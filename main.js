@@ -240,7 +240,7 @@
         uOpacity: { value: opacity },
       },
       vertexShader: `
-        attribute vec3 color;
+        attribute vec3 aColor;
         attribute float aPhase;
         attribute float aSpeed;
         attribute float aScale;
@@ -249,7 +249,7 @@
         uniform float uTime;
         uniform float uSize;
         void main() {
-          vColor = color;
+          vColor = aColor;
           vTwinkle = 0.58 + 0.42 * sin(uTime * aSpeed + aPhase);
           vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
           gl_PointSize = uSize * aScale * (0.74 + vTwinkle * 0.65) * (300.0 / max(80.0, -mvPosition.z));
@@ -446,6 +446,24 @@
           return value;
         }
 
+        vec2 hash2(vec2 p) {
+          return fract(sin(vec2(dot(p, vec2(127.1, 311.7)), dot(p, vec2(269.5, 183.3)))) * 43758.5453123);
+        }
+
+        float cellular(vec2 p) {
+          vec2 i = floor(p);
+          vec2 f = fract(p);
+          float minDist = 1.0;
+          for (int y = -1; y <= 1; y++) {
+            for (int x = -1; x <= 1; x++) {
+              vec2 neighbor = vec2(float(x), float(y));
+              vec2 point = hash2(i + neighbor) + neighbor;
+              minDist = min(minDist, length(f - point));
+            }
+          }
+          return minDist;
+        }
+
         void main() {
           vec2 uv = vUv * 2.2 + vec2(uTime * 0.08, -uTime * 0.05);
           vec3 baseColor = texture2D(uMap, uv * 0.78).rgb;
@@ -454,37 +472,31 @@
           float pattern = fbm(noisePos * 3.8);
           float molten = fbm(noisePos * 8.2 + vec2(uTime * 0.18, uTime * 0.14));
           float detail = fbm(noisePos * 16.4 + vec2(-uTime * 0.22, uTime * 0.19));
+          float cells = cellular(vUv * 15.0 + vec2(uTime * 0.06, -uTime * 0.09));
 
           float granule = mix(pattern, molten, 0.52);
-          float heat = smoothstep(0.38, 0.72, detail * 0.82 + granule * 0.18);
-          float hotSpot = smoothstep(0.68, 0.94, detail * 1.04 + granule * 0.22);
-          float flare = smoothstep(0.80, 0.96, detail * 1.18 + sin(uTime * 4.1 + uv.x * 8.2) * 0.04);
-          float blaze = smoothstep(0.88, 0.99, detail * 1.12 + granule * 0.26);
+          float plasma = mix(granule, 1.0 - cells * 1.28, 0.38);
+          float energy = clamp(plasma + detail * 0.17, 0.0, 1.0);
 
-          float rim = 1.0 - max(dot(normalize(vNormal), normalize(-vViewPosition)), 0.0);
-          float rimGlow = pow(rim, 3.4);
+          vec3 darkRed = vec3(0.15, 0.01, 0.0);
+          vec3 fieryOrange = vec3(0.85, 0.25, 0.0);
+          vec3 goldOrange = vec3(1.0, 0.55, 0.0);
+          vec3 flareWhite = vec3(1.0, 0.95, 0.8);
 
-          vec3 deepBase = vec3(0.29, 0.05, 0.00);
-          vec3 midTone = vec3(0.90, 0.36, 0.00);
-          vec3 highlight = vec3(1.0, 0.85, 0.30);
-          vec3 flareWhite = vec3(1.0);
+          vec3 finalSurface = mix(darkRed, fieryOrange, smoothstep(0.0, 0.4, energy));
+          finalSurface = mix(finalSurface, goldOrange, smoothstep(0.4, 0.75, energy));
+          finalSurface = mix(finalSurface, flareWhite, smoothstep(0.75, 0.98, energy));
 
-          vec3 surfaceColor = mix(deepBase, midTone, smoothstep(0.12, 0.44, granule));
-          surfaceColor = mix(surfaceColor, highlight, smoothstep(0.44, 0.72, granule));
-          surfaceColor = mix(surfaceColor, flareWhite, flare * 0.92);
-          surfaceColor += vec3(1.0, 0.72, 0.24) * hotSpot * 0.52;
-          surfaceColor += vec3(1.0, 0.86, 0.52) * pow(max(0.0, hotSpot - 0.38), 2.8) * 0.46;
-          surfaceColor = mix(surfaceColor, baseColor * 1.08, 0.28);
+          float edgeFactor = 1.0 - max(dot(normalize(vNormal), normalize(-vViewPosition)), 0.0);
+          float rimGlow = pow(edgeFactor, 3.5);
+          finalSurface = mix(finalSurface, vec3(0.4, 0.02, 0.0), rimGlow * 0.92);
 
-          surfaceColor += vec3(1.0, 0.62, 0.18) * rimGlow * uGlow * 0.56;
-          surfaceColor += vec3(1.0, 0.84, 0.47) * rimGlow * 0.28;
-          surfaceColor *= 0.90 + 0.14 * heat;
+          float heat = smoothstep(0.18, 0.72, detail * 0.82 + granule * 0.18);
+          finalSurface += vec3(0.3, 0.11, 0.02) * rimGlow * uGlow * 0.42;
+          finalSurface *= 0.82 + 0.24 * heat;
 
-          vec3 coronaColor = vec3(1.0, 0.44, 0.12) * rimGlow * 0.68;
-          vec3 finalColor = surfaceColor + coronaColor + flareWhite * blaze * 0.16;
-          finalColor = clamp(finalColor, 0.0, 1.0);
-
-          gl_FragColor = vec4(finalColor, 1.0);
+          vec3 surfaceColor = clamp(finalSurface + baseColor * 0.16, 0.0, 1.0);
+          gl_FragColor = vec4(surfaceColor, 1.0);
         }
       `,
       transparent: false,
@@ -655,7 +667,7 @@
       scales[i] = 0.45 + Math.random() * 1.35;
     }
     geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
-    geometry.setAttribute("color", new THREE.BufferAttribute(colorValues, 3));
+    geometry.setAttribute("aColor", new THREE.BufferAttribute(colorValues, 3));
     geometry.setAttribute("aPhase", new THREE.BufferAttribute(phases, 1));
     geometry.setAttribute("aSpeed", new THREE.BufferAttribute(speeds, 1));
     geometry.setAttribute("aScale", new THREE.BufferAttribute(scales, 1));
@@ -690,7 +702,7 @@
       scales[i] = 0.25 + Math.random() * 0.8;
     }
     geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
-    geometry.setAttribute("color", new THREE.BufferAttribute(colorValues, 3));
+    geometry.setAttribute("aColor", new THREE.BufferAttribute(colorValues, 3));
     geometry.setAttribute("aPhase", new THREE.BufferAttribute(phases, 1));
     geometry.setAttribute("aSpeed", new THREE.BufferAttribute(speeds, 1));
     geometry.setAttribute("aScale", new THREE.BufferAttribute(scales, 1));
