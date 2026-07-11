@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Universe Drift</title>
+    <link rel="preconnect" href="https://unpkg.com" />
+    <link rel="preconnect" href="https://threejs.org" />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div id="loader" class="loader" aria-live="polite">
+      <div class="loader__ring" aria-hidden="true">
+        <span></span>
+        <span></span>
+        <span></span>
+      </div>
+      <p>Bringing the universe to you</p>
+    </div>
+
+    <canvas id="universe" aria-label="Interactive animated 3D universe scene"></canvas>
+
+    <main class="experience">
+      <header class="hud" aria-label="Universe navigation">
+        <a class="brand" href="#voyage" aria-label="Universe Drift home">
+          <span class="brand__mark" aria-hidden="true"></span>
+          <span>Universe Drift</span>
+        </a>
+
+        <div class="readout" aria-live="polite">
+          <span id="scale-label">Earth orbit</span>
+          <strong id="body-label">Free drift</strong>
+          <em id="body-detail">Eight-planet solar system</em>
+        </div>
+
+        <div class="ship-controls" aria-label="Flight controls">
+          <span>Scroll to change scale</span>
+          <span>Drag to orbit</span>
+          <span>Click a body to focus</span>
+        </div>
+      </header>
+
+      <section class="stage stage--earth" id="voyage">
+        <div class="copy">
+          <p class="eyebrow">Free voyage</p>
+          <h1>Begin at Earth, then pull away</h1>
+          <p>
+            Start close enough to see clouds, moonlight, and orbital motion.
+            Scroll outward to reveal the Sun, planetary paths, the outer solar
+            system, and finally the Milky Way beyond.
+          </p>
+        </div>
+      </section>
+
+      <section class="stage stage--solar">
+        <div class="copy copy--right">
+          <p class="eyebrow">Solar system</p>
+          <h2>Planets move around the Sun</h2>
+          <p>
+            The planets are arranged around the Sun, with orbit lines revealing
+            the path structure as you zoom out. The Moon stays with Earth
+            instead of becoming a separate stop.
+          </p>
+        </div>
+      </section>
+
+      <section class="stage stage--galaxy">
+        <div class="copy">
+          <p class="eyebrow">Galaxy scale</p>
+          <h2>The Milky Way appears beyond the system</h2>
+          <p>
+            Keep pulling back and the solar system becomes a tiny local
+            structure inside a much larger spiral field of stars.
+          </p>
+        </div>
+      </section>
+    </main>
+
+    <div class="progress" aria-hidden="true"><span id="progress-bar"></span></div>
+
+    <script type="module" defer src="./main.js"></script>
+  </body>
+</html>
