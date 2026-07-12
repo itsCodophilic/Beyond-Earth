@@ -15,13 +15,12 @@ import * as THREE from 'three';
 // Importing brand.js runs its DOM event setup; it does not export a value.
 import './brand.js';
 import { PLANET_CONFIGS } from './planets/index.js';
-import { makeNoiseTexture } from './graphics/proceduralTextures.js';
-import { makeSunSurfaceMaterial } from './graphics/materials.js';
 import { loadUniverseTextures } from './graphics/loadTextures.js';
 import { makeBeltDust, makeParticles } from './scene/particles.js';
 import { createAsteroidBelt } from './scene/asteroidBelt.js';
 import { addAtmosphere, createPlanet } from './scene/planetFactory.js';
 import { createMoonSystem } from './planets/earth/satellites/moon.js';
+import { createSun, updateSun } from './stars/sun/sun.js';
 
 // An async immediately-invoked function lets us await texture loading while
 // keeping all application variables private to this module.
@@ -99,10 +98,6 @@ import { createMoonSystem } from './planets/earth/satellites/moon.js';
   // AmbientLight illuminates every surface equally so shadowed sides are not pure black.
   scene.add(new THREE.AmbientLight(0x8da1c6, 0.34));
 
-  // PointLight radiates from one location, matching the Sun's role in the system.
-  const sunLight = new THREE.PointLight(0xffe6aa, 5200, 1450, 1.5);
-  scene.add(sunLight);
-
   // A cool DirectionalLight adds readable edge detail from a consistent direction.
   const fillLight = new THREE.DirectionalLight(0x8bdcff, 0.75);
   fillLight.position.set(-50, 40, 90);
@@ -111,29 +106,8 @@ import { createMoonSystem } from './planets/earth/satellites/moon.js';
   // Asset loading is isolated so scene setup only consumes a ready texture dictionary.
   const textures = await loadUniverseTextures();
 
-  // `??` chooses the generated fallback only when the downloaded value is null/undefined.
-  const sunSurfaceTexture = textures.sun ?? makeNoiseTexture("sun");
-  // A Mesh combines a geometry (shape) with a material (how pixels should look).
-  const sun = new THREE.Mesh(
-    new THREE.SphereGeometry(9.2, 128, 128),
-    makeSunSurfaceMaterial(sunSurfaceTexture),
-  );
-  sun.name = "Sun";
-  sun.userData = {
-    name: "Sun",
-    detail: "G-type star | 99.86% of solar system mass",
-    focusScale: 1.2,
-    info: {
-      type: "Star",
-      diameter: "1,392,700 km",
-      orbitalSpeed: "System reference body",
-      distanceFromEarth: "≈ 149.6 million km",
-      description: "A vast sphere of plasma whose light and gravity sustain every world in this planetary system.",
-    },
-  };
-  world.add(sun);
-  // Only objects in hoverTargets participate in raycasting, keeping checks focused.
-  hoverTargets.push(sun);
+  // The star module owns the Sun's surface, atmosphere, corona, flares, and light.
+  const sun = createSun({ world, hoverTargets, texture: textures.sun });
 
   // Config-driven construction means adding a normal planet only requires a new data file.
   PLANET_CONFIGS.forEach((config) => {
@@ -514,7 +488,12 @@ import { createMoonSystem } from './planets/earth/satellites/moon.js';
     // Smooth target movement is especially important because planets keep orbiting.
     cameraFocusPoint.lerp(targetFocusPoint, focusedBody ? 0.055 : 0.075);
     const focusScale = focusedBody?.userData?.focusScale ?? 1;
-    const cameraDistance = focusedBody ? Math.max(4.5, Math.min(distance, 30 / focusScale)) : distance;
+    // Large bodies such as the Sun provide a safe minimum so the camera cannot
+    // enter their geometry while focusing near the beginning of the scroll range.
+    const minimumFocusDistance = focusedBody?.userData?.minFocusDistance ?? 4.5;
+    const cameraDistance = focusedBody
+      ? Math.max(minimumFocusDistance, Math.min(distance, 30 / focusScale))
+      : distance;
     // Yaw, pitch, and distance are spherical coordinates converted into x/y/z.
     const x = Math.cos(pitch) * Math.sin(yaw) * cameraDistance;
     const y = Math.sin(pitch) * cameraDistance * 0.64;
@@ -531,9 +510,7 @@ import { createMoonSystem } from './planets/earth/satellites/moon.js';
     moonPivot.rotation.y += 0.011 * motionScale;
     // A small oscillation suggests lunar libration while the pivot maintains tidal lock.
     moon.rotation.y = Math.sin(simulationTime * 0.35) * 0.04;
-    sun.rotation.y += 0.0025 * motionScale;
-    // Updating uTime sends the current time into GLSL for procedural movement.
-    if (sun.material.uniforms) sun.material.uniforms.uTime.value = elapsed;
+    updateSun(sun, simulationTime, motionScale);
     asteroidGroup.rotation.y += 0.001 * motionScale;
     asteroidGroup.children.forEach((asteroid) => {
       // Each asteroid's unique spin vector was stored during construction.

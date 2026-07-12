@@ -112,12 +112,43 @@ export function makeSunSurfaceMaterial(texture) {
       uGlow: { value: 1.25 },
     },
     vertexShader: `
+      uniform float uTime;
       varying vec3 vNormal;
+      varying vec3 vObjectNormal;
       varying vec3 vViewPosition;
       varying vec2 vUv;
+
+      float vertexHash(vec2 p) {
+        return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);
+      }
+
+      float vertexNoise(vec2 p) {
+        vec2 i = floor(p);
+        vec2 f = fract(p);
+        vec2 u = f * f * (3.0 - 2.0 * f);
+        return mix(
+          mix(vertexHash(i), vertexHash(i + vec2(1.0, 0.0)), u.x),
+          mix(vertexHash(i + vec2(0.0, 1.0)), vertexHash(i + vec2(1.0, 1.0)), u.x),
+          u.y
+        );
+      }
+
       void main() {
         vNormal = normalize(normalMatrix * normal);
-        vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+        vObjectNormal = normalize(normal);
+        // Three planar samples avoid a flat UV-only bump and physically move the
+        // sphere vertices into evolving convection-cell hills and sinking edges.
+        vec3 n = normalize(normal);
+        float flow = uTime * 0.035;
+        float granules = (
+          vertexNoise(n.xy * 28.0 + flow) +
+          vertexNoise(n.yz * 29.0 - flow * 0.8) +
+          vertexNoise(n.zx * 27.0 + vec2(-flow, flow * 0.6))
+        ) / 3.0;
+        float fineRelief = vertexNoise(n.xy * 63.0 - flow * 1.4) - 0.5;
+        float displacement = (granules - 0.5) * 0.22 + fineRelief * 0.045;
+        vec3 displacedPosition = position + normal * displacement;
+        vec4 mvPosition = modelViewMatrix * vec4(displacedPosition, 1.0);
         vViewPosition = mvPosition.xyz;
         vUv = uv;
         gl_Position = projectionMatrix * mvPosition;
@@ -128,6 +159,7 @@ export function makeSunSurfaceMaterial(texture) {
       uniform sampler2D uMap;
       uniform float uGlow;
       varying vec3 vNormal;
+      varying vec3 vObjectNormal;
       varying vec3 vViewPosition;
       varying vec2 vUv;
 
@@ -195,6 +227,30 @@ export function makeSunSurfaceMaterial(texture) {
         float plasma = mix(granule, 1.0 - cells * 1.28, 0.38);
         float energy = clamp(plasma + detail * 0.17, 0.0, 1.0);
 
+        // Compact active regions imitate the reference's white-hot magnetic areas.
+        // Object-space directions keep these regions attached while the Sun rotates.
+        float activeA = pow(max(dot(vObjectNormal, normalize(vec3(0.72, 0.1, 0.68))), 0.0), 112.0);
+        float activeB = pow(max(dot(vObjectNormal, normalize(vec3(-0.5, -0.42, 0.76))), 0.0), 138.0);
+        float activeC = pow(max(dot(vObjectNormal, normalize(vec3(0.18, 0.58, 0.79))), 0.0), 124.0);
+        float activeD = pow(max(dot(vObjectNormal, normalize(vec3(-0.8, 0.28, 0.52))), 0.0), 148.0);
+        float activeRegions = clamp((activeA + activeB + activeC + activeD)
+          * (0.82 + detail * 0.55), 0.0, 1.0);
+
+        // Sunspots are cooler magnetic openings. A dark umbra is surrounded by a
+        // wider striped penumbra whose radial filaments drift very slowly.
+        vec3 spotDirectionA = normalize(vec3(0.48, -0.28, 0.83));
+        vec3 spotDirectionB = normalize(vec3(-0.72, 0.34, 0.6));
+        float spotDotA = dot(vObjectNormal, spotDirectionA);
+        float spotDotB = dot(vObjectNormal, spotDirectionB);
+        float umbraA = smoothstep(0.988, 0.997, spotDotA);
+        float umbraB = smoothstep(0.991, 0.998, spotDotB);
+        float outerA = smoothstep(0.962, 0.989, spotDotA);
+        float outerB = smoothstep(0.972, 0.992, spotDotB);
+        float penumbra = max(outerA - umbraA, outerB - umbraB);
+        float umbra = max(umbraA, umbraB);
+        float penumbraAngle = atan(vObjectNormal.y, vObjectNormal.x);
+        float striations = 0.45 + 0.55 * sin(penumbraAngle * 54.0 + detail * 9.0 + uTime * 0.025);
+
         // Convert the calculated energy level into a red → orange → white heat ramp.
         vec3 darkRed = vec3(0.15, 0.01, 0.0);
         vec3 fieryOrange = vec3(0.85, 0.25, 0.0);
@@ -204,6 +260,11 @@ export function makeSunSurfaceMaterial(texture) {
         vec3 finalSurface = mix(darkRed, fieryOrange, smoothstep(0.0, 0.4, energy));
         finalSurface = mix(finalSurface, goldOrange, smoothstep(0.4, 0.75, energy));
         finalSurface = mix(finalSurface, flareWhite, smoothstep(0.75, 0.98, energy));
+        // Hot cores reach near-white while a broader gold fringe suggests flare rays.
+        finalSurface = mix(finalSurface, vec3(1.0, 0.72, 0.16), smoothstep(0.04, 0.38, activeRegions));
+        finalSurface = mix(finalSurface, vec3(1.0, 0.98, 0.84), smoothstep(0.38, 0.9, activeRegions));
+        finalSurface = mix(finalSurface, vec3(0.28, 0.045, 0.008), umbra * 0.92);
+        finalSurface = mix(finalSurface, mix(vec3(0.38, 0.07, 0.01), vec3(0.88, 0.28, 0.025), striations), penumbra * 0.78);
 
         // Surface normals facing away from the camera receive a darker glowing rim.
         float edgeFactor = 1.0 - max(dot(normalize(vNormal), normalize(-vViewPosition)), 0.0);

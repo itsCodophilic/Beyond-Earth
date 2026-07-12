@@ -48,6 +48,9 @@ Beyond-Earth/
 │       │   ├── mercury/ ... neptune/
 │       │   │   └── <planet>.js
 │       │   └── index.js            # Ordered planet registry
+│       ├── stars/
+│       │   └── sun/
+│       │       └── sun.js           # Surface, corona, glow, flares, and light
 │       └── scene/
 │           ├── planetFactory.js    # Planet mesh construction
 │           ├── orbits.js           # Orbit guide construction
