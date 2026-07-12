@@ -21,6 +21,14 @@ const BELT_INNER_RADIUS = 44;
 const BELT_OUTER_RADIUS = 52;
 const JUPITER_ORBIT_RADIUS = 75;
 
+// Rendering one mesh for every real asteroid would overwhelm both the CPU and
+// the browser's memory. These two layers preserve the *visual population* of
+// the million-plus-object belt while keeping the number of draw calls tiny:
+// instanced rocks are genuine 3D geometry, and point-sized pebbles fill the
+// far distance where individual geometry would occupy less than one pixel.
+const INSTANCED_BOULDER_COUNTS = { C: 7000, S: 5000, M: 2500 };
+const UNRESOLVED_PEBBLE_COUNT = 120000;
+
 const COMPOSITIONS = {
   S: {
     label: "S-type (silicate)",
@@ -113,6 +121,20 @@ const MAJOR_BODIES = [
     archetype: "rounded",
     roundness: 0.72,
     description: "A very dark carbonaceous body and the largest member of the Hygiea collision family.",
+  },
+  {
+    name: "Psyche",
+    composition: "M",
+    diameter: "≈ 280 × 232 km",
+    radius: 46.9,
+    angle: 3.28,
+    size: 0.43,
+    eccentricity: 0.14,
+    inclination: 0.05,
+    orbitalSpeed: 0.00058,
+    archetype: "irregular",
+    roundness: 0.22,
+    description: "A large metal-rich asteroid whose exposed mixture of metal and silicate rock may preserve material from an early planetesimal.",
   },
 ];
 
@@ -339,9 +361,6 @@ function createCompositionMaterials() {
           map: textures.colorTexture,
           bumpMap: textures.bumpTexture,
           bumpScale: composition.bumpScale,
-          displacementMap: textures.bumpTexture,
-          displacementScale: composition.displacementScale,
-          displacementBias: -composition.displacementScale * 0.48,
           roughnessMap: textures.roughnessTexture,
           roughness: composition.roughness,
           metalness: composition.metalness,
@@ -572,87 +591,6 @@ function attachAsteroidMetadata(object, {
 }
 
 
-/**
- * Adds Moon-style crater floors and illuminated rims at the same positions used
- * to physically deform the asteroid geometry. These are subtle secondary cues;
- * the displacement map and vertex deformation remain responsible for depth.
- */
-function addCraterDetails({ core, composition, count = 4 }) {
-  const craters = core.geometry.userData.craters ?? [];
-  if (!craters.length || count <= 0) return;
-
-  const floorColors = {
-    C: 0x080a09,
-    S: 0x302d29,
-    M: 0x202322,
-  };
-  const rimColors = {
-    C: 0x555550,
-    S: 0xaaa092,
-    M: 0x8f918c,
-  };
-
-  const floorMaterial = new THREE.MeshStandardMaterial({
-    color: floorColors[composition],
-    roughness: 1,
-    metalness: 0,
-    transparent: true,
-    opacity: 0.28,
-    depthWrite: false,
-    polygonOffset: true,
-    polygonOffsetFactor: -2,
-  });
-  const rimMaterial = new THREE.MeshStandardMaterial({
-    color: rimColors[composition],
-    roughness: composition === "M" ? 0.7 : 1,
-    metalness: composition === "M" ? 0.18 : 0,
-    transparent: true,
-    opacity: 0.34,
-    depthWrite: false,
-  });
-
-  const forward = new THREE.Vector3(0, 0, 1);
-  const raycaster = new THREE.Raycaster();
-  const rayOrigin = new THREE.Vector3();
-  const rayDirection = new THREE.Vector3();
-  core.updateMatrixWorld(true);
-
-  craters
-    .slice()
-    .sort((a, b) => b.radius - a.radius)
-    .slice(0, count)
-    .forEach((crater) => {
-      rayOrigin.copy(crater.direction).multiplyScalar(3);
-      rayDirection.copy(crater.direction).multiplyScalar(-1);
-      raycaster.set(rayOrigin, rayDirection);
-      const hit = raycaster.intersectObject(core, false)[0];
-      if (!hit?.face) return;
-
-      const normal = hit.face.normal.clone().transformDirection(core.matrixWorld).normalize();
-      const point = hit.point.clone();
-      const orientation = new THREE.Quaternion().setFromUnitVectors(forward, normal);
-      const visibleRadius = THREE.MathUtils.clamp(crater.radius * 0.66, 0.028, 0.13);
-
-      const floor = new THREE.Mesh(
-        new THREE.CircleGeometry(visibleRadius * 0.76, 30),
-        floorMaterial,
-      );
-      floor.position.copy(point).addScaledVector(normal, 0.0025);
-      floor.quaternion.copy(orientation);
-      floor.userData.isSurfaceDetail = true;
-      core.add(floor);
-
-      const rim = new THREE.Mesh(
-        new THREE.TorusGeometry(visibleRadius * 0.78, visibleRadius * 0.075, 8, 36),
-        rimMaterial,
-      );
-      rim.position.copy(point).addScaledVector(normal, 0.006);
-      rim.quaternion.copy(orientation);
-      rim.userData.isSurfaceDetail = true;
-      core.add(rim);
-    });
-}
-
 function addSurfaceBoulders({ group, material, seed, count, composition }) {
   const boulderGeometry = new THREE.IcosahedronGeometry(1, 2);
 
@@ -697,7 +635,6 @@ function createAsteroidObject({
   population = "Main belt",
   archetype,
   surfaceBoulders = 0,
-  surfaceCraters = 0,
 }) {
   const compositionData = COMPOSITIONS[composition];
   const chosenArchetype = archetype
@@ -726,13 +663,9 @@ function createAsteroidObject({
     seededRandom(index + 63) * Math.PI,
   );
 
-  if (surfaceCraters > 0) {
-    addCraterDetails({
-      core,
-      composition,
-      count: surfaceCraters,
-    });
-  }
+  // Craters are cut directly into `createAsteroidGeometry`. Avoid adding flat
+  // CircleGeometry/TorusGeometry decals here: those overlays were the main
+  // reason nearby asteroids looked painted instead of physically excavated.
 
   if (surfaceBoulders > 0) {
     addSurfaceBoulders({
@@ -770,46 +703,266 @@ function createAsteroidObject({
   return group;
 }
 
-/** Generates a sparse point cloud for unresolved pebble bodies. */
+/**
+ * Creates one shared low-poly rock shape for thousands of GPU instances.
+ * The vertices are pushed into an uneven silhouette and several crater bowls
+ * are physically carved into it. Because every vertex really moves in 3D,
+ * light produces proper ridges and shadows instead of a flat crater picture.
+ */
+function createInstancedRockGeometry(seed, composition, variant) {
+  const geometry = new THREE.IcosahedronGeometry(1, 1);
+  const positions = geometry.attributes.position;
+  const stretch = composition === "M"
+    ? new THREE.Vector3(1.18, 0.82, 0.94)
+    : composition === "C"
+      ? new THREE.Vector3(1.08, 0.91, 1.02)
+      : new THREE.Vector3(1.28, 0.76, 0.91);
+
+  // Two geometry variants per composition avoid an obviously repeated rock
+  // silhouette while still requiring only six draw calls for the whole field.
+  if (variant === 1) {
+    stretch.set(stretch.z * 0.96, stretch.x * 0.91, stretch.y * 1.08);
+  }
+
+  const craters = Array.from({ length: 4 }, (_, index) => ({
+    direction: randomUnitVector(seed + index * 37),
+    radius: 0.12 + seededRandom(seed + index * 53) * 0.16,
+    depth: 0.035 + seededRandom(seed + index * 71) * 0.055,
+  }));
+
+  for (let index = 0; index < positions.count; index += 1) {
+    _position.fromBufferAttribute(positions, index);
+    _direction.copy(_position).normalize();
+
+    const broadNoise = fractalNoise(_direction, seed) - 0.5;
+    const sharpNoise = smoothNoise3(
+      _direction.x * 13,
+      _direction.y * 13,
+      _direction.z * 13,
+      seed + 91,
+    ) - 0.5;
+    let radialScale = 1 + broadNoise * 0.25 + sharpNoise * 0.075;
+
+    craters.forEach((crater) => {
+      const angularDistance = Math.acos(
+        THREE.MathUtils.clamp(_direction.dot(crater.direction), -1, 1),
+      );
+      const bowl = 1 - THREE.MathUtils.smoothstep(
+        angularDistance,
+        crater.radius * 0.08,
+        crater.radius,
+      );
+      radialScale -= bowl * crater.depth;
+    });
+
+    _position.multiplyScalar(radialScale).multiply(stretch);
+    positions.setXYZ(index, _position.x, _position.y, _position.z);
+  }
+
+  positions.needsUpdate = true;
+  geometry.computeVertexNormals();
+  geometry.computeBoundingSphere();
+  return geometry;
+}
+
+/**
+ * Places thousands of real 3D boulders into the belt with InstancedMesh.
+ * An instance has its own position, rotation, scale, and colour, but shares the
+ * same geometry/material on the GPU. This is what makes a dense volumetric belt
+ * possible without creating fifteen thousand JavaScript Mesh objects.
+ */
+function createInstancedBoulderField(materials) {
+  const field = new THREE.Group();
+  const meshes = [];
+  field.name = "3D asteroid boulder field";
+
+  Object.entries(INSTANCED_BOULDER_COUNTS).forEach(([composition, totalCount], compositionIndex) => {
+    for (let variant = 0; variant < 2; variant += 1) {
+      const count = variant === 0 ? Math.ceil(totalCount / 2) : Math.floor(totalCount / 2);
+      const geometry = createInstancedRockGeometry(
+        8100 + compositionIndex * 307 + variant * 97,
+        composition,
+        variant,
+      );
+      const material = materials[composition][variant].clone();
+      // Mid-distance rocks get their depth from geometry and direct lighting.
+      // A small bump map keeps the material grain without distorting silhouettes.
+      material.bumpScale *= 0.55;
+      const mesh = new THREE.InstancedMesh(geometry, material, count);
+      const dummy = new THREE.Object3D();
+      const palette = COMPOSITIONS[composition].baseColors.map((value) => new THREE.Color(value));
+
+      let accepted = 0;
+      let attempt = 0;
+      while (accepted < count && attempt < count * 30) {
+        const seed = 12000 + compositionIndex * 50000 + variant * 17000 + attempt * 13;
+        attempt += 1;
+
+        let radius = BELT_INNER_RADIUS
+          + seededRandom(seed + 1) * (BELT_OUTER_RADIUS - BELT_INNER_RADIUS);
+        let angle = seededRandom(seed + 2) * Math.PI * 2;
+
+        // About one in ten rocks belongs to a visible collision-family stream.
+        // These overlapping streams make the belt a region with structure, not
+        // a perfectly uniform decorative ring.
+        if (accepted % 10 === 0 && composition !== "M") {
+          const useOuterFamily = seededRandom(seed + 3) > 0.48;
+          if (composition === "C") {
+            radius = 50.2 + (seededRandom(seed + 4) - 0.5) * 0.8;
+            angle = 3.7 + (seededRandom(seed + 5) - 0.5) * 1.05;
+          } else if (useOuterFamily) {
+            radius = 49.5 + (seededRandom(seed + 4) - 0.5) * 0.7;
+            angle = 5.15 + (seededRandom(seed + 5) - 0.5) * 0.95;
+          } else {
+            radius = 44.9 + (seededRandom(seed + 4) - 0.5) * 0.7;
+            angle = 1.1 + (seededRandom(seed + 5) - 0.5) * 0.95;
+          }
+        }
+
+        if (isInsideKirkwoodGap(radius)) continue;
+        if (compositionForRadius(radius, seed + 6) !== composition) continue;
+
+        const orbit = {
+          semiMajor: radius,
+          eccentricity: seededRandom(seed + 7) * 0.13,
+          inclination: (seededRandom(seed + 8) - 0.5) * 0.22,
+          node: seededRandom(seed + 9) * Math.PI * 2,
+        };
+        positionFromOrbit(dummy.position, orbit, angle);
+        dummy.rotation.set(
+          seededRandom(seed + 10) * Math.PI,
+          seededRandom(seed + 11) * Math.PI,
+          seededRandom(seed + 12) * Math.PI,
+        );
+
+        // The steep power curve makes almost every object a pebble/small rock,
+        // while leaving a rare tail of large, clearly readable boulders.
+        const sizeBias = Math.pow(seededRandom(seed + 13), 5.2);
+        const size = 0.014 + sizeBias * 0.18;
+        dummy.scale.set(
+          size * (0.68 + seededRandom(seed + 14) * 0.72),
+          size * (0.62 + seededRandom(seed + 15) * 0.70),
+          size * (0.70 + seededRandom(seed + 16) * 0.68),
+        );
+        dummy.updateMatrix();
+        mesh.setMatrixAt(accepted, dummy.matrix);
+
+        const color = palette[Math.floor(seededRandom(seed + 17) * palette.length)].clone();
+        color.multiplyScalar(0.72 + seededRandom(seed + 18) * 0.42);
+        mesh.setColorAt(accepted, color);
+        accepted += 1;
+      }
+
+      mesh.instanceMatrix.needsUpdate = true;
+      if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+      mesh.name = `${composition}-class instanced boulders ${variant + 1}`;
+      mesh.castShadow = false;
+      mesh.receiveShadow = true;
+      mesh.frustumCulled = false;
+      mesh.userData.rotationSpeed = 0.000055 + compositionIndex * 0.000012 + variant * 0.000009;
+      field.add(mesh);
+      meshes.push(mesh);
+    }
+  });
+
+  return { field, meshes };
+}
+
+/**
+ * Generates the unresolved population: tiny bodies that are physically below
+ * a pixel at this scale. It is intentionally a point layer, while every object
+ * large enough to inspect is represented by actual 3D geometry above.
+ */
 function createDistantDebris() {
-  const count = 4200;
-  const positions = [];
-  const colors = [];
+  const positions = new Float32Array(UNRESOLVED_PEBBLE_COUNT * 3);
+  const colors = new Float32Array(UNRESOLVED_PEBBLE_COUNT * 3);
+  const sizes = new Float32Array(UNRESOLVED_PEBBLE_COUNT);
   const colorPalette = [
-    new THREE.Color(0x6e6258),
-    new THREE.Color(0x393937),
-    new THREE.Color(0x8a7766),
+    new THREE.Color(0x73665b),
+    new THREE.Color(0x373937),
+    new THREE.Color(0x897667),
+    new THREE.Color(0x232625),
   ];
 
-  let seed = 1;
-  while (positions.length < count * 3) {
-    const radius = BELT_INNER_RADIUS + seededRandom(seed++) * (BELT_OUTER_RADIUS - BELT_INNER_RADIUS);
+  let accepted = 0;
+  let attempt = 0;
+  while (accepted < UNRESOLVED_PEBBLE_COUNT) {
+    const seed = 500000 + attempt * 19;
+    attempt += 1;
+    const radius = BELT_INNER_RADIUS
+      + seededRandom(seed + 1) * (BELT_OUTER_RADIUS - BELT_INNER_RADIUS);
     if (isInsideKirkwoodGap(radius)) continue;
-    const angle = seededRandom(seed++) * Math.PI * 2;
-    const inclination = (seededRandom(seed++) - 0.5) * 0.11;
-    const vertical = Math.sin(angle * 1.7 + seed) * radius * inclination;
-    positions.push(
-      Math.cos(angle) * radius,
-      vertical,
-      Math.sin(angle) * radius,
-    );
-    const color = colorPalette[Math.floor(seededRandom(seed++) * colorPalette.length)];
-    colors.push(color.r, color.g, color.b);
+
+    const angle = seededRandom(seed + 2) * Math.PI * 2;
+    const orbit = {
+      semiMajor: radius,
+      eccentricity: seededRandom(seed + 3) * 0.12,
+      // Adding several random values creates a centre-heavy distribution, so
+      // the belt has a thin core plus a sparse halo above and below its plane.
+      inclination: (
+        seededRandom(seed + 4)
+        + seededRandom(seed + 5)
+        + seededRandom(seed + 6)
+        - 1.5
+      ) * 0.12,
+      node: seededRandom(seed + 7) * Math.PI * 2,
+    };
+    positionFromOrbit(_position, orbit, angle);
+    const positionIndex = accepted * 3;
+    positions[positionIndex] = _position.x;
+    positions[positionIndex + 1] = _position.y;
+    positions[positionIndex + 2] = _position.z;
+
+    const color = colorPalette[Math.floor(seededRandom(seed + 8) * colorPalette.length)];
+    const brightness = 0.56 + seededRandom(seed + 9) * 0.58;
+    colors[positionIndex] = color.r * brightness;
+    colors[positionIndex + 1] = color.g * brightness;
+    colors[positionIndex + 2] = color.b * brightness;
+    sizes[accepted] = 0.34 + Math.pow(seededRandom(seed + 10), 3.4) * 0.92;
+    accepted += 1;
   }
 
   const geometry = new THREE.BufferGeometry();
-  geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
-  geometry.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
-  const material = new THREE.PointsMaterial({
-    size: 0.044,
-    sizeAttenuation: true,
-    transparent: true,
-    opacity: 0.22,
+  geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+  geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+  geometry.setAttribute("aSize", new THREE.BufferAttribute(sizes, 1));
+
+  const material = new THREE.ShaderMaterial({
+    uniforms: {
+      uPixelRatio: { value: Math.min(window.devicePixelRatio, 2) },
+      uOpacity: { value: 0.62 },
+    },
+    vertexShader: `
+      attribute float aSize;
+      varying vec3 vColor;
+      uniform float uPixelRatio;
+
+      void main() {
+        vColor = color;
+        vec4 viewPosition = modelViewMatrix * vec4(position, 1.0);
+        gl_Position = projectionMatrix * viewPosition;
+        gl_PointSize = clamp(aSize * uPixelRatio * (105.0 / max(1.0, -viewPosition.z)), 0.7, 4.0);
+      }
+    `,
+    fragmentShader: `
+      varying vec3 vColor;
+      uniform float uOpacity;
+
+      void main() {
+        float distanceFromCentre = length(gl_PointCoord - vec2(0.5));
+        float edge = 1.0 - smoothstep(0.28, 0.5, distanceFromCentre);
+        if (edge < 0.02) discard;
+        gl_FragColor = vec4(vColor, edge * uOpacity);
+      }
+    `,
     vertexColors: true,
+    transparent: true,
     depthWrite: false,
+    blending: THREE.NormalBlending,
   });
   const points = new THREE.Points(geometry, material);
-  points.name = "Unresolved asteroid debris";
+  points.name = "Virtual million-object pebble population";
+  points.frustumCulled = false;
   return points;
 }
 
@@ -851,7 +1004,6 @@ function createFamily({
       description: `A fragment produced by the ancient collision that formed the ${name} family.`,
       family: `${name} family`,
       surfaceBoulders: size > 0.14 ? 3 : 0,
-      surfaceCraters: size > 0.12 ? 2 : 0,
     });
     container.add(rock);
     rocks.push(rock);
@@ -896,7 +1048,6 @@ function createTrojanCloud({
       population: "Trojan cloud",
       archetype: member % 3 === 0 ? "top" : "rubble",
       surfaceBoulders: size > 0.12 ? 4 : 0,
-      surfaceCraters: size > 0.10 ? 2 : 0,
     });
     container.add(rock);
     rocks.push(rock);
@@ -976,7 +1127,6 @@ export function createAsteroidBelt({ world, hoverTargets = [] }) {
       family: `${body.name} major body`,
       archetype: body.archetype,
       surfaceBoulders: body.name === "Ceres" ? 6 : body.name === "Vesta" ? 9 : 7,
-      surfaceCraters: body.name === "Vesta" ? 7 : 5,
     });
     mainBelt.add(rock);
     rocks.push(rock);
@@ -1019,7 +1169,6 @@ export function createAsteroidBelt({ world, hoverTargets = [] }) {
       family: "Background population",
       archetype,
       surfaceBoulders: size > 0.16 ? 4 + Math.floor(seededRandom(index + 12) * 4) : 0,
-      surfaceCraters: size > 0.16 ? 3 : size > 0.10 ? 2 : 0,
     });
     mainBelt.add(rock);
     rocks.push(rock);
@@ -1090,17 +1239,26 @@ export function createAsteroidBelt({ world, hoverTargets = [] }) {
     geometryPool,
   });
 
+  // The belt is rendered as a depth hierarchy. Resolved bodies remain fully
+  // interactive; instanced boulders supply nearby 3D mass; points represent
+  // only the enormous population that is too small to resolve at this scale.
+  const { field: instancedBoulderField, meshes: instancedBoulders } =
+    createInstancedBoulderField(materials);
   const distantDebris = createDistantDebris();
-  mainBelt.add(distantDebris);
+  mainBelt.add(instancedBoulderField, distantDebris);
 
   world.add(system);
-  hoverTargets.push(system);
+  // Raycasting the whole system would test every one of the 14,500 instances
+  // on every pointer move. Only resolved, named bodies need inspection cards.
+  hoverTargets.push(...rocks);
 
   return {
     system,
     mainBelt,
     trojans,
     rocks,
+    instancedBoulderField,
+    instancedBoulders,
     distantDebris,
   };
 }
@@ -1127,5 +1285,10 @@ export function updateAsteroidBelt(asteroidBelt, motionScale = 1, jupiter = null
     rock.rotation.z += rock.userData.spin.z * motionScale;
   });
 
-  asteroidBelt.distantDebris.rotation.y += 0.00016 * motionScale;
+  // Each instanced population band advances at a slightly different rate. The
+  // small difference prevents the belt from behaving like one rigid vinyl ring.
+  asteroidBelt.instancedBoulders?.forEach((mesh) => {
+    mesh.rotation.y += mesh.userData.rotationSpeed * motionScale;
+  });
+  asteroidBelt.distantDebris.rotation.y += 0.000045 * motionScale;
 }
