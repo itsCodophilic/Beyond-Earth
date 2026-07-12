@@ -464,14 +464,18 @@ import { createSun, updateSun } from './stars/sun/sun.js';
       cameraFocusPoint.copy(targetFocusPoint);
       hasCameraFocusPoint = true;
     }
-    // Smooth target movement is especially important because planets keep orbiting.
-    cameraFocusPoint.lerp(targetFocusPoint, focusedBody ? 0.055 : 0.075);
+    // Asteroids can be tens of scene units away and visually tiny. Their metadata
+    // supplies a stronger focus easing so the camera reaches them promptly.
+    const focusEase = focusedBody?.userData?.focusEase
+      ?? (focusedBody ? 0.055 : 0.075);
+    cameraFocusPoint.lerp(targetFocusPoint, focusEase);
+
     const focusScale = focusedBody?.userData?.focusScale ?? 1;
-    // Large bodies such as the Sun provide a safe minimum so the camera cannot
-    // enter their geometry while focusing near the beginning of the scroll range.
     const minimumFocusDistance = focusedBody?.userData?.minFocusDistance ?? 4.5;
+    const explicitFocusDistance = focusedBody?.userData?.focusDistance;
     const cameraDistance = focusedBody
-      ? Math.max(minimumFocusDistance, Math.min(distance, 30 / focusScale))
+      ? explicitFocusDistance
+        ?? Math.max(minimumFocusDistance, Math.min(distance, 30 / focusScale))
       : distance;
     // Yaw, pitch, and distance are spherical coordinates converted into x/y/z.
     const x = Math.cos(pitch) * Math.sin(yaw) * cameraDistance;

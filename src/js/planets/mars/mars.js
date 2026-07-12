@@ -7,7 +7,7 @@ export const mars = {
   name: "Mars", texture: "mars", radius: 0.72, orbitRadius: 40,
   orbitSpeed: 0.25, spinSpeed: 0.01, axialTilt: 0.44, angle: 5.3,
   bump: 0.065, orbitColor: 0xd06a37,
-  detail: "Red planet | about half Earth width", focusScale: 1.55,
+  detail: "Red planet | about half Earth width", focusScale: 2.1, minFocusDistance: 1.4, focusDistance: 1.85, focusEase: 0.11,
   info: {
     type: "Planet", diameter: "6,779 km", orbitalSpeed: "24.07 km/s",
     distanceFromEarth: "≈ 54.6 million km at closest approach",

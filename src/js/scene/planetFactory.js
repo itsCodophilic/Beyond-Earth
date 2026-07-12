@@ -69,17 +69,223 @@ const GAS_PROFILES = {
   },
 };
 
+
+function createMercuryMaterial(texture, reliefMap) {
+  return new THREE.MeshStandardMaterial({
+    map: texture,
+    color: 0xc6b7a3,
+    roughness: 1,
+    metalness: 0.01,
+    bumpMap: reliefMap,
+    bumpScale: 0.14,
+    displacementMap: reliefMap,
+    displacementScale: 0.052,
+    displacementBias: -0.026,
+    roughnessMap: reliefMap,
+    envMapIntensity: 0.06,
+  });
+}
+
+function createMarsMaterial(texture, reliefMap) {
+  return new THREE.MeshStandardMaterial({
+    map: texture,
+    color: 0xf0b06f,
+    roughness: 0.98,
+    metalness: 0.0,
+    bumpMap: reliefMap,
+    bumpScale: 0.16,
+    displacementMap: reliefMap,
+    displacementScale: 0.068,
+    displacementBias: -0.032,
+    roughnessMap: reliefMap,
+    envMapIntensity: 0.07,
+  });
+}
+
+function createVenusSurfaceMaterial(texture, reliefMap) {
+  return new THREE.MeshStandardMaterial({
+    map: texture,
+    color: 0x8c5227,
+    roughness: 1,
+    metalness: 0,
+    bumpMap: reliefMap,
+    bumpScale: 0.045,
+    displacementMap: reliefMap,
+    displacementScale: 0.016,
+    displacementBias: -0.008,
+    roughnessMap: reliefMap,
+    envMapIntensity: 0.02,
+  });
+}
+
 function createRockyMaterial(config, textures) {
   const map = textures[config.texture] ?? makeNoiseTexture(config.texture);
+  const reliefMap = makeNoiseTexture(config.texture, 2048);
+  if (config.name === "Mercury") return createMercuryMaterial(map, reliefMap);
+  if (config.name === "Mars") return createMarsMaterial(map, reliefMap);
+  if (config.name === "Venus") return createVenusSurfaceMaterial(map, reliefMap);
   return new THREE.MeshStandardMaterial({
     map,
-    roughness: config.name === "Venus" ? 0.9 : 0.96,
+    roughness: 0.96,
     metalness: 0,
     bumpMap: config.bump ? map : null,
     bumpScale: config.bump ?? 0,
+    displacementMap: config.bump ? map : null,
+    displacementScale: (config.bump ?? 0) * 0.35,
+    displacementBias: -((config.bump ?? 0) * 0.18),
     normalMap: config.normalTexture ? textures[config.normalTexture] : null,
     normalScale: new THREE.Vector2(config.normalScale ?? 0.55, config.normalScale ?? 0.55),
     envMapIntensity: 0.1,
+  });
+}
+
+function sphericalDirection(latitude, longitude) {
+  const phi = THREE.MathUtils.degToRad(90 - latitude);
+  const theta = THREE.MathUtils.degToRad(longitude);
+  return new THREE.Vector3(
+    Math.sin(phi) * Math.cos(theta),
+    Math.cos(phi),
+    Math.sin(phi) * Math.sin(theta),
+  );
+}
+
+function addCraterField(planet, radius, craterDefinitions, options = {}) {
+  const floorMaterial = new THREE.MeshStandardMaterial({
+    color: options.floorColor ?? 0x342c26,
+    roughness: 1,
+    transparent: true,
+    opacity: options.floorOpacity ?? 0.26,
+    depthWrite: false,
+    polygonOffset: true,
+    polygonOffsetFactor: -2,
+  });
+  const rimMaterial = new THREE.MeshStandardMaterial({
+    color: options.rimColor ?? 0xb8aa95,
+    roughness: 1,
+    transparent: true,
+    opacity: options.rimOpacity ?? 0.34,
+    depthWrite: false,
+  });
+  const forward = new THREE.Vector3(0, 0, 1);
+
+  craterDefinitions.forEach(({ latitude, longitude, radiusScale, stretch = 1, rotation = 0 }) => {
+    const direction = sphericalDirection(latitude, longitude);
+    const orientation = new THREE.Quaternion().setFromUnitVectors(forward, direction);
+
+    const floor = new THREE.Mesh(new THREE.CircleGeometry(radiusScale * 0.72, 36), floorMaterial);
+    floor.position.copy(direction).multiplyScalar(radius * 1.006);
+    floor.quaternion.copy(orientation);
+    floor.rotateZ(rotation);
+    floor.scale.set(stretch, 1, 1);
+    planet.add(floor);
+
+    const rim = new THREE.Mesh(new THREE.TorusGeometry(radiusScale * 0.76, Math.max(0.0035, radiusScale * 0.085), 8, 48), rimMaterial);
+    rim.position.copy(direction).multiplyScalar(radius * 1.010);
+    rim.quaternion.copy(orientation);
+    rim.rotateZ(rotation);
+    rim.scale.set(stretch, 1, 1);
+    planet.add(rim);
+  });
+}
+
+function addMercurySurfaceFeatures(planet, config) {
+  const craters = [
+    { latitude: 18, longitude: 162, radiusScale: config.radius * 0.22, stretch: 1.10 },
+    { latitude: -8, longitude: -54, radiusScale: config.radius * 0.14 },
+    { latitude: 36, longitude: 24, radiusScale: config.radius * 0.104 },
+    { latitude: -42, longitude: 114, radiusScale: config.radius * 0.092 },
+    { latitude: -21, longitude: -128, radiusScale: config.radius * 0.080 },
+    { latitude: 12, longitude: 88, radiusScale: config.radius * 0.068 },
+    { latitude: 56, longitude: -66, radiusScale: config.radius * 0.058 },
+    { latitude: -58, longitude: 36, radiusScale: config.radius * 0.050 },
+    { latitude: 8, longitude: -6, radiusScale: config.radius * 0.046 },
+    { latitude: 28, longitude: -146, radiusScale: config.radius * 0.038 },
+    { latitude: -34, longitude: 62, radiusScale: config.radius * 0.034 },
+    { latitude: 48, longitude: 96, radiusScale: config.radius * 0.030 },
+  ];
+  addCraterField(planet, config.radius, craters, {
+    floorColor: 0x4f4337,
+    rimColor: 0xcbbba4,
+    floorOpacity: 0.36,
+    rimOpacity: 0.44,
+  });
+}
+
+function addMarsSurfaceFeatures(planet, config) {
+  const craterSet = [
+    { latitude: 12, longitude: -22, radiusScale: config.radius * 0.086 },
+    { latitude: -14, longitude: 52, radiusScale: config.radius * 0.072 },
+    { latitude: 42, longitude: -88, radiusScale: config.radius * 0.060 },
+    { latitude: -34, longitude: 138, radiusScale: config.radius * 0.078 },
+    { latitude: -49, longitude: -44, radiusScale: config.radius * 0.056 },
+    { latitude: 26, longitude: 116, radiusScale: config.radius * 0.052 },
+    { latitude: -2, longitude: -118, radiusScale: config.radius * 0.046 },
+    { latitude: 54, longitude: 22, radiusScale: config.radius * 0.038 },
+  ];
+  addCraterField(planet, config.radius, craterSet, {
+    floorColor: 0x5c3c2e,
+    rimColor: 0xd8b189,
+    floorOpacity: 0.28,
+    rimOpacity: 0.34,
+  });
+
+  const marsForward = new THREE.Vector3(0, 1, 0);
+  const olympusDir = sphericalDirection(18, -133);
+  const olympusOrientation = new THREE.Quaternion().setFromUnitVectors(marsForward, olympusDir);
+  const volcano = new THREE.Mesh(
+    new THREE.CylinderGeometry(config.radius * 0.16, config.radius * 0.22, config.radius * 0.060, 56, 1, false),
+    new THREE.MeshStandardMaterial({ color: 0xd6a376, roughness: 1, transparent: true, opacity: 0.94 }),
+  );
+  volcano.position.copy(olympusDir).multiplyScalar(config.radius * 1.015);
+  volcano.quaternion.copy(olympusOrientation);
+  planet.add(volcano);
+
+  const caldera = new THREE.Mesh(
+    new THREE.TorusGeometry(config.radius * 0.052, config.radius * 0.010, 10, 56),
+    new THREE.MeshStandardMaterial({ color: 0x88614b, roughness: 1, transparent: true, opacity: 0.55, depthWrite: false }),
+  );
+  caldera.position.copy(olympusDir).multiplyScalar(config.radius * 1.029);
+  caldera.quaternion.copy(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), olympusDir));
+  planet.add(caldera);
+
+  const canyonMaterial = new THREE.MeshStandardMaterial({
+    color: 0x69858f,
+    roughness: 1,
+    transparent: true,
+    opacity: 0.30,
+    depthWrite: false,
+    polygonOffset: true,
+    polygonOffsetFactor: -2,
+  });
+  const canyonRimMaterial = new THREE.MeshStandardMaterial({
+    color: 0xe8d2a7,
+    roughness: 1,
+    transparent: true,
+    opacity: 0.18,
+    depthWrite: false,
+  });
+  const canyonDefinitions = [
+    { latitude: -10, longitude: -58, radiusScale: config.radius * 0.11, stretch: 2.7, rotation: 0.12 },
+    { latitude: -12, longitude: -28, radiusScale: config.radius * 0.10, stretch: 2.5, rotation: 0.02 },
+    { latitude: -14, longitude: 2, radiusScale: config.radius * 0.09, stretch: 2.2, rotation: -0.08 },
+  ];
+  const forward = new THREE.Vector3(0, 0, 1);
+  canyonDefinitions.forEach(({ latitude, longitude, radiusScale, stretch, rotation }) => {
+    const direction = sphericalDirection(latitude, longitude);
+    const orientation = new THREE.Quaternion().setFromUnitVectors(forward, direction);
+    const scar = new THREE.Mesh(new THREE.CircleGeometry(radiusScale, 40), canyonMaterial);
+    scar.position.copy(direction).multiplyScalar(config.radius * 1.005);
+    scar.quaternion.copy(orientation);
+    scar.rotateZ(rotation);
+    scar.scale.set(stretch, 0.36, 1);
+    planet.add(scar);
+
+    const rim = new THREE.Mesh(new THREE.TorusGeometry(radiusScale, Math.max(0.004, radiusScale * 0.05), 8, 48), canyonRimMaterial);
+    rim.position.copy(direction).multiplyScalar(config.radius * 1.010);
+    rim.quaternion.copy(orientation);
+    rim.rotateZ(rotation);
+    rim.scale.set(stretch, 0.40, 1);
+    planet.add(rim);
   });
 }
 
@@ -264,6 +470,7 @@ function createGasMaterial(config, texture) {
   });
 }
 
+
 function createAtmosphereMaterial(color, opacity) {
   return new THREE.ShaderMaterial({
     uniforms: { uColor: { value: new THREE.Color(color) }, uOpacity: { value: opacity } },
@@ -300,18 +507,18 @@ function addRealisticAtmosphere(planet, config) {
   let color;
   let opacity;
   let scale;
-  if (config.name === "Venus") { color = 0xffc46b; opacity = 0.23; scale = 1.025; }
+  if (config.name === "Venus") { color = 0xffd792; opacity = 0.32; scale = 1.045; }
   else if (GAS_PROFILES[config.name]) {
     const profile = GAS_PROFILES[config.name];
     color = profile.atmosphereColor;
     opacity = profile.atmosphereOpacity;
     scale = config.name === "Jupiter" ? 1.014 : config.name === "Neptune" ? 1.024 : 1.018;
-  } else if (config.name === "Mars") { color = 0xd86c3b; opacity = 0.055; scale = 1.012; }
+  } else if (config.name === "Mars") { color = 0xe38d53; opacity = 0.082; scale = 1.018; }
   else if (config.name === "Mercury") { return null; }
   else return null;
 
   const shell = new THREE.Mesh(
-    new THREE.SphereGeometry(config.radius * scale, 128, 96),
+    new THREE.SphereGeometry(config.radius * scale, 144, 120),
     createAtmosphereMaterial(color, opacity),
   );
   shell.name = `${config.name} atmosphere`;
@@ -319,22 +526,123 @@ function addRealisticAtmosphere(planet, config) {
   return shell;
 }
 
-function addVenusClouds(planet, config, texture) {
-  const clouds = new THREE.Mesh(
-    new THREE.SphereGeometry(config.radius * 1.012, 128, 96),
-    new THREE.MeshStandardMaterial({
-      map: texture,
-      color: 0xffd29a,
+function createVenusCloudShader(baseColor, opacity) {
+  return new THREE.ShaderMaterial({
+    uniforms: {
+      uTime: { value: 0 },
+      uBase: { value: new THREE.Color(baseColor) },
+      uOpacity: { value: opacity },
+    },
+    vertexShader: `
+      varying vec3 vObjectDirection;
+      varying vec3 vNormalView;
+      varying vec3 vViewDirection;
+      void main() {
+        vObjectDirection = normalize(position);
+        vec4 viewPosition = modelViewMatrix * vec4(position, 1.0);
+        vNormalView = normalize(normalMatrix * normal);
+        vViewDirection = normalize(-viewPosition.xyz);
+        gl_Position = projectionMatrix * viewPosition;
+      }
+    `,
+    fragmentShader: `
+      uniform float uTime;
+      uniform vec3 uBase;
+      uniform float uOpacity;
+      varying vec3 vObjectDirection;
+      varying vec3 vNormalView;
+      varying vec3 vViewDirection;
+
+      float hash31(vec3 p) {
+        p = fract(p * 0.1031);
+        p += dot(p, p.yzx + 33.33);
+        return fract((p.x + p.y) * p.z);
+      }
+      float noise3D(vec3 p) {
+        vec3 i = floor(p);
+        vec3 f = fract(p);
+        f = f * f * (3.0 - 2.0 * f);
+        float n000 = hash31(i + vec3(0.0, 0.0, 0.0));
+        float n100 = hash31(i + vec3(1.0, 0.0, 0.0));
+        float n010 = hash31(i + vec3(0.0, 1.0, 0.0));
+        float n110 = hash31(i + vec3(1.0, 1.0, 0.0));
+        float n001 = hash31(i + vec3(0.0, 0.0, 1.0));
+        float n101 = hash31(i + vec3(1.0, 0.0, 1.0));
+        float n011 = hash31(i + vec3(0.0, 1.0, 1.0));
+        float n111 = hash31(i + vec3(1.0, 1.0, 1.0));
+        float nx00 = mix(n000, n100, f.x);
+        float nx10 = mix(n010, n110, f.x);
+        float nx01 = mix(n001, n101, f.x);
+        float nx11 = mix(n011, n111, f.x);
+        return mix(mix(nx00, nx10, f.y), mix(nx01, nx11, f.y), f.z);
+      }
+      float fbm3D(vec3 p) {
+        float value = 0.0;
+        float amplitude = 0.5;
+        for (int i = 0; i < 5; i++) {
+          value += noise3D(p) * amplitude;
+          p = p * 2.0 + vec3(8.2, 5.1, 11.4);
+          amplitude *= 0.5;
+        }
+        return value;
+      }
+      void main() {
+        vec3 direction = normalize(vObjectDirection);
+        vec3 flow = normalize(direction + vec3(0.18, 0.0, 0.05));
+        float cloudA = fbm3D(flow * 6.0 + vec3(uTime * 0.030, -uTime * 0.018, uTime * 0.014));
+        float cloudB = fbm3D(flow * 16.0 + vec3(-uTime * 0.015, uTime * 0.022, -uTime * 0.011));
+        float bands = sin(asin(clamp(direction.y, -1.0, 1.0)) * 18.0 + cloudA * 3.4);
+        vec3 warm = mix(vec3(1.0, 0.82, 0.56), vec3(0.82, 0.60, 0.34), smoothstep(0.26, 0.92, cloudA));
+        vec3 cream = mix(vec3(0.98, 0.91, 0.72), warm, smoothstep(0.34, 0.92, cloudB));
+        vec3 color = mix(cream, vec3(0.75, 0.48, 0.23), smoothstep(0.62, 0.96, -bands) * 0.28);
+        float fresnel = pow(1.0 - max(dot(normalize(vNormalView), normalize(vViewDirection)), 0.0), 2.8);
+        float density = 0.48 + cloudA * 0.36 + cloudB * 0.22;
+        float alpha = clamp(uOpacity * density + fresnel * 0.18, 0.0, 0.92);
+        gl_FragColor = vec4(color * (0.86 + fresnel * 0.32), alpha);
+      }
+    `,
+    transparent: true,
+    depthWrite: false,
+  });
+}
+
+function addVenusClouds(planet, config) {
+  const cloudGroup = new THREE.Group();
+  cloudGroup.name = "Venus cloud deck";
+
+  const lowerClouds = new THREE.Mesh(
+    new THREE.SphereGeometry(config.radius * 1.010, 160, 128),
+    createVenusCloudShader(0xf0ba73, 0.60),
+  );
+  lowerClouds.name = "Venus lower cloud layer";
+  cloudGroup.add(lowerClouds);
+
+  const upperClouds = new THREE.Mesh(
+    new THREE.SphereGeometry(config.radius * 1.022, 160, 128),
+    createVenusCloudShader(0xffe0a9, 0.38),
+  );
+  upperClouds.name = "Venus upper haze layer";
+  upperClouds.rotation.y = 1.2;
+  cloudGroup.add(upperClouds);
+
+  const softGlow = new THREE.Mesh(
+    new THREE.SphereGeometry(config.radius * 1.05, 128, 96),
+    new THREE.MeshBasicMaterial({
+      color: 0xffcd7c,
       transparent: true,
-      opacity: 0.32,
-      roughness: 1,
+      opacity: 0.055,
+      blending: THREE.AdditiveBlending,
       depthWrite: false,
+      side: THREE.BackSide,
     }),
   );
-  clouds.name = "Venus cloud deck";
-  planet.add(clouds);
-  return clouds;
+  softGlow.name = "Venus soft glow";
+  cloudGroup.add(softGlow);
+
+  planet.add(cloudGroup);
+  return cloudGroup;
 }
+
 
 
 /**
@@ -589,7 +897,7 @@ function createPlanetMaterial(config, textures) {
 
 /** Builds one planet, its specialised layers, and registers it for animation. */
 export function createPlanet({ config, textures, world, orbitRoot, planets, hoverTargets }) {
-  const segments = GAS_PROFILES[config.name] ? [192, 128] : [144, 112];
+  const segments = GAS_PROFILES[config.name] ? [192, 128] : config.name === "Mercury" ? [192, 160] : config.name === "Mars" ? [200, 168] : config.name === "Venus" ? [184, 152] : [144, 112];
   const mesh = new THREE.Mesh(
     new THREE.SphereGeometry(config.radius, segments[0], segments[1]),
     createPlanetMaterial(config, textures),
@@ -604,6 +912,9 @@ export function createPlanet({ config, textures, world, orbitRoot, planets, hove
     angle: config.angle,
     tilt: config.tilt ?? 0,
     focusScale: config.focusScale ?? 1,
+    focusDistance: config.focusDistance,
+    minFocusDistance: config.minFocusDistance,
+    focusEase: config.focusEase,
     detail: config.detail,
     info: config.info,
     visualLayers: {},
@@ -613,8 +924,10 @@ export function createPlanet({ config, textures, world, orbitRoot, planets, hove
   const atmosphere = addRealisticAtmosphere(mesh, config);
   if (atmosphere) mesh.userData.visualLayers.atmosphere = atmosphere;
   if (config.name === "Venus") {
-    mesh.userData.visualLayers.clouds = addVenusClouds(mesh, config, textures.venus ?? makeNoiseTexture("venus"));
+    mesh.userData.visualLayers.clouds = addVenusClouds(mesh, config);
   }
+  if (config.name === "Mercury") addMercurySurfaceFeatures(mesh, config);
+  if (config.name === "Mars") addMarsSurfaceFeatures(mesh, config);
   if (["Jupiter", "Saturn", "Uranus", "Neptune"].includes(config.name)) {
     mesh.userData.visualLayers.ringSystem = addGiantPlanetRings(mesh, config, textures);
   }
@@ -636,7 +949,14 @@ export function createPlanet({ config, textures, world, orbitRoot, planets, hove
 export function updatePlanetVisuals(planet, time, motionScale = 1) {
   if (planet.material?.uniforms?.uTime) planet.material.uniforms.uTime.value = time;
   const layers = planet.userData.visualLayers ?? {};
-  if (layers.clouds) layers.clouds.rotation.y += 0.0016 * motionScale;
+  if (layers.clouds) {
+    layers.clouds.rotation.y += 0.00035 * motionScale;
+    layers.clouds.children.forEach((child, index) => {
+      if (child.material?.uniforms?.uTime) child.material.uniforms.uTime.value = time + index * 11.0;
+      if (index === 0) child.rotation.y += 0.00125 * motionScale;
+      if (index === 1) child.rotation.y -= 0.00072 * motionScale;
+    });
+  }
   if (layers.atmosphere) layers.atmosphere.rotation.y -= 0.00018 * motionScale;
   if (layers.ringSystem) layers.ringSystem.rotation.y += 0.000012 * motionScale;
   if (layers.dustArcs) layers.dustArcs.rotation.z += 0.000085 * motionScale;
