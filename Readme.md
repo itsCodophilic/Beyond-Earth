@@ -1,21 +1,24 @@
 # 🌌 Beyond Earth
 
-> An immersive 3D Solar System experience built with Three.js and Vite.
-
-## 🚀 Features
-
-- 3D Solar System visualization
-- Interactive camera controls
-- Animated planets
-- Modular JavaScript architecture
-- Built with Vite for fast development
+> An immersive 3D Solar System experience built with **Three.js** and **Vite**.
 
 ---
 
-## 📁 Project Structure
+## 🚀 Features
+
+- 🌍 Interactive 3D Solar System
+- 🪐 Animated planets
+- 🎥 Camera controls
+- ⚡ Fast development using Vite
+- 📦 Modular JavaScript architecture
+- 🌐 Hosted using GitHub Pages
+
+---
+
+# 📁 Project Structure
 
 ```text
-solar-system/
+Beyond-Earth/
 │
 ├── public/
 │
@@ -38,9 +41,9 @@ solar-system/
 
 ---
 
-## 📦 Prerequisites
+# 📋 Prerequisites
 
-Install **Node.js** (which includes npm).
+Install **Node.js** (includes npm).
 
 Verify installation:
 
@@ -51,21 +54,23 @@ npm -v
 
 ---
 
-## 🔧 Installation
-
-Clone the repository:
+# 📥 Clone the Repository
 
 ```bash
-git clone https://github.com/<your-username>/<repository-name>.git
+git clone https://github.com/itsCodophilic/Beyond-Earth.git
 ```
 
-Go inside the project:
+Move into the project directory.
 
 ```bash
-cd <repository-name>
+cd Beyond-Earth
 ```
 
-Install dependencies:
+---
+
+# 📦 Install Dependencies
+
+Install all required packages.
 
 ```bash
 npm install
@@ -73,13 +78,15 @@ npm install
 
 ---
 
-## ▶️ Run Development Server
+# ▶️ Run the Development Server
 
 ```bash
 npm run dev
 ```
 
-Open the URL shown in the terminal, typically:
+Vite will start a local server.
+
+Example:
 
 ```
 http://localhost:5173
@@ -87,21 +94,23 @@ http://localhost:5173
 
 ---
 
-## 🏗️ Build for Production
+# 🏗️ Build for Production
+
+Generate the optimized production build.
 
 ```bash
 npm run build
 ```
 
-This generates a production-ready build inside:
+The production files are generated inside:
 
-```
+```text
 dist/
 ```
 
 ---
 
-## 👀 Preview Production Build
+# 👀 Preview the Production Build
 
 ```bash
 npm run preview
@@ -109,16 +118,190 @@ npm run preview
 
 ---
 
-## 📚 Technologies Used
+# 🌐 Deploying to GitHub Pages
+
+## Step 1 — Install `gh-pages`
+
+```bash
+npm install --save-dev gh-pages
+```
+
+---
+
+## Step 2 — Update `package.json`
+
+Add these scripts.
+
+```json
+"scripts": {
+  "dev": "vite",
+  "build": "vite build",
+  "preview": "vite preview",
+  "deploy": "gh-pages -d dist",
+  "publish": "npm run build && npm run deploy"
+}
+```
+
+---
+
+## Step 3 — Configure `vite.config.js`
+
+Replace **Beyond-Earth** with your repository name if it ever changes.
+
+```javascript
+import { defineConfig } from "vite";
+
+export default defineConfig({
+  base: "/Beyond-Earth/",
+});
+```
+
+---
+
+## Step 4 — Build the Project
+
+```bash
+npm run build
+```
+
+---
+
+## Step 5 — Deploy
+
+```bash
+npm run deploy
+```
+
+This creates a new branch named:
+
+```
+gh-pages
+```
+
+and uploads the contents of the `dist/` folder.
+
+---
+
+## Step 6 — Enable GitHub Pages
+
+Open your GitHub repository.
+
+Go to:
+
+```
+Settings
+    ↓
+Pages
+```
+
+Under **Build and Deployment**:
+
+```
+Source
+Deploy from a branch
+```
+
+Choose:
+
+```
+Branch
+gh-pages
+```
+
+Folder:
+
+```
+/ (root)
+```
+
+Click **Save**.
+
+After a minute or two your website will be live at:
+
+```
+https://itsCodophilic.github.io/Beyond-Earth/
+```
+
+---
+
+# 🔄 Updating the Website
+
+Whenever you make changes to the project:
+
+### 1. Start the development server
+
+```bash
+npm run dev
+```
+
+Verify your changes.
+
+---
+
+### 2. Commit your changes
+
+```bash
+git add .
+git commit -m "Describe your changes"
+```
+
+---
+
+### 3. Push to GitHub
+
+```bash
+git push origin main
+```
+
+This updates your source code repository.
+
+---
+
+### 4. Publish the latest website
+
+```bash
+npm run publish
+```
+
+or
+
+```bash
+npm run build
+npm run deploy
+```
+
+After 1–2 minutes, GitHub Pages will automatically serve the latest version.
+
+---
+
+# 💻 Common Commands
+
+| Command | Description |
+|----------|-------------|
+| `npm install` | Install project dependencies |
+| `npm run dev` | Start development server |
+| `npm run build` | Build production files |
+| `npm run preview` | Preview production build |
+| `npm run deploy` | Deploy `dist/` to GitHub Pages |
+| `npm run publish` | Build and deploy in one command |
+
+---
+
+# 📚 Tech Stack
 
 - HTML5
 - CSS3
 - JavaScript (ES Modules)
 - Three.js
 - Vite
+- Git
+- GitHub Pages
+
 
 ---
 
-## 📄 License
+## ⭐ Support
 
-This project is available for learning and personal use.
+If you enjoyed this project, consider giving it a ⭐ on GitHub.
+
+It helps others discover the project and supports future improvements.

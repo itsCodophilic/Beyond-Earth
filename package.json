@@ -5,7 +5,11 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "deploy": "gh-pages -d dist",
+    "publish": "npm run build && npm run deploy"
+
+
   },
   "repository": {
     "type": "git",
@@ -17,12 +21,13 @@
   "bugs": {
     "url": "https://github.com/itsCodophilic/Universe-UI/issues"
   },
-  "homepage": "https://github.com/itsCodophilic/Universe-UI#readme",
+  "homepage": "https://itsCodophilic.github.io/Beyond-Earth/",
   "description": "",
   "dependencies": {
     "three": "^0.185.1"
   },
   "devDependencies": {
+    "gh-pages": "^6.3.0",
     "vite": "^8.1.4"
   }
 }
