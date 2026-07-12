@@ -17,8 +17,8 @@ import './brand.js';
 import { loadUniverseTextures } from './graphics/loadTextures.js';
 import { createMoonSystem } from './planets/earth/satellites/moon.js';
 import { PLANET_CONFIGS } from './planets/index.js';
-import { createAsteroidBelt } from './scene/asteroidBelt.js';
-import { makeBeltDust, makeParticles } from './scene/particles.js';
+import { createAsteroidBelt, updateAsteroidBelt } from './scene/asteroidBelt.js';
+import { makeParticles } from './scene/particles.js';
 import { createPlanet, updatePlanetVisuals } from './scene/planetFactory.js';
 import { createSun, updateSun } from './stars/sun/sun.js';
 
@@ -187,8 +187,8 @@ import { createSun, updateSun } from './stars/sun/sun.js';
   milkyWay.rotation.x = 0.28;
 
   // Asteroid meshes provide nearby shape; dust points cheaply supply density.
-  const asteroidGroup = createAsteroidBelt(world);
-  const asteroidDust = makeBeltDust(world);
+  const asteroidBelt = createAsteroidBelt({ world, hoverTargets });
+  const jupiter = planets.find((planet) => planet.name === "Jupiter");
 
   /*
     updateScrollProgress
@@ -490,18 +490,10 @@ import { createSun, updateSun } from './stars/sun/sun.js';
     // A small oscillation suggests lunar libration while the pivot maintains tidal lock.
     moon.rotation.y = Math.sin(simulationTime * 0.35) * 0.04;
     updateSun(sun, simulationTime, motionScale);
-    asteroidGroup.rotation.y += 0.001 * motionScale;
-    asteroidGroup.children.forEach((asteroid) => {
-      // Each asteroid's unique spin vector was stored during construction.
-      asteroid.rotation.x += asteroid.userData.spin.x * motionScale;
-      asteroid.rotation.y += asteroid.userData.spin.y * motionScale;
-      asteroid.rotation.z += asteroid.userData.spin.z * motionScale;
-    });
-    asteroidDust.rotation.y -= 0.0007 * motionScale;
+    updateAsteroidBelt(asteroidBelt, motionScale, jupiter);
     stars.rotation.y += 0.00008 * motionScale;
     milkyWay.rotation.y += 0.00045 * motionScale;
     stars.material.uniforms.uTime.value = elapsed;
-    asteroidDust.material.uniforms.uTime.value = elapsed;
     milkyWay.material.uniforms.uTime.value = elapsed * 0.72;
     // Fade the galaxy in only during the latter part of the scroll journey.
     milkyWay.material.uniforms.uOpacity.value = THREE.MathUtils.clamp((smoothProgress - 0.54) / 0.34, 0, 1) * 0.9;
