@@ -24,12 +24,30 @@ Beyond-Earth/
 │
 ├── src/
 │   ├── css/
-│   │   ├── style.css
-│   │   └── planets.css
+│   │   ├── styles.css              # CSS entry point
+│   │   ├── base.css                # Theme and browser defaults
+│   │   ├── experience.css          # Canvas, stages, and progress
+│   │   ├── loader.css              # Startup overlay animation
+│   │   ├── hud.css                 # Readout and responsive controls
+│   │   └── brand.css               # Beyond Earth identity
 │   │
 │   └── js/
-│       ├── main.js
-│       └── planetLabel.js
+│       ├── main.js                 # Application composition and render loop
+│       ├── brand.js                # Magnetic brand interaction
+│       ├── config/
+│       │   └── textures.js         # Texture sources and fallback rules
+│       ├── graphics/
+│       │   ├── loadTextures.js     # Asynchronous texture loading
+│       │   ├── materials.js        # Custom WebGL shader materials
+│       │   └── proceduralTextures.js
+│       ├── planets/                # One configuration module per planet
+│       │   ├── mercury.js ... neptune.js
+│       │   └── index.js            # Ordered planet registry
+│       └── scene/
+│           ├── planetFactory.js    # Planet mesh construction
+│           ├── orbits.js           # Orbit guide construction
+│           ├── particles.js        # Stars, galaxy, and belt dust
+│           └── asteroidBelt.js     # Rocky asteroid meshes
 │
 ├── index.html
 ├── package.json

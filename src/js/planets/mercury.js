@@ -1,0 +1,11 @@
+/**
+ * Plain data used by planetFactory.js to build Mercury.
+ * Keeping data separate from mesh-building code makes values easy to tune while
+ * debugging. Distances are artistic scene units rather than astronomical scale.
+ */
+export const mercury = {
+  name: "Mercury", texture: "mercury", radius: 0.54, orbitRadius: 14,
+  orbitSpeed: 0.72, spinSpeed: 0.003, axialTilt: 0.001, angle: 0.8,
+  bump: 0.028, orbitColor: 0x9d9386,
+  detail: "Smallest planet | 0.38x Earth width",
+};

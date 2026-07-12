@@ -1,0 +1,102 @@
+/* Loader overlay while the scene initializes. */
+.loader {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 28px;
+  background:
+    radial-gradient(circle at 50% 45%, rgba(34, 73, 104, 0.52), transparent 30%),
+    #03050b;
+  transition:
+    opacity 700ms ease,
+    visibility 700ms ease;
+}
+
+.loader.is-hidden {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.loader p {
+  margin: 0;
+  max-width: min(76vw, 760px);
+  text-align: center;
+  color: var(--ink);
+  font-size: clamp(2rem, 7vw, 5.8rem);
+  font-weight: 850;
+  line-height: 0.96;
+}
+
+.loader__ring {
+  position: relative;
+  width: 118px;
+  aspect-ratio: 1;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 50%;
+  animation: spin 1700ms linear infinite;
+}
+
+.loader__ring::before,
+.loader__ring::after,
+.loader__ring span {
+  position: absolute;
+  content: "";
+  width: 10px;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: var(--cyan);
+  box-shadow:
+    0 0 18px var(--cyan),
+    0 0 42px rgba(125, 231, 255, 0.72);
+}
+
+.loader__ring::before {
+  top: 2px;
+  left: 52px;
+}
+
+.loader__ring::after {
+  right: 10px;
+  bottom: 20px;
+  background: var(--gold);
+  box-shadow:
+    0 0 18px var(--gold),
+    0 0 42px rgba(255, 211, 122, 0.68);
+}
+
+.loader__ring span:nth-child(1) {
+  left: 8px;
+  bottom: 26px;
+  background: var(--rose);
+  box-shadow:
+    0 0 18px var(--rose),
+    0 0 42px rgba(255, 125, 168, 0.62);
+}
+
+.loader__ring span:nth-child(2) {
+  width: 5px;
+  top: 26px;
+  right: 21px;
+}
+
+.loader__ring span:nth-child(3) {
+  width: 4px;
+  left: 25px;
+  top: 18px;
+  background: var(--green);
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .loader__ring { animation-duration: 6s; }
+}
+

@@ -1,0 +1,11 @@
+/**
+ * Plain data used by planetFactory.js to build Mars.
+ * `bump` controls how strongly the color texture perturbs lighting, creating the
+ * impression of rocky height without adding expensive geometry.
+ */
+export const mars = {
+  name: "Mars", texture: "mars", radius: 0.72, orbitRadius: 40,
+  orbitSpeed: 0.25, spinSpeed: 0.01, axialTilt: 0.44, angle: 5.3,
+  bump: 0.065, orbitColor: 0xd06a37,
+  detail: "Red planet | about half Earth width", focusScale: 1.55,
+};

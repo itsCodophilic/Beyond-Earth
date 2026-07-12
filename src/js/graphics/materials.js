@@ -1,0 +1,224 @@
+/**
+ * Custom GPU materials written with GLSL shaders.
+ *
+ * A vertex shader runs once for each vertex/point and decides its screen position.
+ * A fragment shader runs for generated pixels and decides their final color.
+ * `uniform` values are shared by every vertex/pixel and can change each frame;
+ * `attribute` values can be different for every point in a BufferGeometry.
+ */
+import * as THREE from "three";
+
+/** Builds a shader material that turns each THREE.Points vertex into a twinkling star. */
+export function makeTwinkleMaterial(size, opacity = 0.86) {
+  return new THREE.ShaderMaterial({
+    // main.js updates uTime every frame; size and opacity are creation-time controls.
+    uniforms: {
+      uTime: { value: 0 },
+      uSize: { value: size },
+      uOpacity: { value: opacity },
+    },
+    vertexShader: `
+      // Attributes arrive from BufferGeometry and may differ for every star.
+      attribute vec3 aColor;
+      attribute float aPhase;
+      attribute float aSpeed;
+      attribute float aScale;
+      varying vec3 vColor;
+      varying float vTwinkle;
+      uniform float uTime;
+      uniform float uSize;
+      void main() {
+        vColor = aColor;
+        // Sine creates a repeating brightness wave; phase/speed keep stars independent.
+        vTwinkle = 0.58 + 0.42 * sin(uTime * aSpeed + aPhase);
+        // Convert world position to camera/view space before projection to the screen.
+        vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+        // Nearby points are drawn larger, providing natural perspective.
+        gl_PointSize = uSize * aScale * (0.74 + vTwinkle * 0.65) * (300.0 / max(80.0, -mvPosition.z));
+        gl_Position = projectionMatrix * mvPosition;
+      }
+    `,
+    fragmentShader: `
+      varying vec3 vColor;
+      varying float vTwinkle;
+      uniform float uOpacity;
+      void main() {
+        // gl_PointCoord runs from 0–1 across each square point. Re-centering it
+        // allows distance-from-center calculations for a circular glow.
+        vec2 uv = gl_PointCoord - vec2(0.5);
+        float dist = length(uv);
+        float core = smoothstep(0.24, 0.0, dist);
+        float halo = smoothstep(0.5, 0.0, dist) * 0.34;
+        float alpha = (core + halo) * uOpacity * (0.55 + vTwinkle * 0.55);
+        // Discard transparent edge pixels so point squares look like round stars.
+        if (alpha < 0.02) discard;
+        gl_FragColor = vec4(vColor * (0.75 + vTwinkle * 0.72), alpha);
+      }
+    `,
+    transparent: true,
+    vertexColors: true,
+    // Additive blending makes overlapping particles brighter like emitted light.
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+  });
+}
+
+
+/** Creates a transparent pulsing material intended for a flat corona/glow shell. */
+export function makeSunCoronaMaterial() {
+  return new THREE.ShaderMaterial({
+    uniforms: {
+      uTime: { value: 0 },
+      uIntensity: { value: 1.1 },
+    },
+    vertexShader: `
+      varying vec2 vUv;
+      void main() {
+        vUv = uv;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }
+    `,
+    fragmentShader: `
+      varying vec2 vUv;
+      uniform float uTime;
+      uniform float uIntensity;
+      void main() {
+        // Distance from UV center creates a soft circular mask.
+        vec2 uv = vUv - 0.5;
+        float dist = length(uv) * 1.8;
+        float glow = smoothstep(0.94, 0.24, dist);
+        float pulse = 0.22 + 0.28 * sin(uTime * 3.8 - dist * 12.0);
+        float corona = glow * pulse * uIntensity * 0.76;
+        float rim = smoothstep(0.58, 0.52, length(uv)) * 0.18;
+        vec3 color = vec3(1.0, 0.68, 0.18) * (0.88 + corona * 1.1 + rim * 0.8);
+        float alpha = clamp(glow * 0.54 + rim * 0.22, 0.0, 0.82);
+        gl_FragColor = vec4(color, alpha);
+        if (gl_FragColor.a < 0.01) discard;
+      }
+    `,
+    transparent: true,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+  });
+}
+
+/** Creates the Sun's animated surface by combining texture pixels and procedural noise. */
+export function makeSunSurfaceMaterial(texture) {
+  return new THREE.ShaderMaterial({
+    uniforms: {
+      uTime: { value: 0 },
+      uMap: { value: texture },
+      uGlow: { value: 1.25 },
+    },
+    vertexShader: `
+      varying vec3 vNormal;
+      varying vec3 vViewPosition;
+      varying vec2 vUv;
+      void main() {
+        vNormal = normalize(normalMatrix * normal);
+        vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+        vViewPosition = mvPosition.xyz;
+        vUv = uv;
+        gl_Position = projectionMatrix * mvPosition;
+      }
+    `,
+    fragmentShader: `
+      uniform float uTime;
+      uniform sampler2D uMap;
+      uniform float uGlow;
+      varying vec3 vNormal;
+      varying vec3 vViewPosition;
+      varying vec2 vUv;
+
+      // A deterministic pseudo-random value: same coordinate, same result.
+      float hash(vec2 p) {
+        return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);
+      }
+
+      // Smoothly interpolate four random grid corners to create coherent noise.
+      float noise(vec2 p) {
+        vec2 i = floor(p);
+        vec2 f = fract(p);
+        float a = hash(i);
+        float b = hash(i + vec2(1.0, 0.0));
+        float c = hash(i + vec2(0.0, 1.0));
+        float d = hash(i + vec2(1.0, 1.0));
+        vec2 u = f * f * (3.0 - 2.0 * f);
+        return mix(a, b, u.x) + (c - a) * u.y * (1.0 - u.x) + (d - b) * u.x * u.y;
+      }
+
+      // Fractal Brownian Motion stacks noise at several scales for richer detail.
+      float fbm(vec2 p) {
+        float value = 0.0;
+        float amplitude = 0.55;
+        for (int i = 0; i < 5; i++) {
+          value += amplitude * noise(p);
+          p *= 2.0;
+          amplitude *= 0.52;
+          p += vec2(1.7, 9.2);
+        }
+        return value;
+      }
+
+      vec2 hash2(vec2 p) {
+        return fract(sin(vec2(dot(p, vec2(127.1, 311.7)), dot(p, vec2(269.5, 183.3)))) * 43758.5453123);
+      }
+
+      // Cellular/Worley-style distance creates granular, cell-like solar patterns.
+      float cellular(vec2 p) {
+        vec2 i = floor(p);
+        vec2 f = fract(p);
+        float minDist = 1.0;
+        for (int y = -1; y <= 1; y++) {
+          for (int x = -1; x <= 1; x++) {
+            vec2 neighbor = vec2(float(x), float(y));
+            vec2 point = hash2(i + neighbor) + neighbor;
+            minDist = min(minDist, length(f - point));
+          }
+        }
+        return minDist;
+      }
+
+      void main() {
+        // Moving UV/noise coordinates over time makes the surface flow continuously.
+        vec2 uv = vUv * 2.2 + vec2(uTime * 0.08, -uTime * 0.05);
+        vec3 baseColor = texture2D(uMap, uv * 0.78).rgb;
+        vec2 noisePos = vNormal.xy * 2.4 + vec2(uTime * 0.12, -uTime * 0.07);
+
+        float pattern = fbm(noisePos * 3.8);
+        float molten = fbm(noisePos * 8.2 + vec2(uTime * 0.18, uTime * 0.14));
+        float detail = fbm(noisePos * 16.4 + vec2(-uTime * 0.22, uTime * 0.19));
+        float cells = cellular(vUv * 15.0 + vec2(uTime * 0.06, -uTime * 0.09));
+
+        float granule = mix(pattern, molten, 0.52);
+        float plasma = mix(granule, 1.0 - cells * 1.28, 0.38);
+        float energy = clamp(plasma + detail * 0.17, 0.0, 1.0);
+
+        // Convert the calculated energy level into a red → orange → white heat ramp.
+        vec3 darkRed = vec3(0.15, 0.01, 0.0);
+        vec3 fieryOrange = vec3(0.85, 0.25, 0.0);
+        vec3 goldOrange = vec3(1.0, 0.55, 0.0);
+        vec3 flareWhite = vec3(1.0, 0.95, 0.8);
+
+        vec3 finalSurface = mix(darkRed, fieryOrange, smoothstep(0.0, 0.4, energy));
+        finalSurface = mix(finalSurface, goldOrange, smoothstep(0.4, 0.75, energy));
+        finalSurface = mix(finalSurface, flareWhite, smoothstep(0.75, 0.98, energy));
+
+        // Surface normals facing away from the camera receive a darker glowing rim.
+        float edgeFactor = 1.0 - max(dot(normalize(vNormal), normalize(-vViewPosition)), 0.0);
+        float rimGlow = pow(edgeFactor, 3.5);
+        finalSurface = mix(finalSurface, vec3(0.4, 0.02, 0.0), rimGlow * 0.92);
+
+        float heat = smoothstep(0.18, 0.72, detail * 0.82 + granule * 0.18);
+        finalSurface += vec3(0.3, 0.11, 0.02) * rimGlow * uGlow * 0.42;
+        finalSurface *= 0.82 + 0.24 * heat;
+
+        vec3 surfaceColor = clamp(finalSurface + baseColor * 0.16, 0.0, 1.0);
+        gl_FragColor = vec4(surfaceColor, 1.0);
+      }
+    `,
+    transparent: false,
+    depthWrite: true,
+  });
+}

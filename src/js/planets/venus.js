@@ -1,0 +1,11 @@
+/**
+ * Plain data used by planetFactory.js to build Venus.
+ * A negative spinSpeed produces retrograde rotation—the surface turns in the
+ * opposite direction from most planets—without needing special animation code.
+ */
+export const venus = {
+  name: "Venus", texture: "venus", radius: 1.18, orbitRadius: 21,
+  orbitSpeed: 0.46, spinSpeed: -0.0015, axialTilt: 3.1, angle: 2.2,
+  bump: 0.01, orbitColor: 0xe0b36a,
+  detail: "Earth-size world | retrograde spin",
+};
