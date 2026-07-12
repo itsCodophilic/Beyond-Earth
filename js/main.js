@@ -1,4 +1,12 @@
+/*
+  main.js
+  - Entry point for the Universe Drift experience.
+  - Initializes the Three.js scene, loads textures, creates the solar system, and drives scroll-based camera motion.
+*/
+
+
 (async () => {
+
   const THREE = await import("https://unpkg.com/three@0.161.0/build/three.module.js");
 
   const canvas = document.querySelector("#universe");
@@ -8,9 +16,13 @@
   const bodyLabel = document.querySelector("#body-label");
   const bodyDetail = document.querySelector("#body-detail");
 
+  // The three.js scene, camera, renderer, and control state are initialized here.
+  // The scene contains fog for depth and two root groups: one for planetary world objects,
+  // and another for orbit lines so they can have independent opacity animation.
   const scene = new THREE.Scene();
   scene.fog = new THREE.FogExp2(0x01040a, 0.0018);
 
+  // Set up the camera and renderer for the WebGL canvas.
   const camera = new THREE.PerspectiveCamera(56, innerWidth / innerHeight, 0.1, 5000);
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false, powerPreference: "high-performance" });
   renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
@@ -25,12 +37,15 @@
   const textureLoader = new THREE.TextureLoader();
   textureLoader.setCrossOrigin("anonymous");
 
+  // Groups separate objects into world content and orbit overlays.
   const world = new THREE.Group();
   const orbitRoot = new THREE.Group();
   const planets = [];
   const hoverTargets = [];
   scene.add(world, orbitRoot);
 
+  // Scroll and drag state for camera control.
+  // Uses both raw scroll progress and smoothed values for camera motion.
   let scrollProgress = 0;
   let smoothProgress = 0;
   let targetYaw = -0.55;
@@ -45,6 +60,8 @@
   let hasCameraFocusPoint = false;
   const cameraFocusPoint = new THREE.Vector3();
 
+  // Remote texture URLs used for planetary materials and special surface maps.
+  // The loader will fetch these assets and fall back to procedural textures when necessary.
   const textureUrls = {
     sun: "https://threejs.org/examples/textures/lava/cloud.png",
     mercury: "https://threejs.org/examples/textures/planets/mercury.jpg",
@@ -62,6 +79,7 @@
     neptune: "https://threejs.org/examples/textures/planets/neptune.jpg",
   };
 
+  // Lighting that illuminates the solar system and adds atmospheric shading.
   scene.add(new THREE.AmbientLight(0x8da1c6, 0.34));
 
   const sunLight = new THREE.PointLight(0xffe6aa, 5200, 1450, 1.5);
@@ -71,6 +89,10 @@
   fillLight.position.set(-50, 40, 90);
   scene.add(fillLight);
 
+  /*
+    makeNoiseTexture
+    - Procedurally generates a planet-like canvas texture for bodies without external imagery.
+  */
   function makeNoiseTexture(kind, size = 1024) {
     const textureCanvas = document.createElement("canvas");
     textureCanvas.width = size;
@@ -184,6 +206,10 @@
     return texture;
   }
 
+  /*
+    makeRockTexture
+    - Builds a rugged rock canvas texture used for asteroids and small debris.
+  */
   function makeRockTexture() {
     const size = 256;
     const textureCanvas = document.createElement("canvas");
@@ -214,6 +240,10 @@
     return texture;
   }
 
+  /*
+    makeGlowTexture
+    - Creates a soft radial glow texture for sprites and halo effects.
+  */
   function makeGlowTexture() {
     const size = 128;
     const sprite = document.createElement("canvas");
@@ -232,6 +262,16 @@
     return texture;
   }
 
+  /*
+    makeTwinkleMaterial
+    - Returns a custom shader material for stars, dust, and particle effects.
+    - Simulates size modulation, twinkle, and halo glow per point.
+  */
+  /*
+    makeTwinkleMaterial
+    - Builds a shader material for star and dust point clouds.
+    - Each particle is sized and brightened by per-vertex attributes and time-varying twinkle.
+  */
   function makeTwinkleMaterial(size, opacity = 0.86) {
     return new THREE.ShaderMaterial({
       uniforms: {
@@ -277,6 +317,16 @@
     });
   }
 
+  /*
+    loadTexture
+    - Loads a remote texture and falls back to a procedural noise texture on failure.
+    - Prepares texture color space, anisotropy, and wrapping behavior.
+  */
+  /*
+    loadTexture
+    - Loads a remote texture or falls back to a procedural texture if the load fails.
+    - Configures color space, anisotropy, and wrapping for consistent rendering.
+  */
   function loadTexture(url, fallbackKind, options = {}) {
     return new Promise((resolve) => {
       textureLoader.load(
@@ -302,6 +352,16 @@
     }),
   );
 
+  /*
+    createOrbitLine
+    - Creates a smooth circular orbit visual for a planet.
+    - Adds the line to the orbit secondary group for separate opacity control.
+  */
+  /*
+    createOrbitLine
+    - Builds a low-opacity circular line showing a planet's orbit.
+    - The orbit line is kept separate so its opacity can fade in with scroll.
+  */
   function createOrbitLine(radius, color = 0xffffff, opacity = 0.18, tilt = 0) {
     const points = Array.from({ length: 241 }, (_, i) => {
       const angle = (i / 240) * Math.PI * 2;
@@ -316,6 +376,16 @@
     return orbit;
   }
 
+  /*
+    makePlanetMaterial
+    - Builds each planet's surface material using loaded textures and config values.
+    - Supports bump maps, normals, emissive highlights, and roughness settings.
+  */
+  /*
+    makePlanetMaterial
+    - Builds a standard mesh material for each planet surface.
+    - Uses texture maps, bump maps, and normals to create varied planetary detail.
+  */
   function makePlanetMaterial(config) {
     return new THREE.MeshStandardMaterial({
       map: textures[config.texture] ?? makeNoiseTexture(config.texture),
@@ -331,6 +401,15 @@
     });
   }
 
+  /*
+    makePlanet
+    - Creates a planet mesh, assigns orbit/focus metadata, and adds it to world scene groups.
+  */
+  /*
+    makePlanet
+    - Creates a planet mesh with orbit data, spin data, and interaction metadata.
+    - Adds it to the world group and registers it for pointer hover detection.
+  */
   function makePlanet(config) {
     const mesh = new THREE.Mesh(
       new THREE.SphereGeometry(config.radius, 112, 112),
@@ -355,6 +434,15 @@
     return mesh;
   }
 
+  /*
+    makeSunCoronaMaterial
+    - Builds the glowing, animated corona shader material around the Sun.
+  */
+  /*
+    makeSunCoronaMaterial
+    - Creates the animated outer corona shader for the Sun.
+    - Uses soft glow and pulsation to make the stellar atmosphere feel alive.
+  */
   function makeSunCoronaMaterial() {
     return new THREE.ShaderMaterial({
       uniforms: {
@@ -392,6 +480,10 @@
     });
   }
 
+  /*
+    makeSunSurfaceMaterial
+    - Creates the animated star surface shader using noise and lighting variation.
+  */
   function makeSunSurfaceMaterial(texture) {
     return new THREE.ShaderMaterial({
       uniforms: {
@@ -533,6 +625,11 @@
   const uranus = planets.find((planet) => planet.name === "Uranus");
   const neptune = planets.find((planet) => planet.name === "Neptune");
 
+  /*
+    addAtmosphere
+    - Creates a transparent glow shell around a planet to simulate an atmosphere.
+    - Uses a back-side material and additive blending so the layer softly wraps the body.
+  */
   function addAtmosphere(planet, radius, color, opacity) {
     const shell = new THREE.Mesh(
       new THREE.SphereGeometry(radius, 96, 96),
@@ -633,6 +730,11 @@
   );
   earth.add(moonOrbit);
 
+  /*
+    makeParticles
+    - Builds a point cloud for stars, background dust, or a spiral Milky Way.
+    - Each particle receives color, phase, speed, and scale attributes for per-star animation.
+  */
   function makeParticles({ count, radius, position, colors, size, spiral = false, opacity = 0.86 }) {
     const geometry = new THREE.BufferGeometry();
     const positions = new Float32Array(count * 3);
@@ -677,6 +779,10 @@
     return points;
   }
 
+  /*
+    makeBeltDust
+    - Generates the asteroid belt dust field as a point cloud around the inner solar system.
+  */
   function makeBeltDust() {
     const count = 1800;
     const geometry = new THREE.BufferGeometry();
@@ -768,6 +874,10 @@
   world.add(asteroidGroup);
   const asteroidDust = makeBeltDust();
 
+  /*
+    updateScrollProgress
+    - Updates normalized scroll progress and refreshes the HUD progress bar.
+  */
   function updateScrollProgress() {
     const maxScroll = document.documentElement.scrollHeight - innerHeight;
     scrollProgress = maxScroll > 0 ? scrollY / maxScroll : 0;
@@ -779,12 +889,22 @@
     return THREE.MathUtils.lerp(4.8, 620, eased);
   }
 
+  /*
+    getFocusPoint
+    - Chooses the camera target based on the selected body or nearby Earth when zoomed in.
+    - Keeps the camera on the Sun at long range when no body is focused.
+  */
   function getFocusPoint(distance) {
     if (focusedBody) return focusedBody.getWorldPosition(new THREE.Vector3());
     if (distance < 18) return earth.getWorldPosition(new THREE.Vector3());
     return new THREE.Vector3(0, 0, 0);
   }
 
+  /*
+    updateScaleLabel
+    - Writes a descriptive label to the HUD based on the current camera distance.
+    - Helps the user understand the scroll-driven scale transition.
+  */
   function updateScaleLabel(distance) {
     if (distance < 16) scaleLabel.textContent = "Earth orbit";
     else if (distance < 92) scaleLabel.textContent = "Inner solar system";
@@ -792,6 +912,11 @@
     else scaleLabel.textContent = "Milky Way scale";
   }
 
+  /*
+    updateHoveredBody
+    - Raycasts from the mouse pointer into the scene and updates HUD text.
+    - Adds a hover CSS state for subtle cursor feedback.
+  */
   function updateHoveredBody() {
     const named = getBodyAtPointer();
     bodyLabel.textContent = named?.userData?.name ?? "Free drift";
@@ -799,11 +924,21 @@
     document.body.classList.toggle("is-hovering-body", Boolean(named));
   }
 
+  /*
+    updatePointerFromEvent
+    - Converts browser pointer coordinates into normalized device coordinates.
+    - These coordinates are used for raycasting and interactive hover detection.
+  */
   function updatePointerFromEvent(event) {
     pointer.x = (event.clientX / innerWidth) * 2 - 1;
     pointer.y = -(event.clientY / innerHeight) * 2 + 1;
   }
 
+  /*
+    findInteractiveObject
+    - Walks up the scene graph to identify the top-most interactive body.
+    - Ensures raycast hits on child mesh parts still resolve to the parent planet object.
+  */
   function findInteractiveObject(object) {
     while (object) {
       if (object.userData?.name) return object;
@@ -812,12 +947,22 @@
     return null;
   }
 
+  /*
+    getBodyAtPointer
+    - Uses the raycaster to determine which body is under the cursor.
+    - Supports nested mesh structures by resolving to the interactive parent.
+  */
   function getBodyAtPointer() {
     raycaster.setFromCamera(pointer, camera);
     const hit = raycaster.intersectObjects(hoverTargets, true)[0];
     return hit ? findInteractiveObject(hit.object) : null;
   }
 
+  /*
+    focusBody
+    - Toggles selection of a body and scrolls the page toward a camera distance that frames it.
+    - Clicking the same body twice clears focus and returns to free drift.
+  */
   function focusBody(body) {
     if (!body) {
       focusedBody = null;
@@ -832,6 +977,11 @@
     window.scrollTo({ top: idealProgress * (document.documentElement.scrollHeight - innerHeight), behavior: "smooth" });
   }
 
+  /*
+    setup input handlers
+    - Wires scroll, pointer, drag, and keyboard events to the camera control state.
+    - Keeps the scene interactive while preserving pointer selection and drag motion.
+  */
   addEventListener("scroll", updateScrollProgress, { passive: true });
   addEventListener("pointermove", (event) => {
     updatePointerFromEvent(event);
@@ -886,6 +1036,10 @@
     renderer.setSize(innerWidth, innerHeight);
   });
 
+  /*
+    animate
+    - Main render loop that updates the camera, rotates bodies, animates particles, and renders the scene.
+  */
   function animate() {
     const elapsed = clock.getElapsedTime();
     smoothProgress = THREE.MathUtils.lerp(smoothProgress, scrollProgress, 0.065);
