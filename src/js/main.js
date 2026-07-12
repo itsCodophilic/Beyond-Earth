@@ -5,9 +5,10 @@
 */
 
 
-(async () => {
+import * as THREE from 'three';
+import './brand.js';
 
-  const THREE = await import("https://unpkg.com/three@0.161.0/build/three.module.js");
+(async () => {
 
   const canvas = document.querySelector("#universe");
   const loader = document.querySelector("#loader");
