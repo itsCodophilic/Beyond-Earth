@@ -14,12 +14,12 @@
 import * as THREE from 'three';
 // Importing brand.js runs its DOM event setup; it does not export a value.
 import './brand.js';
-import { PLANET_CONFIGS } from './planets/index.js';
 import { loadUniverseTextures } from './graphics/loadTextures.js';
-import { makeBeltDust, makeParticles } from './scene/particles.js';
-import { createAsteroidBelt } from './scene/asteroidBelt.js';
-import { addAtmosphere, createPlanet } from './scene/planetFactory.js';
 import { createMoonSystem } from './planets/earth/satellites/moon.js';
+import { PLANET_CONFIGS } from './planets/index.js';
+import { createAsteroidBelt } from './scene/asteroidBelt.js';
+import { makeBeltDust, makeParticles } from './scene/particles.js';
+import { createPlanet, updatePlanetVisuals } from './scene/planetFactory.js';
 import { createSun, updateSun } from './stars/sun/sun.js';
 
 // An async immediately-invoked function lets us await texture loading while
@@ -109,42 +109,20 @@ import { createSun, updateSun } from './stars/sun/sun.js';
   // The star module owns the Sun's surface, atmosphere, corona, flares, and light.
   const sun = createSun({ world, hoverTargets, texture: textures.sun });
 
-  // Config-driven construction means adding a normal planet only requires a new data file.
+  // Every planet is built through one realistic factory. Earth receives its extra
+  // cloud, atmosphere, night-light, and Moon layers below as before.
   PLANET_CONFIGS.forEach((config) => {
-    createPlanet({ config, textures, world, orbitRoot, planets, hoverTargets });
+    createPlanet({
+      config,
+      textures,
+      world,
+      orbitRoot,
+      planets,
+      hoverTargets,
+    });
   });
-  // Keep named references only for bodies that receive extra meshes or special behavior.
+
   const earth = planets.find((planet) => planet.name === "Earth");
-  const venus = planets.find((planet) => planet.name === "Venus");
-  const jupiter = planets.find((planet) => planet.name === "Jupiter");
-  const saturn = planets.find((planet) => planet.name === "Saturn");
-  const uranus = planets.find((planet) => planet.name === "Uranus");
-  const neptune = planets.find((planet) => planet.name === "Neptune");
-
-  // Atmospheres are slightly larger transparent spheres parented to their planets.
-  addAtmosphere(venus, 1.24, 0xffd99a, 0.16);
-  addAtmosphere(jupiter, 6.38, 0xffd4a2, 0.08);
-  addAtmosphere(saturn, 5.32, 0xf8dfb0, 0.08);
-  addAtmosphere(uranus, 2.86, 0x9ff7ff, 0.12);
-  addAtmosphere(neptune, 2.76, 0x5d8dff, 0.13);
-
-  if (saturn) {
-    // RingGeometry is a flat disc with a hole. DoubleSide keeps both faces visible.
-    const ring = new THREE.Mesh(
-      new THREE.RingGeometry(6.45, 9.4, 180),
-      new THREE.MeshBasicMaterial({
-        map: textures.saturnRing ?? null,
-        color: 0xe6d0a2,
-        side: THREE.DoubleSide,
-        transparent: true,
-        opacity: 0.78,
-      }),
-    );
-    // Rotate the default upright ring into Saturn's equatorial plane.
-    ring.rotation.x = Math.PI / 2.05;
-    ring.rotation.z = 0.24;
-    saturn.add(ring);
-  }
 
   // Earth is layered like an onion: solid globe, cloud shell, atmospheric glow,
   // and optional light shell. Small radius differences avoid z-fighting.
@@ -475,6 +453,7 @@ import { createSun, updateSun } from './stars/sun/sun.js';
         Math.sin(data.angle) * data.orbitRadius,
       );
       planet.rotation.y += data.spinSpeed * motionScale;
+      updatePlanetVisuals(planet, simulationTime, motionScale);
     });
 
     // ----- Calculate the camera's spherical orbit around its focus point -----
