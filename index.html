@@ -13,8 +13,8 @@
     <!-- <link rel="preconnect" href="https://unpkg.com" />
     <link rel="preconnect" href="https://threejs.org" /> -->
     <!-- Main stylesheet for page layout, HUD, and effects. -->
-    <script type="module" crossorigin src="/Beyond-Earth/assets/index-CtH-QSqs.js"></script>
-    <link rel="stylesheet" crossorigin href="/Beyond-Earth/assets/index-Dp8AQip1.css">
+    <script type="module" crossorigin src="/Beyond-Earth/assets/index-DpM1-2mb.js"></script>
+    <link rel="stylesheet" crossorigin href="/Beyond-Earth/assets/index-UlB2hCk6.css">
   </head>
   <body>
     <!-- Loader overlay displayed while Three.js assets and textures initialize. -->
@@ -39,18 +39,9 @@
           <span class="brand__text">Beyond Earth</span>
         </a>
 
-        <!-- Live labels updated from JavaScript as the user moves through the scene. -->
-        <div class="readout" aria-live="polite">
-          <span id="scale-label">Earth orbit</span>
-          <strong id="body-label">Free drift</strong>
-          <em id="body-detail">Eight-planet solar system</em>
-        </div>
-
-        <!-- Simple control hints for how to interact with the simulation. -->
-        <div class="ship-controls" aria-label="Flight controls">
-          <span>Scroll to change scale</span>
-          <span>Drag to orbit</span>
-          <span>Click a body to focus</span>
+        <!-- Primary invitation into the focused slow-motion inspection experience. -->
+        <div class="ship-controls" aria-label="Celestial inspection guidance">
+          <span>Click, Scroll and dive into the Universe</span>
         </div>
       </header>
 
@@ -61,6 +52,27 @@
 
 
     </main>
+
+    <!--
+      Selection panel populated from each celestial body's userData.info object.
+      The connector is rotated by JavaScript so it points toward the selected mesh.
+    -->
+    <div id="body-connector" class="body-connector" aria-hidden="true"></div>
+    <aside id="body-card" class="body-card" aria-live="polite" aria-hidden="true">
+      <button id="card-close" class="body-card__close" type="button" aria-label="Close celestial information">×</button>
+      <div class="body-card__eyebrow">
+        <span id="card-type">Celestial body</span>
+        <span id="card-mode">Inspection mode</span>
+      </div>
+      <h2 id="card-name">Earth</h2>
+      <dl class="body-card__facts">
+        <div><dt>Diameter</dt><dd id="card-diameter">—</dd></div>
+        <div><dt>Orbital speed</dt><dd id="card-speed">—</dd></div>
+        <div><dt>Distance from Earth</dt><dd id="card-distance">—</dd></div>
+      </dl>
+      <p id="card-description">Select a planet or satellite to inspect it.</p>
+      <span id="card-hint" class="body-card__hint">Click to focus · Focus activates slow motion</span>
+    </aside>
 
     <!-- Progress bar reflects current scroll progress; updated by JavaScript. -->
     <div class="progress" aria-hidden="true"><span id="progress-bar"></span></div>
