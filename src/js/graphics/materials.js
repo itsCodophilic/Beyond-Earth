@@ -23,46 +23,69 @@ export function makeTwinkleMaterial(size, opacity = 0.86) {
       attribute float aPhase;
       attribute float aSpeed;
       attribute float aScale;
+
       varying vec3 vColor;
       varying float vTwinkle;
+
       uniform float uTime;
       uniform float uSize;
+
       void main() {
         vColor = aColor;
+
         // Sine creates a repeating brightness wave; phase/speed keep stars independent.
         vTwinkle = 0.58 + 0.42 * sin(uTime * aSpeed + aPhase);
+
         // Convert world position to camera/view space before projection to the screen.
         vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+
         // Nearby points are drawn larger, providing natural perspective.
-        gl_PointSize = uSize * aScale * (0.74 + vTwinkle * 0.65) * (300.0 / max(80.0, -mvPosition.z));
+        gl_PointSize =
+          uSize *
+          aScale *
+          (0.74 + vTwinkle * 0.65) *
+          (300.0 / max(80.0, -mvPosition.z));
+
         gl_Position = projectionMatrix * mvPosition;
       }
     `,
     fragmentShader: `
       varying vec3 vColor;
       varying float vTwinkle;
+
       uniform float uOpacity;
+
       void main() {
-        // gl_PointCoord runs from 0–1 across each square point. Re-centering it
-        // allows distance-from-center calculations for a circular glow.
+        // gl_PointCoord runs from 0–1 across each square point.
+        // Re-centering it allows distance-from-center calculations.
         vec2 uv = gl_PointCoord - vec2(0.5);
         float dist = length(uv);
+
         float core = smoothstep(0.24, 0.0, dist);
         float halo = smoothstep(0.5, 0.0, dist) * 0.34;
-        float alpha = (core + halo) * uOpacity * (0.55 + vTwinkle * 0.55);
-        // Discard transparent edge pixels so point squares look like round stars.
-        if (alpha < 0.02) discard;
-        gl_FragColor = vec4(vColor * (0.75 + vTwinkle * 0.72), alpha);
+
+        float alpha =
+          (core + halo) *
+          uOpacity *
+          (0.55 + vTwinkle * 0.55);
+
+        // Discard transparent edge pixels so point squares look circular.
+        if (alpha < 0.02) {
+          discard;
+        }
+
+        gl_FragColor = vec4(
+          vColor * (0.75 + vTwinkle * 0.72),
+          alpha
+        );
       }
     `,
     transparent: true,
     vertexColors: true,
-    // Additive blending makes overlapping particles brighter like emitted light.
     blending: THREE.AdditiveBlending,
     depthWrite: false,
   });
 }
-
 
 /** Creates a transparent pulsing material intended for a flat corona/glow shell. */
 export function makeSunCoronaMaterial() {
@@ -73,27 +96,65 @@ export function makeSunCoronaMaterial() {
     },
     vertexShader: `
       varying vec2 vUv;
+
       void main() {
         vUv = uv;
-        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+
+        gl_Position =
+          projectionMatrix *
+          modelViewMatrix *
+          vec4(position, 1.0);
       }
     `,
     fragmentShader: `
       varying vec2 vUv;
+
       uniform float uTime;
       uniform float uIntensity;
+
       void main() {
         // Distance from UV center creates a soft circular mask.
         vec2 uv = vUv - 0.5;
         float dist = length(uv) * 1.8;
-        float glow = smoothstep(0.94, 0.24, dist);
-        float pulse = 0.22 + 0.28 * sin(uTime * 3.8 - dist * 12.0);
-        float corona = glow * pulse * uIntensity * 0.76;
-        float rim = smoothstep(0.58, 0.52, length(uv)) * 0.18;
-        vec3 color = vec3(1.0, 0.68, 0.18) * (0.88 + corona * 1.1 + rim * 0.8);
-        float alpha = clamp(glow * 0.54 + rim * 0.22, 0.0, 0.82);
-        gl_FragColor = vec4(color, alpha);
-        if (gl_FragColor.a < 0.01) discard;
+
+        float glow =
+          smoothstep(0.94, 0.24, dist);
+
+        float pulse =
+          0.22 +
+          0.28 *
+          sin(uTime * 3.8 - dist * 12.0);
+
+        float corona =
+          glow *
+          pulse *
+          uIntensity *
+          0.76;
+
+        float rim =
+          smoothstep(
+            0.58,
+            0.52,
+            length(uv)
+          ) * 0.18;
+
+        vec3 color =
+          vec3(1.0, 0.68, 0.18) *
+          (0.88 + corona * 1.1 + rim * 0.8);
+
+        float alpha =
+          clamp(
+            glow * 0.54 + rim * 0.22,
+            0.0,
+            0.82
+          );
+
+        gl_FragColor =
+          vec4(color, alpha);
+
+        if (gl_FragColor.a < 0.01) {
+          discard;
+        }
       }
     `,
     transparent: true,
@@ -103,183 +164,791 @@ export function makeSunCoronaMaterial() {
   });
 }
 
-/** Creates the Sun's animated surface by combining texture pixels and procedural noise. */
+/**
+ * Creates the Sun's animated photosphere.
+ *
+ * The surface is generated mainly from object-space 3D noise so the pattern
+ * remains attached to the sphere and does not look like a flat texture sliding
+ * across it.
+ *
+ * The shader combines:
+ * - broad plasma flow
+ * - tiny convection granules
+ * - subtle physical relief
+ * - fragmented active regions
+ * - small irregular sunspot groups
+ */
 export function makeSunSurfaceMaterial(texture) {
+  const spotDirections = [
+    new THREE.Vector3(0.82, 0.16, 0.55).normalize(),
+    new THREE.Vector3(0.76, 0.12, 0.64).normalize(),
+    new THREE.Vector3(0.69, 0.22, 0.69).normalize(),
+    new THREE.Vector3(-0.71, 0.33, 0.62).normalize(),
+    new THREE.Vector3(-0.64, 0.26, 0.72).normalize(),
+    new THREE.Vector3(0.22, -0.58, 0.78).normalize(),
+    new THREE.Vector3(0.29, -0.52, 0.80).normalize(),
+    new THREE.Vector3(-0.38, -0.70, -0.60).normalize(),
+  ];
+
+  const spotSizes = [
+    0.0048,
+    0.0032,
+    0.0026,
+    0.0040,
+    0.0027,
+    0.0038,
+    0.0024,
+    0.0030,
+  ];
+
   return new THREE.ShaderMaterial({
     uniforms: {
-      uTime: { value: 0 },
-      uMap: { value: texture },
-      uGlow: { value: 1.25 },
+      uTime: {
+        value: 0,
+      },
+
+      uMap: {
+        value: texture,
+      },
+
+      uGlow: {
+        value: 1.0,
+      },
+
+      uSpotDirections: {
+        value: spotDirections,
+      },
+
+      uSpotSizes: {
+        value: spotSizes,
+      },
     },
+
     vertexShader: `
       uniform float uTime;
-      varying vec3 vNormal;
-      varying vec3 vObjectNormal;
+
+      varying vec3 vNormalView;
       varying vec3 vViewPosition;
+      varying vec3 vObjectDirection;
       varying vec2 vUv;
+      varying float vHeight;
 
-      float vertexHash(vec2 p) {
-        return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);
-      }
+      float hash31(vec3 p) {
+        p = fract(p * 0.1031);
+        p += dot(p, p.yzx + 33.33);
 
-      float vertexNoise(vec2 p) {
-        vec2 i = floor(p);
-        vec2 f = fract(p);
-        vec2 u = f * f * (3.0 - 2.0 * f);
-        return mix(
-          mix(vertexHash(i), vertexHash(i + vec2(1.0, 0.0)), u.x),
-          mix(vertexHash(i + vec2(0.0, 1.0)), vertexHash(i + vec2(1.0, 1.0)), u.x),
-          u.y
+        return fract(
+          (p.x + p.y) * p.z
         );
       }
 
-      void main() {
-        vNormal = normalize(normalMatrix * normal);
-        vObjectNormal = normalize(normal);
-        // Three planar samples avoid a flat UV-only bump and physically move the
-        // sphere vertices into evolving convection-cell hills and sinking edges.
-        vec3 n = normalize(normal);
-        float flow = uTime * 0.035;
-        float granules = (
-          vertexNoise(n.xy * 28.0 + flow) +
-          vertexNoise(n.yz * 29.0 - flow * 0.8) +
-          vertexNoise(n.zx * 27.0 + vec2(-flow, flow * 0.6))
-        ) / 3.0;
-        float fineRelief = vertexNoise(n.xy * 63.0 - flow * 1.4) - 0.5;
-        float displacement = (granules - 0.5) * 0.22 + fineRelief * 0.045;
-        vec3 displacedPosition = position + normal * displacement;
-        vec4 mvPosition = modelViewMatrix * vec4(displacedPosition, 1.0);
-        vViewPosition = mvPosition.xyz;
-        vUv = uv;
-        gl_Position = projectionMatrix * mvPosition;
-      }
-    `,
-    fragmentShader: `
-      uniform float uTime;
-      uniform sampler2D uMap;
-      uniform float uGlow;
-      varying vec3 vNormal;
-      varying vec3 vObjectNormal;
-      varying vec3 vViewPosition;
-      varying vec2 vUv;
+      float noise3D(vec3 p) {
+        vec3 i = floor(p);
+        vec3 f = fract(p);
 
-      // A deterministic pseudo-random value: same coordinate, same result.
-      float hash(vec2 p) {
-        return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);
+        f = f * f * (3.0 - 2.0 * f);
+
+        float n000 =
+          hash31(i + vec3(0.0, 0.0, 0.0));
+
+        float n100 =
+          hash31(i + vec3(1.0, 0.0, 0.0));
+
+        float n010 =
+          hash31(i + vec3(0.0, 1.0, 0.0));
+
+        float n110 =
+          hash31(i + vec3(1.0, 1.0, 0.0));
+
+        float n001 =
+          hash31(i + vec3(0.0, 0.0, 1.0));
+
+        float n101 =
+          hash31(i + vec3(1.0, 0.0, 1.0));
+
+        float n011 =
+          hash31(i + vec3(0.0, 1.0, 1.0));
+
+        float n111 =
+          hash31(i + vec3(1.0, 1.0, 1.0));
+
+        float nx00 =
+          mix(n000, n100, f.x);
+
+        float nx10 =
+          mix(n010, n110, f.x);
+
+        float nx01 =
+          mix(n001, n101, f.x);
+
+        float nx11 =
+          mix(n011, n111, f.x);
+
+        return mix(
+          mix(nx00, nx10, f.y),
+          mix(nx01, nx11, f.y),
+          f.z
+        );
       }
 
-      // Smoothly interpolate four random grid corners to create coherent noise.
-      float noise(vec2 p) {
-        vec2 i = floor(p);
-        vec2 f = fract(p);
-        float a = hash(i);
-        float b = hash(i + vec2(1.0, 0.0));
-        float c = hash(i + vec2(0.0, 1.0));
-        float d = hash(i + vec2(1.0, 1.0));
-        vec2 u = f * f * (3.0 - 2.0 * f);
-        return mix(a, b, u.x) + (c - a) * u.y * (1.0 - u.x) + (d - b) * u.x * u.y;
-      }
-
-      // Fractal Brownian Motion stacks noise at several scales for richer detail.
-      float fbm(vec2 p) {
+      float fbm3D(vec3 p) {
         float value = 0.0;
-        float amplitude = 0.55;
-        for (int i = 0; i < 5; i++) {
-          value += amplitude * noise(p);
-          p *= 2.0;
-          amplitude *= 0.52;
-          p += vec2(1.7, 9.2);
+        float amplitude = 0.5;
+
+        for (int i = 0; i < 4; i++) {
+          value +=
+            amplitude *
+            noise3D(p);
+
+          p =
+            p * 2.03 +
+            vec3(7.1, 13.7, 5.4);
+
+          amplitude *= 0.5;
         }
+
         return value;
       }
 
-      vec2 hash2(vec2 p) {
-        return fract(sin(vec2(dot(p, vec2(127.1, 311.7)), dot(p, vec2(269.5, 183.3)))) * 43758.5453123);
+      void main() {
+        vec3 direction =
+          normalize(position);
+
+        vObjectDirection =
+          direction;
+
+        vUv =
+          uv;
+
+        float broad =
+          fbm3D(
+            direction * 6.0 +
+            vec3(
+              uTime * 0.010,
+              -uTime * 0.007,
+              uTime * 0.005
+            )
+          );
+
+        float granules =
+          fbm3D(
+            direction * 42.0 +
+            vec3(
+              -uTime * 0.022,
+              uTime * 0.017,
+              uTime * 0.013
+            )
+          );
+
+        float fine =
+          fbm3D(
+            direction * 96.0 +
+            vec3(
+              uTime * 0.031,
+              -uTime * 0.024,
+              uTime * 0.018
+            )
+          );
+
+        float height =
+          broad * 0.20 +
+          granules * 0.62 +
+          fine * 0.18;
+
+        vHeight =
+          height;
+
+        /*
+         * Keep physical displacement very small.
+         *
+         * Most depth is created by convection-cell contrast rather than
+         * turning the photosphere into a rocky surface.
+         */
+        float displacement =
+          (height - 0.5) *
+          0.032;
+
+        vec3 displacedPosition =
+          position +
+          normal * displacement;
+
+        vec4 viewPosition =
+          modelViewMatrix *
+          vec4(displacedPosition, 1.0);
+
+        vViewPosition =
+          viewPosition.xyz;
+
+        vNormalView =
+          normalize(
+            normalMatrix * normal
+          );
+
+        gl_Position =
+          projectionMatrix *
+          viewPosition;
+      }
+    `,
+
+    fragmentShader: `
+      #define SPOT_COUNT 8
+
+      uniform float uTime;
+      uniform sampler2D uMap;
+      uniform float uGlow;
+      uniform vec3 uSpotDirections[SPOT_COUNT];
+      uniform float uSpotSizes[SPOT_COUNT];
+
+      varying vec3 vNormalView;
+      varying vec3 vViewPosition;
+      varying vec3 vObjectDirection;
+      varying vec2 vUv;
+      varying float vHeight;
+
+      float hash31(vec3 p) {
+        p = fract(p * 0.1031);
+        p += dot(p, p.yzx + 33.33);
+
+        return fract(
+          (p.x + p.y) * p.z
+        );
       }
 
-      // Cellular/Worley-style distance creates granular, cell-like solar patterns.
-      float cellular(vec2 p) {
-        vec2 i = floor(p);
-        vec2 f = fract(p);
-        float minDist = 1.0;
-        for (int y = -1; y <= 1; y++) {
-          for (int x = -1; x <= 1; x++) {
-            vec2 neighbor = vec2(float(x), float(y));
-            vec2 point = hash2(i + neighbor) + neighbor;
-            minDist = min(minDist, length(f - point));
-          }
+      float noise3D(vec3 p) {
+        vec3 i = floor(p);
+        vec3 f = fract(p);
+
+        f = f * f * (3.0 - 2.0 * f);
+
+        float n000 =
+          hash31(i + vec3(0.0, 0.0, 0.0));
+
+        float n100 =
+          hash31(i + vec3(1.0, 0.0, 0.0));
+
+        float n010 =
+          hash31(i + vec3(0.0, 1.0, 0.0));
+
+        float n110 =
+          hash31(i + vec3(1.0, 1.0, 0.0));
+
+        float n001 =
+          hash31(i + vec3(0.0, 0.0, 1.0));
+
+        float n101 =
+          hash31(i + vec3(1.0, 0.0, 1.0));
+
+        float n011 =
+          hash31(i + vec3(0.0, 1.0, 1.0));
+
+        float n111 =
+          hash31(i + vec3(1.0, 1.0, 1.0));
+
+        float nx00 =
+          mix(n000, n100, f.x);
+
+        float nx10 =
+          mix(n010, n110, f.x);
+
+        float nx01 =
+          mix(n001, n101, f.x);
+
+        float nx11 =
+          mix(n011, n111, f.x);
+
+        return mix(
+          mix(nx00, nx10, f.y),
+          mix(nx01, nx11, f.y),
+          f.z
+        );
+      }
+
+      float fbm3D(vec3 p) {
+        float value = 0.0;
+        float amplitude = 0.5;
+
+        for (int i = 0; i < 5; i++) {
+          value +=
+            amplitude *
+            noise3D(p);
+
+          p =
+            p * 2.02 +
+            vec3(11.3, 4.7, 8.9);
+
+          amplitude *= 0.5;
         }
-        return minDist;
+
+        return value;
       }
 
       void main() {
-        // Moving UV/noise coordinates over time makes the surface flow continuously.
-        vec2 uv = vUv * 2.2 + vec2(uTime * 0.08, -uTime * 0.05);
-        vec3 baseColor = texture2D(uMap, uv * 0.78).rgb;
-        vec2 noisePos = vNormal.xy * 2.4 + vec2(uTime * 0.12, -uTime * 0.07);
+        vec3 direction =
+          normalize(vObjectDirection);
 
-        float pattern = fbm(noisePos * 3.8);
-        float molten = fbm(noisePos * 8.2 + vec2(uTime * 0.18, uTime * 0.14));
-        float detail = fbm(noisePos * 16.4 + vec2(-uTime * 0.22, uTime * 0.19));
-        float cells = cellular(vUv * 15.0 + vec2(uTime * 0.06, -uTime * 0.09));
+        vec3 normalView =
+          normalize(vNormalView);
 
-        float granule = mix(pattern, molten, 0.52);
-        float plasma = mix(granule, 1.0 - cells * 1.28, 0.38);
-        float energy = clamp(plasma + detail * 0.17, 0.0, 1.0);
+        vec3 viewDirection =
+          normalize(-vViewPosition);
 
-        // Compact active regions imitate the reference's white-hot magnetic areas.
-        // Object-space directions keep these regions attached while the Sun rotates.
-        float activeA = pow(max(dot(vObjectNormal, normalize(vec3(0.72, 0.1, 0.68))), 0.0), 112.0);
-        float activeB = pow(max(dot(vObjectNormal, normalize(vec3(-0.5, -0.42, 0.76))), 0.0), 138.0);
-        float activeC = pow(max(dot(vObjectNormal, normalize(vec3(0.18, 0.58, 0.79))), 0.0), 124.0);
-        float activeD = pow(max(dot(vObjectNormal, normalize(vec3(-0.8, 0.28, 0.52))), 0.0), 148.0);
-        float activeRegions = clamp((activeA + activeB + activeC + activeD)
-          * (0.82 + detail * 0.55), 0.0, 1.0);
+        float facing =
+          max(
+            dot(
+              normalView,
+              viewDirection
+            ),
+            0.0
+          );
 
-        // Sunspots are cooler magnetic openings. A dark umbra is surrounded by a
-        // wider striped penumbra whose radial filaments drift very slowly.
-        vec3 spotDirectionA = normalize(vec3(0.48, -0.28, 0.83));
-        vec3 spotDirectionB = normalize(vec3(-0.72, 0.34, 0.6));
-        float spotDotA = dot(vObjectNormal, spotDirectionA);
-        float spotDotB = dot(vObjectNormal, spotDirectionB);
-        float umbraA = smoothstep(0.988, 0.997, spotDotA);
-        float umbraB = smoothstep(0.991, 0.998, spotDotB);
-        float outerA = smoothstep(0.962, 0.989, spotDotA);
-        float outerB = smoothstep(0.972, 0.992, spotDotB);
-        float penumbra = max(outerA - umbraA, outerB - umbraB);
-        float umbra = max(umbraA, umbraB);
-        float penumbraAngle = atan(vObjectNormal.y, vObjectNormal.x);
-        float striations = 0.45 + 0.55 * sin(penumbraAngle * 54.0 + detail * 9.0 + uTime * 0.025);
+        float limb =
+          1.0 - facing;
 
-        // Convert the calculated energy level into a red → orange → white heat ramp.
-        vec3 darkRed = vec3(0.15, 0.01, 0.0);
-        vec3 fieryOrange = vec3(0.85, 0.25, 0.0);
-        vec3 goldOrange = vec3(1.0, 0.55, 0.0);
-        vec3 flareWhite = vec3(1.0, 0.95, 0.8);
+        /*
+         * Broad variations move slowly.
+         * The fine layers move independently so the surface evolves instead
+         * of looking like one texture sliding in a single direction.
+         */
+        float broad =
+          fbm3D(
+            direction * 7.0 +
+            vec3(
+              uTime * 0.009,
+              -uTime * 0.006,
+              uTime * 0.004
+            )
+          );
 
-        vec3 finalSurface = mix(darkRed, fieryOrange, smoothstep(0.0, 0.4, energy));
-        finalSurface = mix(finalSurface, goldOrange, smoothstep(0.4, 0.75, energy));
-        finalSurface = mix(finalSurface, flareWhite, smoothstep(0.75, 0.98, energy));
-        // Hot cores reach near-white while a broader gold fringe suggests flare rays.
-        finalSurface = mix(finalSurface, vec3(1.0, 0.72, 0.16), smoothstep(0.04, 0.38, activeRegions));
-        finalSurface = mix(finalSurface, vec3(1.0, 0.98, 0.84), smoothstep(0.38, 0.9, activeRegions));
-        finalSurface = mix(finalSurface, vec3(0.28, 0.045, 0.008), umbra * 0.92);
-        finalSurface = mix(finalSurface, mix(vec3(0.38, 0.07, 0.01), vec3(0.88, 0.28, 0.025), striations), penumbra * 0.78);
+        float cellsA =
+          fbm3D(
+            direction * 46.0 +
+            vec3(
+              -uTime * 0.020,
+              uTime * 0.015,
+              uTime * 0.011
+            )
+          );
 
-        // Surface normals facing away from the camera receive a darker glowing rim.
-        float edgeFactor = 1.0 - max(dot(normalize(vNormal), normalize(-vViewPosition)), 0.0);
-        float rimGlow = pow(edgeFactor, 3.5);
-        finalSurface = mix(finalSurface, vec3(0.4, 0.02, 0.0), rimGlow * 0.92);
+        float cellsB =
+          fbm3D(
+            direction * 92.0 +
+            vec3(
+              uTime * 0.028,
+              -uTime * 0.021,
+              uTime * 0.016
+            )
+          );
 
-        float heat = smoothstep(0.18, 0.72, detail * 0.82 + granule * 0.18);
-        finalSurface += vec3(0.3, 0.11, 0.02) * rimGlow * uGlow * 0.42;
-        finalSurface *= 0.82 + 0.24 * heat;
+        float micro =
+          fbm3D(
+            direction * 150.0 +
+            vec3(
+              -uTime * 0.037,
+              uTime * 0.030,
+              -uTime * 0.023
+            )
+          );
 
-        vec3 surfaceColor = clamp(finalSurface + baseColor * 0.16, 0.0, 1.0);
-        gl_FragColor = vec4(surfaceColor, 1.0);
+        float cellularEnergy =
+          clamp(
+            cellsA * 0.72 +
+            cellsB * 0.22 +
+            micro * 0.06,
+            0.0,
+            1.0
+          );
+
+        /*
+         * These masks form the convection cells:
+         *
+         * brightCell:
+         * ordinary hot orange/gold cell centres.
+         *
+         * whiteCell:
+         * occasional near-white regions.
+         *
+         * darkCellBorder:
+         * darker plasma between the rising cells.
+         */
+        float brightCell =
+          smoothstep(
+            0.38,
+            0.78,
+            cellularEnergy
+          );
+
+        float whiteCell =
+          smoothstep(
+            0.72,
+            0.93,
+            cellularEnergy
+          );
+
+        float darkCellBorder =
+          1.0 -
+          smoothstep(
+            0.25,
+            0.46,
+            cellularEnergy
+          );
+
+        vec3 deepRed =
+          vec3(
+            0.095,
+            0.004,
+            0.0
+          );
+
+        vec3 redOrange =
+          vec3(
+            0.48,
+            0.045,
+            0.001
+          );
+
+        vec3 hotOrange =
+          vec3(
+            1.0,
+            0.24,
+            0.003
+          );
+
+        vec3 gold =
+          vec3(
+            1.0,
+            0.57,
+            0.055
+          );
+
+        vec3 creamWhite =
+          vec3(
+            1.0,
+            0.94,
+            0.73
+          );
+
+        vec3 finalSurface =
+          mix(
+            redOrange,
+            hotOrange,
+            brightCell
+          );
+
+        finalSurface =
+          mix(
+            finalSurface,
+            gold,
+            smoothstep(
+              0.52,
+              0.82,
+              cellularEnergy
+            )
+          );
+
+        finalSurface =
+          mix(
+            finalSurface,
+            creamWhite,
+            whiteCell * 0.72
+          );
+
+        finalSurface =
+          mix(
+            finalSurface,
+            deepRed,
+            darkCellBorder * 0.34
+          );
+
+        finalSurface *=
+          0.82 +
+          broad * 0.30 +
+          vHeight * 0.08;
+
+        /*
+         * Small irregular spot groups.
+         *
+         * Each region contains:
+         * - a reddish penumbra
+         * - a tiny dark umbra
+         * - a broken bright magnetic rim
+         */
+        for (int i = 0; i < SPOT_COUNT; i++) {
+          vec3 spotDirection =
+            normalize(
+              uSpotDirections[i]
+            );
+
+          float spotDistance =
+            1.0 -
+            dot(
+              direction,
+              spotDirection
+            );
+
+          float irregularity =
+            fbm3D(
+              direction * 180.0 +
+              vec3(float(i) * 9.7)
+            );
+
+          spotDistance +=
+            (irregularity - 0.5) *
+            uSpotSizes[i] *
+            0.55;
+
+          float penumbra =
+            1.0 -
+            smoothstep(
+              uSpotSizes[i] * 0.58,
+              uSpotSizes[i],
+              spotDistance
+            );
+
+          float umbra =
+            1.0 -
+            smoothstep(
+              uSpotSizes[i] * 0.12,
+              uSpotSizes[i] * 0.38,
+              spotDistance
+            );
+
+          float activeRim =
+            smoothstep(
+              uSpotSizes[i] * 0.43,
+              uSpotSizes[i] * 0.64,
+              spotDistance
+            )
+            *
+            (
+              1.0 -
+              smoothstep(
+                uSpotSizes[i] * 0.64,
+                uSpotSizes[i] * 0.95,
+                spotDistance
+              )
+            );
+
+          /*
+           * Build a local coordinate system for every sunspot.
+           *
+           * This allows the reddish penumbra lines to radiate from each
+           * individual spot instead of from the centre of the whole Sun.
+           */
+          vec3 referenceAxis =
+            abs(spotDirection.y) > 0.88
+              ? vec3(1.0, 0.0, 0.0)
+              : vec3(0.0, 1.0, 0.0);
+
+          vec3 tangent =
+            normalize(
+              cross(
+                referenceAxis,
+                spotDirection
+              )
+            );
+
+          vec3 bitangent =
+            normalize(
+              cross(
+                spotDirection,
+                tangent
+              )
+            );
+
+          vec2 localPosition =
+            vec2(
+              dot(direction, tangent),
+              dot(direction, bitangent)
+            );
+
+          float localAngle =
+            atan(
+              localPosition.y,
+              localPosition.x
+            );
+
+          float striations =
+            0.45 +
+            0.55 *
+            sin(
+              localAngle * 34.0 +
+              irregularity * 13.0
+            );
+
+          vec3 penumbraColor =
+            mix(
+              vec3(
+                0.24,
+                0.012,
+                0.001
+              ),
+              vec3(
+                0.66,
+                0.10,
+                0.005
+              ),
+              striations
+            );
+
+          vec3 umbraColor =
+            vec3(
+              0.018,
+              0.0015,
+              0.0005
+            );
+
+          vec3 activeColor =
+            vec3(
+              1.0,
+              0.82,
+              0.42
+            );
+
+          finalSurface =
+            mix(
+              finalSurface,
+              penumbraColor,
+              penumbra * 0.72
+            );
+
+          finalSurface =
+            mix(
+              finalSurface,
+              umbraColor,
+              umbra * 0.86
+            );
+
+          finalSurface +=
+            activeColor *
+            activeRim *
+            (
+              0.22 +
+              irregularity * 0.25
+            );
+        }
+
+        /*
+         * Fragmented white/orange magnetic regions near the hottest cells.
+         */
+        float activeNoise =
+          fbm3D(
+            direction * 74.0 +
+            vec3(
+              uTime * 0.012,
+              -uTime * 0.009,
+              0.0
+            )
+          );
+
+        float activeRegions =
+          smoothstep(
+            0.83,
+            0.94,
+            activeNoise
+          )
+          *
+          smoothstep(
+            0.58,
+            0.88,
+            cellsA
+          );
+
+        finalSurface +=
+          vec3(
+            1.0,
+            0.75,
+            0.31
+          )
+          *
+          activeRegions
+          *
+          0.28;
+
+        finalSurface +=
+          vec3(
+            1.0,
+            0.97,
+            0.82
+          )
+          *
+          smoothstep(
+            0.88,
+            0.97,
+            activeNoise
+          )
+          *
+          0.18;
+
+        /*
+         * Mild limb darkening gives the Sun a spherical appearance.
+         *
+         * The separate chromosphere mesh supplies the bright outer edge,
+         * so this shader avoids producing a thick dark-red ring.
+         */
+        float limbDarkening =
+          mix(
+            1.0,
+            0.48,
+            pow(limb, 1.45)
+          );
+
+        finalSurface *=
+          limbDarkening;
+
+        finalSurface +=
+          vec3(
+            0.55,
+            0.07,
+            0.003
+          )
+          *
+          pow(limb, 5.0)
+          *
+          uGlow
+          *
+          0.22;
+
+        /*
+         * Retain the supplied texture as subtle organic variation only.
+         *
+         * It no longer controls the main appearance or surface movement.
+         */
+        vec3 textureColor =
+          texture2D(
+            uMap,
+            vUv
+          ).rgb;
+
+        float textureLuma =
+          dot(
+            textureColor,
+            vec3(
+              0.299,
+              0.587,
+              0.114
+            )
+          );
+
+        finalSurface *=
+          mix(
+            0.95,
+            1.06,
+            textureLuma * 0.08 + 0.46
+          );
+
+        gl_FragColor =
+          vec4(
+            max(
+              finalSurface,
+              vec3(0.0)
+            ),
+            1.0
+          );
       }
     `,
+
     transparent: false,
     depthWrite: true,
+    depthTest: true,
   });
 }
