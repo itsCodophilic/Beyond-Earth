@@ -10,14 +10,14 @@
  * - angle: starting location around the Sun, in radians
  * - focusScale: adjusts how closely the camera frames the body
  */
-import { mercury } from "./mercury.js";
-import { venus } from "./venus.js";
-import { earth } from "./earth.js";
-import { mars } from "./mars.js";
-import { jupiter } from "./jupiter.js";
-import { saturn } from "./saturn.js";
-import { uranus } from "./uranus.js";
-import { neptune } from "./neptune.js";
+import { mercury } from "./mercury/mercury.js";
+import { venus } from "./venus/venus.js";
+import { earth } from "./earth/earth.js";
+import { mars } from "./mars/mars.js";
+import { jupiter } from "./jupiter/jupiter.js";
+import { saturn } from "./saturn/saturn.js";
+import { uranus } from "./uranus/uranus.js";
+import { neptune } from "./neptune/neptune.js";
 
 // Export one canonical order for rendering, navigation, and future storytelling.
 export const PLANET_CONFIGS = [mercury, venus, earth, mars, jupiter, saturn, uranus, neptune];

@@ -40,8 +40,13 @@ Beyond-Earth/
 │       │   ├── loadTextures.js     # Asynchronous texture loading
 │       │   ├── materials.js        # Custom WebGL shader materials
 │       │   └── proceduralTextures.js
-│       ├── planets/                # One configuration module per planet
-│       │   ├── mercury.js ... neptune.js
+│       ├── planets/                # One owned folder per planet
+│       │   ├── earth/
+│       │   │   ├── earth.js
+│       │   │   └── satellites/
+│       │   │       └── moon.js     # Moon mesh, craters, and orbit
+│       │   ├── mercury/ ... neptune/
+│       │   │   └── <planet>.js
 │       │   └── index.js            # Ordered planet registry
 │       └── scene/
 │           ├── planetFactory.js    # Planet mesh construction

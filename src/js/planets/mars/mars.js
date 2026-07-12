@@ -8,4 +8,9 @@ export const mars = {
   orbitSpeed: 0.25, spinSpeed: 0.01, axialTilt: 0.44, angle: 5.3,
   bump: 0.065, orbitColor: 0xd06a37,
   detail: "Red planet | about half Earth width", focusScale: 1.55,
+  info: {
+    type: "Planet", diameter: "6,779 km", orbitalSpeed: "24.07 km/s",
+    distanceFromEarth: "≈ 54.6 million km at closest approach",
+    description: "A cold desert of rust-red dunes, immense volcanoes, ancient river valleys, and two tiny moons.",
+  },
 };

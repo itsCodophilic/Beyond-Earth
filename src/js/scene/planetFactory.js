@@ -45,6 +45,8 @@ export function createPlanet({ config, textures, world, orbitRoot, planets, hove
     tilt: config.tilt ?? 0,
     focusScale: config.focusScale ?? 1,
     detail: config.detail,
+    // Structured inspection-panel fields are authored inside each planet module.
+    info: config.info,
   };
   mesh.rotation.z = config.axialTilt ?? 0;
 

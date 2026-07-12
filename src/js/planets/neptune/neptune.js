@@ -8,4 +8,9 @@ export const neptune = {
   orbitSpeed: 0.043, spinSpeed: 0.012, axialTilt: 0.49, angle: 0.05,
   bump: 0.005, orbitColor: 0x5f83ff,
   detail: "Most distant planet | about 30 AU", focusScale: 1,
+  info: {
+    type: "Planet", diameter: "49,244 km", orbitalSpeed: "5.43 km/s",
+    distanceFromEarth: "≈ 4.3 billion km at closest approach",
+    description: "A deep-blue ice giant where supersonic winds race through bright methane clouds at the edge of the planetary system.",
+  },
 };

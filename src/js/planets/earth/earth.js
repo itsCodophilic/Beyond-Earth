@@ -8,4 +8,9 @@ export const earth = {
   orbitRadius: 29, orbitSpeed: 0.34, spinSpeed: 0.012, axialTilt: 0.41,
   angle: 4.35, normalScale: 0.55, orbitColor: 0x7de7ff,
   detail: "Home planet | 12,756 km diameter", focusScale: 1.75,
+  info: {
+    type: "Planet", diameter: "12,756 km", orbitalSpeed: "29.78 km/s",
+    distanceFromEarth: "0 km — your current reference point",
+    description: "An ocean world wrapped in a living atmosphere—the only known place where life has transformed an entire planet.",
+  },
 };

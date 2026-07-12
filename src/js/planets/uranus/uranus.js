@@ -8,4 +8,9 @@ export const uranus = {
   orbitSpeed: 0.055, spinSpeed: 0.011, axialTilt: 1.71, angle: 4.8,
   bump: 0.005, orbitColor: 0x9ee9f2,
   detail: "Ice giant | sideways axial tilt", focusScale: 1,
+  info: {
+    type: "Planet", diameter: "50,724 km", orbitalSpeed: "6.81 km/s",
+    distanceFromEarth: "≈ 2.6 billion km at closest approach",
+    description: "A serene blue-green ice giant rotating almost on its side, surrounded by faint rings and distant moons.",
+  },
 };

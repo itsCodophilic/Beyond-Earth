@@ -21,6 +21,7 @@ import { loadUniverseTextures } from './graphics/loadTextures.js';
 import { makeBeltDust, makeParticles } from './scene/particles.js';
 import { createAsteroidBelt } from './scene/asteroidBelt.js';
 import { addAtmosphere, createPlanet } from './scene/planetFactory.js';
+import { createMoonSystem } from './planets/earth/satellites/moon.js';
 
 // An async immediately-invoked function lets us await texture loading while
 // keeping all application variables private to this module.
@@ -30,9 +31,17 @@ import { addAtmosphere, createPlanet } from './scene/planetFactory.js';
   const canvas = document.querySelector("#universe");
   const loader = document.querySelector("#loader");
   const progressBar = document.querySelector("#progress-bar");
-  const scaleLabel = document.querySelector("#scale-label");
-  const bodyLabel = document.querySelector("#body-label");
-  const bodyDetail = document.querySelector("#body-detail");
+  const bodyCard = document.querySelector("#body-card");
+  const bodyConnector = document.querySelector("#body-connector");
+  const cardType = document.querySelector("#card-type");
+  const cardMode = document.querySelector("#card-mode");
+  const cardName = document.querySelector("#card-name");
+  const cardDiameter = document.querySelector("#card-diameter");
+  const cardSpeed = document.querySelector("#card-speed");
+  const cardDistance = document.querySelector("#card-distance");
+  const cardDescription = document.querySelector("#card-description");
+  const cardHint = document.querySelector("#card-hint");
+  const cardClose = document.querySelector("#card-close");
 
   // Scene is the root container of the 3D scene graph. Anything not attached to
   // the scene (directly or through a Group) cannot be rendered.
@@ -81,7 +90,10 @@ import { addAtmosphere, createPlanet } from './scene/planetFactory.js';
   let dragDistance = 0;
   // focusedBody is null during free flight or references the clicked Mesh.
   let focusedBody = null;
+  let displayedBody = null;
+  let dismissedBody = null;
   let hasCameraFocusPoint = false;
+  let simulationTime = 0;
   const cameraFocusPoint = new THREE.Vector3();
 
   // AmbientLight illuminates every surface equally so shadowed sides are not pure black.
@@ -107,7 +119,18 @@ import { addAtmosphere, createPlanet } from './scene/planetFactory.js';
     makeSunSurfaceMaterial(sunSurfaceTexture),
   );
   sun.name = "Sun";
-  sun.userData = { name: "Sun", detail: "G-type star | 99.86% of solar system mass", focusScale: 1.2 };
+  sun.userData = {
+    name: "Sun",
+    detail: "G-type star | 99.86% of solar system mass",
+    focusScale: 1.2,
+    info: {
+      type: "Star",
+      diameter: "1,392,700 km",
+      orbitalSpeed: "System reference body",
+      distanceFromEarth: "≈ 149.6 million km",
+      description: "A vast sphere of plasma whose light and gravity sustain every world in this planetary system.",
+    },
+  };
   world.add(sun);
   // Only objects in hoverTargets participate in raycasting, keeping checks focused.
   hoverTargets.push(sun);
@@ -187,36 +210,8 @@ import { addAtmosphere, createPlanet } from './scene/planetFactory.js';
     earth.add(earthLights);
   }
 
-  // The Moon is attached to a pivot at Earth's center. Rotating the pivot makes
-  // the child Moon orbit without recalculating its x/z position every frame.
-  const moonPivot = new THREE.Group();
-  earth.add(moonPivot);
-  const moon = new THREE.Mesh(
-    new THREE.SphereGeometry(0.36, 96, 96),
-    new THREE.MeshStandardMaterial({
-      map: textures.moon ?? makeNoiseTexture("moon"),
-      roughness: 0.96,
-      bumpMap: textures.moon ?? null,
-      bumpScale: 0.04,
-    }),
-  );
-  moon.name = "Moon";
-  moon.position.set(3.05, 0.08, 0);
-  moon.userData = { name: "Moon", detail: "Earth's moon | cratered companion", focusScale: 3.3 };
-  moonPivot.add(moon);
-  hoverTargets.push(moon);
-
-  // This line mirrors the Moon's pivot path and is parented to moving Earth.
-  const moonOrbit = new THREE.Line(
-    new THREE.BufferGeometry().setFromPoints(
-      Array.from({ length: 161 }, (_, i) => {
-        const angle = (i / 160) * Math.PI * 2;
-        return new THREE.Vector3(Math.cos(angle) * 3.05, 0.08, Math.sin(angle) * 3.05);
-      }),
-    ),
-    new THREE.LineBasicMaterial({ color: 0x9fdcff, transparent: true, opacity: 0.28 }),
-  );
-  earth.add(moonOrbit);
+  // Earth owns its satellite builder; main.js only keeps references needed for animation.
+  const { moon, moonPivot } = createMoonSystem({ earth, textures, hoverTargets });
 
   // Large point clouds are efficient because each field is rendered as one object.
   const stars = makeParticles(scene, {
@@ -275,30 +270,83 @@ import { addAtmosphere, createPlanet } from './scene/planetFactory.js';
     return new THREE.Vector3(0, 0, 0);
   }
 
-  /*
-    updateScaleLabel
-    - Writes a descriptive label to the HUD based on the current camera distance.
-    - Helps the user understand the scroll-driven scale transition.
-  */
-  function updateScaleLabel(distance) {
-    if (distance < 16) scaleLabel.textContent = "Earth orbit";
-    else if (distance < 92) scaleLabel.textContent = "Inner solar system";
-    else if (distance < 240) scaleLabel.textContent = "Outer planets";
-    else scaleLabel.textContent = "Milky Way scale";
+  /** Writes a body's structured metadata into the right-side inspection panel. */
+  function updateBodyCard(body) {
+    const isVisible = Boolean(body);
+    bodyCard.classList.toggle("is-visible", isVisible);
+    bodyCard.setAttribute("aria-hidden", String(!isVisible));
+    if (!body) {
+      displayedBody = null;
+      bodyConnector.classList.remove("is-visible");
+      return;
+    }
+
+    // DOM text only needs rewriting when the inspected object changes.
+    if (displayedBody !== body) {
+      const info = body.userData.info ?? {};
+      cardType.textContent = info.type ?? "Celestial body";
+      cardName.textContent = body.userData.name ?? body.name;
+      cardDiameter.textContent = info.diameter ?? "Not available";
+      cardSpeed.textContent = info.orbitalSpeed ?? "Not available";
+      cardDistance.textContent = info.distanceFromEarth ?? "Not available";
+      cardDescription.textContent = info.description ?? body.userData.detail ?? "No description available.";
+      displayedBody = body;
+    }
+    const isFocused = focusedBody === body;
+    cardMode.textContent = isFocused ? "Slow motion · Focused" : "Hover preview";
+    cardHint.textContent = isFocused
+      ? "Slow motion active · Drag to inspect · Click empty space to exit"
+      : "Click to focus · Focus activates slow motion · Then drag to inspect";
   }
 
-  /*
-    updateHoveredBody
-    - Raycasts from the mouse pointer into the scene and updates HUD text.
-    - Adds a hover CSS state for subtle cursor feedback.
-  */
-  function updateHoveredBody() {
-    const named = getBodyAtPointer();
-    // Optional chaining avoids errors when the ray hits no named body.
-    bodyLabel.textContent = named?.userData?.name ?? "Free drift";
-    bodyDetail.textContent = named?.userData?.detail ?? "Eight-planet solar system";
-    document.body.classList.toggle("is-hovering-body", Boolean(named));
+  /** Projects a 3D world position into 2D pixels and points the line at the body. */
+  function updateBodyConnector(body) {
+    if (!body || innerWidth <= 760) {
+      bodyConnector.classList.remove("is-visible");
+      return;
+    }
+
+    const projected = body.getWorldPosition(new THREE.Vector3()).project(camera);
+    const bodyX = (projected.x * 0.5 + 0.5) * innerWidth;
+    const bodyY = (-projected.y * 0.5 + 0.5) * innerHeight;
+    const isOnScreen = projected.z > -1 && projected.z < 1
+      && bodyX >= 0 && bodyX <= innerWidth && bodyY >= 0 && bodyY <= innerHeight;
+    if (!isOnScreen) {
+      bodyConnector.classList.remove("is-visible");
+      return;
+    }
+
+    const cardRect = bodyCard.getBoundingClientRect();
+    const cardX = cardRect.left;
+    const cardY = THREE.MathUtils.clamp(bodyY, cardRect.top + 26, cardRect.bottom - 26);
+    const deltaX = cardX - bodyX;
+    const deltaY = cardY - bodyY;
+    bodyConnector.style.left = `${bodyX}px`;
+    bodyConnector.style.top = `${bodyY}px`;
+    bodyConnector.style.width = `${Math.hypot(deltaX, deltaY)}px`;
+    bodyConnector.style.transform = `rotate(${Math.atan2(deltaY, deltaX)}rad)`;
+    bodyConnector.classList.add("is-visible");
   }
+
+  /** Hover previews a body; a clicked/focused body always takes priority. */
+  function updateInspectionInterface() {
+    const hoveredBody = getBodyAtPointer();
+    // Moving away from a dismissed body resets dismissal, allowing a later hover.
+    if (dismissedBody && hoveredBody !== dismissedBody) dismissedBody = null;
+    const candidateBody = focusedBody ?? hoveredBody;
+    const inspectedBody = candidateBody === dismissedBody ? null : candidateBody;
+    document.body.classList.toggle("is-hovering-body", Boolean(hoveredBody));
+    updateBodyCard(inspectedBody);
+    updateBodyConnector(inspectedBody);
+  }
+
+  // Closing a card dismisses the current body until the pointer leaves it. If the
+  // body was focused, this also restores normal simulation speed and free flight.
+  cardClose.addEventListener("click", () => {
+    dismissedBody = displayedBody;
+    focusedBody = null;
+    updateBodyCard(null);
+  });
 
   /*
     updatePointerFromEvent
@@ -333,11 +381,12 @@ import { addAtmosphere, createPlanet } from './scene/planetFactory.js';
     - Supports nested mesh structures by resolving to the interactive parent.
   */
   function getBodyAtPointer() {
-    // `true` recursively checks descendants. Results are nearest-first, so [0]
-    // is the visible surface closest to the camera along the ray.
+    // `true` recursively checks descendants. A satellite can visually overlap its
+    // much larger parent, so satellite hits receive priority over the first planet hit.
     raycaster.setFromCamera(pointer, camera);
-    const hit = raycaster.intersectObjects(hoverTargets, true)[0];
-    return hit ? findInteractiveObject(hit.object) : null;
+    const hits = raycaster.intersectObjects(hoverTargets, true);
+    const bodies = hits.map((hit) => findInteractiveObject(hit.object)).filter(Boolean);
+    return bodies.find((body) => body.userData?.info?.type === "Natural satellite") ?? bodies[0] ?? null;
   }
 
   /*
@@ -353,8 +402,6 @@ import { addAtmosphere, createPlanet } from './scene/planetFactory.js';
     // Selecting the same body again toggles focus off.
     focusedBody = focusedBody === body ? null : body;
     if (!focusedBody) return;
-    bodyLabel.textContent = body.userData.name;
-    bodyDetail.textContent = body.userData.detail ?? "Selected body";
     // Convert the body's distance from the Sun into an approximate scroll point.
     const radius = body.userData.orbitRadius ?? body.getWorldPosition(new THREE.Vector3()).length();
     const idealProgress = THREE.MathUtils.clamp(radius / 230, 0.035, 0.72);
@@ -401,7 +448,7 @@ import { addAtmosphere, createPlanet } from './scene/planetFactory.js';
     updatePointerFromEvent(event);
     isDragging = false;
     // HUD clicks belong to HTML controls and must not select objects behind them.
-    if (event.target.closest?.(".hud")) return;
+    if (event.target.closest?.(".hud, .body-card")) return;
     if (dragDistance > 12) return;
     const body = getBodyAtPointer();
     if (body) focusBody(body);
@@ -435,6 +482,9 @@ import { addAtmosphere, createPlanet } from './scene/planetFactory.js';
   */
   function animate() {
     const elapsed = clock.getElapsedTime();
+    // Focus mode slows physical scene motion without slowing camera input/easing.
+    const motionScale = focusedBody ? 0.12 : 1;
+    simulationTime += 0.016 * motionScale;
     // Easing with lerp each frame creates inertia. Larger factors catch up faster.
     smoothProgress = THREE.MathUtils.lerp(smoothProgress, scrollProgress, 0.065);
     yaw = THREE.MathUtils.lerp(yaw, targetYaw, 0.075);
@@ -443,14 +493,14 @@ import { addAtmosphere, createPlanet } from './scene/planetFactory.js';
     // ----- Update planet revolution and self-rotation -----
     planets.forEach((planet) => {
       const data = planet.userData;
-      data.angle += data.orbitSpeed * 0.0024;
+      data.angle += data.orbitSpeed * 0.0024 * motionScale;
       // cos/sin convert an orbit angle into x/z coordinates around the Sun.
       planet.position.set(
         Math.cos(data.angle) * data.orbitRadius,
         Math.sin(data.angle * 0.7) * Math.sin(data.tilt) * 1.8,
         Math.sin(data.angle) * data.orbitRadius,
       );
-      planet.rotation.y += data.spinSpeed;
+      planet.rotation.y += data.spinSpeed * motionScale;
     });
 
     // ----- Calculate the camera's spherical orbit around its focus point -----
@@ -478,22 +528,22 @@ import { addAtmosphere, createPlanet } from './scene/planetFactory.js';
     // ----- Animate special meshes and scene effects -----
     earthClouds.rotation.y += 0.0032;
     earthAtmosphere.rotation.y -= 0.0014;
-    moonPivot.rotation.y += 0.011;
-    moon.rotation.y += 0.006;
-    moonOrbit.rotation.y = Math.sin(elapsed * 0.2) * 0.04;
-    sun.rotation.y += 0.0025;
+    moonPivot.rotation.y += 0.011 * motionScale;
+    // A small oscillation suggests lunar libration while the pivot maintains tidal lock.
+    moon.rotation.y = Math.sin(simulationTime * 0.35) * 0.04;
+    sun.rotation.y += 0.0025 * motionScale;
     // Updating uTime sends the current time into GLSL for procedural movement.
     if (sun.material.uniforms) sun.material.uniforms.uTime.value = elapsed;
-    asteroidGroup.rotation.y += 0.001;
+    asteroidGroup.rotation.y += 0.001 * motionScale;
     asteroidGroup.children.forEach((asteroid) => {
       // Each asteroid's unique spin vector was stored during construction.
-      asteroid.rotation.x += asteroid.userData.spin.x;
-      asteroid.rotation.y += asteroid.userData.spin.y;
-      asteroid.rotation.z += asteroid.userData.spin.z;
+      asteroid.rotation.x += asteroid.userData.spin.x * motionScale;
+      asteroid.rotation.y += asteroid.userData.spin.y * motionScale;
+      asteroid.rotation.z += asteroid.userData.spin.z * motionScale;
     });
-    asteroidDust.rotation.y -= 0.0007;
-    stars.rotation.y += 0.00008;
-    milkyWay.rotation.y += 0.00045;
+    asteroidDust.rotation.y -= 0.0007 * motionScale;
+    stars.rotation.y += 0.00008 * motionScale;
+    milkyWay.rotation.y += 0.00045 * motionScale;
     stars.material.uniforms.uTime.value = elapsed;
     asteroidDust.material.uniforms.uTime.value = elapsed;
     milkyWay.material.uniforms.uTime.value = elapsed * 0.72;
@@ -504,8 +554,9 @@ import { addAtmosphere, createPlanet } from './scene/planetFactory.js';
     });
 
     // ----- Sync HTML, draw the frame, then schedule the next frame -----
-    updateScaleLabel(distance);
-    updateHoveredBody();
+    // Matrix updates make the latest camera transform available to 3D→2D projection.
+    camera.updateMatrixWorld();
+    updateInspectionInterface();
     renderer.render(scene, camera);
     // requestAnimationFrame runs before the browser's next repaint (usually ~60 FPS).
     requestAnimationFrame(animate);
@@ -520,5 +571,3 @@ import { addAtmosphere, createPlanet } from './scene/planetFactory.js';
     loader.classList.add("is-hidden");
   }, 1350);
 })();
-
-

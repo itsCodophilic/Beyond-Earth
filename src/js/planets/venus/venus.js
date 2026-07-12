@@ -8,4 +8,9 @@ export const venus = {
   orbitSpeed: 0.46, spinSpeed: -0.0015, axialTilt: 3.1, angle: 2.2,
   bump: 0.01, orbitColor: 0xe0b36a,
   detail: "Earth-size world | retrograde spin",
+  info: {
+    type: "Planet", diameter: "12,104 km", orbitalSpeed: "35.02 km/s",
+    distanceFromEarth: "≈ 38 million km at closest approach",
+    description: "A luminous cloud-covered world with volcanic plains, crushing pressure, and a day longer than its year.",
+  },
 };
