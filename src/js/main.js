@@ -96,10 +96,10 @@ import { createSun, updateSun } from './stars/sun/sun.js';
   const cameraFocusPoint = new THREE.Vector3();
 
   // AmbientLight illuminates every surface equally so shadowed sides are not pure black.
-  scene.add(new THREE.AmbientLight(0x8da1c6, 0.34));
+  scene.add(new THREE.AmbientLight(0x8da1c6, 0.16));
 
   // A cool DirectionalLight adds readable edge detail from a consistent direction.
-  const fillLight = new THREE.DirectionalLight(0x8bdcff, 0.75);
+  const fillLight = new THREE.DirectionalLight(0x8bdcff, 0.32);
   fillLight.position.set(-50, 40, 90);
   scene.add(fillLight);
 
@@ -484,7 +484,12 @@ import { createSun, updateSun } from './stars/sun/sun.js';
     camera.position.set(cameraFocusPoint.x + x, cameraFocusPoint.y + y, cameraFocusPoint.z + z);
     // lookAt rotates the camera so its forward direction points at the target.
     camera.lookAt(cameraFocusPoint);
-    camera.fov = THREE.MathUtils.lerp(camera.fov, THREE.MathUtils.lerp(42, 68, smoothProgress), 0.04);
+    // Focus mode owns the lens as well as camera distance. A narrower FOV creates
+    // a cinematic inspection shot instead of retaining the wide scroll lens.
+    const targetFov = focusedBody
+      ? focusedBody.userData.focusFov ?? 30
+      : THREE.MathUtils.lerp(42, 68, smoothProgress);
+    camera.fov = THREE.MathUtils.lerp(camera.fov, targetFov, focusedBody ? 0.08 : 0.04);
     camera.updateProjectionMatrix();
 
     // ----- Animate special meshes and scene effects -----

@@ -2,6 +2,10 @@
 
 > An immersive 3D Solar System experience built with **Three.js** and **Vite**.
 
+Planet texture maps for Mercury, Venus, and Mars are adapted from the
+[Solar System Scope texture pack](https://www.solarsystemscope.com/textures/),
+distributed under the Creative Commons Attribution 4.0 International license.
+
 ---
 
 ## 🚀 Features

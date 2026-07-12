@@ -23,12 +23,24 @@ function loadTexture(loader, url, fallbackKind, options = {}) {
         texture.anisotropy = 8;
         texture.wrapS = THREE.RepeatWrapping;
         texture.wrapT = THREE.ClampToEdgeWrapping;
+        texture.userData.sourceUrl = url;
+        texture.userData.isFallback = false;
         resolve(texture);
       },
       undefined,
       // Optional detail layers may safely be null. Required planet surfaces get
       // a generated canvas texture so one failed URL cannot break the whole scene.
-      () => resolve(options.optional ? null : makeNoiseTexture(fallbackKind)),
+      () => {
+        console.warn(`[Beyond Earth] Texture failed to load: ${url}`);
+        if (options.optional) {
+          resolve(null);
+          return;
+        }
+        const fallback = makeNoiseTexture(fallbackKind);
+        fallback.userData.isFallback = true;
+        fallback.userData.failedUrl = url;
+        resolve(fallback);
+      },
     );
   });
 }
