@@ -13,41 +13,53 @@ function createGalacticStarGeometry(count, radius) {
   const speeds = new Float32Array(count);
   const halos = new Float32Array(count);
   const color = new THREE.Color();
-  const warmCore = new THREE.Color(1, 0.78, 0.56);
+  const warmCore = new THREE.Color(1, 0.80, 0.62);
   let accepted = 0;
 
   while (accepted < count) {
-    const centreBiased = random() < 0.46;
+    const centreBiased = random() < 0.34;
     const longitude = centreBiased
-      ? THREE.MathUtils.clamp(gaussian(random) * 0.82, -Math.PI, Math.PI)
+      ? THREE.MathUtils.clamp(gaussian(random) * 0.72, -Math.PI, Math.PI)
       : random() * Math.PI * 2 - Math.PI;
-    const latitude = gaussian(random) * (centreBiased ? 0.105 : 0.145);
-    if (Math.abs(latitude) > 0.46) continue;
 
-    const lane = Math.sin(longitude * 3.1 + 0.7) * 0.023;
-    if (Math.abs(latitude - lane) < 0.025 && random() < 0.78) continue;
+    const bandCentre =
+      Math.sin(longitude * 0.72 + 0.8) * 0.042 +
+      Math.sin(longitude * 2.35 - 1.1) * 0.014;
+    const latitude = bandCentre + gaussian(random) * (centreBiased ? 0.070 : 0.105);
+    if (Math.abs(latitude - bandCentre) > 0.33) continue;
+
+    // Several broad longitude patches prevent the band from looking like an
+    // even sprayed line. Large black intervals remain between dense regions.
+    const patchDensity = THREE.MathUtils.clamp(
+      0.46
+        + Math.sin(longitude * 2.7 + 0.8) * 0.18
+        + Math.sin(longitude * 6.3 - 1.6) * 0.13
+        + (centreBiased ? 0.22 : 0),
+      0.12,
+      1,
+    );
+    if (random() > patchDensity) continue;
 
     const cosLatitude = Math.cos(latitude);
-    const pointRadius = radius - 8 + random() * 16;
+    const pointRadius = radius - 10 + random() * 20;
     const offset = accepted * 3;
     positions[offset] = Math.cos(longitude) * cosLatitude * pointRadius;
     positions[offset + 1] = Math.sin(latitude) * pointRadius;
     positions[offset + 2] = Math.sin(longitude) * cosLatitude * pointRadius;
 
-    const coreStrength = Math.exp(-Math.pow(Math.abs(longitude) / 0.90, 1.6));
-    const brightTail = Math.pow(random(), 5.2);
-    getStellarColor(random, 0.24 + brightTail * 0.52 + coreStrength * 0.18, color);
-    color.lerp(warmCore, coreStrength * 0.24);
+    const coreStrength = Math.exp(-Math.pow(Math.abs(longitude) / 0.82, 1.7));
+    const brightTail = Math.pow(random(), 7.2);
+    getStellarColor(random, 0.18 + brightTail * 0.58 + coreStrength * 0.12, color);
+    color.lerp(warmCore, coreStrength * 0.16);
     colors[offset] = color.r;
     colors[offset + 1] = color.g;
     colors[offset + 2] = color.b;
-    // Most stars remain sub-pixel points, but a brighter tail resolves against
-    // the diffuse clouds like a real long-exposure Milky Way photograph.
-    sizes[accepted] = 1.24 + brightTail * 3.45 + coreStrength * random() * 0.46;
-    brightnesses[accepted] = 0.40 + brightTail * 0.58 + coreStrength * 0.15;
+
+    sizes[accepted] = 0.96 + brightTail * 3.05 + coreStrength * random() * 0.42;
+    brightnesses[accepted] = 0.32 + brightTail * 0.74 + coreStrength * 0.14;
     phases[accepted] = random() * Math.PI * 2;
-    speeds[accepted] = 0.028 + random() * 0.055;
-    halos[accepted] = 0.08 + brightTail * 0.16;
+    speeds[accepted] = 0.020 + random() * 0.045;
+    halos[accepted] = 0.055 + brightTail * 0.17;
     accepted += 1;
   }
 
@@ -62,13 +74,13 @@ function createGalacticStarGeometry(count, radius) {
   return geometry;
 }
 
-/** Continuous great-circle Milky Way plus the resolved stellar population. */
+/** Narrow, patchy great-circle Milky Way plus its resolved stellar population. */
 export function createMilkyWayBackground({ count, radius, pixelRatio, rotation }) {
   const group = new THREE.Group();
-  group.name = "Tilted Milky Way plane";
+  group.name = "Distant diagonal Milky Way";
   group.rotation.set(...rotation);
 
-  const glowGeometry = new THREE.SphereGeometry(radius, 96, 64);
+  const glowGeometry = new THREE.SphereGeometry(radius, 112, 72);
   const glowMaterial = new THREE.ShaderMaterial({
     uniforms: {
       uVisibility: { value: 0 },
@@ -83,19 +95,17 @@ export function createMilkyWayBackground({ count, radius, pixelRatio, rotation }
     depthWrite: false,
     depthTest: true,
     blending: THREE.AdditiveBlending,
-    // The galactic veil is already authored in display-friendly values. Keeping
-    // it outside the bright planetary exposure curve prevents it disappearing.
     toneMapped: false,
   });
   const glow = new THREE.Mesh(glowGeometry, glowMaterial);
-  glow.name = "Diffuse Milky Way with dark dust lanes";
+  glow.name = "Restrained diffuse galactic band";
   glow.frustumCulled = false;
   glow.renderOrder = -30;
 
-  const starGeometry = createGalacticStarGeometry(count, radius - 20);
+  const starGeometry = createGalacticStarGeometry(count, radius - 22);
   const starMaterial = createStarMaterial({ pixelRatio, maxPointSize: 4.5 });
   const stars = new THREE.Points(starGeometry, starMaterial);
-  stars.name = "Resolved Milky Way stars";
+  stars.name = "Patchy resolved Milky Way stars";
   stars.frustumCulled = false;
   stars.renderOrder = -28;
   group.add(glow, stars);
@@ -107,8 +117,9 @@ export function createMilkyWayBackground({ count, radius, pixelRatio, rotation }
       glowMaterial.uniforms.uContrast.value = contrast;
       glowMaterial.uniforms.uSolarSuppression.value = solarSuppression;
       glowMaterial.uniforms.uSunDirection.value.copy(sunDirection);
+
       starMaterial.uniforms.uTime.value = time;
-      starMaterial.uniforms.uVisibility.value = Math.min(1, visibility * 1.14);
+      starMaterial.uniforms.uVisibility.value = Math.min(1.48, visibility * 1.16);
       starMaterial.uniforms.uExposure.value = exposure;
       starMaterial.uniforms.uSolarSuppression.value = solarSuppression;
       starMaterial.uniforms.uSunDirection.value.copy(sunDirection);

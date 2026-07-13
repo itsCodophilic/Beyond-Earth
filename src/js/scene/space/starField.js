@@ -2,13 +2,13 @@ import * as THREE from "three";
 import { starFragmentShader, starVertexShader } from "../../shaders/space/starShaders.js";
 import { createSeededRandom, gaussian } from "./seededRandom.js";
 
-const FAINT_STAR_COLOR = new THREE.Color(0.82, 0.84, 0.86);
+const FAINT_STAR_COLOR = new THREE.Color(0.84, 0.85, 0.87);
 const STAR_PALETTE = [
-  { threshold: 0.66, color: new THREE.Color(0.94, 0.96, 1) },
-  { threshold: 0.82, color: new THREE.Color(1, 0.91, 0.73) },
-  { threshold: 0.92, color: new THREE.Color(0.78, 0.86, 1) },
-  { threshold: 0.985, color: new THREE.Color(1, 0.72, 0.48) },
-  { threshold: 1, color: new THREE.Color(0.68, 0.78, 1) },
+  { threshold: 0.67, color: new THREE.Color(0.95, 0.97, 1.0) },
+  { threshold: 0.83, color: new THREE.Color(1.0, 0.92, 0.76) },
+  { threshold: 0.93, color: new THREE.Color(0.80, 0.87, 1.0) },
+  { threshold: 0.987, color: new THREE.Color(1.0, 0.75, 0.52) },
+  { threshold: 1, color: new THREE.Color(0.72, 0.80, 1.0) },
 ];
 
 /** Writes a restrained stellar-temperature color into a reusable target. */
@@ -37,7 +37,7 @@ export function createStarMaterial({ pixelRatio, maxPointSize = 4.8 }) {
     depthWrite: false,
     depthTest: true,
     blending: THREE.AdditiveBlending,
-    toneMapped: true,
+    toneMapped: false,
   });
 }
 
@@ -52,14 +52,16 @@ function makeStarGeometry({ count, minimumRadius, maximumRadius, seed, midDistan
   const halos = new Float32Array(count);
   const color = new THREE.Color();
   const voidDirection = new THREE.Vector3(-0.24, 0.68, 0.69).normalize();
+  const clusterDirectionA = new THREE.Vector3(0.63, 0.28, -0.72).normalize();
+  const clusterDirectionB = new THREE.Vector3(-0.48, -0.32, -0.82).normalize();
   const direction = new THREE.Vector3();
   let accepted = 0;
 
   while (accepted < count) {
-    const inLooseBand = !midDistance && random() < 0.22;
+    const inLooseBand = !midDistance && random() < 0.13;
     const longitude = random() * Math.PI * 2;
     const latitude = inLooseBand
-      ? THREE.MathUtils.clamp(gaussian(random) * 0.30, -0.72, 0.72)
+      ? THREE.MathUtils.clamp(gaussian(random) * 0.34, -0.82, 0.82)
       : Math.asin(random() * 2 - 1);
     const cosLatitude = Math.cos(latitude);
     direction.set(
@@ -68,8 +70,16 @@ function makeStarGeometry({ count, minimumRadius, maximumRadius, seed, midDistan
       Math.sin(longitude) * cosLatitude,
     );
 
-    // A deliberately sparse celestial void prevents uniform wallpaper density.
-    if (direction.dot(voidDirection) > 0.91 && random() < 0.72) continue;
+    if (direction.dot(voidDirection) > 0.90 && random() < 0.78) continue;
+
+    // Two loose stellar associations create subtle density changes without
+    // turning the background into a repeating wallpaper.
+    const clusterBoost = Math.max(
+      0,
+      Math.pow(Math.max(direction.dot(clusterDirectionA), 0), 12),
+      Math.pow(Math.max(direction.dot(clusterDirectionB), 0), 15),
+    );
+    if (!midDistance && random() > 0.84 + clusterBoost * 0.16) continue;
 
     const radius = THREE.MathUtils.lerp(minimumRadius, maximumRadius, random());
     const offset = accepted * 3;
@@ -77,17 +87,17 @@ function makeStarGeometry({ count, minimumRadius, maximumRadius, seed, midDistan
     positions[offset + 1] = direction.y * radius;
     positions[offset + 2] = direction.z * radius;
 
-    const brightTail = Math.pow(random(), midDistance ? 5.4 : 6.8);
-    const perceptualBrightness = 0.24 + brightTail * 0.76;
-    getStellarColor(random, 0.28 + brightTail * 0.72, color);
+    const brightTail = Math.pow(random(), midDistance ? 6.0 : 7.8);
+    const perceptualBrightness = 0.30 + brightTail * 0.82 + clusterBoost * 0.08;
+    getStellarColor(random, 0.22 + brightTail * 0.68, color);
     colors[offset] = color.r;
     colors[offset + 1] = color.g;
     colors[offset + 2] = color.b;
-    sizes[accepted] = (midDistance ? 1.1 : 0.85) + brightTail * (midDistance ? 4.6 : 4.1);
+    sizes[accepted] = (midDistance ? 1.18 : 0.92) + brightTail * (midDistance ? 3.20 : 2.75);
     brightnesses[accepted] = perceptualBrightness;
     phases[accepted] = random() * Math.PI * 2;
-    speeds[accepted] = 0.035 + random() * 0.075;
-    halos[accepted] = 0.10 + brightTail * 0.26;
+    speeds[accepted] = 0.024 + random() * 0.052;
+    halos[accepted] = 0.050 + brightTail * 0.18;
     accepted += 1;
   }
 
@@ -114,7 +124,7 @@ export function createStarField({
   midDistance = false,
 }) {
   const geometry = makeStarGeometry({ count, minimumRadius, maximumRadius, seed, midDistance });
-  const material = createStarMaterial({ pixelRatio, maxPointSize: midDistance ? 4.2 : 4.8 });
+  const material = createStarMaterial({ pixelRatio, maxPointSize: midDistance ? 4.6 : 4.8 });
   const points = new THREE.Points(geometry, material);
   points.name = name;
   points.frustumCulled = false;
@@ -140,4 +150,3 @@ export function createStarField({
     },
   };
 }
-

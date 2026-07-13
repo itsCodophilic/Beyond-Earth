@@ -25,6 +25,7 @@ import {
 } from './scene/asteroidBelt.js';
 import { createPlanet, updatePlanetVisuals } from './scene/planetFactory.js';
 import { SpaceEnvironment } from './scene/space/spaceEnvironment.js';
+import { JOURNEY_MAP } from './scene/space/spaceEnvironmentConfig.js';
 import { createSun, updateSun } from './stars/sun/sun.js';
 
 // An async immediately-invoked function lets us await texture loading while
@@ -50,8 +51,10 @@ import { createSun, updateSun } from './stars/sun/sun.js';
   // Scene is the root container of the 3D scene graph. Anything not attached to
   // the scene (directly or through a Group) cannot be rendered.
   const scene = new THREE.Scene();
-  // Exponential fog gradually blends distant fragments into near-black, adding depth.
-  scene.fog = new THREE.FogExp2(0x01040a, 0.0018);
+  // Vacuum remains black. Distant celestial structure is added by explicit sky
+  // layers rather than by scene-wide coloured fog.
+  scene.background = new THREE.Color(0x000106);
+  scene.fog = new THREE.FogExp2(0x000106, 0.00115);
 
   // PerspectiveCamera arguments: vertical FOV, aspect ratio, near plane, far plane.
   // Objects outside near/far are clipped and never sent through the full pipeline.
@@ -205,6 +208,30 @@ import { createSun, updateSun } from './stars/sun/sun.js';
     const eased = progress * progress * (3 - 2 * progress);
     // lerp(a, b, t) returns a at t=0, b at t=1, and blends between them.
     return THREE.MathUtils.lerp(4.8, 620, eased);
+  }
+
+  /** Uses the focused body's physical region when inspection overrides scroll. */
+  function getEnvironmentJourneyProgress() {
+    if (!focusedBody) return smoothProgress;
+
+    const bodyName = String(focusedBody.userData?.name ?? focusedBody.name ?? "").toLowerCase();
+    const bodyType = String(focusedBody.userData?.info?.type ?? "").toLowerCase();
+
+    if (bodyName.includes("sun")) return JOURNEY_MAP.sun;
+    if (bodyName.includes("mercury")) return JOURNEY_MAP.mercury;
+    if (bodyName.includes("venus")) return JOURNEY_MAP.venus;
+    if (bodyName.includes("earth")) return JOURNEY_MAP.earth;
+    if (bodyName.includes("moon")) return JOURNEY_MAP.moon;
+    if (bodyName.includes("mars")) return JOURNEY_MAP.mars;
+    if (bodyName.includes("jupiter")) return JOURNEY_MAP.jupiter;
+    if (bodyName.includes("saturn")) return JOURNEY_MAP.saturn;
+    if (bodyName.includes("uranus")) return JOURNEY_MAP.uranus;
+    if (bodyName.includes("neptune")) return JOURNEY_MAP.neptune;
+    if (bodyType.includes("asteroid") || bodyName.includes("asteroid") || bodyName.includes("family")) {
+      return JOURNEY_MAP.asteroidBelt;
+    }
+
+    return smoothProgress;
   }
 
   /*
@@ -543,7 +570,7 @@ import { createSun, updateSun } from './stars/sun/sun.js';
     updateAsteroidBelt(asteroidBelt, motionScale, jupiter);
     // One journey value coordinates exposure, stellar layers, galaxies, local
     // dust, and zodiacal light for scroll, reverse travel, and body focus alike.
-    spaceEnvironment.setJourneyProgress(smoothProgress);
+    spaceEnvironment.setJourneyProgress(getEnvironmentJourneyProgress());
     spaceEnvironment.update(deltaTime, elapsedTime);
     orbitRoot.children.forEach((orbit) => {
       orbit.material.opacity = THREE.MathUtils.clamp((smoothProgress - 0.035) / 0.18, 0.04, 0.22);

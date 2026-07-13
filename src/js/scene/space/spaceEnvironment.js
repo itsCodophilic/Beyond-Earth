@@ -32,6 +32,7 @@ export class SpaceEnvironment {
     this.paused = false;
     this.sunPosition = new THREE.Vector3();
     this.sunDirection = new THREE.Vector3(0, 0, -1);
+    this.deepSkyAnchor = new THREE.Vector3();
     this.hasSolarDirectionOverride = false;
     this.updateContext = {
       time: 0,
@@ -150,15 +151,26 @@ export class SpaceEnvironment {
     }
 
     this.renderer.toneMappingExposure = state.rendererExposure;
+
+    // The most distant layers follow most of the camera translation. They still
+    // retain a little movement for depth, but never reveal themselves as nearby
+    // spheres centred on the Sun when the camera travels hundreds of units.
+    this.deepSkyAnchor.copy(this.camera.position);
+    this.backgroundStars.object.position.copy(this.deepSkyAnchor);
+    this.milkyWay.object.position.copy(this.deepSkyAnchor);
+    this.heroStars.object.position.copy(this.deepSkyAnchor);
+    this.galaxies.object.position.copy(this.deepSkyAnchor);
+
     const context = this.updateContext;
     context.time = elapsedTime;
     context.exposure = state.backgroundContrast;
     context.solarSuppression = state.solarGlare;
     context.reducedMotion = this.reducedMotion;
     context.contrast = state.backgroundContrast;
+    context.journeyProgress = state.journeyProgress;
     context.visibility = state.starVisibility;
     this.backgroundStars.update(context);
-    context.visibility = state.starVisibility * (0.20 + state.journeyProgress * 0.20);
+    context.visibility = state.starVisibility * (0.22 + state.journeyProgress * 0.26);
     this.parallaxStars.update(context);
     context.visibility = state.milkyWayVisibility;
     this.milkyWay.update(context);

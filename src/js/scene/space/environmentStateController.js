@@ -21,9 +21,11 @@ const STATE_KEYS = [
 ];
 
 /**
- * Converts one normalized journey value into every coordinated visual state.
- * Target values are damped over time, so scroll, focus, reverse travel, and
- * browser-restored scroll positions all use the same continuous transition.
+ * Converts one normalized journey value into a coordinated deep-space state.
+ *
+ * The important visual rule is that space remains black in every region. The
+ * journey reveals additional faint information; it never replaces darkness
+ * with a bright cloud background.
  */
 export class EnvironmentStateController {
   constructor() {
@@ -47,33 +49,39 @@ export class EnvironmentStateController {
   }
 
   #calculateTargets(progress, target) {
-    const middle = smootherstep(progress, 0.22, 0.72);
-    const outer = smootherstep(progress, 0.58, 0.96);
-    const deep = smootherstep(progress, 0.78, 1);
-    const solarInfluence = 1 - smootherstep(progress, 0.08, 0.96);
+    const middle = smootherstep(progress, 0.24, 0.70);
+    const outer = smootherstep(progress, 0.60, 0.94);
+    const deep = smootherstep(progress, 0.82, 1.0);
+    const solarInfluence = 1 - smootherstep(progress, 0.10, 0.97);
+
     const exposure = SPACE_ENVIRONMENT_CONFIG.exposure.innerSolar
       + middle * (SPACE_ENVIRONMENT_CONFIG.exposure.outerSolar - SPACE_ENVIRONMENT_CONFIG.exposure.innerSolar)
       + deep * (SPACE_ENVIRONMENT_CONFIG.exposure.interstellar - SPACE_ENVIRONMENT_CONFIG.exposure.outerSolar);
 
     target.journeyProgress = progress;
     target.solarInfluence = solarInfluence;
-    target.solarGlare = solarInfluence * (1 - outer * 0.72);
+    target.solarGlare = solarInfluence * (1 - outer * 0.78);
     target.rendererExposure = exposure;
     target.directLightIntensity = 0.72 + solarInfluence * 0.28;
     target.sunApparentScale = 0.42 + solarInfluence * 0.58;
-    // Stars, the Milky Way, and distant galaxies exist in every region. Solar
-    // glare suppresses only the area surrounding the Sun, so the rest of the
-    // sky remains rich even while the camera is among the inner planets.
-    target.starVisibility = 0.88 + middle * 0.07 + outer * 0.05;
-    target.heroStarVisibility = 0.05 + middle * 0.08 + outer * 0.55;
-    target.milkyWayVisibility = 0.64 + middle * 0.16 + outer * 0.20;
-    target.galaxyVisibility = 0.22 + middle * 0.14 + outer * 0.46;
-    target.dustVisibility = 0.09 + solarInfluence * 0.23 * (1 - deep);
-    target.zodiacalGlow = 0.27 * solarInfluence * (1 - outer * 0.82);
-    target.debrisVisibility = 0.22 + middle * 0.38;
-    target.backgroundContrast = 0.84 + outer * 0.16;
-    target.bloomStrength = 0.42 + solarInfluence * 0.20;
-    target.lensFlareStrength = solarInfluence * 0.55;
+
+    // Ordinary stars are present throughout the Solar System. The faint tail is
+    // progressively revealed as solar glare and foreground brightness weaken.
+    target.starVisibility = 0.82 + middle * 0.12 + outer * 0.22 + deep * 0.12;
+    target.heroStarVisibility = 0.26 + middle * 0.10 + outer * 0.30 + deep * 0.26;
+
+    // The Milky Way and galaxies never pop into existence. Their very low inner
+    // values become perceptually useful only in the outer-system exposure range.
+    target.milkyWayVisibility = 0.16 + middle * 0.12 + outer * 0.26 + deep * 0.18;
+    target.galaxyVisibility = 0.18 + middle * 0.14 + outer * 0.34 + deep * 0.30;
+
+    // Local dust is a rare glint, not a surrounding fog or a galactic ribbon.
+    target.dustVisibility = 0.012 + solarInfluence * 0.030 * (1 - deep);
+    target.zodiacalGlow = 0.075 * solarInfluence * (1 - outer * 0.92);
+    target.debrisVisibility = 0.16 + middle * 0.34;
+    target.backgroundContrast = 1.06 + outer * 0.15 + deep * 0.07;
+    target.bloomStrength = 0.36 + solarInfluence * 0.18;
+    target.lensFlareStrength = solarInfluence * 0.50;
     return target;
   }
 }

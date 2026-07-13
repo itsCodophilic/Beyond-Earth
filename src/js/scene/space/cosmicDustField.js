@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { dustFragmentShader, dustVertexShader } from "../../shaders/space/dustShaders.js";
 import { createSeededRandom, gaussian } from "./seededRandom.js";
 
-/** Sparse interplanetary grains visible only at favourable Sun/view angles. */
+/** Rare interplanetary grains revealed only at favourable Sun/view angles. */
 export function createCosmicDustField({ count, maximumRadius, pixelRatio }) {
   const random = createSeededRandom(0xd057a11e);
   const positions = new Float32Array(count * 3);
@@ -11,12 +11,26 @@ export function createCosmicDustField({ count, maximumRadius, pixelRatio }) {
 
   for (let index = 0; index < count; index += 1) {
     const offset = index * 3;
-    const radialDistance = 12 + Math.sqrt(random()) * (maximumRadius - 12);
+    const radialDistance = 18 + Math.sqrt(random()) * (maximumRadius - 18);
     const angle = random() * Math.PI * 2;
-    positions[offset] = Math.cos(angle) * radialDistance;
-    positions[offset + 1] = THREE.MathUtils.clamp(gaussian(random) * 7.5, -24, 24);
-    positions[offset + 2] = Math.sin(angle) * radialDistance;
-    sizes[index] = 0.70 + Math.pow(random(), 3.5) * 1.6;
+    const population = random();
+
+    if (population < 0.62) {
+      // Most interplanetary dust remains close to the ecliptic.
+      positions[offset] = Math.cos(angle) * radialDistance;
+      positions[offset + 1] = THREE.MathUtils.clamp(gaussian(random) * 16, -54, 54);
+      positions[offset + 2] = Math.sin(angle) * radialDistance;
+    } else {
+      // A smaller high-inclination population puts occasional glints above and
+      // below the planetary plane, so dust is not visually compressed into one
+      // horizontal strip.
+      const y = random() * 2 - 1;
+      const latitudeRadius = Math.sqrt(Math.max(0, 1 - y * y));
+      positions[offset] = Math.cos(angle) * latitudeRadius * radialDistance;
+      positions[offset + 1] = y * radialDistance * 0.72;
+      positions[offset + 2] = Math.sin(angle) * latitudeRadius * radialDistance;
+    }
+    sizes[index] = 0.42 + Math.pow(random(), 4.2) * 0.90;
     phases[index] = random() * Math.PI * 2;
   }
 
@@ -41,8 +55,9 @@ export function createCosmicDustField({ count, maximumRadius, pixelRatio }) {
     blending: THREE.NormalBlending,
     toneMapped: true,
   });
+
   const points = new THREE.Points(geometry, material);
-  points.name = "Angle-dependent interplanetary dust";
+  points.name = "Rare angle-dependent interplanetary dust glints";
   points.frustumCulled = false;
   points.renderOrder = -12;
 
@@ -53,7 +68,7 @@ export function createCosmicDustField({ count, maximumRadius, pixelRatio }) {
       material.uniforms.uVisibility.value = visibility;
       material.uniforms.uSunPosition.value.copy(sunPosition);
       material.uniforms.uReducedMotion.value = reducedMotion ? 1 : 0;
-      if (!reducedMotion) points.rotation.y = time * 0.00045;
+      if (!reducedMotion) points.rotation.y = time * 0.00018;
     },
     resize(pixelRatioValue) {
       material.uniforms.uPixelRatio.value = pixelRatioValue;
@@ -64,4 +79,3 @@ export function createCosmicDustField({ count, maximumRadius, pixelRatio }) {
     },
   };
 }
-
