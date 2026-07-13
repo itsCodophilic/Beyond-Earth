@@ -7,7 +7,7 @@
  * - composition-specific C, S, and M class surfaces
  * - smooth, genuinely three-dimensional silhouettes
  * - crater bowls, raised rims, grooves, boulders, and rubble-pile forms
- * - individually clickable resolved bodies plus unresolved distant debris
+ * - every visible 3D rock is clickable; only sub-pixel debris is unresolved
  * - collision families and Jupiter Trojan swarms
  *
  * The resolved objects are not direct scans of real asteroids. They are
@@ -16,6 +16,7 @@
  * self-contained while avoiding a repeated low-poly "game rock" appearance.
  */
 import * as THREE from "three";
+import { ImprovedNoise } from "three/addons/math/ImprovedNoise.js";
 
 const BELT_INNER_RADIUS = 44;
 const BELT_OUTER_RADIUS = 52;
@@ -33,36 +34,51 @@ const COMPOSITIONS = {
   S: {
     label: "S-type (silicate)",
     description: "A stony inner-belt asteroid rich in silicate minerals, magnesium, and nickel-iron.",
-    baseColors: ["#68635d", "#90867b", "#45433f"],
-    roughness: 0.94,
+    baseColors: ["#4e4842", "#807364", "#242321"],
+    roughness: 0.88,
     metalness: 0.035,
-    bumpScale: 0.085,
-    displacementScale: 0.055,
+    bumpScale: 0.14,
     density: "Silicate and nickel-iron",
     archetypes: ["elongated", "fractured", "irregular"],
   },
   M: {
     label: "M-type (metallic)",
     description: "A dense metal-rich asteroid containing substantial iron and nickel with rocky inclusions.",
-    baseColors: ["#4a4c4b", "#73736e", "#292d2d"],
-    roughness: 0.64,
-    metalness: 0.48,
-    bumpScale: 0.065,
-    displacementScale: 0.042,
+    baseColors: ["#3b3d3c", "#716c62", "#1b1e1e"],
+    roughness: 0.58,
+    metalness: 0.36,
+    bumpScale: 0.11,
     density: "Iron-nickel metal mixed with silicate rock",
     archetypes: ["rounded", "elongated", "fractured"],
   },
   C: {
     label: "C-type (carbonaceous)",
     description: "A dark primitive asteroid rich in carbon compounds, hydrated minerals, and possible water-bearing material.",
-    baseColors: ["#181a19", "#2d2e2b", "#0c0e0d"],
-    roughness: 1,
+    baseColors: ["#121412", "#302d27", "#070908"],
+    roughness: 0.94,
     metalness: 0.005,
-    bumpScale: 0.10,
-    displacementScale: 0.064,
+    bumpScale: 0.16,
     density: "Carbon-rich hydrated rock",
     archetypes: ["rubble", "top", "irregular"],
   },
+};
+
+// Colours remain deliberately muted. Real asteroid surfaces are mostly dark
+// charcoal, weathered grey, and subdued iron/silicate browns—not saturated tan.
+const COMPOSITION_PALETTES = Object.fromEntries(
+  Object.entries(COMPOSITIONS).map(([key, value]) => [
+    key,
+    value.baseColors.map((hex) => new THREE.Color(hex)),
+  ]),
+);
+
+// The Sun is intentionally extremely bright in this cinematic scene. These
+// neutral multipliers keep asteroid albedo within realistic dark-stone ranges
+// instead of letting direct solar illumination bleach every rock to white.
+const COMPOSITION_EXPOSURE = {
+  C: new THREE.Color(0x333834),
+  S: new THREE.Color(0x514941),
+  M: new THREE.Color(0x474947),
 };
 
 const MAJOR_BODIES = [
@@ -143,6 +159,13 @@ const _normal = new THREE.Vector3();
 const _direction = new THREE.Vector3();
 const _axisA = new THREE.Vector3();
 const _axisB = new THREE.Vector3();
+const _instanceMatrix = new THREE.Matrix4();
+const _instanceQuaternion = new THREE.Quaternion();
+const _instanceScale = new THREE.Vector3();
+const _perlinNoise = new ImprovedNoise();
+const _surfaceColor = new THREE.Color();
+const _rustMineralColor = new THREE.Color(0x6d4938);
+const _metalMineralColor = new THREE.Color(0x81786c);
 
 /** Stable pseudo-random value from any numeric seed. */
 function seededRandom(seed) {
@@ -151,19 +174,16 @@ function seededRandom(seed) {
 }
 
 function smoothNoise3(x, y, z, seed) {
-  const value = Math.sin(
-    x * 1.73 +
-    y * 2.11 +
-    z * 2.47 +
-    seed * 0.618,
+  // Perlin noise changes smoothly in every direction without producing the
+  // parallel sine-wave bands that made the previous surface look synthetic.
+  const offsetX = (seed * 0.754877666) % 97;
+  const offsetY = (seed * 0.569840291) % 89;
+  const offsetZ = (seed * 0.438289121) % 83;
+  return _perlinNoise.noise(
+    x + offsetX,
+    y + offsetY,
+    z + offsetZ,
   ) * 0.5 + 0.5;
-  const second = Math.sin(
-    x * 3.91 -
-    y * 2.73 +
-    z * 4.37 +
-    seed * 1.127,
-  ) * 0.5 + 0.5;
-  return value * 0.66 + second * 0.34;
 }
 
 function fractalNoise(direction, seed) {
@@ -185,6 +205,41 @@ function fractalNoise(direction, seed) {
   }
 
   return total / weight;
+}
+
+/**
+ * Produces stone colour directly from a point on the 3D surface.
+ * Because the lookup uses XYZ direction rather than UV pixels, it has no seams,
+ * circular decals, texture stretching, or repeating horizontal bands.
+ */
+function writeSurfaceColor(target, composition, direction, seed, craterShade = 0, rimLight = 0) {
+  const palette = COMPOSITION_PALETTES[composition];
+  const broad = fractalNoise(direction, seed + 211);
+  const mineral = fractalNoise(
+    _normal.copy(direction).multiplyScalar(3.7),
+    seed + 337,
+  );
+  const grain = smoothNoise3(
+    direction.x * 31,
+    direction.y * 31,
+    direction.z * 31,
+    seed + 491,
+  );
+
+  target.copy(palette[0]);
+  target.lerp(palette[1], THREE.MathUtils.smoothstep(broad, 0.28, 0.78) * 0.72);
+  target.lerp(palette[2], THREE.MathUtils.smoothstep(mineral, 0.48, 0.82) * 0.55);
+
+  if (composition === "S" && grain > 0.72) {
+    target.lerp(_rustMineralColor, (grain - 0.72) * 0.65);
+  } else if (composition === "M" && mineral > 0.68) {
+    target.lerp(_metalMineralColor, (mineral - 0.68) * 0.52);
+  }
+
+  const brightness = 0.72 + broad * 0.42 + (grain - 0.5) * 0.13
+    - craterShade * 0.34 + rimLight * 0.14;
+  target.multiplyScalar(THREE.MathUtils.clamp(brightness, 0.38, 1.16));
+  return target;
 }
 
 /** Maps the project's artistic belt radius back to an approximate AU value. */
@@ -218,159 +273,37 @@ function compositionForRadius(radius, seed) {
   return random < 0.84 ? "C" : "M";
 }
 
-/**
- * Creates colour, bump, and roughness maps tailored to one composition class.
- * The maps are generated once per variant and reused by many meshes.
- */
-function createAsteroidTextureSet(compositionKey, variantSeed) {
-  const composition = COMPOSITIONS[compositionKey];
-  const width = 768;
-  const height = 384;
-
-  const colorCanvas = document.createElement("canvas");
-  const bumpCanvas = document.createElement("canvas");
-  const roughnessCanvas = document.createElement("canvas");
-  colorCanvas.width = bumpCanvas.width = roughnessCanvas.width = width;
-  colorCanvas.height = bumpCanvas.height = roughnessCanvas.height = height;
-
-  const colorContext = colorCanvas.getContext("2d");
-  const bumpContext = bumpCanvas.getContext("2d");
-  const roughnessContext = roughnessCanvas.getContext("2d");
-
-  const colorImage = colorContext.createImageData(width, height);
-  const bumpImage = bumpContext.createImageData(width, height);
-  const roughnessImage = roughnessContext.createImageData(width, height);
-
-  const base = composition.baseColors.map((hex) => new THREE.Color(hex));
-
-  for (let y = 0; y < height; y += 1) {
-    for (let x = 0; x < width; x += 1) {
-      const u = x / width;
-      const v = y / height;
-      const longitude = u * Math.PI * 2;
-      const latitude = (v - 0.5) * Math.PI;
-      const direction = new THREE.Vector3(
-        Math.cos(latitude) * Math.cos(longitude),
-        Math.sin(latitude),
-        Math.cos(latitude) * Math.sin(longitude),
-      );
-
-      const broad = fractalNoise(direction, variantSeed + 10);
-      const fine = fractalNoise(
-        direction.clone().multiplyScalar(3.2),
-        variantSeed + 30,
-      );
-      const micro = smoothNoise3(
-        direction.x * 33,
-        direction.y * 33,
-        direction.z * 33,
-        variantSeed + 60,
-      );
-
-      const blendA = THREE.MathUtils.smoothstep(broad, 0.22, 0.78);
-      const blendB = THREE.MathUtils.smoothstep(fine, 0.35, 0.82);
-      const color = base[0].clone().lerp(base[1], blendA).lerp(base[2], blendB * 0.48);
-
-      if (compositionKey === "M") {
-        const metallicVein = Math.pow(Math.max(0, Math.sin(longitude * 8 + fine * 9)), 12);
-        color.addScalar(metallicVein * 0.16);
-      } else if (compositionKey === "C") {
-        const carbonPatch = THREE.MathUtils.smoothstep(fine, 0.58, 0.9);
-        color.multiplyScalar(0.72 + broad * 0.33 - carbonPatch * 0.14);
-      } else {
-        const ironPatch = THREE.MathUtils.smoothstep(micro, 0.72, 0.96);
-        color.lerp(new THREE.Color("#5a463a"), ironPatch * 0.28);
-      }
-
-      const index = (y * width + x) * 4;
-      colorImage.data[index] = Math.round(THREE.MathUtils.clamp(color.r, 0, 1) * 255);
-      colorImage.data[index + 1] = Math.round(THREE.MathUtils.clamp(color.g, 0, 1) * 255);
-      colorImage.data[index + 2] = Math.round(THREE.MathUtils.clamp(color.b, 0, 1) * 255);
-      colorImage.data[index + 3] = 255;
-
-      const bump = THREE.MathUtils.clamp((broad * 0.34 + fine * 0.46 + micro * 0.20), 0, 1);
-      const bumpValue = Math.round(bump * 255);
-      bumpImage.data[index] = bumpValue;
-      bumpImage.data[index + 1] = bumpValue;
-      bumpImage.data[index + 2] = bumpValue;
-      bumpImage.data[index + 3] = 255;
-
-      const rough = compositionKey === "M"
-        ? 0.45 + (1 - fine) * 0.28
-        : 0.75 + (1 - micro) * 0.22;
-      const roughValue = Math.round(THREE.MathUtils.clamp(rough, 0, 1) * 255);
-      roughnessImage.data[index] = roughValue;
-      roughnessImage.data[index + 1] = roughValue;
-      roughnessImage.data[index + 2] = roughValue;
-      roughnessImage.data[index + 3] = 255;
-    }
-  }
-
-  colorContext.putImageData(colorImage, 0, 0);
-  bumpContext.putImageData(bumpImage, 0, 0);
-  roughnessContext.putImageData(roughnessImage, 0, 0);
-
-  const craterCount = 42;
-  for (let crater = 0; crater < craterCount; crater += 1) {
-    const x = seededRandom(variantSeed * 17 + crater * 13) * width;
-    const y = seededRandom(variantSeed * 23 + crater * 19) * height;
-    const radius = 2 + Math.pow(seededRandom(variantSeed * 31 + crater * 29), 2.2) * 30;
-
-    const bumpGradient = bumpContext.createRadialGradient(x, y, 0, x, y, radius);
-    bumpGradient.addColorStop(0, "rgba(25,25,25,0.92)");
-    bumpGradient.addColorStop(0.52, "rgba(55,55,55,0.65)");
-    bumpGradient.addColorStop(0.72, "rgba(218,218,218,0.60)");
-    bumpGradient.addColorStop(1, "rgba(128,128,128,0)");
-    bumpContext.fillStyle = bumpGradient;
-    bumpContext.beginPath();
-    bumpContext.arc(x, y, radius, 0, Math.PI * 2);
-    bumpContext.fill();
-
-    const colorGradient = colorContext.createRadialGradient(x, y, 0, x, y, radius);
-    colorGradient.addColorStop(0, "rgba(3,3,3,0.16)");
-    colorGradient.addColorStop(0.62, "rgba(18,17,15,0.08)");
-    colorGradient.addColorStop(0.80, "rgba(225,220,205,0.045)");
-    colorGradient.addColorStop(1, "rgba(0,0,0,0)");
-    colorContext.fillStyle = colorGradient;
-    colorContext.beginPath();
-    colorContext.arc(x, y, radius, 0, Math.PI * 2);
-    colorContext.fill();
-  }
-
-  const colorTexture = new THREE.CanvasTexture(colorCanvas);
-  const bumpTexture = new THREE.CanvasTexture(bumpCanvas);
-  const roughnessTexture = new THREE.CanvasTexture(roughnessCanvas);
-
-  colorTexture.colorSpace = THREE.SRGBColorSpace;
-  [colorTexture, bumpTexture, roughnessTexture].forEach((texture) => {
-    texture.wrapS = THREE.RepeatWrapping;
-    texture.wrapT = THREE.ClampToEdgeWrapping;
-    texture.anisotropy = 8;
-  });
-
-  return { colorTexture, bumpTexture, roughnessTexture };
-}
-
 /** Creates smooth material variants for the three composition classes. */
 function createCompositionMaterials() {
   return Object.fromEntries(
     Object.entries(COMPOSITIONS).map(([key, composition]) => {
-      const variants = Array.from({ length: 4 }, (_, index) => {
-        const textures = createAsteroidTextureSet(key, 1000 + index * 137 + key.charCodeAt(0));
-        return new THREE.MeshStandardMaterial({
-          map: textures.colorTexture,
-          bumpMap: textures.bumpTexture,
-          bumpScale: composition.bumpScale,
-          roughnessMap: textures.roughnessTexture,
+      const variants = Array.from({ length: 4 }, () =>
+        new THREE.MeshStandardMaterial({
+          color: COMPOSITION_EXPOSURE[key],
+          vertexColors: true,
           roughness: composition.roughness,
           metalness: composition.metalness,
-          envMapIntensity: key === "M" ? 0.28 : 0.08,
+          envMapIntensity: key === "M" ? 0.12 : 0.025,
           flatShading: false,
-        });
-      });
+        }),
+      );
       return [key, variants];
     }),
   );
+}
+
+/** Creates a close-up stone material with no image-based surface shortcuts. */
+function createStoneMaterial(compositionKey) {
+  const composition = COMPOSITIONS[compositionKey];
+  return new THREE.MeshStandardMaterial({
+    color: COMPOSITION_EXPOSURE[compositionKey],
+    vertexColors: true,
+    roughness: composition.roughness,
+    metalness: composition.metalness,
+    envMapIntensity: compositionKey === "M" ? 0.12 : 0.025,
+    flatShading: false,
+    dithering: true,
+  });
 }
 
 function randomUnitVector(seed) {
@@ -397,12 +330,13 @@ function createAsteroidGeometry({
   majorBasin = false,
 }) {
   // SphereGeometry is indexed and carries smooth shared normals, like the Moon.
-  // The high subdivision count also lets displacementMap physically move the
-  // surface instead of only changing the colour of pixels.
+  // Its high subdivision count gives the procedural crater and fracture pass
+  // enough vertices to sculpt the surface directly in genuine 3D.
   const widthSegments = detail >= 5 ? 144 : 80;
   const heightSegments = detail >= 5 ? 104 : 60;
   const geometry = new THREE.SphereGeometry(1, widthSegments, heightSegments);
   const positions = geometry.attributes.position;
+  const surfaceColors = new Float32Array(positions.count * 3);
 
   const stretch = new THREE.Vector3(1, 1, 1);
   if (archetype === "elongated") {
@@ -427,8 +361,10 @@ function createAsteroidGeometry({
   stretch.lerp(new THREE.Vector3(1, 1, 1), roundness);
 
   const craterCount = majorBasin
-    ? 14
-    : 8 + Math.floor(seededRandom(seed + 4) * 11);
+    ? 34
+    : detail >= 5
+      ? 32 + Math.floor(seededRandom(seed + 4) * 19)
+      : 10 + Math.floor(seededRandom(seed + 4) * 13);
 
   const craters = Array.from({ length: craterCount }, (_, index) => ({
     direction: randomUnitVector(seed * 17 + index * 41),
@@ -464,6 +400,8 @@ function createAsteroidGeometry({
     ) - 0.5;
 
     let radialScale = 1 + low * 0.18 + medium * 0.075 + fine * 0.025;
+    let craterShade = 0;
+    let rimLight = 0;
 
     if (archetype === "top") {
       const equator = 1 - Math.abs(_direction.y);
@@ -498,6 +436,8 @@ function createAsteroidGeometry({
 
       radialScale -= bowl * crater.depth;
       radialScale += rim * crater.rim;
+      craterShade = Math.max(craterShade, bowl);
+      rimLight = Math.max(rimLight, rim);
     }
 
     fractureNormals.forEach((fractureNormal, fractureIndex) => {
@@ -508,9 +448,21 @@ function createAsteroidGeometry({
 
     _position.multiplyScalar(radialScale).multiply(stretch);
     positions.setXYZ(index, _position.x, _position.y, _position.z);
+    writeSurfaceColor(
+      _surfaceColor,
+      composition,
+      _direction,
+      seed,
+      craterShade,
+      rimLight,
+    );
+    surfaceColors[index * 3] = _surfaceColor.r;
+    surfaceColors[index * 3 + 1] = _surfaceColor.g;
+    surfaceColors[index * 3 + 2] = _surfaceColor.b;
   }
 
   positions.needsUpdate = true;
+  geometry.setAttribute("color", new THREE.BufferAttribute(surfaceColors, 3));
   geometry.computeVertexNormals();
   geometry.normalizeNormals();
   geometry.computeBoundingSphere();
@@ -590,13 +542,129 @@ function attachAsteroidMetadata(object, {
   };
 }
 
+/**
+ * Converts a raycast hit on an InstancedMesh into a stable Object3D target.
+ *
+ * Instanced rocks are not separate JavaScript objects—the GPU draws thousands
+ * of them from one mesh. The inspection UI, however, needs a real object with a
+ * position and metadata. We therefore create a lightweight target only when a
+ * particular instance is first hovered. It is cached afterward, so hovering
+ * and clicking the same rock always resolves to the same selectable object.
+ */
+export function resolveAsteroidInstanceHit(hit) {
+  const mesh = hit?.object;
+  const instanceId = hit?.instanceId;
+  if (!mesh?.userData?.isInteractiveAsteroidField || !Number.isInteger(instanceId)) {
+    return null;
+  }
+
+  const cachedTarget = mesh.userData.inspectionTargets.get(instanceId);
+  if (cachedTarget) return cachedTarget;
+
+  const record = mesh.userData.instanceRecords[instanceId];
+  if (!record) return null;
+
+  // The instance matrix is local to the InstancedMesh. Making the inspection
+  // target its child means it automatically follows the belt band's rotation.
+  mesh.getMatrixAt(instanceId, _instanceMatrix);
+  _instanceMatrix.decompose(_position, _instanceQuaternion, _instanceScale);
+
+  const target = new THREE.Object3D();
+  target.position.copy(_position);
+  target.quaternion.copy(_instanceQuaternion);
+  target.name = record.name;
+
+  attachAsteroidMetadata(target, record);
+  target.userData.instanceId = instanceId;
+  target.userData.isInstancedAsteroid = true;
+  target.userData.sourceMesh = mesh;
+  target.userData.instanceRecord = record;
+  target.userData.instanceScale = _instanceScale.clone();
+  target.userData.originalInstanceMatrix = _instanceMatrix.clone();
+
+  mesh.add(target);
+  mesh.userData.inspectionTargets.set(instanceId, target);
+  return target;
+}
+
+/**
+ * Swaps one selected GPU instance for a high-resolution inspection model.
+ * Distant belt rocks stay inexpensive, but the clicked body gains thousands of
+ * sculptable vertices, physical crater bowls, fractures, and surface boulders.
+ */
+export function setAsteroidInspectionDetail(target, active) {
+  if (!target?.userData?.isInstancedAsteroid) return;
+
+  const mesh = target.userData.sourceMesh;
+  const instanceId = target.userData.instanceId;
+  const record = target.userData.instanceRecord;
+  if (!mesh || !record || !Number.isInteger(instanceId)) return;
+
+  if (active && !target.userData.focusDetail) {
+    const archetype = record.composition === "C"
+      ? "rubble"
+      : record.composition === "M"
+        ? "fractured"
+        : record.variant === 0
+          ? "elongated"
+          : "irregular";
+    const geometry = createAsteroidGeometry({
+      seed: record.geometrySeed + 7001,
+      composition: record.composition,
+      archetype,
+      detail: 5,
+      roundness: 0.025,
+      majorBasin: false,
+    });
+    const material = createStoneMaterial(record.composition);
+    const detailGroup = new THREE.Group();
+    const core = new THREE.Mesh(geometry, material);
+    core.name = `${record.name} high-detail surface`;
+    detailGroup.add(core);
+    addSurfaceBoulders({
+      group: detailGroup,
+      material,
+      seed: record.geometrySeed + 9103,
+      count: record.composition === "C" ? 18 : 12,
+      composition: record.composition,
+    });
+    detailGroup.scale.copy(target.userData.instanceScale);
+    detailGroup.visible = false;
+    target.add(detailGroup);
+    target.userData.focusDetail = detailGroup;
+  }
+
+  const detailGroup = target.userData.focusDetail;
+  if (detailGroup) detailGroup.visible = active;
+
+  // Collapse only the selected low-detail instance so it cannot intersect the
+  // high-detail replacement. Its exact matrix is restored on focus exit.
+  if (active) {
+    target.userData.originalInstanceMatrix.decompose(
+      _position,
+      _instanceQuaternion,
+      _instanceScale,
+    );
+    _instanceScale.multiplyScalar(0.00001);
+    _instanceMatrix.compose(_position, _instanceQuaternion, _instanceScale);
+    mesh.setMatrixAt(instanceId, _instanceMatrix);
+  } else {
+    mesh.setMatrixAt(instanceId, target.userData.originalInstanceMatrix);
+  }
+  mesh.instanceMatrix.needsUpdate = true;
+}
+
 
 function addSurfaceBoulders({ group, material, seed, count, composition }) {
   const boulderGeometry = new THREE.IcosahedronGeometry(1, 2);
+  const boulderMaterial = material.clone();
+  boulderMaterial.vertexColors = false;
+  boulderMaterial.color.copy(COMPOSITION_PALETTES[composition][0]);
+  boulderMaterial.needsUpdate = true;
 
   for (let index = 0; index < count; index += 1) {
     const direction = randomUnitVector(seed * 13 + index * 37);
-    const boulder = new THREE.Mesh(boulderGeometry, material);
+    const boulder = new THREE.Mesh(boulderGeometry, boulderMaterial);
     const size = 0.035 + seededRandom(seed * 19 + index * 31) * 0.085;
     boulder.position.copy(direction).multiplyScalar(0.91 + size * 0.58);
     boulder.scale.set(
@@ -611,9 +679,9 @@ function addSurfaceBoulders({ group, material, seed, count, composition }) {
     boulder.userData.isSurfaceDetail = true;
 
     if (composition === "M" && index % 3 === 0) {
-      boulder.material = material.clone();
-      boulder.material.metalness = Math.min(0.82, material.metalness + 0.12);
-      boulder.material.roughness = Math.max(0.35, material.roughness - 0.10);
+      boulder.material = boulderMaterial.clone();
+      boulder.material.metalness = Math.min(0.82, boulderMaterial.metalness + 0.12);
+      boulder.material.roughness = Math.max(0.35, boulderMaterial.roughness - 0.10);
     }
 
     group.add(boulder);
@@ -710,8 +778,11 @@ function createAsteroidObject({
  * light produces proper ridges and shadows instead of a flat crater picture.
  */
 function createInstancedRockGeometry(seed, composition, variant) {
-  const geometry = new THREE.IcosahedronGeometry(1, 1);
+  // Detail level 2 supplies enough vertices for real pits and broken ridges,
+  // while remaining light enough to reuse across thousands of instances.
+  const geometry = new THREE.IcosahedronGeometry(1, 2);
   const positions = geometry.attributes.position;
+  const surfaceColors = new Float32Array(positions.count * 3);
   const stretch = composition === "M"
     ? new THREE.Vector3(1.18, 0.82, 0.94)
     : composition === "C"
@@ -724,10 +795,10 @@ function createInstancedRockGeometry(seed, composition, variant) {
     stretch.set(stretch.z * 0.96, stretch.x * 0.91, stretch.y * 1.08);
   }
 
-  const craters = Array.from({ length: 4 }, (_, index) => ({
+  const craters = Array.from({ length: 9 }, (_, index) => ({
     direction: randomUnitVector(seed + index * 37),
-    radius: 0.12 + seededRandom(seed + index * 53) * 0.16,
-    depth: 0.035 + seededRandom(seed + index * 71) * 0.055,
+    radius: 0.08 + seededRandom(seed + index * 53) * 0.20,
+    depth: 0.025 + seededRandom(seed + index * 71) * 0.075,
   }));
 
   for (let index = 0; index < positions.count; index += 1) {
@@ -742,6 +813,7 @@ function createInstancedRockGeometry(seed, composition, variant) {
       seed + 91,
     ) - 0.5;
     let radialScale = 1 + broadNoise * 0.25 + sharpNoise * 0.075;
+    let craterShade = 0;
 
     craters.forEach((crater) => {
       const angularDistance = Math.acos(
@@ -753,13 +825,19 @@ function createInstancedRockGeometry(seed, composition, variant) {
         crater.radius,
       );
       radialScale -= bowl * crater.depth;
+      craterShade = Math.max(craterShade, bowl);
     });
 
     _position.multiplyScalar(radialScale).multiply(stretch);
     positions.setXYZ(index, _position.x, _position.y, _position.z);
+    writeSurfaceColor(_surfaceColor, composition, _direction, seed, craterShade, 0);
+    surfaceColors[index * 3] = _surfaceColor.r;
+    surfaceColors[index * 3 + 1] = _surfaceColor.g;
+    surfaceColors[index * 3 + 2] = _surfaceColor.b;
   }
 
   positions.needsUpdate = true;
+  geometry.setAttribute("color", new THREE.BufferAttribute(surfaceColors, 3));
   geometry.computeVertexNormals();
   geometry.computeBoundingSphere();
   return geometry;
@@ -785,12 +863,14 @@ function createInstancedBoulderField(materials) {
         variant,
       );
       const material = materials[composition][variant].clone();
-      // Mid-distance rocks get their depth from geometry and direct lighting.
-      // A small bump map keeps the material grain without distorting silhouettes.
-      material.bumpScale *= 0.55;
+      // Geometry and vertex colour now carry the detail; no UV colour/bump map
+      // is allowed to paint ripples or repeated circular marks onto the stone.
+      material.envMapIntensity = composition === "M" ? 0.12 : 0.025;
+      material.dithering = true;
+      material.needsUpdate = true;
       const mesh = new THREE.InstancedMesh(geometry, material, count);
       const dummy = new THREE.Object3D();
-      const palette = COMPOSITIONS[composition].baseColors.map((value) => new THREE.Color(value));
+      const instanceRecords = new Array(count);
 
       let accepted = 0;
       let attempt = 0;
@@ -801,6 +881,7 @@ function createInstancedBoulderField(materials) {
         let radius = BELT_INNER_RADIUS
           + seededRandom(seed + 1) * (BELT_OUTER_RADIUS - BELT_INNER_RADIUS);
         let angle = seededRandom(seed + 2) * Math.PI * 2;
+        let family = "Background main-belt population";
 
         // About one in ten rocks belongs to a visible collision-family stream.
         // These overlapping streams make the belt a region with structure, not
@@ -810,12 +891,15 @@ function createInstancedBoulderField(materials) {
           if (composition === "C") {
             radius = 50.2 + (seededRandom(seed + 4) - 0.5) * 0.8;
             angle = 3.7 + (seededRandom(seed + 5) - 0.5) * 1.05;
+            family = "Eos collision-family stream";
           } else if (useOuterFamily) {
             radius = 49.5 + (seededRandom(seed + 4) - 0.5) * 0.7;
             angle = 5.15 + (seededRandom(seed + 5) - 0.5) * 0.95;
+            family = "Koronis collision-family stream";
           } else {
             radius = 44.9 + (seededRandom(seed + 4) - 0.5) * 0.7;
             angle = 1.1 + (seededRandom(seed + 5) - 0.5) * 0.95;
+            family = "Flora collision-family stream";
           }
         }
 
@@ -847,9 +931,37 @@ function createInstancedBoulderField(materials) {
         dummy.updateMatrix();
         mesh.setMatrixAt(accepted, dummy.matrix);
 
-        const color = palette[Math.floor(seededRandom(seed + 17) * palette.length)].clone();
-        color.multiplyScalar(0.72 + seededRandom(seed + 18) * 0.42);
+        // Instance colour is a neutral exposure variation. Composition colour
+        // already comes from the geometry's non-repeating 3D vertex colours.
+        const color = new THREE.Color().setScalar(0.84 + seededRandom(seed + 18) * 0.20);
         mesh.setColorAt(accepted, color);
+
+        const visualRadius = Math.max(dummy.scale.x, dummy.scale.y, dummy.scale.z);
+        const estimatedDiameter = Math.max(
+          1,
+          Math.round(1 + Math.pow(size / 0.194, 1.35) * 95),
+        );
+        const archetype = composition === "C"
+          ? "Rubble-pile body"
+          : composition === "M"
+            ? "Fractured metal-rich body"
+            : variant === 0
+              ? "Elongated stony body"
+              : "Angular silicate body";
+        instanceRecords[accepted] = {
+          name: `${composition}-class asteroid ${String(compositionIndex + 1)}-${String(variant + 1)}-${String(accepted + 1).padStart(4, "0")}`,
+          composition,
+          diameter: `≈ ${estimatedDiameter} km`,
+          semiMajor: radius,
+          orbitalSpeed: `${(14.2 + seededRandom(seed + 19) * 6.8).toFixed(1)} km/s`,
+          description: COMPOSITIONS[composition].description,
+          family,
+          population: "Main belt",
+          archetype,
+          visualRadius,
+          geometrySeed: seed,
+          variant,
+        };
         accepted += 1;
       }
 
@@ -860,6 +972,9 @@ function createInstancedBoulderField(materials) {
       mesh.receiveShadow = true;
       mesh.frustumCulled = false;
       mesh.userData.rotationSpeed = 0.000055 + compositionIndex * 0.000012 + variant * 0.000009;
+      mesh.userData.isInteractiveAsteroidField = true;
+      mesh.userData.instanceRecords = instanceRecords;
+      mesh.userData.inspectionTargets = new Map();
       field.add(mesh);
       meshes.push(mesh);
     }
@@ -930,7 +1045,8 @@ function createDistantDebris() {
   const material = new THREE.ShaderMaterial({
     uniforms: {
       uPixelRatio: { value: Math.min(window.devicePixelRatio, 2) },
-      uOpacity: { value: 0.62 },
+      // Pebbles establish belt density but should not veil the solid rocks.
+      uOpacity: { value: 0.38 },
     },
     vertexShader: `
       attribute float aSize;
@@ -941,7 +1057,7 @@ function createDistantDebris() {
         vColor = color;
         vec4 viewPosition = modelViewMatrix * vec4(position, 1.0);
         gl_Position = projectionMatrix * viewPosition;
-        gl_PointSize = clamp(aSize * uPixelRatio * (105.0 / max(1.0, -viewPosition.z)), 0.7, 4.0);
+        gl_PointSize = clamp(aSize * uPixelRatio * (92.0 / max(1.0, -viewPosition.z)), 0.65, 2.6);
       }
     `,
     fragmentShader: `
@@ -950,7 +1066,7 @@ function createDistantDebris() {
 
       void main() {
         float distanceFromCentre = length(gl_PointCoord - vec2(0.5));
-        float edge = 1.0 - smoothstep(0.28, 0.5, distanceFromCentre);
+        float edge = 1.0 - smoothstep(0.40, 0.5, distanceFromCentre);
         if (edge < 0.02) discard;
         gl_FragColor = vec4(vColor, edge * uOpacity);
       }
@@ -1248,9 +1364,10 @@ export function createAsteroidBelt({ world, hoverTargets = [] }) {
   mainBelt.add(instancedBoulderField, distantDebris);
 
   world.add(system);
-  // Raycasting the whole system would test every one of the 14,500 instances
-  // on every pointer move. Only resolved, named bodies need inspection cards.
-  hoverTargets.push(...rocks);
+  // Resolved bodies and every visible 3D instance can now be inspected. The
+  // unresolved point field is intentionally excluded because each point is a
+  // sub-pixel population marker rather than a resolvable physical rock.
+  hoverTargets.push(...rocks, ...instancedBoulders);
 
   return {
     system,

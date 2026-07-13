@@ -17,7 +17,12 @@ import './brand.js';
 import { loadUniverseTextures } from './graphics/loadTextures.js';
 import { createMoonSystem } from './planets/earth/satellites/moon.js';
 import { PLANET_CONFIGS } from './planets/index.js';
-import { createAsteroidBelt, updateAsteroidBelt } from './scene/asteroidBelt.js';
+import {
+  createAsteroidBelt,
+  resolveAsteroidInstanceHit,
+  setAsteroidInspectionDetail,
+  updateAsteroidBelt,
+} from './scene/asteroidBelt.js';
 import { makeParticles } from './scene/particles.js';
 import { createPlanet, updatePlanetVisuals } from './scene/planetFactory.js';
 import { createSun, updateSun } from './stars/sun/sun.js';
@@ -91,6 +96,11 @@ import { createSun, updateSun } from './stars/sun/sun.js';
   let focusedBody = null;
   let displayedBody = null;
   let dismissedBody = null;
+  // Instanced asteroid raycasts are intentionally throttled. Testing thousands
+  // of boulders roughly 12 times per second feels immediate to the pointer while
+  // leaving the render loop enough time for smooth WebGL animation.
+  let cachedHoveredBody = null;
+  let lastAsteroidRaycastTime = -Infinity;
   let hasCameraFocusPoint = false;
   let simulationTime = 0;
   const cameraFocusPoint = new THREE.Vector3();
@@ -296,7 +306,7 @@ import { createSun, updateSun } from './stars/sun/sun.js';
   // body was focused, this also restores normal simulation speed and free flight.
   cardClose.addEventListener("click", () => {
     dismissedBody = displayedBody;
-    focusedBody = null;
+    focusBody(null);
     updateBodyCard(null);
   });
 
@@ -317,7 +327,14 @@ import { createSun, updateSun } from './stars/sun/sun.js';
     - Walks up the scene graph to identify the top-most interactive body.
     - Ensures raycast hits on child mesh parts still resolve to the parent planet object.
   */
-  function findInteractiveObject(object) {
+  function findInteractiveObject(hit) {
+    // An InstancedMesh represents thousands of rocks inside one JavaScript
+    // object. Its raycast hit includes an instanceId, which the belt module
+    // converts into a stable inspection/focus target for that exact rock.
+    const instanceTarget = resolveAsteroidInstanceHit(hit);
+    if (instanceTarget) return instanceTarget;
+
+    let object = hit?.object;
     // Raycasting may hit a child such as an atmosphere or ring. Walking through
     // `.parent` finds the first ancestor carrying our identifying metadata.
     while (object) {
@@ -332,13 +349,22 @@ import { createSun, updateSun } from './stars/sun/sun.js';
     - Uses the raycaster to determine which body is under the cursor.
     - Supports nested mesh structures by resolving to the interactive parent.
   */
-  function getBodyAtPointer() {
+  function getBodyAtPointer(forceRaycast = false) {
+    const now = performance.now();
+    if (!forceRaycast && now - lastAsteroidRaycastTime < 80) {
+      return cachedHoveredBody;
+    }
+    lastAsteroidRaycastTime = now;
+
     // `true` recursively checks descendants. A satellite can visually overlap its
     // much larger parent, so satellite hits receive priority over the first planet hit.
     raycaster.setFromCamera(pointer, camera);
     const hits = raycaster.intersectObjects(hoverTargets, true);
-    const bodies = hits.map((hit) => findInteractiveObject(hit.object)).filter(Boolean);
-    return bodies.find((body) => body.userData?.info?.type === "Natural satellite") ?? bodies[0] ?? null;
+    const bodies = hits.map((hit) => findInteractiveObject(hit)).filter(Boolean);
+    cachedHoveredBody = bodies.find((body) => body.userData?.info?.type === "Natural satellite")
+      ?? bodies[0]
+      ?? null;
+    return cachedHoveredBody;
   }
 
   /*
@@ -347,13 +373,17 @@ import { createSun, updateSun } from './stars/sun/sun.js';
     - Clicking the same body twice clears focus and returns to free drift.
   */
   function focusBody(body) {
-    if (!body) {
-      focusedBody = null;
-      return;
-    }
-    // Selecting the same body again toggles focus off.
-    focusedBody = focusedBody === body ? null : body;
+    // Restore a previous instanced rock before changing focus. Its inexpensive
+    // belt representation replaces the temporary high-resolution close-up.
+    if (focusedBody) setAsteroidInspectionDetail(focusedBody, false);
+
+    // Selecting the same body again—or clicking empty space—toggles focus off.
+    focusedBody = body && focusedBody !== body ? body : null;
     if (!focusedBody) return;
+
+    // Only instanced asteroids react here; planets, satellites, and individually
+    // modeled major asteroids continue using their normal meshes.
+    setAsteroidInspectionDetail(focusedBody, true);
     // Convert the body's distance from the Sun into an approximate scroll point.
     const radius = body.userData.orbitRadius ?? body.getWorldPosition(new THREE.Vector3()).length();
     const idealProgress = THREE.MathUtils.clamp(radius / 230, 0.035, 0.72);
@@ -402,7 +432,9 @@ import { createSun, updateSun } from './stars/sun/sun.js';
     // HUD clicks belong to HTML controls and must not select objects behind them.
     if (event.target.closest?.(".hud, .body-card")) return;
     if (dragDistance > 12) return;
-    const body = getBodyAtPointer();
+    // A click always performs a fresh raycast, even if the hover cache was just
+    // updated, so the selected instance exactly matches the pointer-up position.
+    const body = getBodyAtPointer(true);
     if (body) focusBody(body);
     else focusBody(null);
   });
@@ -414,7 +446,7 @@ import { createSun, updateSun } from './stars/sun/sun.js';
 
   addEventListener("keydown", (event) => {
     // Keyboard controls modify the same targets as dragging, so smoothing still applies.
-    if (event.key === "Escape") focusedBody = null;
+    if (event.key === "Escape") focusBody(null);
     if (event.key === "ArrowLeft") targetYaw += 0.18;
     if (event.key === "ArrowRight") targetYaw -= 0.18;
     if (event.key === "ArrowUp") targetPitch = THREE.MathUtils.clamp(targetPitch + 0.12, -1.1, 1.1);
