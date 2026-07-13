@@ -23,8 +23,11 @@ import {
   setAsteroidInspectionDetail,
   updateAsteroidBelt,
 } from './scene/asteroidBelt.js';
-import { makeParticles } from './scene/particles.js';
 import { createPlanet, updatePlanetVisuals } from './scene/planetFactory.js';
+import {
+  createSpaceEnvironment,
+  updateSpaceEnvironment,
+} from './scene/space/spaceEnvironment.js';
 import { createSun, updateSun } from './stars/sun/sun.js';
 
 // An async immediately-invoked function lets us await texture loading while
@@ -175,26 +178,10 @@ import { createSun, updateSun } from './stars/sun/sun.js';
   // Earth owns its satellite builder; main.js only keeps references needed for animation.
   const { moon, moonPivot } = createMoonSystem({ earth, textures, hoverTargets });
 
-  // Large point clouds are efficient because each field is rendered as one object.
-  const stars = makeParticles(scene, {
-    count: 6800,
-    radius: 1800,
-    position: new THREE.Vector3(0, 0, 0),
-    colors: ["#ffffff", "#95dcff", "#ffd38c", "#ff9ec2"],
-    size: 1.55,
-    opacity: 0.95,
-  });
-
-  const milkyWay = makeParticles(scene, {
-    count: 11500,
-    radius: 320,
-    position: new THREE.Vector3(0, -18, 0),
-    colors: ["#ffffff", "#7de7ff", "#ffd37a", "#ff7da8"],
-    size: 1.15,
-    spiral: true,
-    opacity: 0,
-  });
-  milkyWay.rotation.x = 0.28;
+  // Space is a distant celestial sphere rather than a nearby cloud of coloured
+  // particles. The environment owns steady stars, the tilted Milky Way, cloudy
+  // galactic light, and its dark interstellar dust lanes.
+  const spaceEnvironment = createSpaceEnvironment(scene);
 
   // Asteroid meshes provide nearby shape; dust points cheaply supply density.
   const asteroidBelt = createAsteroidBelt({ world, hoverTargets });
@@ -532,12 +519,9 @@ import { createSun, updateSun } from './stars/sun/sun.js';
     moon.rotation.y = Math.sin(simulationTime * 0.35) * 0.04;
     updateSun(sun, simulationTime, motionScale);
     updateAsteroidBelt(asteroidBelt, motionScale, jupiter);
-    stars.rotation.y += 0.00008 * motionScale;
-    milkyWay.rotation.y += 0.00045 * motionScale;
-    stars.material.uniforms.uTime.value = elapsed;
-    milkyWay.material.uniforms.uTime.value = elapsed * 0.72;
-    // Fade the galaxy in only during the latter part of the scroll journey.
-    milkyWay.material.uniforms.uOpacity.value = THREE.MathUtils.clamp((smoothProgress - 0.54) / 0.34, 0, 1) * 0.9;
+    // Distant stars remain fixed because there is no atmospheric twinkling or
+    // visible stellar parallax while crossing the scale of one solar system.
+    updateSpaceEnvironment(spaceEnvironment, smoothProgress);
     orbitRoot.children.forEach((orbit) => {
       orbit.material.opacity = THREE.MathUtils.clamp((smoothProgress - 0.035) / 0.18, 0.04, 0.22);
     });
