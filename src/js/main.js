@@ -24,10 +24,7 @@ import {
   updateAsteroidBelt,
 } from './scene/asteroidBelt.js';
 import { createPlanet, updatePlanetVisuals } from './scene/planetFactory.js';
-import {
-  createSpaceEnvironment,
-  updateSpaceEnvironment,
-} from './scene/space/spaceEnvironment.js';
+import { SpaceEnvironment } from './scene/space/spaceEnvironment.js';
 import { createSun, updateSun } from './stars/sun/sun.js';
 
 // An async immediately-invoked function lets us await texture loading while
@@ -106,7 +103,10 @@ import { createSun, updateSun } from './stars/sun/sun.js';
   let lastAsteroidRaycastTime = -Infinity;
   let hasCameraFocusPoint = false;
   let simulationTime = 0;
+  let elapsedTime = 0;
+  let isPageVisible = !document.hidden;
   const cameraFocusPoint = new THREE.Vector3();
+  const targetFocusPoint = new THREE.Vector3();
 
   // AmbientLight illuminates every surface equally so shadowed sides are not pure black.
   scene.add(new THREE.AmbientLight(0x8da1c6, 0.16));
@@ -181,7 +181,8 @@ import { createSun, updateSun } from './stars/sun/sun.js';
   // Space is a distant celestial sphere rather than a nearby cloud of coloured
   // particles. The environment owns steady stars, the tilted Milky Way, cloudy
   // galactic light, and its dark interstellar dust lanes.
-  const spaceEnvironment = createSpaceEnvironment(scene);
+  const spaceEnvironment = new SpaceEnvironment({ scene, camera, renderer });
+  await spaceEnvironment.init();
 
   // Asteroid meshes provide nearby shape; dust points cheaply supply density.
   const asteroidBelt = createAsteroidBelt({ world, hoverTargets });
@@ -211,12 +212,12 @@ import { createSun, updateSun } from './stars/sun/sun.js';
     - Chooses the camera target based on the selected body or nearby Earth when zoomed in.
     - Keeps the camera on the Sun at long range when no body is focused.
   */
-  function getFocusPoint(distance) {
+  function getFocusPoint(distance, target) {
     // getWorldPosition is important for nested bodies such as the Moon because
     // their local `.position` is relative to a moving parent.
-    if (focusedBody) return focusedBody.getWorldPosition(new THREE.Vector3());
-    if (distance < 18) return earth.getWorldPosition(new THREE.Vector3());
-    return new THREE.Vector3(0, 0, 0);
+    if (focusedBody) return focusedBody.getWorldPosition(target);
+    if (distance < 18) return earth.getWorldPosition(target);
+    return target.set(0, 0, 0);
   }
 
   /** Writes a body's structured metadata into the right-side inspection panel. */
@@ -397,7 +398,7 @@ import { createSun, updateSun } from './stars/sun/sun.js';
       targetYaw -= (event.clientX - lastPointer.x) * 0.006;
       targetPitch -= (event.clientY - lastPointer.y) * 0.004;
       targetPitch = THREE.MathUtils.clamp(targetPitch, -1.1, 1.1);
-    } else {
+    } else if (!spaceEnvironment.reducedMotion) {
       // Even without dragging, a tiny pointer parallax keeps the scene feeling alive.
       targetYaw += pointer.x * 0.0005;
       targetPitch += pointer.y * 0.00025;
@@ -444,7 +445,23 @@ import { createSun, updateSun } from './stars/sun/sun.js';
     // Both the camera projection and drawing buffer must match the new viewport.
     camera.aspect = innerWidth / innerHeight;
     camera.updateProjectionMatrix();
-    renderer.setSize(innerWidth, innerHeight);
+    spaceEnvironment.resize(innerWidth, innerHeight, devicePixelRatio);
+  });
+
+  // Hidden tabs should not spend CPU time advancing an invisible WebGL scene.
+  // Browsers already throttle animation frames, but this also skips every
+  // simulation, raycast-interface, and shader-uniform update explicitly.
+  addEventListener("visibilitychange", () => {
+    isPageVisible = !document.hidden;
+    spaceEnvironment.setPaused(!isPageVisible);
+    if (isPageVisible) clock.getDelta();
+  });
+
+  // Release GPU-owned space resources when the page is actually discarded.
+  addEventListener("pagehide", (event) => {
+    // A page kept in the back-forward cache will resume with its WebGL context;
+    // only a true discard should release the environment resources.
+    if (!event.persisted) spaceEnvironment.dispose();
   });
 
   /*
@@ -452,10 +469,15 @@ import { createSun, updateSun } from './stars/sun/sun.js';
     - Main render loop that updates the camera, rotates bodies, animates particles, and renders the scene.
   */
   function animate() {
-    const elapsed = clock.getElapsedTime();
+    const deltaTime = Math.min(clock.getDelta(), 0.05);
+    if (!isPageVisible) {
+      requestAnimationFrame(animate);
+      return;
+    }
+    elapsedTime += deltaTime;
     // Focus mode slows physical scene motion without slowing camera input/easing.
     const motionScale = focusedBody ? 0.12 : 1;
-    simulationTime += 0.016 * motionScale;
+    simulationTime += deltaTime * motionScale;
     // Easing with lerp each frame creates inertia. Larger factors catch up faster.
     smoothProgress = THREE.MathUtils.lerp(smoothProgress, scrollProgress, 0.065);
     yaw = THREE.MathUtils.lerp(yaw, targetYaw, 0.075);
@@ -477,7 +499,7 @@ import { createSun, updateSun } from './stars/sun/sun.js';
 
     // ----- Calculate the camera's spherical orbit around its focus point -----
     const distance = getCameraDistance(smoothProgress);
-    const targetFocusPoint = getFocusPoint(distance);
+    getFocusPoint(distance, targetFocusPoint);
     if (!hasCameraFocusPoint) {
       // Initialize once with copy; otherwise the first frame would ease from (0,0,0).
       cameraFocusPoint.copy(targetFocusPoint);
@@ -519,9 +541,10 @@ import { createSun, updateSun } from './stars/sun/sun.js';
     moon.rotation.y = Math.sin(simulationTime * 0.35) * 0.04;
     updateSun(sun, simulationTime, motionScale);
     updateAsteroidBelt(asteroidBelt, motionScale, jupiter);
-    // Distant stars remain fixed because there is no atmospheric twinkling or
-    // visible stellar parallax while crossing the scale of one solar system.
-    updateSpaceEnvironment(spaceEnvironment, smoothProgress);
+    // One journey value coordinates exposure, stellar layers, galaxies, local
+    // dust, and zodiacal light for scroll, reverse travel, and body focus alike.
+    spaceEnvironment.setJourneyProgress(smoothProgress);
+    spaceEnvironment.update(deltaTime, elapsedTime);
     orbitRoot.children.forEach((orbit) => {
       orbit.material.opacity = THREE.MathUtils.clamp((smoothProgress - 0.035) / 0.18, 0.04, 0.22);
     });
