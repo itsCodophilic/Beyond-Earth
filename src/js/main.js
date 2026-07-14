@@ -16,9 +16,11 @@ import * as THREE from 'three';
 import './brand.js';
 import { loadUniverseTextures } from './graphics/loadTextures.js';
 import { createMoonSystem } from './planets/earth/satellites/moon.js';
+import { createMajorSatelliteSystems, updateMajorSatelliteSystems } from './planets/satellites/satelliteSystem.js';
 import { PLANET_CONFIGS } from './planets/index.js';
 import {
   createAsteroidBelt,
+  findNearestAsteroidInstanceAtPointer,
   resolveAsteroidInstanceHit,
   setAsteroidInspectionDetail,
   updateAsteroidBelt,
@@ -340,6 +342,21 @@ import { createSun, updateSun } from './stars/sun/sun.js';
   const cardHint = document.querySelector("#card-hint");
   const cardClose = document.querySelector("#card-close");
 
+  // The original HTML has three fact rows. Add one reusable Earth-relative size
+  // row in JavaScript so existing markup does not need to be replaced.
+  const cardFacts = bodyCard?.querySelector(".body-card__facts");
+  let cardScaleComparison = document.querySelector("#card-scale-comparison");
+  if (cardFacts && !cardScaleComparison) {
+    const scaleRow = document.createElement("div");
+    scaleRow.className = "body-card__scale-row";
+    const label = document.createElement("dt");
+    label.textContent = "Size vs Earth";
+    cardScaleComparison = document.createElement("dd");
+    cardScaleComparison.id = "card-scale-comparison";
+    scaleRow.append(label, cardScaleComparison);
+    cardFacts.append(scaleRow);
+  }
+
   // Scene is the root container of the 3D scene graph. Anything not attached to
   // the scene (directly or through a Group) cannot be rendered.
   const scene = new THREE.Scene();
@@ -394,6 +411,9 @@ import { createSun, updateSun } from './stars/sun/sun.js';
   // user closes the celestial inspection card.
   let isJourneyScrollLocked = false;
   let journeyScrollSnapshot = null;
+  let focusZoomTarget = 1;
+  let focusZoomCurrent = 1;
+  let focusPinchDistance = null;
   // Raycasting is performed only for an intentional click/tap. The previous
   // continuous hover preview was removed so moving the pointer across the scene
   // no longer opens cards or repeatedly tests the asteroid belt.
@@ -432,11 +452,12 @@ import { createSun, updateSun } from './stars/sun/sun.js';
   });
 
   const earth = planets.find((planet) => planet.name === "Earth");
+  const earthRadius = earth.userData.visualRadius ?? 1.25;
 
   // Earth is layered like an onion: solid globe, cloud shell, atmospheric glow,
   // and optional light shell. Small radius differences avoid z-fighting.
   const earthClouds = new THREE.Mesh(
-    new THREE.SphereGeometry(1.285, 96, 96),
+    new THREE.SphereGeometry(earthRadius * 1.028, 96, 96),
     new THREE.MeshStandardMaterial({
       color: 0xffffff,
       // alphaMap controls which cloud pixels are opaque or transparent.
@@ -450,7 +471,7 @@ import { createSun, updateSun } from './stars/sun/sun.js';
   earth.add(earthClouds);
 
   const earthAtmosphere = new THREE.Mesh(
-    new THREE.SphereGeometry(1.305, 96, 96),
+    new THREE.SphereGeometry(earthRadius * 1.044, 96, 96),
     new THREE.MeshBasicMaterial({ color: 0x5bdcff, transparent: true, opacity: 0.18, side: THREE.BackSide, blending: THREE.AdditiveBlending }),
   );
   earth.add(earthAtmosphere);
@@ -458,7 +479,7 @@ import { createSun, updateSun } from './stars/sun/sun.js';
   if (textures.earthLights) {
     // Additive blending makes bright city pixels glow over the globe underneath.
     const earthLights = new THREE.Mesh(
-      new THREE.SphereGeometry(1.265, 96, 96),
+      new THREE.SphereGeometry(earthRadius * 1.012, 96, 96),
       new THREE.MeshBasicMaterial({
         color: 0xffd37a,
         map: textures.earthLights,
@@ -473,6 +494,15 @@ import { createSun, updateSun } from './stars/sun/sun.js';
 
   // Earth owns its satellite builder; main.js only keeps references needed for animation.
   const { moon, moonPivot } = createMoonSystem({ earth, textures, hoverTargets });
+
+  // Mars and the giant planets share one reusable major-satellite builder. The
+  // moon meshes keep scientific diameter ordering while using a readable,
+  // compressed scale for this cinematic experience.
+  const majorSatelliteSystems = createMajorSatelliteSystems({
+    world,
+    planets,
+    hoverTargets,
+  });
 
   // Space is a distant celestial sphere rather than a nearby cloud of coloured
   // particles. The environment owns steady stars, the tilted Milky Way, cloudy
@@ -525,6 +555,15 @@ import { createSun, updateSun } from './stars/sun/sun.js';
         eyebrow: "How this distance is measured",
         title: "Verified small-body orbital scale",
         description: "The asteroid’s published orbital elements set its physical scale. Its current Earth separation follows the angular position shown in the simulation, not a live date-specific ephemeris.",
+        equivalent: `Current display: ${currentValue}.${rangeSummary}`,
+      };
+    }
+
+    if (focusedDistance.basis === "satellite-parent-orbit") {
+      return {
+        eyebrow: "How this distance is measured",
+        title: `${focusedDistance.bodyName} follows its planet’s Earth distance`,
+        description: "The moon’s local orbit around its parent is tiny compared with the planet’s distance from Earth. The readout therefore uses the parent planet’s verified heliocentric orbital scale together with the direction shown in the simulation.",
         equivalent: `Current display: ${currentValue}.${rangeSummary}`,
       };
     }
@@ -631,7 +670,9 @@ import { createSun, updateSun } from './stars/sun/sun.js';
 
     const bodyName = String(focusedBody.userData?.name ?? focusedBody.name ?? "").toLowerCase();
     const bodyType = String(focusedBody.userData?.info?.type ?? "").toLowerCase();
+    const parentPlanet = String(focusedBody.userData?.parentPlanet ?? "").toLowerCase();
 
+    if (parentPlanet && JOURNEY_MAP[parentPlanet] != null) return JOURNEY_MAP[parentPlanet];
     if (bodyName.includes("sun")) return JOURNEY_MAP.sun;
     if (bodyName.includes("mercury")) return JOURNEY_MAP.mercury;
     if (bodyName.includes("venus")) return JOURNEY_MAP.venus;
@@ -687,8 +728,13 @@ import { createSun, updateSun } from './stars/sun/sun.js';
     const earthDistance = earthDistanceTracker.getBodyDistanceFromEarth(body);
     const formattedEarthDistance = formatEarthDistance(earthDistance.kilometres);
     cardDistance.textContent = `${formattedEarthDistance.primary} from Earth`;
+    if (cardScaleComparison) {
+      cardScaleComparison.textContent = body.userData?.info?.sizeComparison
+        ?? body.userData?.sizeComparison
+        ?? "Scale comparison unavailable";
+    }
     cardMode.textContent = "Slow motion · Focused";
-    cardHint.textContent = "Journey paused · Drag to inspect · Close to return";
+    cardHint.textContent = "Journey paused · Drag to orbit · Scroll or pinch to zoom · Close to return";
   }
 
   /** Projects a 3D world position into 2D pixels and points the line at the body. */
@@ -778,9 +824,22 @@ import { createSun, updateSun } from './stars/sun/sun.js';
     raycaster.setFromCamera(pointer, camera);
     const hits = raycaster.intersectObjects(hoverTargets, true);
     const bodies = hits.map((hit) => findInteractiveObject(hit)).filter(Boolean);
-    return bodies.find((body) => body.userData?.info?.type === "Natural satellite")
+    const directBody = bodies.find((body) => body.userData?.info?.type === "Natural satellite")
       ?? bodies[0]
       ?? null;
+    if (directBody) return directBody;
+
+    // Tiny instanced rocks may occupy less than a physical pointer pixel. A
+    // click-only screen-space fallback keeps them selectable without running
+    // expensive belt scans continuously during pointer movement.
+    return findNearestAsteroidInstanceAtPointer({
+      meshes: asteroidBelt.instancedBoulders,
+      pointer,
+      camera,
+      viewportWidth: innerWidth,
+      viewportHeight: innerHeight,
+      pixelRadius: innerWidth <= 760 ? 34 : 24,
+    });
   }
 
   /** Freezes the scroll journey without moving the user's current viewpoint. */
@@ -883,12 +942,18 @@ import { createSun, updateSun } from './stars/sun/sun.js';
 
     if (!nextBody) {
       focusedBody = null;
+      focusZoomTarget = 1;
+      focusZoomCurrent = 1;
+      focusPinchDistance = null;
       unlockJourneyScroll();
       return;
     }
 
     if (!isJourneyScrollLocked) lockJourneyScroll();
     focusedBody = nextBody;
+    focusZoomTarget = 1;
+    focusZoomCurrent = 1;
+    focusPinchDistance = null;
 
     // Only instanced asteroids react here; planets, satellites, and individually
     // modeled major asteroids continue using their normal meshes.
@@ -904,15 +969,57 @@ import { createSun, updateSun } from './stars/sun/sun.js';
   // `passive` promises that the handler will not cancel scrolling, helping browsers
   // keep scrolling responsive while JavaScript updates its normalized value.
   addEventListener("scroll", updateScrollProgress, { passive: true });
+  function adjustFocusedZoom(delta) {
+    if (!focusedBody || (distanceUnitPopover && !distanceUnitPopover.hidden)) return;
+    focusZoomTarget = THREE.MathUtils.clamp(
+      focusZoomTarget * Math.exp(delta * 0.00125),
+      0.58,
+      2.45,
+    );
+  }
+
   const preventFocusedJourneyScroll = (event) => {
-    // Keep the page journey frozen while still allowing a long information card
-    // to scroll internally on small screens.
-    if (isJourneyScrollLocked && !event.target.closest?.(".body-card")) {
-      event.preventDefault();
-    }
+    // Cards and the distance explanation retain their own internal scrolling.
+    if (event.target.closest?.(".body-card, .progress")) return;
+    if (!isJourneyScrollLocked) return;
+
+    event.preventDefault();
+    if (focusedBody && event.type === "wheel") adjustFocusedZoom(event.deltaY);
   };
   addEventListener("wheel", preventFocusedJourneyScroll, { passive: false });
-  addEventListener("touchmove", preventFocusedJourneyScroll, { passive: false });
+
+  addEventListener("touchstart", (event) => {
+    if (!focusedBody || event.target.closest?.(".body-card, .progress")) return;
+    if (event.touches.length === 2) {
+      focusPinchDistance = Math.hypot(
+        event.touches[0].clientX - event.touches[1].clientX,
+        event.touches[0].clientY - event.touches[1].clientY,
+      );
+    }
+  }, { passive: true });
+
+  addEventListener("touchmove", (event) => {
+    if (!isJourneyScrollLocked || event.target.closest?.(".body-card, .progress")) return;
+    event.preventDefault();
+    if (!focusedBody || event.touches.length !== 2 || focusPinchDistance == null) return;
+
+    const nextDistance = Math.hypot(
+      event.touches[0].clientX - event.touches[1].clientX,
+      event.touches[0].clientY - event.touches[1].clientY,
+    );
+    if (nextDistance > 0) {
+      focusZoomTarget = THREE.MathUtils.clamp(
+        focusZoomTarget * (focusPinchDistance / nextDistance),
+        0.58,
+        2.45,
+      );
+      focusPinchDistance = nextDistance;
+    }
+  }, { passive: false });
+
+  addEventListener("touchend", (event) => {
+    if (event.touches.length < 2) focusPinchDistance = null;
+  }, { passive: true });
   addEventListener("pointermove", (event) => {
     updatePointerFromEvent(event);
     if (isDragging) {
@@ -1046,6 +1153,7 @@ import { createSun, updateSun } from './stars/sun/sun.js';
       planet.rotation.y += data.spinSpeed * motionScale;
       updatePlanetVisuals(planet, simulationTime, motionScale);
     });
+    updateMajorSatelliteSystems(majorSatelliteSystems, motionScale);
 
     // ----- Calculate the camera's spherical orbit around its focus point -----
     const distance = getCameraDistance(smoothProgress);
@@ -1064,10 +1172,33 @@ import { createSun, updateSun } from './stars/sun/sun.js';
     const focusScale = focusedBody?.userData?.focusScale ?? 1;
     const minimumFocusDistance = focusedBody?.userData?.minFocusDistance ?? 4.5;
     const explicitFocusDistance = focusedBody?.userData?.focusDistance;
-    const cameraDistance = focusedBody
-      ? explicitFocusDistance
-        ?? Math.max(minimumFocusDistance, Math.min(distance, 30 / focusScale))
-      : distance;
+    focusZoomCurrent = THREE.MathUtils.lerp(
+      focusZoomCurrent,
+      focusedBody ? focusZoomTarget : 1,
+      focusedBody ? 0.12 : 0.18,
+    );
+
+    let cameraDistance = distance;
+    if (focusedBody) {
+      const baseFocusDistance = explicitFocusDistance
+        ?? Math.max(minimumFocusDistance, Math.min(distance, 30 / focusScale));
+      const focusVisualRadius = focusedBody.userData?.focusVisualRadius
+        ?? focusedBody.userData?.visualRadius
+        ?? 1;
+      const safeMinimum = Math.max(
+        baseFocusDistance * 0.58,
+        focusVisualRadius * (focusedBody.userData?.info?.type === "Star" ? 1.72 : 1.38),
+      );
+      const surroundingsMaximum = Math.max(
+        baseFocusDistance * 2.45,
+        focusVisualRadius * 7.5,
+      );
+      cameraDistance = THREE.MathUtils.clamp(
+        baseFocusDistance * focusZoomCurrent,
+        safeMinimum,
+        surroundingsMaximum,
+      );
+    }
     // Yaw, pitch, and distance are spherical coordinates converted into x/y/z.
     const x = Math.cos(pitch) * Math.sin(yaw) * cameraDistance;
     const y = Math.sin(pitch) * cameraDistance * 0.64;

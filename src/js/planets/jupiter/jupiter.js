@@ -15,6 +15,9 @@
  * being a scientifically exact scale model.
  */
 import * as THREE from "three";
+import { PLANET_SCALE_PROFILES, getPlanetSizeComparison } from "../../config/celestialScale.js";
+
+const scale = PLANET_SCALE_PROFILES.Jupiter;
 
 /**
  * Plain configuration used by the main solar-system simulation.
@@ -23,8 +26,11 @@ export const jupiter = {
   name: "Jupiter",
   texture: "jupiter",
 
-  radius: 6.25,
-  orbitRadius: 75,
+  radius: scale.visualRadius,
+  orbitRadius: scale.orbitRadius,
+  physicalDiameterKm: scale.diameterKm,
+  diameterEarths: scale.diameterEarths,
+  volumeEarths: scale.volumeEarths,
   orbitSpeed: 0.12,
   spinSpeed: 0.021,
   axialTilt: 0.05,
@@ -32,6 +38,10 @@ export const jupiter = {
 
   orbitColor: 0xe2bc8a,
   focusScale: 0.75,
+  minFocusDistance: scale.focusDistance * 0.88,
+  focusDistance: scale.focusDistance,
+  focusEase: 0.07,
+  focusFov: 34,
 
   detail:
     "Largest planet | about 11× Earth width",
@@ -42,6 +52,7 @@ export const jupiter = {
     orbitalSpeed: "13.07 km/s",
     distanceFromEarth:
       "≈ 588 million km at closest approach",
+    sizeComparison: getPlanetSizeComparison("Jupiter"),
     description:
       "A colossal striped world of hydrogen, powerful auroras, and storms large enough to swallow Earth.",
   },

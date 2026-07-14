@@ -17,10 +17,11 @@
  */
 import * as THREE from "three";
 import { ImprovedNoise } from "three/addons/math/ImprovedNoise.js";
+import { SOLAR_ORBIT_SCALE, getAsteroidVisualRadius, getSizeComparisonText, parseDiameterKm } from "../config/celestialScale.js";
 
-const BELT_INNER_RADIUS = 44;
-const BELT_OUTER_RADIUS = 52;
-const JUPITER_ORBIT_RADIUS = 75;
+const BELT_INNER_RADIUS = 44 * SOLAR_ORBIT_SCALE;
+const BELT_OUTER_RADIUS = 52 * SOLAR_ORBIT_SCALE;
+const JUPITER_ORBIT_RADIUS = 75 * SOLAR_ORBIT_SCALE;
 
 // Rendering one mesh for every real asteroid would overwhelm both the CPU and
 // the browser's memory. These two layers preserve the *visual population* of
@@ -86,7 +87,7 @@ const MAJOR_BODIES = [
     name: "Ceres",
     composition: "C",
     diameter: "939 km",
-    radius: 47.8,
+    radius: 47.8 * SOLAR_ORBIT_SCALE,
     heliocentricAU: 2.7675,
     angle: 0.58,
     size: 0.92,
@@ -101,7 +102,7 @@ const MAJOR_BODIES = [
     name: "Vesta",
     composition: "S",
     diameter: "525 km",
-    radius: 45.7,
+    radius: 45.7 * SOLAR_ORBIT_SCALE,
     heliocentricAU: 2.3613,
     angle: 2.3,
     size: 0.67,
@@ -116,7 +117,7 @@ const MAJOR_BODIES = [
     name: "Pallas",
     composition: "C",
     diameter: "512 km",
-    radius: 48.4,
+    radius: 48.4 * SOLAR_ORBIT_SCALE,
     heliocentricAU: 2.7700,
     angle: 4.12,
     size: 0.61,
@@ -131,7 +132,7 @@ const MAJOR_BODIES = [
     name: "Hygiea",
     composition: "C",
     diameter: "434 km",
-    radius: 50.9,
+    radius: 50.9 * SOLAR_ORBIT_SCALE,
     heliocentricAU: 3.1415,
     angle: 5.18,
     size: 0.54,
@@ -146,7 +147,7 @@ const MAJOR_BODIES = [
     name: "Psyche",
     composition: "M",
     diameter: "≈ 280 × 232 km",
-    radius: 46.9,
+    radius: 46.9 * SOLAR_ORBIT_SCALE,
     heliocentricAU: 2.9225,
     angle: 3.28,
     size: 0.43,
@@ -261,10 +262,10 @@ function radiusToAU(radius) {
 /** Returns true when a radius falls inside one of the visual Kirkwood gaps. */
 function isInsideKirkwoodGap(radius) {
   const gaps = [
-    { centre: 46.35, halfWidth: 0.24 },
-    { centre: 48.72, halfWidth: 0.18 },
-    { centre: 50.05, halfWidth: 0.16 },
-    { centre: 50.92, halfWidth: 0.20 },
+    { centre: 46.35 * SOLAR_ORBIT_SCALE, halfWidth: 0.24 * SOLAR_ORBIT_SCALE },
+    { centre: 48.72 * SOLAR_ORBIT_SCALE, halfWidth: 0.18 * SOLAR_ORBIT_SCALE },
+    { centre: 50.05 * SOLAR_ORBIT_SCALE, halfWidth: 0.16 * SOLAR_ORBIT_SCALE },
+    { centre: 50.92 * SOLAR_ORBIT_SCALE, halfWidth: 0.20 * SOLAR_ORBIT_SCALE },
   ];
   return gaps.some((gap) => Math.abs(radius - gap.centre) < gap.halfWidth);
 }
@@ -518,6 +519,10 @@ function attachAsteroidMetadata(object, {
   orbitalEccentricity = 0.10,
 }) {
   const compositionData = COMPOSITIONS[composition];
+  const physicalDiameterKm = parseDiameterKm(diameter);
+  const sizeComparison = physicalDiameterKm
+    ? getSizeComparisonText({ diameterKm: physicalDiameterKm, name })
+    : "Scale comparison unavailable";
   const explicitAU = Number(heliocentricAU);
   const au = Number.isFinite(explicitAU) && explicitAU > 0
     ? explicitAU
@@ -541,6 +546,10 @@ function attachAsteroidMetadata(object, {
     focusEase: 0.14,
     isAsteroid: true,
     visualRadius,
+    physicalDiameterKm,
+    diameterEarths: physicalDiameterKm ? physicalDiameterKm / 12_756 : null,
+    volumeEarths: physicalDiameterKm ? Math.pow(physicalDiameterKm / 12_756, 3) : null,
+    sizeComparison,
     orbitRadius: semiMajor,
     // Physical heliocentric scale used by the Earth-distance readout. The belt
     // renderer itself keeps its compressed artistic scene radius.
@@ -556,6 +565,7 @@ function attachAsteroidMetadata(object, {
       distanceFromEarth: population === "Trojan cloud"
         ? "Near Jupiter's orbit; distance from Earth continuously varies"
         : `≈ ${au.toFixed(2)} AU from the Sun; distance from Earth continuously varies`,
+      sizeComparison,
       description: `${description} Composition: ${compositionData.density}. Shape: ${archetype}. Orbital group: ${family}.`,
     },
   };
@@ -604,6 +614,51 @@ export function resolveAsteroidInstanceHit(hit) {
   mesh.add(target);
   mesh.userData.inspectionTargets.set(instanceId, target);
   return target;
+}
+
+/**
+ * Finds the nearest visible instanced asteroid in screen space when the exact
+ * mesh ray misses a tiny rock. This runs only on a deliberate click/tap, so a
+ * scan of the instanced belt does not affect animation performance.
+ */
+export function findNearestAsteroidInstanceAtPointer({
+  meshes,
+  pointer,
+  camera,
+  viewportWidth,
+  viewportHeight,
+  pixelRadius = 24,
+}) {
+  if (!Array.isArray(meshes) || !camera || !pointer) return null;
+
+  let nearestHit = null;
+  let nearestDistanceSquared = pixelRadius * pixelRadius;
+  const projected = new THREE.Vector3();
+
+  camera.updateMatrixWorld();
+  meshes.forEach((mesh) => {
+    if (!mesh?.visible || !mesh.userData?.isInteractiveAsteroidField) return;
+    mesh.updateWorldMatrix(true, false);
+    const records = mesh.userData.instanceRecords ?? [];
+
+    for (let instanceId = 0; instanceId < records.length; instanceId += 1) {
+      if (!records[instanceId]) continue;
+      mesh.getMatrixAt(instanceId, _instanceMatrix);
+      _position.setFromMatrixPosition(_instanceMatrix).applyMatrix4(mesh.matrixWorld);
+      projected.copy(_position).project(camera);
+      if (projected.z < -1 || projected.z > 1) continue;
+
+      const dx = (projected.x - pointer.x) * viewportWidth * 0.5;
+      const dy = (projected.y - pointer.y) * viewportHeight * 0.5;
+      const distanceSquared = dx * dx + dy * dy;
+      if (distanceSquared >= nearestDistanceSquared) continue;
+
+      nearestDistanceSquared = distanceSquared;
+      nearestHit = { object: mesh, instanceId };
+    }
+  });
+
+  return nearestHit ? resolveAsteroidInstanceHit(nearestHit) : null;
 }
 
 /**
@@ -738,7 +793,26 @@ function createAsteroidObject({
   core.name = `${name} surface`;
   group.add(core);
 
-  group.scale.setScalar(size);
+  // A transparent local-space proxy makes small resolved rocks easier to tap
+  // without changing their rendered size. Metadata is still resolved from the
+  // parent asteroid group.
+  const interactionTarget = new THREE.Mesh(
+    new THREE.SphereGeometry(1.65, 14, 10),
+    new THREE.MeshBasicMaterial({
+      transparent: true,
+      opacity: 0,
+      colorWrite: false,
+      depthWrite: false,
+    }),
+  );
+  interactionTarget.name = `${name} interaction target`;
+  group.add(interactionTarget);
+
+  const physicalDiameterKm = parseDiameterKm(diameter);
+  const ratioAwareSize = physicalDiameterKm
+    ? getAsteroidVisualRadius(physicalDiameterKm, { minimum: 0.026, maximum: 0.78 })
+    : size;
+  group.scale.setScalar(ratioAwareSize);
   group.scale.multiply(new THREE.Vector3(
     0.88 + seededRandom(index * 3 + 1) * 0.26,
     0.86 + seededRandom(index * 3 + 2) * 0.24,
@@ -911,15 +985,15 @@ function createInstancedBoulderField(materials) {
         if (accepted % 10 === 0 && composition !== "M") {
           const useOuterFamily = seededRandom(seed + 3) > 0.48;
           if (composition === "C") {
-            radius = 50.2 + (seededRandom(seed + 4) - 0.5) * 0.8;
+            radius = 50.2 * SOLAR_ORBIT_SCALE + (seededRandom(seed + 4) - 0.5) * 0.8 * SOLAR_ORBIT_SCALE;
             angle = 3.7 + (seededRandom(seed + 5) - 0.5) * 1.05;
             family = "Eos collision-family stream";
           } else if (useOuterFamily) {
-            radius = 49.5 + (seededRandom(seed + 4) - 0.5) * 0.7;
+            radius = 49.5 * SOLAR_ORBIT_SCALE + (seededRandom(seed + 4) - 0.5) * 0.7 * SOLAR_ORBIT_SCALE;
             angle = 5.15 + (seededRandom(seed + 5) - 0.5) * 0.95;
             family = "Koronis collision-family stream";
           } else {
-            radius = 44.9 + (seededRandom(seed + 4) - 0.5) * 0.7;
+            radius = 44.9 * SOLAR_ORBIT_SCALE + (seededRandom(seed + 4) - 0.5) * 0.7 * SOLAR_ORBIT_SCALE;
             angle = 1.1 + (seededRandom(seed + 5) - 0.5) * 0.95;
             family = "Flora collision-family stream";
           }
@@ -944,7 +1018,8 @@ function createInstancedBoulderField(materials) {
         // The steep power curve makes almost every object a pebble/small rock,
         // while leaving a rare tail of large, clearly readable boulders.
         const sizeBias = Math.pow(seededRandom(seed + 13), 5.2);
-        const size = 0.014 + sizeBias * 0.18;
+        const estimatedDiameter = Math.max(1, Math.round(1 + sizeBias * 95));
+        const size = getAsteroidVisualRadius(estimatedDiameter, { minimum: 0.020, maximum: 0.19 });
         dummy.scale.set(
           size * (0.68 + seededRandom(seed + 14) * 0.72),
           size * (0.62 + seededRandom(seed + 15) * 0.70),
@@ -959,10 +1034,6 @@ function createInstancedBoulderField(materials) {
         mesh.setColorAt(accepted, color);
 
         const visualRadius = Math.max(dummy.scale.x, dummy.scale.y, dummy.scale.z);
-        const estimatedDiameter = Math.max(
-          1,
-          Math.round(1 + Math.pow(size / 0.194, 1.35) * 95),
-        );
         const archetype = composition === "C"
           ? "Rubble-pile body"
           : composition === "M"
@@ -1069,7 +1140,7 @@ function createDistantDebris() {
     uniforms: {
       uPixelRatio: { value: Math.min(window.devicePixelRatio, 2) },
       // Pebbles establish belt density but should not veil the solid rocks.
-      uOpacity: { value: 0.38 },
+      uOpacity: { value: 0.56 },
     },
     vertexShader: `
       attribute float aSize;
@@ -1080,7 +1151,7 @@ function createDistantDebris() {
         vColor = color;
         vec4 viewPosition = modelViewMatrix * vec4(position, 1.0);
         gl_Position = projectionMatrix * viewPosition;
-        gl_PointSize = clamp(aSize * uPixelRatio * (92.0 / max(1.0, -viewPosition.z)), 0.65, 2.6);
+        gl_PointSize = clamp(aSize * uPixelRatio * (128.0 / max(1.0, -viewPosition.z)), 0.82, 3.35);
       }
     `,
     fragmentShader: `
@@ -1318,7 +1389,7 @@ export function createAsteroidBelt({ world, hoverTargets = [] }) {
   createFamily({
     name: "Flora",
     composition: "S",
-    centreRadius: 44.9,
+    centreRadius: 44.9 * SOLAR_ORBIT_SCALE,
     centreAngle: 1.1,
     inclination: 0.08,
     count: 24,
@@ -1332,7 +1403,7 @@ export function createAsteroidBelt({ world, hoverTargets = [] }) {
   createFamily({
     name: "Eos",
     composition: "C",
-    centreRadius: 50.2,
+    centreRadius: 50.2 * SOLAR_ORBIT_SCALE,
     centreAngle: 3.7,
     inclination: 0.18,
     count: 22,
@@ -1346,7 +1417,7 @@ export function createAsteroidBelt({ world, hoverTargets = [] }) {
   createFamily({
     name: "Koronis",
     composition: "S",
-    centreRadius: 49.5,
+    centreRadius: 49.5 * SOLAR_ORBIT_SCALE,
     centreAngle: 5.15,
     inclination: 0.05,
     count: 20,

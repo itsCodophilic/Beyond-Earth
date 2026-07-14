@@ -180,3 +180,23 @@
     display: none;
   }
 }
+
+/* Earth-relative physical scale is appended by main.js to the existing facts. */
+.body-card__scale-row dd {
+  color: rgba(125, 231, 255, 0.92);
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 760px) {
+  .body-card {
+    max-height: min(78vh, 680px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  .body-card__facts div {
+    grid-template-columns: 0.86fr 1.45fr;
+    gap: 12px;
+  }
+}

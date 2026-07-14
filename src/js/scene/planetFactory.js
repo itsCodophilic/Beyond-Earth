@@ -934,6 +934,11 @@ export function createPlanet({ config, textures, world, orbitRoot, planets, hove
     focusEase: config.focusEase,
     focusFov: config.focusFov,
     detail: config.detail,
+    visualRadius: config.radius,
+    physicalDiameterKm: config.physicalDiameterKm,
+    diameterEarths: config.diameterEarths,
+    volumeEarths: config.volumeEarths,
+    sizeComparison: config.info?.sizeComparison,
     info: config.info,
     visualLayers: {},
   };
@@ -962,6 +967,15 @@ export function createPlanet({ config, textures, world, orbitRoot, planets, hove
   }
   if (["Jupiter", "Saturn", "Uranus", "Neptune"].includes(config.name)) {
     mesh.userData.visualLayers.ringSystem = addGiantPlanetRings(mesh, config, textures);
+    const ringBoundsMultiplier = {
+      Jupiter: 1.92,
+      Saturn: 2.58,
+      Uranus: 2.34,
+      Neptune: 2.10,
+    }[config.name];
+    mesh.userData.focusVisualRadius = config.radius * ringBoundsMultiplier;
+  } else {
+    mesh.userData.focusVisualRadius = config.radius;
   }
   if (config.name === "Neptune") {
     mesh.userData.visualLayers.dustArcs = addNeptuneDustArcs(mesh, config);

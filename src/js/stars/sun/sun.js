@@ -16,6 +16,7 @@
  * subtle so they do not hide the granular Sun surface.
  */
 import * as THREE from "three";
+import { PLANET_SCALE_PROFILES, getPlanetSizeComparison } from "../../config/celestialScale.js";
 
 import { makeSunSurfaceMaterial } from "../../graphics/materials.js";
 
@@ -24,7 +25,7 @@ import {
   makeNoiseTexture,
 } from "../../graphics/proceduralTextures.js";
 
-const SUN_RADIUS = 9.2;
+const SUN_RADIUS = PLANET_SCALE_PROFILES.Sun.visualRadius;
 
 /**
  * Creates a Fresnel-based atmosphere shell.
@@ -853,10 +854,20 @@ export function createSun({ world, hoverTargets, texture }) {
 
     focusScale: 1.2,
 
+    visualRadius: SUN_RADIUS,
+    focusVisualRadius: SUN_RADIUS * 1.62,
+    physicalDiameterKm: PLANET_SCALE_PROFILES.Sun.diameterKm,
+    diameterEarths: PLANET_SCALE_PROFILES.Sun.diameterEarths,
+    volumeEarths: PLANET_SCALE_PROFILES.Sun.volumeEarths,
+    sizeComparison: getPlanetSizeComparison("Sun"),
+
     /*
      * Prevent the focus camera from moving inside this large mesh.
      */
-    minFocusDistance: 28,
+    minFocusDistance: PLANET_SCALE_PROFILES.Sun.focusDistance * 0.88,
+    focusDistance: PLANET_SCALE_PROFILES.Sun.focusDistance,
+    focusEase: 0.065,
+    focusFov: 34,
 
     info: {
       type: "Star",
@@ -866,6 +877,8 @@ export function createSun({ world, hoverTargets, texture }) {
       orbitalSpeed: "System reference body",
 
       distanceFromEarth: "≈ 149.6 million km",
+
+      sizeComparison: getPlanetSizeComparison("Sun"),
 
       description:
         "A living ocean of plasma whose magnetic storms, radiant light, and immense gravity sustain every world in this planetary system.",

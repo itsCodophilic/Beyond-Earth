@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { SOLAR_ORBIT_SCALE } from "../config/celestialScale.js";
 
 /**
  * Earth-referenced distance helpers for the journey HUD and celestial focus.
@@ -65,9 +66,9 @@ const wholeNumberFormatter = new Intl.NumberFormat("en-US", {
 /** Maps the project's main-belt radius back to the approximate 2.2–3.2 au range. */
 function asteroidOrbitRadiusToAU(radius) {
   return THREE.MathUtils.mapLinear(
-    THREE.MathUtils.clamp(radius, 44, 52),
-    44,
-    52,
+    THREE.MathUtils.clamp(radius, 44 * SOLAR_ORBIT_SCALE, 52 * SOLAR_ORBIT_SCALE),
+    44 * SOLAR_ORBIT_SCALE,
+    52 * SOLAR_ORBIT_SCALE,
     2.2,
     3.2,
   );
@@ -83,6 +84,11 @@ function normalizedBodyName(body) {
 
 function resolveOrbitalElements(body) {
   const normalizedName = normalizedBodyName(body);
+  const parentPlanet = String(body?.userData?.parentPlanet ?? "").toLowerCase();
+
+  if (parentPlanet && PLANET_ORBITAL_ELEMENTS[parentPlanet]) {
+    return { ...PLANET_ORBITAL_ELEMENTS[parentPlanet], source: "satellite-parent-orbit" };
+  }
 
   for (const [planetName, elements] of Object.entries(PLANET_ORBITAL_ELEMENTS)) {
     if (normalizedName.includes(planetName)) return { ...elements, source: "jpl-elements" };
@@ -333,7 +339,9 @@ export function createEarthDistanceTracker({ earth }) {
           ? orbitalElements.source === "jpl-small-body"
             ? "Current simulated separation · verified small-body orbit"
             : "Current simulated separation · generated asteroid orbit"
-          : "Current simulated Earth separation · planetary orbit",
+          : orbitalElements.source === "satellite-parent-orbit"
+            ? `Current simulated separation · ${body.userData.parentPlanet} moon system`
+            : "Current simulated Earth separation · planetary orbit",
         bodyName: name,
         basis: orbitalElements.source,
         approximateRange: calculateApproximateEarthRange(orbitalElements),

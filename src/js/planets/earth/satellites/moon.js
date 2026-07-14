@@ -13,9 +13,11 @@
  */
 import * as THREE from "three";
 import { makeNoiseTexture } from "../../../graphics/proceduralTextures.js";
+import { EARTH_VISUAL_RADIUS, getMoonVisualRadius, getSizeComparisonText } from "../../../config/celestialScale.js";
 
-const MOON_RADIUS = 0.36;
-const ORBIT_RADIUS = 3.05;
+const MOON_DIAMETER_KM = 3_474.8;
+const MOON_RADIUS = getMoonVisualRadius(MOON_DIAMETER_KM);
+const ORBIT_RADIUS = EARTH_VISUAL_RADIUS * 3.15;
 
 /** Fixed crater positions keep the Moon visually stable between page reloads. */
 const CRATERS = [
@@ -105,11 +107,21 @@ export function createMoonSystem({ earth, textures, hoverTargets }) {
     name: "Moon",
     detail: "Earth's natural satellite | cratered highlands and dark maria",
     focusScale: 3.3,
+    focusDistance: Math.max(1.25, MOON_RADIUS * 4.2),
+    minFocusDistance: Math.max(1.05, MOON_RADIUS * 3.5),
+    focusEase: 0.10,
+    focusFov: 36,
+    visualRadius: MOON_RADIUS,
+    physicalDiameterKm: MOON_DIAMETER_KM,
+    diameterEarths: MOON_DIAMETER_KM / 12_756,
+    volumeEarths: Math.pow(MOON_DIAMETER_KM / 12_756, 3),
+    sizeComparison: getSizeComparisonText({ diameterKm: MOON_DIAMETER_KM, name: "Moon" }),
     info: {
       type: "Natural satellite",
       diameter: "3,474.8 km",
       orbitalSpeed: "1.022 km/s around Earth",
       distanceFromEarth: "≈ 384,400 km average",
+      sizeComparison: getSizeComparisonText({ diameterKm: MOON_DIAMETER_KM, name: "Moon" }),
       description: "A silent companion shaped by ancient impacts, with bright highlands, dark volcanic maria, and no air to soften its horizon.",
     },
   };
