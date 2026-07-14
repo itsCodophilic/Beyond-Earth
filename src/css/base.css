@@ -48,3 +48,25 @@ button {
   html { scroll-behavior: auto; }
 }
 
+
+/* Celestial inspection temporarily freezes the scroll-driven journey. */
+html.is-celestial-focus,
+body.is-celestial-focus {
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+body.is-celestial-focus {
+  touch-action: none;
+}
+
+body.is-celestial-focus .body-card {
+  touch-action: pan-y;
+  overscroll-behavior: contain;
+}
+
+/* Distance explanations remain independently scrollable while the journey is locked. */
+body.is-celestial-focus .distance-unit-popover {
+  touch-action: pan-y;
+  overscroll-behavior: contain;
+}

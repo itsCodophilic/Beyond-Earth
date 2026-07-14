@@ -24,6 +24,12 @@ import {
   updateAsteroidBelt,
 } from './scene/asteroidBelt.js';
 import { createPlanet, updatePlanetVisuals } from './scene/planetFactory.js';
+import {
+  createEarthDistanceTracker,
+  formatEarthDistance,
+  formatEarthDistanceRange,
+  interpolateCameraDistanceFromEarth,
+} from './scene/distanceFromEarth.js';
 import { SpaceEnvironment } from './scene/space/spaceEnvironment.js';
 import { JOURNEY_MAP } from './scene/space/spaceEnvironmentConfig.js';
 import { createSun, updateSun } from './stars/sun/sun.js';
@@ -36,6 +42,292 @@ import { createSun, updateSun } from './stars/sun/sun.js';
   const canvas = document.querySelector("#universe");
   const loader = document.querySelector("#loader");
   const progressBar = document.querySelector("#progress-bar");
+  const progressShell = progressBar?.closest(".progress") ?? progressBar?.parentElement ?? null;
+  let distanceValueLabel = null;
+  let distanceSecondaryLabel = null;
+  let distanceRegionLabel = null;
+  let distanceModeLabel = null;
+  let distanceRangeLabel = null;
+  let distanceUnitPopover = null;
+  let distanceUnitEyebrow = null;
+  let distanceUnitTitle = null;
+  let distanceUnitDescription = null;
+  let distanceUnitEquivalent = null;
+  let distanceMeasurementInfoButton = null;
+  let activeDistanceInfo = null;
+  let currentDistanceMeasurementInfo = null;
+  let currentDistanceUnits = new Set();
+  let distancePopoverOwnsJourneyLock = false;
+  let distancePopoverTouchY = null;
+
+  // The former horizontal progress line is converted into a compact travel
+  // instrument. The existing HTML can stay unchanged because the readout is
+  // built inside its current `.progress` container at runtime.
+  if (progressShell) {
+    progressShell.classList.add("distance-readout");
+    progressShell.setAttribute("role", "region");
+    progressShell.setAttribute("aria-label", "Distance from Earth");
+    progressShell.innerHTML = `
+      <button class="distance-readout__info" id="distance-measurement-info" type="button" aria-label="How this distance is measured" title="How is this distance measured?">
+        <span aria-hidden="true">i</span>
+      </button>
+      <div class="distance-readout__header">
+        <span>You are at</span>
+        <em id="distance-travel-mode">Camera position</em>
+      </div>
+      <strong class="distance-readout__value" id="distance-travel-value">18,100 km from Earth</strong>
+      <div class="distance-readout__footer">
+        <span id="distance-travel-region">Earth orbital vicinity</span>
+        <span id="distance-travel-secondary">11,247 mi</span>
+      </div>
+      <div class="distance-readout__range" id="distance-travel-range" hidden></div>
+      <div class="distance-unit-popover" id="distance-unit-popover" role="dialog" aria-modal="false" aria-live="polite" aria-labelledby="distance-unit-title" hidden>
+        <button class="distance-unit-popover__close" type="button" aria-label="Close distance information">×</button>
+        <span class="distance-unit-popover__eyebrow" id="distance-unit-eyebrow">Distance information</span>
+        <strong id="distance-unit-title"></strong>
+        <p id="distance-unit-description"></p>
+        <small id="distance-unit-equivalent"></small>
+      </div>
+    `;
+    distanceValueLabel = progressShell.querySelector("#distance-travel-value");
+    distanceSecondaryLabel = progressShell.querySelector("#distance-travel-secondary");
+    distanceRegionLabel = progressShell.querySelector("#distance-travel-region");
+    distanceModeLabel = progressShell.querySelector("#distance-travel-mode");
+    distanceRangeLabel = progressShell.querySelector("#distance-travel-range");
+    distanceUnitPopover = progressShell.querySelector("#distance-unit-popover");
+    distanceUnitEyebrow = progressShell.querySelector("#distance-unit-eyebrow");
+    distanceUnitTitle = progressShell.querySelector("#distance-unit-title");
+    distanceUnitDescription = progressShell.querySelector("#distance-unit-description");
+    distanceUnitEquivalent = progressShell.querySelector("#distance-unit-equivalent");
+    distanceMeasurementInfoButton = progressShell.querySelector("#distance-measurement-info");
+  }
+
+  const DISTANCE_UNIT_EXPLANATIONS = Object.freeze({
+    au: {
+      eyebrow: "Space distance unit",
+      title: "Astronomical unit (AU)",
+      description: "AU is a distance unit used mainly inside the Solar System. It gives large planetary distances a shorter, easier-to-read number.",
+      equivalent: "1 AU = exactly 149,597,870.7 km — approximately the average distance from Earth to the Sun.",
+    },
+    lightYear: {
+      eyebrow: "Space distance unit",
+      title: "Light-year (ly)",
+      description: "A light-year is a unit of distance, not time. It is the distance light travels through a vacuum during one Julian year.",
+      equivalent: "1 light-year ≈ 9.46 trillion km, or about 63,241 AU.",
+    },
+  });
+
+  function distanceUnitKey(unitText) {
+    if (unitText === "AU") return "au";
+    if (unitText === "light-year" || unitText === "light-years") return "lightYear";
+    return null;
+  }
+
+  function collectDistanceUnitKeys(...textValues) {
+    const keys = new Set();
+    const pattern = /(light-years?|AU)/g;
+    textValues.forEach((textValue) => {
+      const text = String(textValue ?? "");
+      let match = pattern.exec(text);
+      while (match) {
+        const key = distanceUnitKey(match[0]);
+        if (key) keys.add(key);
+        match = pattern.exec(text);
+      }
+      pattern.lastIndex = 0;
+    });
+    return keys;
+  }
+
+  /**
+   * Replaces AU/light-year words with stable, accessible hyperlink-style buttons.
+   * `skipFirstUnit` keeps the definition's left-hand unit plain while allowing
+   * later comparison units on the right-hand side to remain interactive.
+   */
+  function setDistanceText(element, textValue, { skipFirstUnit = false } = {}) {
+    if (!element) return;
+    const text = String(textValue ?? "");
+    const renderKey = `${skipFirstUnit ? "skip-first" : "all"}|${text}`;
+    if (element.dataset.distanceRenderKey === renderKey) return;
+
+    const pattern = /(light-years?|AU)/g;
+    const fragment = document.createDocumentFragment();
+    let cursor = 0;
+    let unitMatchIndex = 0;
+    let match = pattern.exec(text);
+
+    while (match) {
+      if (match.index > cursor) fragment.append(document.createTextNode(text.slice(cursor, match.index)));
+      const unitKey = distanceUnitKey(match[0]);
+      const shouldRenderPlainText = skipFirstUnit && unitMatchIndex === 0;
+
+      if (unitKey && !shouldRenderPlainText) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "distance-unit-link";
+        button.dataset.distanceUnit = unitKey;
+        button.setAttribute("aria-label", `Open an explanation of ${match[0]}`);
+        button.title = `Learn what ${match[0]} means`;
+        button.append(document.createTextNode(match[0]));
+        const icon = document.createElement("span");
+        icon.className = "distance-unit-link__icon";
+        icon.setAttribute("aria-hidden", "true");
+        icon.textContent = "i";
+        button.append(icon);
+        fragment.append(button);
+      } else {
+        fragment.append(document.createTextNode(match[0]));
+      }
+
+      unitMatchIndex += 1;
+      cursor = pattern.lastIndex;
+      match = pattern.exec(text);
+    }
+
+    if (cursor < text.length) fragment.append(document.createTextNode(text.slice(cursor)));
+    element.replaceChildren(fragment);
+    element.dataset.distanceRenderKey = renderKey;
+  }
+
+  function renderDistancePopover(info) {
+    if (!info || !distanceUnitPopover) return;
+    const fingerprint = [
+      info.eyebrow ?? "Distance information",
+      info.title ?? "Distance information",
+      info.description ?? "",
+      info.equivalent ?? "",
+    ].join("|");
+    const isNewContent = distanceUnitPopover.dataset.infoFingerprint !== fingerprint;
+
+    if (isNewContent) {
+      distanceUnitPopover.dataset.infoFingerprint = fingerprint;
+      distanceUnitEyebrow.textContent = info.eyebrow ?? "Distance information";
+      distanceUnitTitle.textContent = info.title ?? "Distance information";
+      distanceUnitDescription.textContent = info.description ?? "";
+      setDistanceText(distanceUnitEquivalent, info.equivalent ?? "", { skipFirstUnit: true });
+      distanceUnitPopover.scrollTop = 0;
+    }
+
+    distanceUnitPopover.hidden = false;
+    requestAnimationFrame(() => distanceUnitPopover.classList.add("is-visible"));
+  }
+
+  function ensureDistancePopoverJourneyLock() {
+    if (!isJourneyScrollLocked) {
+      lockJourneyScroll();
+      distancePopoverOwnsJourneyLock = true;
+    }
+  }
+
+  function closeDistanceInfoPopover({ releaseJourneyLock = true } = {}) {
+    if (!distanceUnitPopover) return;
+    distanceUnitPopover.hidden = true;
+    distanceUnitPopover.classList.remove("is-visible");
+    activeDistanceInfo = null;
+    distancePopoverTouchY = null;
+
+    if (releaseJourneyLock && distancePopoverOwnsJourneyLock && !focusedBody) {
+      distancePopoverOwnsJourneyLock = false;
+      unlockJourneyScroll();
+    } else if (!releaseJourneyLock) {
+      distancePopoverOwnsJourneyLock = false;
+    }
+  }
+
+  function showDistanceUnitPopover(unitKey) {
+    const info = DISTANCE_UNIT_EXPLANATIONS[unitKey];
+    if (!info || !distanceUnitPopover) return;
+    ensureDistancePopoverJourneyLock();
+    activeDistanceInfo = { type: "unit", key: unitKey };
+    renderDistancePopover(info);
+  }
+
+  function showDistanceMeasurementPopover() {
+    if (!currentDistanceMeasurementInfo || !distanceUnitPopover) return;
+    ensureDistancePopoverJourneyLock();
+    activeDistanceInfo = { type: "measurement" };
+    renderDistancePopover(currentDistanceMeasurementInfo);
+  }
+
+  function refreshOpenDistancePopover() {
+    if (!activeDistanceInfo || !distanceUnitPopover || distanceUnitPopover.hidden) return;
+    if (activeDistanceInfo.type === "measurement") {
+      renderDistancePopover(currentDistanceMeasurementInfo);
+      return;
+    }
+    if (activeDistanceInfo.type === "unit" && !currentDistanceUnits.has(activeDistanceInfo.key)) {
+      closeDistanceInfoPopover();
+    }
+  }
+
+  function updateDistanceMeasurementContext({ units, measurementInfo, fingerprint }) {
+    currentDistanceUnits = units;
+    currentDistanceMeasurementInfo = measurementInfo;
+
+    if (distanceMeasurementInfoButton) {
+      distanceMeasurementInfoButton.setAttribute("aria-label", `${measurementInfo.title}. Open measurement details.`);
+      distanceMeasurementInfoButton.title = "How is this distance measured?";
+      if (distanceMeasurementInfoButton.dataset.measurementFingerprint !== fingerprint) {
+        distanceMeasurementInfoButton.dataset.measurementFingerprint = fingerprint;
+        distanceMeasurementInfoButton.classList.remove("is-updated");
+        void distanceMeasurementInfoButton.offsetWidth;
+        distanceMeasurementInfoButton.classList.add("is-updated");
+      }
+    }
+
+    refreshOpenDistancePopover();
+  }
+
+  function activateDistanceReadoutControl(event) {
+    const unitButton = event.target.closest?.("[data-distance-unit]");
+    const measurementButton = event.target.closest?.("#distance-measurement-info");
+    const closeButton = event.target.closest?.(".distance-unit-popover__close");
+    if (!unitButton && !measurementButton && !closeButton) return false;
+
+    event.preventDefault();
+    event.stopPropagation();
+    if (unitButton) showDistanceUnitPopover(unitButton.dataset.distanceUnit);
+    else if (measurementButton) showDistanceMeasurementPopover();
+    else closeDistanceInfoPopover();
+    return true;
+  }
+
+  // Pointer-down activation remains reliable even while the numeric camera
+  // value is easing and its text is being refreshed. Keyboard activation still
+  // arrives through a normal click event with detail === 0.
+  progressShell?.addEventListener("pointerdown", activateDistanceReadoutControl);
+  progressShell?.addEventListener("click", (event) => {
+    if (event.detail === 0) activateDistanceReadoutControl(event);
+  });
+
+  // Keep modal scrolling inside the information box. It must never move the
+  // scroll-driven camera journey underneath it.
+  distanceUnitPopover?.addEventListener("wheel", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    distanceUnitPopover.scrollTop += event.deltaY;
+  }, { passive: false });
+
+  distanceUnitPopover?.addEventListener("touchstart", (event) => {
+    distancePopoverTouchY = event.touches[0]?.clientY ?? null;
+    event.stopPropagation();
+  }, { passive: true });
+
+  distanceUnitPopover?.addEventListener("touchmove", (event) => {
+    if (distancePopoverTouchY == null) return;
+    const nextY = event.touches[0]?.clientY ?? distancePopoverTouchY;
+    const deltaY = distancePopoverTouchY - nextY;
+    distancePopoverTouchY = nextY;
+    event.preventDefault();
+    event.stopPropagation();
+    distanceUnitPopover.scrollTop += deltaY;
+  }, { passive: false });
+
+  distanceUnitPopover?.addEventListener("touchend", () => {
+    distancePopoverTouchY = null;
+  }, { passive: true });
+
+
   const bodyCard = document.querySelector("#body-card");
   const bodyConnector = document.querySelector("#body-connector");
   const cardType = document.querySelector("#card-type");
@@ -98,6 +390,10 @@ import { createSun, updateSun } from './stars/sun/sun.js';
   // focusedBody is null during free flight or references the clicked Mesh.
   let focusedBody = null;
   let displayedBody = null;
+  // Focus mode freezes the page journey and restores this snapshot when the
+  // user closes the celestial inspection card.
+  let isJourneyScrollLocked = false;
+  let journeyScrollSnapshot = null;
   // Raycasting is performed only for an intentional click/tap. The previous
   // continuous hover preview was removed so moving the pointer across the scene
   // no longer opens cards or repeatedly tests the asteroid belt.
@@ -188,16 +484,138 @@ import { createSun, updateSun } from './stars/sun/sun.js';
   const asteroidBelt = createAsteroidBelt({ world, hoverTargets });
   const jupiter = planets.find((planet) => planet.name === "Jupiter");
 
+  const earthDistanceTracker = createEarthDistanceTracker({ earth });
+  let previousDistanceProgress = smoothProgress;
+
+  function createFocusedMeasurementInfo(focusedDistance, formatted, rangeText) {
+    const currentValue = `${formatted.primary} from Earth`;
+    const rangeSummary = rangeText
+      ? ` Estimated nearest-to-farthest Earth distance across the possible orbital arrangements: ${rangeText}.`
+      : "";
+
+    if (focusedDistance.basis === "reference") {
+      return {
+        eyebrow: "How this distance is measured",
+        title: "Earth is the reference point",
+        description: "All distances in this instrument are measured from Earth. Because Earth is the origin of the measurement, focusing Earth always reads 0 km.",
+        equivalent: `Current display: ${currentValue}.`,
+      };
+    }
+
+    if (focusedDistance.basis === "average") {
+      return {
+        eyebrow: "How this distance is measured",
+        title: `Average reference distance for ${focusedDistance.bodyName}`,
+        description: `This value uses the accepted average separation from Earth rather than a live, date-specific position.${rangeSummary}`,
+        equivalent: `Current display: ${currentValue}.`,
+      };
+    }
+
+    if (focusedDistance.basis === "jpl-elements") {
+      return {
+        eyebrow: "How this distance is measured",
+        title: "Simulated planetary separation",
+        description: "The current number uses the planet’s published orbital scale together with the orbital direction currently shown in this Three.js simulation. It is realistic for the scene, but it is not today’s live ephemeris position.",
+        equivalent: `Current display: ${currentValue}.${rangeSummary}`,
+      };
+    }
+
+    if (focusedDistance.basis === "jpl-small-body") {
+      return {
+        eyebrow: "How this distance is measured",
+        title: "Verified small-body orbital scale",
+        description: "The asteroid’s published orbital elements set its physical scale. Its current Earth separation follows the angular position shown in the simulation, not a live date-specific ephemeris.",
+        equivalent: `Current display: ${currentValue}.${rangeSummary}`,
+      };
+    }
+
+    if (focusedDistance.basis === "explicit" || focusedDistance.basis === "asteroid-estimate") {
+      return {
+        eyebrow: "How this distance is measured",
+        title: "Generated asteroid-orbit distance",
+        description: "This asteroid uses the orbit generated for it inside the experience. Its Earth separation is calculated from that simulated orbit, so the value is internally consistent but not a live astronomical observation.",
+        equivalent: `Current display: ${currentValue}.${rangeSummary}`,
+      };
+    }
+
+    return {
+      eyebrow: "How this distance is measured",
+      title: "Scene-scaled Earth distance",
+      description: "This object does not yet have complete orbital metadata, so its distance is estimated from its Three.js scene position relative to Earth.",
+      equivalent: `Current display: ${currentValue}.`,
+    };
+  }
+
+  function createCameraMeasurementInfo(travel, formatted) {
+    return {
+      eyebrow: "How this distance is measured",
+      title: "Scroll-driven camera distance from Earth",
+      description: "Earth is treated as the 0 km reference. As you scroll outward or inward, the camera journey is mapped onto a progressively larger scientific distance scale for the experience. This describes the viewer’s perspective, not a live spacecraft location.",
+      equivalent: `Current display: ${formatted.primary} from Earth · Region: ${travel.region}.`,
+    };
+  }
+
+  /** Keeps the travel instrument synchronized with either the camera or focus. */
+  function updateDistanceReadout(progress) {
+    if (!distanceValueLabel || !distanceSecondaryLabel || !distanceRegionLabel) return;
+
+    if (focusedBody) {
+      const focusedDistance = earthDistanceTracker.getBodyDistanceFromEarth(focusedBody);
+      const formatted = formatEarthDistance(focusedDistance.kilometres);
+      const range = formatEarthDistanceRange(focusedDistance.approximateRange);
+      const rangeSentence = range
+        ? `Estimated nearest–farthest distance from Earth as both bodies orbit: ${range}`
+        : "";
+
+      setDistanceText(distanceValueLabel, `${formatted.primary} from Earth`);
+      setDistanceText(distanceSecondaryLabel, formatted.secondary);
+      distanceRegionLabel.textContent = focusedDistance.region;
+      if (distanceRangeLabel) {
+        distanceRangeLabel.hidden = !range;
+        if (range) setDistanceText(distanceRangeLabel, rangeSentence);
+      }
+      if (distanceModeLabel) distanceModeLabel.textContent = `Focused: ${focusedDistance.bodyName}`;
+
+      updateDistanceMeasurementContext({
+        units: collectDistanceUnitKeys(formatted.primary, formatted.secondary, rangeSentence),
+        measurementInfo: createFocusedMeasurementInfo(focusedDistance, formatted, range),
+        fingerprint: `focus:${focusedDistance.bodyName}:${focusedDistance.basis}:${formatted.primaryUnit}`,
+      });
+      return;
+    }
+
+    const travel = interpolateCameraDistanceFromEarth(progress);
+    const formatted = formatEarthDistance(travel.kilometres);
+    const progressDelta = progress - previousDistanceProgress;
+    setDistanceText(distanceValueLabel, `${formatted.primary} from Earth`);
+    setDistanceText(distanceSecondaryLabel, formatted.secondary);
+    distanceRegionLabel.textContent = travel.region;
+    if (distanceRangeLabel) distanceRangeLabel.hidden = true;
+
+    if (distanceModeLabel) {
+      if (progressDelta > 0.00008) distanceModeLabel.textContent = "Moving outward";
+      else if (progressDelta < -0.00008) distanceModeLabel.textContent = "Returning inward";
+      else distanceModeLabel.textContent = "Camera position";
+    }
+
+    updateDistanceMeasurementContext({
+      units: collectDistanceUnitKeys(formatted.primary, formatted.secondary),
+      measurementInfo: createCameraMeasurementInfo(travel, formatted),
+      fingerprint: `camera:${travel.region}:${formatted.primaryUnit}`,
+    });
+    previousDistanceProgress = progress;
+  }
+
+
   /*
     updateScrollProgress
-    - Updates normalized scroll progress and refreshes the HUD progress bar.
+    - Updates normalized journey progress. The distance readout follows the
+      smoothed camera progress inside the animation loop.
   */
   function updateScrollProgress() {
-    // maxScroll is the number of vertical pixels the document can actually travel.
+    if (isJourneyScrollLocked) return;
     const maxScroll = document.documentElement.scrollHeight - innerHeight;
-    // Dividing current scroll by maximum produces a reusable 0–1 progress value.
     scrollProgress = maxScroll > 0 ? scrollY / maxScroll : 0;
-    if (progressBar && progressBar.style) progressBar.style.width = `${scrollProgress * 100}%`;
   }
 
   function getCameraDistance(progress) {
@@ -262,12 +680,15 @@ import { createSun, updateSun } from './stars/sun/sun.js';
       cardName.textContent = body.userData.name ?? body.name;
       cardDiameter.textContent = info.diameter ?? "Not available";
       cardSpeed.textContent = info.orbitalSpeed ?? "Not available";
-      cardDistance.textContent = info.distanceFromEarth ?? "Not available";
       cardDescription.textContent = info.description ?? body.userData.detail ?? "No description available.";
       displayedBody = body;
     }
+
+    const earthDistance = earthDistanceTracker.getBodyDistanceFromEarth(body);
+    const formattedEarthDistance = formatEarthDistance(earthDistance.kilometres);
+    cardDistance.textContent = `${formattedEarthDistance.primary} from Earth`;
     cardMode.textContent = "Slow motion · Focused";
-    cardHint.textContent = "Drag to inspect · Click empty space or close to exit";
+    cardHint.textContent = "Journey paused · Drag to inspect · Close to return";
   }
 
   /** Projects a 3D world position into 2D pixels and points the line at the body. */
@@ -362,27 +783,117 @@ import { createSun, updateSun } from './stars/sun/sun.js';
       ?? null;
   }
 
+  /** Freezes the scroll journey without moving the user's current viewpoint. */
+  function lockJourneyScroll() {
+    if (isJourneyScrollLocked) return;
+
+    const scrollbarWidth = Math.max(0, window.innerWidth - document.documentElement.clientWidth);
+    journeyScrollSnapshot = {
+      scrollY: window.scrollY,
+      scrollProgress,
+      smoothProgress,
+      yaw,
+      pitch,
+      targetYaw,
+      targetPitch,
+      cameraFov: camera.fov,
+      cameraFocusPoint: cameraFocusPoint.clone(),
+      htmlOverflow: document.documentElement.style.overflow,
+      htmlScrollBehavior: document.documentElement.style.scrollBehavior,
+      bodyPosition: document.body.style.position,
+      bodyTop: document.body.style.top,
+      bodyLeft: document.body.style.left,
+      bodyRight: document.body.style.right,
+      bodyWidth: document.body.style.width,
+      bodyOverflow: document.body.style.overflow,
+      bodyPaddingRight: document.body.style.paddingRight,
+    };
+
+    isJourneyScrollLocked = true;
+    // Stop any remaining easing immediately. The original values are retained in
+    // the snapshot and restored when the information/focus state is closed.
+    scrollProgress = smoothProgress;
+    previousDistanceProgress = smoothProgress;
+    document.documentElement.classList.add("is-celestial-focus");
+    document.body.classList.add("is-celestial-focus");
+    document.documentElement.style.overflow = "hidden";
+    document.documentElement.style.scrollBehavior = "auto";
+    document.body.style.position = "fixed";
+    document.body.style.top = `-${journeyScrollSnapshot.scrollY}px`;
+    document.body.style.left = "0";
+    document.body.style.right = "0";
+    document.body.style.width = "100%";
+    document.body.style.overflow = "hidden";
+    if (scrollbarWidth > 0) document.body.style.paddingRight = `${scrollbarWidth}px`;
+  }
+
+  /** Restores the exact scroll/camera journey position from before inspection. */
+  function unlockJourneyScroll() {
+    if (!isJourneyScrollLocked || !journeyScrollSnapshot) return;
+    const snapshot = journeyScrollSnapshot;
+
+    document.documentElement.classList.remove("is-celestial-focus");
+    document.body.classList.remove("is-celestial-focus");
+    document.documentElement.style.overflow = snapshot.htmlOverflow;
+    document.documentElement.style.scrollBehavior = snapshot.htmlScrollBehavior;
+    document.body.style.position = snapshot.bodyPosition;
+    document.body.style.top = snapshot.bodyTop;
+    document.body.style.left = snapshot.bodyLeft;
+    document.body.style.right = snapshot.bodyRight;
+    document.body.style.width = snapshot.bodyWidth;
+    document.body.style.overflow = snapshot.bodyOverflow;
+    document.body.style.paddingRight = snapshot.bodyPaddingRight;
+
+    scrollProgress = snapshot.scrollProgress;
+    smoothProgress = snapshot.smoothProgress;
+    yaw = snapshot.yaw;
+    pitch = snapshot.pitch;
+    targetYaw = snapshot.targetYaw;
+    targetPitch = snapshot.targetPitch;
+    camera.fov = snapshot.cameraFov;
+    camera.updateProjectionMatrix();
+    cameraFocusPoint.copy(snapshot.cameraFocusPoint);
+    hasCameraFocusPoint = true;
+    previousDistanceProgress = snapshot.smoothProgress;
+    isJourneyScrollLocked = false;
+    journeyScrollSnapshot = null;
+    window.scrollTo({ top: snapshot.scrollY, left: 0, behavior: "auto" });
+    updateDistanceReadout(smoothProgress);
+  }
+
   /*
     focusBody
-    - Toggles selection of a body and scrolls the page toward a camera distance that frames it.
-    - Clicking the same body twice clears focus and returns to free drift.
+    - Focuses the clicked object without changing the page's journey position.
+    - The vertical scroll journey is locked until focus is closed.
+    - Clicking the same body twice or clicking empty space restores the exact
+      scroll/camera distance that the user was viewing before inspection.
   */
   function focusBody(body) {
+    const nextBody = body && focusedBody !== body ? body : null;
+
+    // Measurement/unit explanations belong to the previous readout state and
+    // should not remain open while focus is changed or dismissed.
+    if (distanceUnitPopover && !distanceUnitPopover.hidden) {
+      closeDistanceInfoPopover({ releaseJourneyLock: false });
+    }
+
     // Restore a previous instanced rock before changing focus. Its inexpensive
     // belt representation replaces the temporary high-resolution close-up.
     if (focusedBody) setAsteroidInspectionDetail(focusedBody, false);
 
-    // Selecting the same body again—or clicking empty space—toggles focus off.
-    focusedBody = body && focusedBody !== body ? body : null;
-    if (!focusedBody) return;
+    if (!nextBody) {
+      focusedBody = null;
+      unlockJourneyScroll();
+      return;
+    }
+
+    if (!isJourneyScrollLocked) lockJourneyScroll();
+    focusedBody = nextBody;
 
     // Only instanced asteroids react here; planets, satellites, and individually
     // modeled major asteroids continue using their normal meshes.
     setAsteroidInspectionDetail(focusedBody, true);
-    // Convert the body's distance from the Sun into an approximate scroll point.
-    const radius = body.userData.orbitRadius ?? body.getWorldPosition(new THREE.Vector3()).length();
-    const idealProgress = THREE.MathUtils.clamp(radius / 230, 0.035, 0.72);
-    window.scrollTo({ top: idealProgress * (document.documentElement.scrollHeight - innerHeight), behavior: "smooth" });
+    updateDistanceReadout(smoothProgress);
   }
 
   /*
@@ -393,6 +904,15 @@ import { createSun, updateSun } from './stars/sun/sun.js';
   // `passive` promises that the handler will not cancel scrolling, helping browsers
   // keep scrolling responsive while JavaScript updates its normalized value.
   addEventListener("scroll", updateScrollProgress, { passive: true });
+  const preventFocusedJourneyScroll = (event) => {
+    // Keep the page journey frozen while still allowing a long information card
+    // to scroll internally on small screens.
+    if (isJourneyScrollLocked && !event.target.closest?.(".body-card")) {
+      event.preventDefault();
+    }
+  };
+  addEventListener("wheel", preventFocusedJourneyScroll, { passive: false });
+  addEventListener("touchmove", preventFocusedJourneyScroll, { passive: false });
   addEventListener("pointermove", (event) => {
     updatePointerFromEvent(event);
     if (isDragging) {
@@ -414,6 +934,7 @@ import { createSun, updateSun } from './stars/sun/sun.js';
   });
 
   addEventListener("pointerdown", (event) => {
+    if (event.target.closest?.(".progress")) return;
     updatePointerFromEvent(event);
     isDragging = true;
     dragDistance = 0;
@@ -425,7 +946,7 @@ import { createSun, updateSun } from './stars/sun/sun.js';
     updatePointerFromEvent(event);
     isDragging = false;
     // HUD clicks belong to HTML controls and must not select objects behind them.
-    if (event.target.closest?.(".hud, .body-card")) return;
+    if (event.target.closest?.(".hud, .body-card, .progress")) return;
     if (dragDistance > 12) return;
     // Details are opened only after this intentional click/tap raycast.
     const body = getBodyAtPointer();
@@ -439,8 +960,27 @@ import { createSun, updateSun } from './stars/sun/sun.js';
   });
 
   addEventListener("keydown", (event) => {
+    const journeyKeys = [
+      " ", "PageUp", "PageDown", "Home", "End",
+      "ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown",
+    ];
+    const isDistancePopoverOpen = Boolean(distanceUnitPopover && !distanceUnitPopover.hidden);
+
+    if (isDistancePopoverOpen && journeyKeys.includes(event.key)) {
+      event.preventDefault();
+      return;
+    }
+
     // Keyboard controls modify the same targets as dragging, so smoothing still applies.
+    if (isJourneyScrollLocked && journeyKeys.includes(event.key)) {
+      event.preventDefault();
+    }
+
     if (event.key === "Escape") {
+      if (isDistancePopoverOpen) {
+        closeDistanceInfoPopover();
+        return;
+      }
       focusBody(null);
       updateBodyCard(null);
     }
@@ -489,6 +1029,7 @@ import { createSun, updateSun } from './stars/sun/sun.js';
     simulationTime += deltaTime * motionScale;
     // Easing with lerp each frame creates inertia. Larger factors catch up faster.
     smoothProgress = THREE.MathUtils.lerp(smoothProgress, scrollProgress, 0.065);
+    updateDistanceReadout(smoothProgress);
     yaw = THREE.MathUtils.lerp(yaw, targetYaw, 0.075);
     pitch = THREE.MathUtils.lerp(pitch, targetPitch, 0.075);
 

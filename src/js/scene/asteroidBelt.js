@@ -87,6 +87,7 @@ const MAJOR_BODIES = [
     composition: "C",
     diameter: "939 km",
     radius: 47.8,
+    heliocentricAU: 2.7675,
     angle: 0.58,
     size: 0.92,
     eccentricity: 0.075,
@@ -101,6 +102,7 @@ const MAJOR_BODIES = [
     composition: "S",
     diameter: "525 km",
     radius: 45.7,
+    heliocentricAU: 2.3613,
     angle: 2.3,
     size: 0.67,
     eccentricity: 0.089,
@@ -115,6 +117,7 @@ const MAJOR_BODIES = [
     composition: "C",
     diameter: "512 km",
     radius: 48.4,
+    heliocentricAU: 2.7700,
     angle: 4.12,
     size: 0.61,
     eccentricity: 0.23,
@@ -129,6 +132,7 @@ const MAJOR_BODIES = [
     composition: "C",
     diameter: "434 km",
     radius: 50.9,
+    heliocentricAU: 3.1415,
     angle: 5.18,
     size: 0.54,
     eccentricity: 0.12,
@@ -143,6 +147,7 @@ const MAJOR_BODIES = [
     composition: "M",
     diameter: "≈ 280 × 232 km",
     radius: 46.9,
+    heliocentricAU: 2.9225,
     angle: 3.28,
     size: 0.43,
     eccentricity: 0.14,
@@ -509,13 +514,20 @@ function attachAsteroidMetadata(object, {
   population = "Main belt",
   archetype = "Irregular body",
   visualRadius = 0.1,
+  heliocentricAU = null,
+  orbitalEccentricity = 0.10,
 }) {
   const compositionData = COMPOSITIONS[composition];
-  const au = radiusToAU(THREE.MathUtils.clamp(
-    semiMajor,
-    BELT_INNER_RADIUS,
-    BELT_OUTER_RADIUS,
-  ));
+  const explicitAU = Number(heliocentricAU);
+  const au = Number.isFinite(explicitAU) && explicitAU > 0
+    ? explicitAU
+    : population === "Trojan cloud"
+      ? 5.2
+      : radiusToAU(THREE.MathUtils.clamp(
+        semiMajor,
+        BELT_INNER_RADIUS,
+        BELT_OUTER_RADIUS,
+      ));
 
   object.name = name;
   object.userData = {
@@ -530,6 +542,13 @@ function attachAsteroidMetadata(object, {
     isAsteroid: true,
     visualRadius,
     orbitRadius: semiMajor,
+    // Physical heliocentric scale used by the Earth-distance readout. The belt
+    // renderer itself keeps its compressed artistic scene radius.
+    heliocentricAU: au,
+    orbitalEccentricity: THREE.MathUtils.clamp(Number(orbitalEccentricity) || 0, 0, 0.99),
+    distanceBasis: population === "Trojan cloud"
+      ? "simulated-trojan-orbit"
+      : "simulated-small-body-orbit",
     info: {
       type: population === "Trojan cloud" ? "Jupiter Trojan asteroid" : "Asteroid",
       diameter,
@@ -703,6 +722,7 @@ function createAsteroidObject({
   population = "Main belt",
   archetype,
   surfaceBoulders = 0,
+  heliocentricAU = null,
 }) {
   const compositionData = COMPOSITIONS[composition];
   const chosenArchetype = archetype
@@ -758,6 +778,8 @@ function createAsteroidObject({
     population,
     archetype: chosenArchetype,
     visualRadius: Math.max(group.scale.x, group.scale.y, group.scale.z),
+    heliocentricAU,
+    orbitalEccentricity: orbit.eccentricity,
   });
 
   group.userData.orbit = orbit;
@@ -953,6 +975,7 @@ function createInstancedBoulderField(materials) {
           composition,
           diameter: `≈ ${estimatedDiameter} km`,
           semiMajor: radius,
+          orbitalEccentricity: orbit.eccentricity,
           orbitalSpeed: `${(14.2 + seededRandom(seed + 19) * 6.8).toFixed(1)} km/s`,
           description: COMPOSITIONS[composition].description,
           family,
@@ -1243,6 +1266,7 @@ export function createAsteroidBelt({ world, hoverTargets = [] }) {
       family: `${body.name} major body`,
       archetype: body.archetype,
       surfaceBoulders: body.name === "Ceres" ? 6 : body.name === "Vesta" ? 9 : 7,
+      heliocentricAU: body.heliocentricAU,
     });
     mainBelt.add(rock);
     rocks.push(rock);
