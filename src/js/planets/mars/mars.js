@@ -6,6 +6,7 @@ export const mars = {
   name: "Mars", texture: "mars", radius: scale.visualRadius, orbitRadius: scale.orbitRadius,
   physicalDiameterKm: scale.diameterKm, diameterEarths: scale.diameterEarths, volumeEarths: scale.volumeEarths,
   orbitSpeed: 0.25, spinSpeed: 0.01, axialTilt: 0.44, angle: 5.3,
+  orbitEccentricity: 0.0934, orbitRotation: 2.78, orbitInclination: 0.032,
   bump: 0.065, orbitColor: 0xd06a37,
   detail: "Red planet | about half Earth diameter", focusScale: 2.1,
   minFocusDistance: scale.focusDistance * 0.88, focusDistance: scale.focusDistance, focusEase: 0.10, focusFov: 36,

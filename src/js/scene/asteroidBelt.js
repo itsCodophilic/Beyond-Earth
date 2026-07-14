@@ -77,9 +77,9 @@ const COMPOSITION_PALETTES = Object.fromEntries(
 // neutral multipliers keep asteroid albedo within realistic dark-stone ranges
 // instead of letting direct solar illumination bleach every rock to white.
 const COMPOSITION_EXPOSURE = {
-  C: new THREE.Color(0x333834),
-  S: new THREE.Color(0x514941),
-  M: new THREE.Color(0x474947),
+  C: new THREE.Color(0x51584f),
+  S: new THREE.Color(0x786b5c),
+  M: new THREE.Color(0x696b67),
 };
 
 const MAJOR_BODIES = [
@@ -289,7 +289,9 @@ function createCompositionMaterials() {
           vertexColors: true,
           roughness: composition.roughness,
           metalness: composition.metalness,
-          envMapIntensity: key === "M" ? 0.12 : 0.025,
+          envMapIntensity: key === "M" ? 0.18 : 0.045,
+          emissive: key === "C" ? 0x050605 : 0x070504,
+          emissiveIntensity: 0.08,
           flatShading: false,
         }),
       );
@@ -306,7 +308,9 @@ function createStoneMaterial(compositionKey) {
     vertexColors: true,
     roughness: composition.roughness,
     metalness: composition.metalness,
-    envMapIntensity: compositionKey === "M" ? 0.12 : 0.025,
+    envMapIntensity: compositionKey === "M" ? 0.18 : 0.045,
+    emissive: compositionKey === "C" ? 0x050605 : 0x070504,
+    emissiveIntensity: 0.08,
     flatShading: false,
     dithering: true,
   });
@@ -479,6 +483,26 @@ function createAsteroidGeometry({
     depth: crater.depth,
   }));
   return geometry;
+}
+
+function solveAsteroidEccentricAnomaly(meanAnomaly, eccentricity) {
+  let eccentricAnomaly = meanAnomaly;
+  for (let iteration = 0; iteration < 5; iteration += 1) {
+    const delta = (eccentricAnomaly - eccentricity * Math.sin(eccentricAnomaly) - meanAnomaly)
+      / Math.max(0.000001, 1 - eccentricity * Math.cos(eccentricAnomaly));
+    eccentricAnomaly -= delta;
+    if (Math.abs(delta) < 0.00001) break;
+  }
+  return eccentricAnomaly;
+}
+
+function asteroidTrueAnomalyFromMean(meanAnomaly, eccentricity) {
+  if (eccentricity <= 0.0001) return meanAnomaly;
+  const eccentricAnomaly = solveAsteroidEccentricAnomaly(meanAnomaly, eccentricity);
+  return 2 * Math.atan2(
+    Math.sqrt(1 + eccentricity) * Math.sin(eccentricAnomaly * 0.5),
+    Math.sqrt(1 - eccentricity) * Math.cos(eccentricAnomaly * 0.5),
+  );
 }
 
 /** Computes a position on a mildly eccentric and inclined orbit. */
@@ -810,7 +834,7 @@ function createAsteroidObject({
 
   const physicalDiameterKm = parseDiameterKm(diameter);
   const ratioAwareSize = physicalDiameterKm
-    ? getAsteroidVisualRadius(physicalDiameterKm, { minimum: 0.026, maximum: 0.78 })
+    ? getAsteroidVisualRadius(physicalDiameterKm, { minimum: 0.034, maximum: 0.92 })
     : size;
   group.scale.setScalar(ratioAwareSize);
   group.scale.multiply(new THREE.Vector3(
@@ -1019,7 +1043,7 @@ function createInstancedBoulderField(materials) {
         // while leaving a rare tail of large, clearly readable boulders.
         const sizeBias = Math.pow(seededRandom(seed + 13), 5.2);
         const estimatedDiameter = Math.max(1, Math.round(1 + sizeBias * 95));
-        const size = getAsteroidVisualRadius(estimatedDiameter, { minimum: 0.020, maximum: 0.19 });
+        const size = getAsteroidVisualRadius(estimatedDiameter, { minimum: 0.028, maximum: 0.24 });
         dummy.scale.set(
           size * (0.68 + seededRandom(seed + 14) * 0.72),
           size * (0.62 + seededRandom(seed + 15) * 0.70),
@@ -1140,7 +1164,7 @@ function createDistantDebris() {
     uniforms: {
       uPixelRatio: { value: Math.min(window.devicePixelRatio, 2) },
       // Pebbles establish belt density but should not veil the solid rocks.
-      uOpacity: { value: 0.56 },
+      uOpacity: { value: 0.74 },
     },
     vertexShader: `
       attribute float aSize;
@@ -1151,7 +1175,7 @@ function createDistantDebris() {
         vColor = color;
         vec4 viewPosition = modelViewMatrix * vec4(position, 1.0);
         gl_Position = projectionMatrix * viewPosition;
-        gl_PointSize = clamp(aSize * uPixelRatio * (128.0 / max(1.0, -viewPosition.z)), 0.82, 3.35);
+        gl_PointSize = clamp(aSize * uPixelRatio * (235.0 / max(1.0, -viewPosition.z)), 0.95, 4.35);
       }
     `,
     fragmentShader: `
@@ -1488,7 +1512,8 @@ export function updateAsteroidBelt(asteroidBelt, motionScale = 1, jupiter = null
     if (orbit.trojanOffset !== undefined) {
       orbit.angle = jupiterAngle + orbit.trojanOffset + orbit.trojanSpread;
     } else {
-      orbit.angle += orbit.speed * motionScale;
+      orbit.meanAnomaly = (orbit.meanAnomaly ?? orbit.angle ?? 0) + orbit.speed * motionScale;
+      orbit.angle = asteroidTrueAnomalyFromMean(orbit.meanAnomaly, orbit.eccentricity ?? 0);
     }
 
     positionFromOrbit(rock.position, orbit, orbit.angle);

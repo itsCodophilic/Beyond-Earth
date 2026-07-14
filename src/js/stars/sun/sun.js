@@ -996,7 +996,7 @@ export function createSun({ world, hoverTargets, texture }) {
 
   glow.name = "Solar glow";
 
-  glow.scale.set(19.2, 19.2, 1);
+  glow.scale.set(SUN_RADIUS * 2.1, SUN_RADIUS * 2.1, 1);
 
   system.add(glow);
 
@@ -1122,7 +1122,7 @@ export function createSun({ world, hoverTargets, texture }) {
    * This light does not directly illuminate the Sun's ShaderMaterial because
    * its surface lighting is calculated inside the custom shader.
    */
-  const light = new THREE.PointLight(0xffdda0, 5600, 1600, 1.45);
+  const light = new THREE.PointLight(0xffdda0, 28000, 6500, 1.28);
 
   light.name = "Solar point light";
 

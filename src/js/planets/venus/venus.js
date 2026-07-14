@@ -6,6 +6,7 @@ export const venus = {
   name: "Venus", texture: "venus", radius: scale.visualRadius, orbitRadius: scale.orbitRadius,
   physicalDiameterKm: scale.diameterKm, diameterEarths: scale.diameterEarths, volumeEarths: scale.volumeEarths,
   orbitSpeed: 0.46, spinSpeed: -0.0015, axialTilt: 3.1, angle: 2.2,
+  orbitEccentricity: 0.0068, orbitRotation: 1.15, orbitInclination: 0.059,
   bump: 0.01, orbitColor: 0xe0b36a,
   detail: "Earth-size world | retrograde spin", focusScale: 1.55,
   minFocusDistance: scale.focusDistance * 0.88, focusDistance: scale.focusDistance, focusEase: 0.09, focusFov: 36,

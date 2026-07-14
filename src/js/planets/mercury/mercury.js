@@ -6,6 +6,7 @@ export const mercury = {
   name: "Mercury", texture: "mercury", radius: scale.visualRadius, orbitRadius: scale.orbitRadius,
   physicalDiameterKm: scale.diameterKm, diameterEarths: scale.diameterEarths, volumeEarths: scale.volumeEarths,
   orbitSpeed: 0.72, spinSpeed: 0.003, axialTilt: 0.001, angle: 0.8,
+  orbitEccentricity: 0.2056, orbitRotation: 0.42, orbitInclination: 0.122,
   bump: 0.028, orbitColor: 0x9d9386,
   detail: "Smallest planet | 0.38× Earth diameter", focusScale: 2.8,
   minFocusDistance: scale.focusDistance * 0.88, focusDistance: scale.focusDistance, focusEase: 0.10, focusFov: 36,

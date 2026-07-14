@@ -927,6 +927,10 @@ export function createPlanet({ config, textures, world, orbitRoot, planets, hove
     orbitSpeed: config.orbitSpeed,
     spinSpeed: config.spinSpeed,
     angle: config.angle,
+    meanAnomaly: config.angle,
+    orbitEccentricity: config.orbitEccentricity ?? 0,
+    orbitRotation: config.orbitRotation ?? 0,
+    orbitInclination: config.orbitInclination ?? 0,
     tilt: config.tilt ?? 0,
     focusScale: config.focusScale ?? 1,
     focusDistance: config.focusDistance,
@@ -986,7 +990,15 @@ export function createPlanet({ config, textures, world, orbitRoot, planets, hove
   hoverTargets.push(mesh);
 
   if (config.orbitRadius > 0) {
-    createOrbitLine(orbitRoot, config.orbitRadius, config.orbitColor, config.orbitOpacity ?? 0.18, config.tilt ?? 0);
+    createOrbitLine(
+      orbitRoot,
+      config.orbitRadius,
+      config.orbitColor,
+      config.orbitOpacity ?? 0.18,
+      config.orbitInclination ?? config.tilt ?? 0,
+      config.orbitEccentricity ?? 0,
+      config.orbitRotation ?? 0,
+    );
   }
   return mesh;
 }

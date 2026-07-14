@@ -6,6 +6,7 @@ export const neptune = {
   name: "Neptune", texture: "neptune", radius: scale.visualRadius, orbitRadius: scale.orbitRadius,
   physicalDiameterKm: scale.diameterKm, diameterEarths: scale.diameterEarths, volumeEarths: scale.volumeEarths,
   orbitSpeed: 0.043, spinSpeed: 0.012, axialTilt: 0.49, angle: 0.05,
+  orbitEccentricity: 0.0086, orbitRotation: 0.62, orbitInclination: 0.031,
   bump: 0.005, orbitColor: 0x5f83ff,
   detail: "Most distant planet | about 30 AU", focusScale: 1,
   minFocusDistance: scale.focusDistance * 0.88, focusDistance: scale.focusDistance, focusEase: 0.07, focusFov: 34,

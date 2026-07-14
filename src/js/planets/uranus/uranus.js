@@ -6,6 +6,7 @@ export const uranus = {
   name: "Uranus", texture: "uranus", radius: scale.visualRadius, orbitRadius: scale.orbitRadius,
   physicalDiameterKm: scale.diameterKm, diameterEarths: scale.diameterEarths, volumeEarths: scale.volumeEarths,
   orbitSpeed: 0.055, spinSpeed: 0.011, axialTilt: 1.71, angle: 4.8,
+  orbitEccentricity: 0.0473, orbitRotation: 5.05, orbitInclination: 0.013,
   bump: 0.005, orbitColor: 0x9ee9f2,
   detail: "Ice giant | sideways axial tilt", focusScale: 1,
   minFocusDistance: scale.focusDistance * 0.88, focusDistance: scale.focusDistance, focusEase: 0.07, focusFov: 34,

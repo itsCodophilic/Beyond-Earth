@@ -9,7 +9,19 @@
 
 export const EARTH_DIAMETER_KM = 12_756;
 export const EARTH_VISUAL_RADIUS = 0.90;
-export const SOLAR_ORBIT_SCALE = 2.35;
+export const SOLAR_ORBIT_SCALE = 10.5;
+
+
+export const HELIOCENTRIC_ORBIT_AU = Object.freeze({
+  Mercury: 0.3871,
+  Venus: 0.7233,
+  Earth: 1.0,
+  Mars: 1.5237,
+  Jupiter: 5.2029,
+  Saturn: 9.5367,
+  Uranus: 19.1892,
+  Neptune: 30.0699,
+});
 
 export const BODY_SIZE_DATA = Object.freeze({
   Sun: { diameterKm: 1_392_700, diameterEarths: 109.18, volumeEarths: 1_300_000 },
@@ -83,10 +95,11 @@ export const PLANET_SCALE_PROFILES = Object.freeze({
   },
   Sun: {
     ...BODY_SIZE_DATA.Sun,
-    // A literal 109× radius would engulf the inner system. Twenty-four scene
-    // units makes the Sun visibly dominant while retaining readable orbits.
-    visualRadius: 24,
-    focusDistance: 74,
+    // The free-flight view uses a deliberately massive cinematic Sun. During
+    // focused inspection, main.js reduces its apparent angular size according
+    // to the selected body's real heliocentric distance.
+    visualRadius: 92,
+    focusDistance: 184,
   },
 });
 

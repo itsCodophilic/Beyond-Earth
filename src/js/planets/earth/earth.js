@@ -8,6 +8,7 @@ export const earth = {
   diameterEarths: scale.diameterEarths, volumeEarths: scale.volumeEarths,
   orbitSpeed: 0.34, spinSpeed: 0.012, axialTilt: 0.41,
   angle: 4.35, normalScale: 0.55, orbitColor: 0x7de7ff,
+  orbitEccentricity: 0.0167, orbitRotation: 2.05, orbitInclination: 0.0,
   detail: "Home planet | 12,756 km diameter", focusScale: 1.75,
   minFocusDistance: scale.focusDistance * 0.88, focusDistance: scale.focusDistance, focusEase: 0.08, focusFov: 34,
   info: {

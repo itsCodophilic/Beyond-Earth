@@ -35,6 +35,7 @@ export const jupiter = {
   spinSpeed: 0.021,
   axialTilt: 0.05,
   angle: 1.35,
+  orbitEccentricity: 0.0484, orbitRotation: 3.32, orbitInclination: 0.023,
 
   orbitColor: 0xe2bc8a,
   focusScale: 0.75,

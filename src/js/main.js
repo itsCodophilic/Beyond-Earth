@@ -14,6 +14,7 @@
 import * as THREE from 'three';
 // Importing brand.js runs its DOM event setup; it does not export a value.
 import './brand.js';
+import { HELIOCENTRIC_ORBIT_AU, PLANET_SCALE_PROFILES } from './config/celestialScale.js';
 import { loadUniverseTextures } from './graphics/loadTextures.js';
 import { createMoonSystem } from './planets/earth/satellites/moon.js';
 import { createMajorSatelliteSystems, updateMajorSatelliteSystems } from './planets/satellites/satelliteSystem.js';
@@ -27,6 +28,7 @@ import {
 } from './scene/asteroidBelt.js';
 import { createPlanet, updatePlanetVisuals } from './scene/planetFactory.js';
 import {
+  ASTRONOMICAL_UNIT_KM,
   createEarthDistanceTracker,
   formatEarthDistance,
   formatEarthDistanceRange,
@@ -363,11 +365,11 @@ import { createSun, updateSun } from './stars/sun/sun.js';
   // Vacuum remains black. Distant celestial structure is added by explicit sky
   // layers rather than by scene-wide coloured fog.
   scene.background = new THREE.Color(0x000106);
-  scene.fog = new THREE.FogExp2(0x000106, 0.00115);
+  scene.fog = new THREE.FogExp2(0x000106, 0.00020);
 
   // PerspectiveCamera arguments: vertical FOV, aspect ratio, near plane, far plane.
   // Objects outside near/far are clipped and never sent through the full pipeline.
-  const camera = new THREE.PerspectiveCamera(56, innerWidth / innerHeight, 0.1, 5000);
+  const camera = new THREE.PerspectiveCamera(56, innerWidth / innerHeight, 0.1, 7500);
   // The renderer owns the WebGL context and draws into the existing HTML canvas.
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false, powerPreference: "high-performance" });
   // Cap pixel ratio at 2; very dense displays would otherwise become unnecessarily expensive.
@@ -661,7 +663,7 @@ import { createSun, updateSun } from './stars/sun/sun.js';
     // smoothstep-like easing: slow at both ends, faster through the middle.
     const eased = progress * progress * (3 - 2 * progress);
     // lerp(a, b, t) returns a at t=0, b at t=1, and blends between them.
-    return THREE.MathUtils.lerp(4.8, 980, eased);
+    return THREE.MathUtils.lerp(4.8, 2550, eased);
   }
 
   /** Uses the focused body's physical region when inspection overrides scroll. */
@@ -701,6 +703,120 @@ import { createSun, updateSun } from './stars/sun/sun.js';
     if (focusedBody) return focusedBody.getWorldPosition(target);
     if (distance < 18) return earth.getWorldPosition(target);
     return target.set(0, 0, 0);
+  }
+
+  function solveEccentricAnomaly(meanAnomaly, eccentricity) {
+    if (eccentricity <= 0.0001) return meanAnomaly;
+    let eccentricAnomaly = meanAnomaly;
+    for (let iteration = 0; iteration < 5; iteration += 1) {
+      const delta = (eccentricAnomaly - eccentricity * Math.sin(eccentricAnomaly) - meanAnomaly)
+        / Math.max(0.000001, 1 - eccentricity * Math.cos(eccentricAnomaly));
+      eccentricAnomaly -= delta;
+      if (Math.abs(delta) < 0.00001) break;
+    }
+    return eccentricAnomaly;
+  }
+
+  function updatePlanetOrbitPosition(planet) {
+    const data = planet.userData;
+    const semiMajorAxis = data.orbitRadius;
+    const eccentricity = THREE.MathUtils.clamp(data.orbitEccentricity ?? 0, 0, 0.92);
+    const orbitRotation = data.orbitRotation ?? 0;
+    const orbitInclination = data.orbitInclination ?? 0;
+    const meanAnomaly = data.meanAnomaly ?? data.angle ?? 0;
+    const eccentricAnomaly = solveEccentricAnomaly(meanAnomaly, eccentricity);
+    const semiMinorAxis = semiMajorAxis * Math.sqrt(Math.max(0.0001, 1 - eccentricity * eccentricity));
+
+    const orbitalX = semiMajorAxis * (Math.cos(eccentricAnomaly) - eccentricity);
+    const orbitalZ = semiMinorAxis * Math.sin(eccentricAnomaly);
+
+    const inclinedZ = orbitalZ * Math.cos(orbitInclination);
+    const inclinedY = orbitalZ * Math.sin(orbitInclination);
+
+    const cosRotation = Math.cos(orbitRotation);
+    const sinRotation = Math.sin(orbitRotation);
+
+    planet.position.set(
+      orbitalX * cosRotation - inclinedZ * sinRotation,
+      inclinedY,
+      orbitalX * sinRotation + inclinedZ * cosRotation,
+    );
+
+    const trueAnomaly = 2 * Math.atan2(
+      Math.sqrt(1 + eccentricity) * Math.sin(eccentricAnomaly * 0.5),
+      Math.sqrt(1 - eccentricity) * Math.cos(eccentricAnomaly * 0.5),
+    );
+    data.angle = trueAnomaly + orbitRotation;
+  }
+
+  const SUN_RADIUS_KM = PLANET_SCALE_PROFILES.Sun.diameterKm * 0.5;
+  const SUN_BASE_VISUAL_RADIUS = PLANET_SCALE_PROFILES.Sun.visualRadius;
+
+  function getBodyHeliocentricAU(body) {
+    if (!body) return null;
+
+    const parentPlanetName = String(body.userData?.parentPlanet ?? '').trim();
+    const parentPlanet = parentPlanetName
+      ? planets.find((planet) => planet.name === parentPlanetName)
+      : null;
+    const orbitalBody = parentPlanet ?? body;
+
+    const explicitAU = Number(body.userData?.heliocentricAU);
+    let semiMajorAU = Number.isFinite(explicitAU) && explicitAU > 0 ? explicitAU : null;
+
+    if (!semiMajorAU && HELIOCENTRIC_ORBIT_AU[parentPlanetName]) {
+      semiMajorAU = HELIOCENTRIC_ORBIT_AU[parentPlanetName];
+    }
+
+    if (!semiMajorAU) {
+      const bodyLabel = String(body.userData?.name ?? body.name ?? '').toLowerCase();
+      const planetEntry = Object.entries(HELIOCENTRIC_ORBIT_AU)
+        .find(([planetName]) => bodyLabel.includes(planetName.toLowerCase()));
+      semiMajorAU = planetEntry?.[1] ?? null;
+    }
+
+    if (!semiMajorAU) return null;
+
+    // Convert the currently rendered elliptical radius back to AU so the Sun
+    // grows slightly near perihelion and shrinks near aphelion. Satellites use
+    // their parent planet's heliocentric position.
+    const sceneSemiMajor = Number(orbitalBody.userData?.orbitRadius);
+    if (Number.isFinite(sceneSemiMajor) && sceneSemiMajor > 0) {
+      const currentSceneRadius = orbitalBody.getWorldPosition(new THREE.Vector3()).length();
+      return semiMajorAU * currentSceneRadius / sceneSemiMajor;
+    }
+
+    return semiMajorAU;
+  }
+
+  function updateSunApparentScale() {
+    let targetScale = 1;
+    const focusedName = String(focusedBody?.userData?.name ?? focusedBody?.name ?? '').toLowerCase();
+
+    if (focusedBody && !focusedName.includes('sun')) {
+      const heliocentricAU = getBodyHeliocentricAU(focusedBody);
+      if (heliocentricAU) {
+        // True apparent angular radius: atan(real solar radius / real distance).
+        // The resulting angle is reproduced using the current Three.js camera-to-Sun distance.
+        const realDistanceKm = heliocentricAU * ASTRONOMICAL_UNIT_KM;
+        const angularRadius = Math.atan(SUN_RADIUS_KM / realDistanceKm);
+        const cameraToSun = Math.max(1, camera.position.distanceTo(sun.system.position));
+        const apparentRadius = Math.tan(angularRadius) * cameraToSun;
+        targetScale = THREE.MathUtils.clamp(apparentRadius / SUN_BASE_VISUAL_RADIUS, 0.010, 0.24);
+      }
+    }
+
+    const currentScale = sun.system.scale.x;
+    const nextScale = THREE.MathUtils.lerp(currentScale, targetScale, focusedBody ? 0.095 : 0.065);
+    sun.system.scale.setScalar(nextScale);
+
+    // Preserve a small optical halo when the real solar disk becomes a distant point.
+    const apparentWorldRadius = SUN_BASE_VISUAL_RADIUS * nextScale;
+    const targetGlowWorldSize = focusedBody
+      ? THREE.MathUtils.clamp(apparentWorldRadius * 4.2, 2.6, 12)
+      : SUN_BASE_VISUAL_RADIUS * 2.1;
+    const localGlowSize = targetGlowWorldSize / Math.max(nextScale, 0.0001);
+    sun.glow.scale.set(localGlowSize, localGlowSize, 1);
   }
 
   /** Writes a body's structured metadata into the right-side inspection panel. */
@@ -1143,13 +1259,8 @@ import { createSun, updateSun } from './stars/sun/sun.js';
     // ----- Update planet revolution and self-rotation -----
     planets.forEach((planet) => {
       const data = planet.userData;
-      data.angle += data.orbitSpeed * 0.0024 * motionScale;
-      // cos/sin convert an orbit angle into x/z coordinates around the Sun.
-      planet.position.set(
-        Math.cos(data.angle) * data.orbitRadius,
-        Math.sin(data.angle * 0.7) * Math.sin(data.tilt) * 1.8,
-        Math.sin(data.angle) * data.orbitRadius,
-      );
+      data.meanAnomaly = (data.meanAnomaly ?? data.angle ?? 0) + data.orbitSpeed * 0.0022 * motionScale;
+      updatePlanetOrbitPosition(planet);
       planet.rotation.y += data.spinSpeed * motionScale;
       updatePlanetVisuals(planet, simulationTime, motionScale);
     });
@@ -1206,6 +1317,7 @@ import { createSun, updateSun } from './stars/sun/sun.js';
     camera.position.set(cameraFocusPoint.x + x, cameraFocusPoint.y + y, cameraFocusPoint.z + z);
     // lookAt rotates the camera so its forward direction points at the target.
     camera.lookAt(cameraFocusPoint);
+    updateSunApparentScale();
     // Focus mode owns the lens as well as camera distance. A narrower FOV creates
     // a cinematic inspection shot instead of retaining the wide scroll lens.
     const targetFov = focusedBody

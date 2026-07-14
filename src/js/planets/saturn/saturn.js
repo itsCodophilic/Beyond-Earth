@@ -6,6 +6,7 @@ export const saturn = {
   name: "Saturn", texture: "saturn", radius: scale.visualRadius, orbitRadius: scale.orbitRadius,
   physicalDiameterKm: scale.diameterKm, diameterEarths: scale.diameterEarths, volumeEarths: scale.volumeEarths,
   orbitSpeed: 0.08, spinSpeed: 0.017, axialTilt: 0.47, angle: 3.1,
+  orbitEccentricity: 0.0539, orbitRotation: 4.16, orbitInclination: 0.043,
   bump: 0.01, orbitColor: 0xd9bd84,
   detail: "Ringed giant | about 9× Earth diameter", focusScale: 0.82,
   minFocusDistance: scale.focusDistance * 0.88, focusDistance: scale.focusDistance, focusEase: 0.07, focusFov: 34,
