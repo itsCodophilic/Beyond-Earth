@@ -62,13 +62,13 @@ export const galaxyFragmentShader = `
 
     // Galaxies exist during the whole journey. Zooming outward increases both
     // their visible envelope and nucleus glow instead of spawning them abruptly.
-    float adaptation = mix(0.90, 1.55, uJourneyProgress);
+    float adaptation = mix(0.96, 1.70, uJourneyProgress);
     float alpha = shape * vData.x * uVisibility * adaptation;
     if (alpha < 0.0017) discard;
 
     vec3 warmCore = vec3(1.0, 0.82, 0.62);
     vec3 galaxyColor = mix(vColor, warmCore, nucleus * (0.38 + uJourneyProgress * 0.24));
-    float glow = 1.02 + shape * (0.94 + uJourneyProgress * 0.46) + broadDisk * 0.14;
+    float glow = 1.08 + shape * (1.02 + uJourneyProgress * 0.58) + broadDisk * 0.18;
     gl_FragColor = vec4(galaxyColor * uExposure * glow, alpha);
   }
 `;

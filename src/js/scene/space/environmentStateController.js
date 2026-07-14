@@ -68,15 +68,15 @@ export class EnvironmentStateController {
     // Ordinary stars are present throughout the Solar System. The faint tail is
     // progressively revealed as solar glare and foreground brightness weaken.
     target.starVisibility = 0.82 + middle * 0.12 + outer * 0.22 + deep * 0.12;
-    target.heroStarVisibility = 0.26 + middle * 0.10 + outer * 0.30 + deep * 0.26;
+    target.heroStarVisibility = 0.28 + middle * 0.12 + outer * 0.34 + deep * 0.30;
 
     // The Milky Way and galaxies never pop into existence. Their very low inner
     // values become perceptually useful only in the outer-system exposure range.
-    target.milkyWayVisibility = 0.16 + middle * 0.12 + outer * 0.26 + deep * 0.18;
-    target.galaxyVisibility = 0.18 + middle * 0.14 + outer * 0.34 + deep * 0.30;
+    target.milkyWayVisibility = 0.18 + middle * 0.14 + outer * 0.28 + deep * 0.22;
+    target.galaxyVisibility = 0.22 + middle * 0.16 + outer * 0.42 + deep * 0.38;
 
     // Local dust is a rare glint, not a surrounding fog or a galactic ribbon.
-    target.dustVisibility = 0.012 + solarInfluence * 0.030 * (1 - deep);
+    target.dustVisibility = 0.010 + solarInfluence * 0.022 + outer * 0.026 + deep * 0.034;
     target.zodiacalGlow = 0.075 * solarInfluence * (1 - outer * 0.92);
     target.debrisVisibility = 0.16 + middle * 0.34;
     target.backgroundContrast = 1.06 + outer * 0.15 + deep * 0.07;

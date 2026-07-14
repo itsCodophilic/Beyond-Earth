@@ -207,7 +207,7 @@ import { createSun, updateSun } from './stars/sun/sun.js';
     // smoothstep-like easing: slow at both ends, faster through the middle.
     const eased = progress * progress * (3 - 2 * progress);
     // lerp(a, b, t) returns a at t=0, b at t=1, and blends between them.
-    return THREE.MathUtils.lerp(4.8, 620, eased);
+    return THREE.MathUtils.lerp(4.8, 980, eased);
   }
 
   /** Uses the focused body's physical region when inspection overrides scroll. */
@@ -556,7 +556,7 @@ import { createSun, updateSun } from './stars/sun/sun.js';
     // a cinematic inspection shot instead of retaining the wide scroll lens.
     const targetFov = focusedBody
       ? focusedBody.userData.focusFov ?? 30
-      : THREE.MathUtils.lerp(42, 68, smoothProgress);
+      : THREE.MathUtils.lerp(42, 72, smoothProgress);
     camera.fov = THREE.MathUtils.lerp(camera.fov, targetFov, focusedBody ? 0.08 : 0.04);
     camera.updateProjectionMatrix();
 

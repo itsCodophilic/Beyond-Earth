@@ -16,10 +16,10 @@ export const dustVertexShader = `
     float alignment = max(dot(lightDirection, viewDirection), 0.0);
 
     // Grains become visible primarily in forward-scattering geometry.
-    vScatter = 0.012 + pow(alignment, 10.0) * 0.988;
+    vScatter = 0.030 + pow(alignment, 8.0) * 0.970;
     vPhase = aPhase;
     gl_Position = projectionMatrix * viewPosition;
-    gl_PointSize = clamp(aSize * uPixelRatio * (150.0 / max(1.0, -viewPosition.z)), 0.34, 1.55);
+    gl_PointSize = clamp(aSize * uPixelRatio * (175.0 / max(1.0, -viewPosition.z)), 0.40, 2.25);
   }
 `;
 
@@ -33,12 +33,12 @@ export const dustFragmentShader = `
 
   void main() {
     float radius = length(gl_PointCoord - vec2(0.5));
-    float grain = 1.0 - smoothstep(0.08, 0.44, radius);
+    float grain = 1.0 - smoothstep(0.06, 0.46, radius);
     float driftLight = 0.97 + sin(uTime * 0.07 + vPhase) * 0.03 * (1.0 - uReducedMotion);
     float alpha = grain * vScatter * uVisibility * driftLight;
 
-    if (alpha < 0.008) discard;
-    gl_FragColor = vec4(vec3(0.86, 0.77, 0.64), alpha * 0.16);
+    if (alpha < 0.006) discard;
+    gl_FragColor = vec4(vec3(0.88, 0.80, 0.69), alpha * 0.18);
   }
 `;
 
