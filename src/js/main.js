@@ -98,12 +98,9 @@ import { createSun, updateSun } from './stars/sun/sun.js';
   // focusedBody is null during free flight or references the clicked Mesh.
   let focusedBody = null;
   let displayedBody = null;
-  let dismissedBody = null;
-  // Instanced asteroid raycasts are intentionally throttled. Testing thousands
-  // of boulders roughly 12 times per second feels immediate to the pointer while
-  // leaving the render loop enough time for smooth WebGL animation.
-  let cachedHoveredBody = null;
-  let lastAsteroidRaycastTime = -Infinity;
+  // Raycasting is performed only for an intentional click/tap. The previous
+  // continuous hover preview was removed so moving the pointer across the scene
+  // no longer opens cards or repeatedly tests the asteroid belt.
   let hasCameraFocusPoint = false;
   let simulationTime = 0;
   let elapsedTime = 0;
@@ -269,11 +266,8 @@ import { createSun, updateSun } from './stars/sun/sun.js';
       cardDescription.textContent = info.description ?? body.userData.detail ?? "No description available.";
       displayedBody = body;
     }
-    const isFocused = focusedBody === body;
-    cardMode.textContent = isFocused ? "Slow motion · Focused" : "Hover preview";
-    cardHint.textContent = isFocused
-      ? "Slow motion active · Drag to inspect · Click empty space to exit"
-      : "Click to focus · Focus activates slow motion · Then drag to inspect";
+    cardMode.textContent = "Slow motion · Focused";
+    cardHint.textContent = "Drag to inspect · Click empty space or close to exit";
   }
 
   /** Projects a 3D world position into 2D pixels and points the line at the body. */
@@ -305,22 +299,15 @@ import { createSun, updateSun } from './stars/sun/sun.js';
     bodyConnector.classList.add("is-visible");
   }
 
-  /** Hover previews a body; a clicked/focused body always takes priority. */
+  /** Keeps the inspection panel synchronized with the currently clicked body. */
   function updateInspectionInterface() {
-    const hoveredBody = getBodyAtPointer();
-    // Moving away from a dismissed body resets dismissal, allowing a later hover.
-    if (dismissedBody && hoveredBody !== dismissedBody) dismissedBody = null;
-    const candidateBody = focusedBody ?? hoveredBody;
-    const inspectedBody = candidateBody === dismissedBody ? null : candidateBody;
-    document.body.classList.toggle("is-hovering-body", Boolean(hoveredBody));
-    updateBodyCard(inspectedBody);
-    updateBodyConnector(inspectedBody);
+    document.body.classList.remove("is-hovering-body");
+    updateBodyCard(focusedBody);
+    updateBodyConnector(focusedBody);
   }
 
-  // Closing a card dismisses the current body until the pointer leaves it. If the
-  // body was focused, this also restores normal simulation speed and free flight.
+  // Closing the card restores normal simulation speed and free flight.
   cardClose.addEventListener("click", () => {
-    dismissedBody = displayedBody;
     focusBody(null);
     updateBodyCard(null);
   });
@@ -361,25 +348,18 @@ import { createSun, updateSun } from './stars/sun/sun.js';
 
   /*
     getBodyAtPointer
-    - Uses the raycaster to determine which body is under the cursor.
+    - Performs a raycast only when the user intentionally clicks or taps.
     - Supports nested mesh structures by resolving to the interactive parent.
   */
-  function getBodyAtPointer(forceRaycast = false) {
-    const now = performance.now();
-    if (!forceRaycast && now - lastAsteroidRaycastTime < 80) {
-      return cachedHoveredBody;
-    }
-    lastAsteroidRaycastTime = now;
-
+  function getBodyAtPointer() {
     // `true` recursively checks descendants. A satellite can visually overlap its
     // much larger parent, so satellite hits receive priority over the first planet hit.
     raycaster.setFromCamera(pointer, camera);
     const hits = raycaster.intersectObjects(hoverTargets, true);
     const bodies = hits.map((hit) => findInteractiveObject(hit)).filter(Boolean);
-    cachedHoveredBody = bodies.find((body) => body.userData?.info?.type === "Natural satellite")
+    return bodies.find((body) => body.userData?.info?.type === "Natural satellite")
       ?? bodies[0]
       ?? null;
-    return cachedHoveredBody;
   }
 
   /*
@@ -447,9 +427,8 @@ import { createSun, updateSun } from './stars/sun/sun.js';
     // HUD clicks belong to HTML controls and must not select objects behind them.
     if (event.target.closest?.(".hud, .body-card")) return;
     if (dragDistance > 12) return;
-    // A click always performs a fresh raycast, even if the hover cache was just
-    // updated, so the selected instance exactly matches the pointer-up position.
-    const body = getBodyAtPointer(true);
+    // Details are opened only after this intentional click/tap raycast.
+    const body = getBodyAtPointer();
     if (body) focusBody(body);
     else focusBody(null);
   });
@@ -461,7 +440,10 @@ import { createSun, updateSun } from './stars/sun/sun.js';
 
   addEventListener("keydown", (event) => {
     // Keyboard controls modify the same targets as dragging, so smoothing still applies.
-    if (event.key === "Escape") focusBody(null);
+    if (event.key === "Escape") {
+      focusBody(null);
+      updateBodyCard(null);
+    }
     if (event.key === "ArrowLeft") targetYaw += 0.18;
     if (event.key === "ArrowRight") targetYaw -= 0.18;
     if (event.key === "ArrowUp") targetPitch = THREE.MathUtils.clamp(targetPitch + 0.12, -1.1, 1.1);
