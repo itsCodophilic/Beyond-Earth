@@ -121,7 +121,7 @@ function createSatelliteMesh(profile, parentName, parentRadius, sharedGeometry, 
     focusDistance: Math.max(0.90, visualRadius * 4.6),
     minFocusDistance: Math.max(0.72, visualRadius * 3.7),
     focusEase: 0.11,
-    focusFov: 36,
+    focusFov: parentName === "Mars" ? 36 : 34,
     info: {
       type: "Natural satellite",
       diameter: `${profile.diameterKm.toLocaleString("en-US", { maximumFractionDigits: 1 })} km`,

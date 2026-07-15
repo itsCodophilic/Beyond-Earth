@@ -27,6 +27,51 @@ import {
 
 const SUN_RADIUS = PLANET_SCALE_PROFILES.Sun.visualRadius;
 
+function createDistantStarTexture(size = 512) {
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const context = canvas.getContext("2d");
+  const centre = size * 0.5;
+
+  context.clearRect(0, 0, size, size);
+
+  const halo = context.createRadialGradient(centre, centre, 0, centre, centre, centre);
+  halo.addColorStop(0, "rgba(255,255,255,1)");
+  halo.addColorStop(0.035, "rgba(255,250,220,1)");
+  halo.addColorStop(0.12, "rgba(255,202,100,0.82)");
+  halo.addColorStop(0.34, "rgba(255,132,42,0.24)");
+  halo.addColorStop(1, "rgba(255,90,12,0)");
+  context.fillStyle = halo;
+  context.fillRect(0, 0, size, size);
+
+  context.save();
+  context.translate(centre, centre);
+  context.globalCompositeOperation = "lighter";
+  [0, Math.PI * 0.5, Math.PI * 0.25, -Math.PI * 0.25].forEach((angle, index) => {
+    context.save();
+    context.rotate(angle);
+    const length = index < 2 ? centre * 0.94 : centre * 0.60;
+    const ray = context.createLinearGradient(-length, 0, length, 0);
+    ray.addColorStop(0, "rgba(255,180,70,0)");
+    ray.addColorStop(0.44, "rgba(255,220,140,0.025)");
+    ray.addColorStop(0.495, "rgba(255,250,220,0.62)");
+    ray.addColorStop(0.5, "rgba(255,255,255,0.95)");
+    ray.addColorStop(0.505, "rgba(255,250,220,0.62)");
+    ray.addColorStop(0.56, "rgba(255,220,140,0.025)");
+    ray.addColorStop(1, "rgba(255,180,70,0)");
+    context.fillStyle = ray;
+    context.fillRect(-length, index < 2 ? -1.5 : -0.8, length * 2, index < 2 ? 3 : 1.6);
+    context.restore();
+  });
+  context.restore();
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.needsUpdate = true;
+  return texture;
+}
+
 /**
  * Creates a Fresnel-based atmosphere shell.
  *
@@ -1000,6 +1045,26 @@ export function createSun({ world, hoverTargets, texture }) {
 
   system.add(glow);
 
+  // At planetary and interstellar viewpoints, the solar disk becomes too small
+  // to resolve. This depth-tested sprite turns it into a bright star-like point
+  // with restrained diffraction rays and can be naturally hidden by a planet.
+  const distantStar = new THREE.Sprite(
+    new THREE.SpriteMaterial({
+      map: createDistantStarTexture(),
+      color: 0xfff4cf,
+      transparent: true,
+      opacity: 0,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      depthTest: true,
+    }),
+  );
+  distantStar.name = "Distant solar star flare";
+  distantStar.visible = false;
+  distantStar.renderOrder = 8;
+  distantStar.scale.set(1, 1, 1);
+  system.add(distantStar);
+
   /*
    * Tiny chromospheric flames.
    */
@@ -1144,6 +1209,7 @@ export function createSun({ world, hoverTargets, texture }) {
     innerCorona,
     outerCorona,
     glow,
+    distantStar,
     spicules,
     plasmaJets,
     coronalLoops,

@@ -530,3 +530,265 @@
     animation: none;
   }
 }
+
+
+/* Click-to-explore guidance. This is intentionally passive: there are no
+   competing zoom buttons or controls. */
+.space-explore-hint {
+  position: fixed;
+  left: 50%;
+  bottom: clamp(72px, 9vh, 104px);
+  z-index: 28;
+  max-width: min(90vw, 680px);
+  transform: translateX(-50%);
+  padding: 8px 13px;
+  border: 1px solid rgba(125, 231, 255, 0.20);
+  border-radius: 999px;
+  background: rgba(3, 8, 18, 0.58);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.26), inset 0 0 16px rgba(80, 180, 255, 0.025);
+  color: rgba(218, 239, 250, 0.69);
+  font: 600 clamp(0.58rem, 1.15vw, 0.68rem)/1.25 system-ui, sans-serif;
+  letter-spacing: 0.035em;
+  text-align: center;
+  pointer-events: none;
+  user-select: none;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  opacity: 1;
+  transition: opacity 260ms ease, transform 260ms ease;
+}
+
+.space-explore-hint.is-hidden,
+body.is-celestial-focus .space-explore-hint {
+  opacity: 0;
+  transform: translate(-50%, 6px);
+}
+
+#universe {
+  cursor: zoom-in;
+}
+
+body.is-celestial-focus #universe {
+  cursor: grab;
+}
+
+body.is-celestial-focus #universe:active {
+  cursor: grabbing;
+}
+
+@media (max-width: 760px) {
+  .space-explore-hint {
+    bottom: 66px;
+    width: min(92vw, 520px);
+    border-radius: 13px;
+    padding: 7px 10px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .space-explore-hint {
+    transition: none;
+  }
+}
+
+
+/* --------------------------------------------------------------------------
+   Asteroid discovery locator and return-to-Earth control
+   -------------------------------------------------------------------------- */
+
+.asteroid-hover-tooltip {
+  position: fixed;
+  z-index: 14;
+  display: grid;
+  gap: 2px;
+  min-width: 150px;
+  padding: 8px 11px;
+  border: 1px solid rgba(124, 255, 190, 0.52);
+  border-radius: 9px;
+  background: rgba(3, 15, 18, 0.82);
+  color: rgba(226, 255, 239, 0.94);
+  box-shadow:
+    inset 0 0 18px rgba(88, 255, 177, 0.06),
+    0 0 18px rgba(88, 255, 177, 0.20),
+    0 12px 30px rgba(0, 0, 0, 0.34);
+  backdrop-filter: blur(12px);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(5px) scale(0.97);
+  transition: opacity 140ms ease, transform 140ms ease;
+}
+
+.asteroid-hover-tooltip.is-visible {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+
+.asteroid-hover-tooltip strong {
+  overflow: hidden;
+  max-width: 180px;
+  font-size: 0.76rem;
+  letter-spacing: 0.055em;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.asteroid-hover-tooltip span {
+  color: rgba(161, 255, 208, 0.72);
+  font-size: 0.66rem;
+  letter-spacing: 0.04em;
+}
+
+body.is-hovering-asteroid #universe {
+  cursor: pointer;
+}
+
+.earth-return-button {
+  position: fixed;
+  left: clamp(16px, 2.4vw, 34px);
+  bottom: clamp(18px, 3vw, 34px);
+  z-index: 13;
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  padding: 0;
+  border: 1px solid rgba(103, 255, 184, 0.56);
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 35% 30%, rgba(109, 255, 194, 0.18), transparent 46%),
+    rgba(3, 13, 18, 0.78);
+  color: #baffdc;
+  box-shadow:
+    inset 0 0 16px rgba(94, 255, 183, 0.08),
+    0 0 16px rgba(78, 255, 174, 0.24),
+    0 0 38px rgba(51, 213, 255, 0.10);
+  backdrop-filter: blur(14px);
+  cursor: pointer;
+  transition: transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
+}
+
+.earth-return-button::after {
+  position: absolute;
+  left: 60px;
+  width: max-content;
+  padding: 7px 10px;
+  border: 1px solid rgba(103, 255, 184, 0.32);
+  border-radius: 7px;
+  background: rgba(3, 13, 18, 0.88);
+  color: rgba(223, 255, 239, 0.9);
+  content: "Travel back to Earth";
+  font-size: 0.67rem;
+  letter-spacing: 0.055em;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(-5px);
+  transition: opacity 150ms ease, transform 150ms ease;
+  white-space: nowrap;
+}
+
+.earth-return-button:hover,
+.earth-return-button:focus-visible {
+  border-color: rgba(152, 255, 209, 0.92);
+  box-shadow:
+    inset 0 0 20px rgba(94, 255, 183, 0.13),
+    0 0 24px rgba(78, 255, 174, 0.42),
+    0 0 52px rgba(51, 213, 255, 0.16);
+  outline: none;
+  transform: translateY(-2px) scale(1.04);
+}
+
+.earth-return-button:hover::after,
+.earth-return-button:focus-visible::after {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+.earth-return-button svg {
+  width: 29px;
+  height: 29px;
+  overflow: visible;
+  filter: drop-shadow(0 0 6px rgba(92, 255, 181, 0.58));
+  transform: rotate(-4deg);
+}
+
+.earth-return-button > span {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+}
+
+.earth-return-button__body,
+.earth-return-button__fin,
+.earth-return-button__window,
+.earth-return-button__flame {
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2.25;
+}
+
+.earth-return-button__window {
+  fill: rgba(105, 238, 255, 0.20);
+}
+
+.earth-return-button__flame {
+  color: #7de7ff;
+}
+
+.earth-return-button.is-returning svg {
+  animation: earthReturnLaunch 780ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+@keyframes earthReturnLaunch {
+  0% { transform: translate(0, 0) rotate(-4deg) scale(1); }
+  38% { transform: translate(5px, -7px) rotate(4deg) scale(1.08); }
+  70% { opacity: 0.2; transform: translate(11px, -15px) rotate(8deg) scale(0.76); }
+  71% { opacity: 0; transform: translate(-8px, 10px) rotate(-8deg) scale(0.7); }
+  100% { opacity: 1; transform: translate(0, 0) rotate(-4deg) scale(1); }
+}
+
+@media (max-width: 760px) {
+  .asteroid-hover-tooltip {
+    display: none;
+  }
+
+  .earth-return-button {
+    width: 46px;
+    height: 46px;
+  }
+
+  .earth-return-button svg {
+    width: 25px;
+    height: 25px;
+  }
+
+  .earth-return-button::after {
+    display: none;
+  }
+}
+
+/* v14: the green locator now applies to every celestial body, not asteroids only. */
+body.is-hovering-celestial #universe {
+  cursor: pointer;
+}
+
+/* Place the Earth-return rocket opposite the lower-left distance readout. */
+.earth-return-button {
+  right: clamp(16px, 2.4vw, 34px);
+  left: auto;
+}
+
+.earth-return-button::after {
+  right: 60px;
+  left: auto;
+  transform: translateX(5px);
+}
+
+.earth-return-button:hover::after,
+.earth-return-button:focus-visible::after {
+  transform: translateX(0);
+}

@@ -651,13 +651,18 @@ export function findNearestAsteroidInstanceAtPointer({
   camera,
   viewportWidth,
   viewportHeight,
-  pixelRadius = 24,
+  minimumVisibleRadiusPixels = 2,
+  maximumPixelRadius = 11,
 }) {
   if (!Array.isArray(meshes) || !camera || !pointer) return null;
 
   let nearestHit = null;
-  let nearestDistanceSquared = pixelRadius * pixelRadius;
+  let nearestDistanceSquared = Infinity;
   const projected = new THREE.Vector3();
+  const cameraPosition = new THREE.Vector3();
+  camera.getWorldPosition(cameraPosition);
+  const focalPixels = viewportHeight * 0.5
+    / Math.max(0.0001, Math.tan(THREE.MathUtils.degToRad(camera.fov * 0.5)));
 
   camera.updateMatrixWorld();
   meshes.forEach((mesh) => {
@@ -666,16 +671,27 @@ export function findNearestAsteroidInstanceAtPointer({
     const records = mesh.userData.instanceRecords ?? [];
 
     for (let instanceId = 0; instanceId < records.length; instanceId += 1) {
-      if (!records[instanceId]) continue;
+      const record = records[instanceId];
+      if (!record) continue;
       mesh.getMatrixAt(instanceId, _instanceMatrix);
       _position.setFromMatrixPosition(_instanceMatrix).applyMatrix4(mesh.matrixWorld);
       projected.copy(_position).project(camera);
       if (projected.z < -1 || projected.z > 1) continue;
 
+      const cameraDistance = Math.max(0.0001, cameraPosition.distanceTo(_position));
+      const projectedRadiusPixels = Number(record.visualRadius ?? 0) / cameraDistance * focalPixels;
+      // Do not let a rock the user cannot actually see capture an empty-space click.
+      if (!Number.isFinite(projectedRadiusPixels) || projectedRadiusPixels < minimumVisibleRadiusPixels) continue;
+
       const dx = (projected.x - pointer.x) * viewportWidth * 0.5;
       const dy = (projected.y - pointer.y) * viewportHeight * 0.5;
+      const clickRadius = THREE.MathUtils.clamp(
+        projectedRadiusPixels * 1.35 + 2.5,
+        minimumVisibleRadiusPixels + 2,
+        maximumPixelRadius,
+      );
       const distanceSquared = dx * dx + dy * dy;
-      if (distanceSquared >= nearestDistanceSquared) continue;
+      if (distanceSquared > clickRadius * clickRadius || distanceSquared >= nearestDistanceSquared) continue;
 
       nearestDistanceSquared = distanceSquared;
       nearestHit = { object: mesh, instanceId };
@@ -1486,7 +1502,12 @@ export function createAsteroidBelt({ world, hoverTargets = [] }) {
   // Resolved bodies and every visible 3D instance can now be inspected. The
   // unresolved point field is intentionally excluded because each point is a
   // sub-pixel population marker rather than a resolvable physical rock.
-  hoverTargets.push(...rocks, ...instancedBoulders);
+  // Individually modelled rocks remain normal raycast targets. GPU-instanced
+  // boulders are intentionally excluded from the broad raycast because a tiny,
+  // visually unresolved instance can otherwise intercept clicks meant for a
+  // planet or empty space. They remain selectable through the visibility-aware
+  // screen-space helper above once they are actually large enough to see.
+  hoverTargets.push(...rocks);
 
   return {
     system,
