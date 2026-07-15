@@ -792,3 +792,165 @@ body.is-hovering-celestial #universe {
 .earth-return-button:focus-visible::after {
   transform: translateX(0);
 }
+
+/* v19: make the measurement method an explicit, readable control instead of
+   hiding a second meaning behind the edge information icon. */
+.progress.distance-readout {
+  padding-right: 15px;
+  max-width: min(780px, calc(100vw - 32px));
+}
+
+.distance-readout__method {
+  appearance: none;
+  width: 100%;
+  margin-top: 10px;
+  padding: 8px 10px;
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid rgba(105, 255, 184, 0.24);
+  border-radius: 10px;
+  background:
+    linear-gradient(90deg, rgba(9, 33, 29, 0.72), rgba(3, 13, 20, 0.46)),
+    rgba(2, 8, 15, 0.66);
+  color: #e9fff3;
+  text-align: left;
+  cursor: pointer;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.035),
+    0 0 0 rgba(80, 238, 158, 0);
+  transition:
+    border-color 160ms ease,
+    background 160ms ease,
+    box-shadow 160ms ease,
+    transform 160ms ease;
+}
+
+.distance-readout__method:hover,
+.distance-readout__method:focus-visible {
+  outline: none;
+  border-color: rgba(105, 255, 184, 0.72);
+  background:
+    linear-gradient(90deg, rgba(12, 48, 39, 0.84), rgba(4, 18, 27, 0.68)),
+    rgba(2, 8, 15, 0.78);
+  box-shadow: 0 0 18px rgba(80, 238, 158, 0.16);
+  transform: translateY(-1px);
+}
+
+.distance-readout__method-icon {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(105, 255, 184, 0.72);
+  border-radius: 50%;
+  background: rgba(5, 27, 22, 0.88);
+  color: #9dffd0;
+  box-shadow:
+    0 0 10px rgba(105, 255, 184, 0.28),
+    inset 0 0 9px rgba(105, 255, 184, 0.08);
+}
+
+.distance-readout__method-icon svg {
+  width: 19px;
+  height: 19px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.55;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.distance-readout__method-copy {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.distance-readout__method-copy > span {
+  color: rgba(224, 255, 239, 0.90);
+  font-size: 0.57rem;
+  font-weight: 760;
+  line-height: 1.2;
+  letter-spacing: 0.105em;
+  text-transform: uppercase;
+}
+
+.distance-readout__method-copy small {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: rgba(158, 255, 207, 0.73);
+  font-size: 0.60rem;
+  font-weight: 620;
+  line-height: 1.3;
+  letter-spacing: 0.018em;
+}
+
+.distance-readout__method-arrow {
+  color: rgba(189, 255, 222, 0.72);
+  font-size: 1.15rem;
+  line-height: 1;
+  transition: transform 160ms ease, color 160ms ease;
+}
+
+.distance-readout__method:hover .distance-readout__method-arrow,
+.distance-readout__method:focus-visible .distance-readout__method-arrow {
+  color: #ecfff5;
+  transform: translateX(2px);
+}
+
+.distance-readout__method.is-updated .distance-readout__method-icon {
+  animation: distance-method-update 720ms ease-out;
+}
+
+@keyframes distance-method-update {
+  0% { transform: scale(1); box-shadow: 0 0 10px rgba(105, 255, 184, 0.28); }
+  42% { transform: scale(1.16); box-shadow: 0 0 22px rgba(105, 255, 184, 0.68); }
+  100% { transform: scale(1); box-shadow: 0 0 10px rgba(105, 255, 184, 0.28); }
+}
+
+@media (max-width: 620px) {
+  .progress.distance-readout {
+    padding-right: 13px;
+    max-width: calc(100vw - 24px);
+  }
+
+  .distance-readout__header {
+    padding-right: 0;
+  }
+
+  .distance-readout__method {
+    margin-top: 8px;
+    grid-template-columns: 27px minmax(0, 1fr) auto;
+    gap: 8px;
+    padding: 7px 9px;
+  }
+
+  .distance-readout__method-icon {
+    width: 27px;
+    height: 27px;
+  }
+
+  .distance-readout__method-icon svg {
+    width: 17px;
+    height: 17px;
+  }
+
+  .distance-readout__method-copy > span {
+    font-size: 0.52rem;
+  }
+
+  .distance-readout__method-copy small {
+    font-size: 0.55rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .distance-readout__method,
+  .distance-readout__method-icon,
+  .distance-readout__method-arrow {
+    animation: none !important;
+    transition: none;
+  }
+}

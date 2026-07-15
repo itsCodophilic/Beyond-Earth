@@ -58,6 +58,7 @@ import { createSun, updateSun } from './stars/sun/sun.js';
   let distanceUnitDescription = null;
   let distanceUnitEquivalent = null;
   let distanceMeasurementInfoButton = null;
+  let distanceMeasurementSummaryLabel = null;
   let activeDistanceInfo = null;
   let currentDistanceMeasurementInfo = null;
   let currentDistanceUnits = new Set();
@@ -72,9 +73,6 @@ import { createSun, updateSun } from './stars/sun/sun.js';
     progressShell.setAttribute("role", "region");
     progressShell.setAttribute("aria-label", "Distance from Earth");
     progressShell.innerHTML = `
-      <button class="distance-readout__info" id="distance-measurement-info" type="button" aria-label="How this distance is measured" title="How is this distance measured?">
-        <span aria-hidden="true">i</span>
-      </button>
       <div class="distance-readout__header">
         <span>You are at</span>
         <em id="distance-travel-mode">Camera position</em>
@@ -85,6 +83,20 @@ import { createSun, updateSun } from './stars/sun/sun.js';
         <span id="distance-travel-secondary">11,247 mi</span>
       </div>
       <div class="distance-readout__range" id="distance-travel-range" hidden></div>
+      <button class="distance-readout__method" id="distance-measurement-info" type="button" aria-label="Open how this distance is measured">
+        <span class="distance-readout__method-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24">
+            <circle cx="12" cy="12" r="8.25"></circle>
+            <path d="M7.2 13.3c2.1-3.9 7.1-6.2 10.5-4.1M8.1 8.4l-.9 4.9 4.8.7"></path>
+            <circle cx="17.4" cy="8.8" r="1.15"></circle>
+          </svg>
+        </span>
+        <span class="distance-readout__method-copy">
+          <span>How is this distance measured?</span>
+          <small id="distance-measurement-summary">Scroll-mapped camera scale</small>
+        </span>
+        <span class="distance-readout__method-arrow" aria-hidden="true">›</span>
+      </button>
       <div class="distance-unit-popover" id="distance-unit-popover" role="dialog" aria-modal="false" aria-live="polite" aria-labelledby="distance-unit-title" hidden>
         <button class="distance-unit-popover__close" type="button" aria-label="Close distance information">×</button>
         <span class="distance-unit-popover__eyebrow" id="distance-unit-eyebrow">Distance information</span>
@@ -104,6 +116,7 @@ import { createSun, updateSun } from './stars/sun/sun.js';
     distanceUnitDescription = progressShell.querySelector("#distance-unit-description");
     distanceUnitEquivalent = progressShell.querySelector("#distance-unit-equivalent");
     distanceMeasurementInfoButton = progressShell.querySelector("#distance-measurement-info");
+    distanceMeasurementSummaryLabel = progressShell.querySelector("#distance-measurement-summary");
   }
 
   const DISTANCE_UNIT_EXPLANATIONS = Object.freeze({
@@ -269,8 +282,10 @@ import { createSun, updateSun } from './stars/sun/sun.js';
     currentDistanceMeasurementInfo = measurementInfo;
 
     if (distanceMeasurementInfoButton) {
-      distanceMeasurementInfoButton.setAttribute("aria-label", `${measurementInfo.title}. Open measurement details.`);
-      distanceMeasurementInfoButton.title = "How is this distance measured?";
+      const summary = measurementInfo.summary ?? measurementInfo.title;
+      distanceMeasurementInfoButton.setAttribute("aria-label", `How this distance is measured: ${summary}. Open details.`);
+      distanceMeasurementInfoButton.title = `Measurement method: ${summary}`;
+      if (distanceMeasurementSummaryLabel) distanceMeasurementSummaryLabel.textContent = summary;
       if (distanceMeasurementInfoButton.dataset.measurementFingerprint !== fingerprint) {
         distanceMeasurementInfoButton.dataset.measurementFingerprint = fingerprint;
         distanceMeasurementInfoButton.classList.remove("is-updated");
@@ -522,8 +537,9 @@ import { createSun, updateSun } from './stars/sun/sun.js';
     return texture;
   }
 
+  const celestialLocatorTexture = createAsteroidLocatorTexture();
   const asteroidHoverLocator = new THREE.Sprite(new THREE.SpriteMaterial({
-    map: createAsteroidLocatorTexture(),
+    map: celestialLocatorTexture,
     transparent: true,
     opacity: 0,
     depthTest: true,
@@ -531,10 +547,27 @@ import { createSun, updateSun } from './stars/sun/sun.js';
     blending: THREE.AdditiveBlending,
     toneMapped: false,
   }));
-  asteroidHoverLocator.name = "Asteroid hover locator";
+  asteroidHoverLocator.name = "Celestial hover locator";
   asteroidHoverLocator.visible = false;
   asteroidHoverLocator.renderOrder = 36;
   scene.add(asteroidHoverLocator);
+
+  // A brief confirmation ring appears whenever focus moves to a new celestial
+  // body. It confirms the selection without permanently covering the surface.
+  const focusedBodyLocator = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: celestialLocatorTexture,
+    color: 0xa2ffd0,
+    transparent: true,
+    opacity: 0,
+    depthTest: true,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+    toneMapped: false,
+  }));
+  focusedBodyLocator.name = "Focused celestial confirmation locator";
+  focusedBodyLocator.visible = false;
+  focusedBodyLocator.renderOrder = 37;
+  scene.add(focusedBodyLocator);
 
   // Input handlers update target/raw state. The animation loop eases current
   // values toward those targets, avoiding jumps when input events arrive.
@@ -569,6 +602,7 @@ import { createSun, updateSun } from './stars/sun/sun.js';
   let hasExploredFreeSpace = false;
   let hoveredCelestialBody = null;
   let celestialHoverTimer = null;
+  let focusSelectionPulseStartedAt = -Infinity;
   const celestialHoverAnchor = new THREE.Vector2(-9999, -9999);
   let lastPointerType = "mouse";
   // Hover uses a visibility-aware magnetic lock. Once even a tiny rendered part
@@ -684,6 +718,7 @@ import { createSun, updateSun } from './stars/sun/sun.js';
       return {
         eyebrow: "How this distance is measured",
         title: "Earth is the reference point",
+        summary: "Earth reference point",
         description: "All distances in this instrument are measured from Earth. Because Earth is the origin of the measurement, focusing Earth always reads 0 km.",
         equivalent: `Current display: ${currentValue}.`,
       };
@@ -693,6 +728,7 @@ import { createSun, updateSun } from './stars/sun/sun.js';
       return {
         eyebrow: "How this distance is measured",
         title: `Average reference distance for ${focusedDistance.bodyName}`,
+        summary: "Accepted average separation",
         description: `This value uses the accepted average separation from Earth rather than a live, date-specific position.${rangeSummary}`,
         equivalent: `Current display: ${currentValue}.`,
       };
@@ -702,6 +738,7 @@ import { createSun, updateSun } from './stars/sun/sun.js';
       return {
         eyebrow: "How this distance is measured",
         title: "Simulated planetary separation",
+        summary: "Published orbit + scene position",
         description: "The current number uses the planet’s published orbital scale together with the orbital direction currently shown in this Three.js simulation. It is realistic for the scene, but it is not today’s live ephemeris position.",
         equivalent: `Current display: ${currentValue}.${rangeSummary}`,
       };
@@ -711,6 +748,7 @@ import { createSun, updateSun } from './stars/sun/sun.js';
       return {
         eyebrow: "How this distance is measured",
         title: "Verified small-body orbital scale",
+        summary: "Verified orbit + scene position",
         description: "The asteroid’s published orbital elements set its physical scale. Its current Earth separation follows the angular position shown in the simulation, not a live date-specific ephemeris.",
         equivalent: `Current display: ${currentValue}.${rangeSummary}`,
       };
@@ -720,6 +758,7 @@ import { createSun, updateSun } from './stars/sun/sun.js';
       return {
         eyebrow: "How this distance is measured",
         title: `${focusedDistance.bodyName} follows its planet’s Earth distance`,
+        summary: "Parent planet orbital distance",
         description: "The moon’s local orbit around its parent is tiny compared with the planet’s distance from Earth. The readout therefore uses the parent planet’s verified heliocentric orbital scale together with the direction shown in the simulation.",
         equivalent: `Current display: ${currentValue}.${rangeSummary}`,
       };
@@ -729,6 +768,7 @@ import { createSun, updateSun } from './stars/sun/sun.js';
       return {
         eyebrow: "How this distance is measured",
         title: "Generated asteroid-orbit distance",
+        summary: "Generated orbit geometry",
         description: "This asteroid uses the orbit generated for it inside the experience. Its Earth separation is calculated from that simulated orbit, so the value is internally consistent but not a live astronomical observation.",
         equivalent: `Current display: ${currentValue}.${rangeSummary}`,
       };
@@ -737,6 +777,7 @@ import { createSun, updateSun } from './stars/sun/sun.js';
     return {
       eyebrow: "How this distance is measured",
       title: "Scene-scaled Earth distance",
+      summary: "Three.js scene position",
       description: "This object does not yet have complete orbital metadata, so its distance is estimated from its Three.js scene position relative to Earth.",
       equivalent: `Current display: ${currentValue}.`,
     };
@@ -746,6 +787,7 @@ import { createSun, updateSun } from './stars/sun/sun.js';
     return {
       eyebrow: "How this distance is measured",
       title: "Scroll-driven camera distance from Earth",
+      summary: "Scroll-mapped camera scale",
       description: "Earth is treated as the 0 km reference. As you scroll outward or inward, the camera journey is mapped onto a progressively larger scientific distance scale for the experience. This describes the viewer’s perspective, not a live spacecraft location.",
       equivalent: `Current display: ${formatted.primary} from Earth · Region: ${travel.region}.`,
     };
@@ -1156,6 +1198,37 @@ import { createSun, updateSun } from './stars/sun/sun.js';
     return null;
   }
 
+  function updateFocusedSelectionVisual() {
+    const age = elapsedTime - focusSelectionPulseStartedAt;
+    if (!focusedBody || age < 0 || age > 1.85) {
+      focusedBodyLocator.visible = false;
+      focusedBodyLocator.material.opacity = 0;
+      return;
+    }
+
+    const worldPosition = focusedBody.getWorldPosition(new THREE.Vector3());
+    const projected = worldPosition.clone().project(camera);
+    if (projected.z < -1 || projected.z > 1) {
+      focusedBodyLocator.visible = false;
+      return;
+    }
+
+    focusedBodyLocator.visible = true;
+    focusedBodyLocator.position.copy(worldPosition);
+    const cameraDistance = Math.max(0.001, camera.position.distanceTo(worldPosition));
+    const worldUnitsPerPixel = 2 * cameraDistance
+      * Math.tan(THREE.MathUtils.degToRad(camera.fov * 0.5))
+      / Math.max(1, innerHeight);
+    const bodyRadiusPixels = projectedBodyRadiusPixels(focusedBody);
+    const baseMarkerPixels = THREE.MathUtils.clamp(bodyRadiusPixels * 2.25 + 30, 34, 104);
+    const pulse = 1 + Math.sin(age * 9.5) * 0.10;
+    const markerSize = worldUnitsPerPixel * baseMarkerPixels * pulse;
+    focusedBodyLocator.scale.set(markerSize, markerSize, 1);
+
+    const fadeOut = 1 - THREE.MathUtils.smoothstep(age, 1.05, 1.85);
+    focusedBodyLocator.material.opacity = (0.58 + Math.sin(age * 9.5) * 0.18) * fadeOut;
+  }
+
   /*
     getBodyAtPointer
     - Performs a raycast only when the user intentionally clicks or taps.
@@ -1203,6 +1276,7 @@ import { createSun, updateSun } from './stars/sun/sun.js';
     minimumVisibleRadiusPixels = 0.85,
     extraHitPixels = innerWidth <= 760 ? 9 : 6,
     maximumHitRadiusPixels = 30,
+    excludedBody = null,
   } = {}) {
     const candidates = [];
     const seen = new Set();
@@ -1210,7 +1284,7 @@ import { createSun, updateSun } from './stars/sun/sun.js';
     hoverTargets.forEach((target) => {
       let body = target;
       while (body && !body.userData?.name) body = body.parent;
-      if (!body || seen.has(body) || !isMajorCelestialBody(body)) return;
+      if (!body || body === excludedBody || seen.has(body) || !isMajorCelestialBody(body)) return;
       seen.add(body);
       candidates.push(body);
     });
@@ -1264,6 +1338,16 @@ import { createSun, updateSun } from './stars/sun/sun.js';
     return nearest;
   }
 
+  function isPointerInsideVisibleBodyDisk(body, extraPixels = 0) {
+    if (!body) return false;
+    const projected = body.getWorldPosition(new THREE.Vector3()).project(camera);
+    if (projected.z < -1 || projected.z > 1) return false;
+    const dx = (projected.x - pointer.x) * innerWidth * 0.5;
+    const dy = (projected.y - pointer.y) * innerHeight * 0.5;
+    const radiusPixels = projectedBodyRadiusPixels(body);
+    return radiusPixels > 0.15 && Math.hypot(dx, dy) <= radiusPixels + extraPixels;
+  }
+
   function isPointerStillOnHoveredBody(body) {
     if (!body) return false;
     const worldPosition = body.getWorldPosition(new THREE.Vector3());
@@ -1297,7 +1381,7 @@ import { createSun, updateSun } from './stars/sun/sun.js';
   }
 
   function setCelestialHover(body) {
-    if (!body) {
+    if (!body || body === focusedBody) {
       clearCelestialHover();
       return;
     }
@@ -1306,7 +1390,9 @@ import { createSun, updateSun } from './stars/sun/sun.js';
     const bodyType = body.userData?.info?.type ?? (isAsteroidBody(body) ? "Asteroid" : "Celestial body");
     asteroidHoverName.textContent = body.userData?.name ?? body.name ?? bodyType;
     if (celestialHoverAction) {
-      celestialHoverAction.textContent = `${bodyType} · Slow motion · Click to inspect`;
+      celestialHoverAction.textContent = focusedBody
+        ? `${bodyType} · Click to switch focus`
+        : `${bodyType} · Slow motion · Click to inspect`;
     }
     asteroidHoverTooltip.classList.add("is-visible");
     asteroidHoverTooltip.setAttribute("aria-hidden", "false");
@@ -1320,20 +1406,31 @@ import { createSun, updateSun } from './stars/sun/sun.js';
   }
 
   function findCelestialForHover() {
-    if (focusedBody || isDragging || lastPointerType === "touch"
+    if (isDragging || lastPointerType === "touch"
       || (distanceUnitPopover && !distanceUnitPopover.hidden)) {
+      clearCelestialHover();
+      return;
+    }
+
+    // While inspecting a body, its own visible surface should not reveal a
+    // target hidden behind it. Nearby visible bodies can still be discovered
+    // and selected without closing focus first.
+    if (focusedBody && isPointerInsideVisibleBodyDisk(focusedBody, 1.5)) {
       clearCelestialHover();
       return;
     }
 
     raycaster.setFromCamera(pointer, camera);
     const hits = raycaster.intersectObjects(hoverTargets, true);
-    const hitBodies = hits.map((hit) => findInteractiveObject(hit)).filter(Boolean);
+    const hitBodies = hits
+      .map((hit) => findInteractiveObject(hit))
+      .filter((body) => Boolean(body && body !== focusedBody));
 
     const nearbyMajor = findNearestMajorBodyAtPointer({
       minimumVisibleRadiusPixels: 0.14,
       extraHitPixels: innerWidth <= 760 ? 12 : 7,
       maximumHitRadiusPixels: innerWidth <= 760 ? 30 : 23,
+      excludedBody: focusedBody,
     });
     if (nearbyMajor) {
       setCelestialHover(nearbyMajor);
@@ -1369,7 +1466,7 @@ import { createSun, updateSun } from './stars/sun/sun.js';
   }
 
   function updateCelestialHoverVisual() {
-    if (!hoveredCelestialBody || focusedBody || !asteroidHoverLocator.visible) return;
+    if (!hoveredCelestialBody || !asteroidHoverLocator.visible) return;
 
     const worldPosition = hoveredCelestialBody.getWorldPosition(new THREE.Vector3());
     const projected = worldPosition.clone().project(camera);
@@ -1550,6 +1647,8 @@ import { createSun, updateSun } from './stars/sun/sun.js';
 
     if (!nextBody) {
       focusedBody = null;
+      focusedBodyLocator.visible = false;
+      focusedBodyLocator.material.opacity = 0;
       focusZoomTarget = 1;
       focusZoomCurrent = 1;
       focusPinchDistance = null;
@@ -1559,6 +1658,8 @@ import { createSun, updateSun } from './stars/sun/sun.js';
 
     if (!isJourneyScrollLocked) lockJourneyScroll();
     focusedBody = nextBody;
+    focusSelectionPulseStartedAt = elapsedTime;
+    focusedBodyLocator.visible = true;
     focusZoomTarget = 1;
     focusZoomCurrent = 1;
     focusPinchDistance = null;
@@ -1610,6 +1711,8 @@ import { createSun, updateSun } from './stars/sun/sun.js';
     }
     if (focusedBody) setAsteroidInspectionDetail(focusedBody, false);
     focusedBody = null;
+    focusedBodyLocator.visible = false;
+    focusedBodyLocator.material.opacity = 0;
     displayedBody = null;
     setBodyCardCollapsed(false);
     focusZoomTarget = 1;
@@ -1869,7 +1972,7 @@ import { createSun, updateSun } from './stars/sun/sun.js';
     }
     elapsedTime += deltaTime;
     // Focus mode slows physical scene motion without slowing camera input/easing.
-    const motionScale = focusedBody ? 0.12 : hoveredCelestialBody ? 0.018 : 1;
+    const motionScale = hoveredCelestialBody ? 0.018 : focusedBody ? 0.12 : 1;
     simulationTime += deltaTime * motionScale;
     // Easing with lerp each frame creates inertia. Larger factors catch up faster.
     smoothProgress = THREE.MathUtils.lerp(smoothProgress, scrollProgress, 0.065);
@@ -1966,6 +2069,7 @@ import { createSun, updateSun } from './stars/sun/sun.js';
     updateSun(sun, simulationTime, motionScale);
     updateSunApparentScale();
     updateCelestialHoverVisual();
+    updateFocusedSelectionVisual();
     updateAsteroidBelt(asteroidBelt, motionScale, jupiter, camera, currentSunAngularRadius);
     // One journey value coordinates exposure, stellar layers, galaxies, local
     // dust, and zodiacal light for scroll, reverse travel, and body focus alike.
