@@ -906,6 +906,7 @@ import { createSun, updateSun } from './stars/sun/sun.js';
 
   const SUN_RADIUS_KM = PLANET_SCALE_PROFILES.Sun.diameterKm * 0.5;
   const SUN_BASE_VISUAL_RADIUS = PLANET_SCALE_PROFILES.Sun.visualRadius;
+  let currentSunAngularRadius = 0;
 
   function findOrbitalParentPlanet(body) {
     if (!body) return null;
@@ -984,6 +985,8 @@ import { createSun, updateSun } from './stars/sun/sun.js';
     const cameraToSun = Math.max(1, camera.position.distanceTo(sun.system.position));
     const halfFov = THREE.MathUtils.degToRad(camera.fov * 0.5);
     const apparentWorldRadius = SUN_BASE_VISUAL_RADIUS * nextScale;
+    currentSunAngularRadius = Math.asin(THREE.MathUtils.clamp(apparentWorldRadius / cameraToSun, 0, 0.999));
+    spaceEnvironment.setSunAngularRadius(currentSunAngularRadius);
     const projectedRadiusPixels = (apparentWorldRadius / cameraToSun)
       / Math.max(0.0001, Math.tan(halfFov))
       * innerHeight * 0.5;
@@ -1198,8 +1201,8 @@ import { createSun, updateSun } from './stars/sun/sun.js';
 
   function findNearestMajorBodyAtPointer({
     minimumVisibleRadiusPixels = 0.85,
-    extraHitPixels = innerWidth <= 760 ? 12 : 8,
-    maximumHitRadiusPixels = 34,
+    extraHitPixels = innerWidth <= 760 ? 9 : 6,
+    maximumHitRadiusPixels = 30,
   } = {}) {
     const candidates = [];
     const seen = new Set();
@@ -1229,16 +1232,29 @@ import { createSun, updateSun } from './stars/sun/sun.js';
       const dx = (projected.x - pointer.x) * innerWidth * 0.5;
       const dy = (projected.y - pointer.y) * innerHeight * 0.5;
       const distancePixels = Math.hypot(dx, dy);
-      const clickRadius = THREE.MathUtils.clamp(
-        radiusPixels + extraHitPixels,
-        Math.max(5, extraHitPixels * 0.72),
-        maximumHitRadiusPixels,
+      // Large, clearly visible bodies need almost no invisible cushion. Tiny
+      // planets still receive a modest assist, but nearby Earth no longer owns
+      // the empty region between its globe and the Moon.
+      const adaptiveExtraPixels = radiusPixels >= 12
+        ? Math.min(1.25, extraHitPixels)
+        : radiusPixels >= 4
+          ? Math.min(3.0, extraHitPixels)
+          : extraHitPixels;
+      const clickRadius = Math.min(
+        radiusPixels + adaptiveExtraPixels,
+        Math.max(maximumHitRadiusPixels, radiusPixels + 2.25),
       );
       if (distancePixels > clickRadius) return;
 
       const type = getInteractiveType(body);
       const typeBias = type === "natural satellite" ? -2 : type === "planet" ? -1 : 0;
-      const score = distancePixels / Math.max(1, clickRadius) + typeBias * 0.04;
+      // Prefer the body whose visible disk most clearly contains the cursor.
+      // This avoids selecting Earth when the pointer is actually in the gap
+      // between Earth and the Moon.
+      const coverage = Math.max(0.001, radiusPixels - distancePixels);
+      const score = distancePixels / Math.max(1, clickRadius)
+        - Math.min(0.35, coverage / Math.max(1, radiusPixels) * 0.25)
+        + typeBias * 0.03;
       if (score < nearestScore) {
         nearest = body;
         nearestScore = score;
@@ -1246,6 +1262,29 @@ import { createSun, updateSun } from './stars/sun/sun.js';
     });
 
     return nearest;
+  }
+
+  function isPointerStillOnHoveredBody(body) {
+    if (!body) return false;
+    const worldPosition = body.getWorldPosition(new THREE.Vector3());
+    const projected = worldPosition.project(camera);
+    if (projected.z < -1 || projected.z > 1) return false;
+
+    const dx = (projected.x - pointer.x) * innerWidth * 0.5;
+    const dy = (projected.y - pointer.y) * innerHeight * 0.5;
+    const distancePixels = Math.hypot(dx, dy);
+    const radiusPixels = projectedBodyRadiusPixels(body);
+
+    if (isAsteroidBody(body)) {
+      // Asteroids keep a slightly magnetic lock because they move quickly and
+      // may be only a few pixels wide. The lock is still local to the locator.
+      return distancePixels <= THREE.MathUtils.clamp(radiusPixels + 8, 8, 18);
+    }
+
+    // For visible planets, stars and moons, follow the rendered silhouette.
+    // Only sub-pixel bodies receive a larger discovery cushion.
+    const assistPixels = radiusPixels >= 12 ? 1.5 : radiusPixels >= 4 ? 3.0 : 7;
+    return distancePixels <= radiusPixels + assistPixels;
   }
 
   function clearCelestialHover() {
@@ -1291,15 +1330,6 @@ import { createSun, updateSun } from './stars/sun/sun.js';
     const hits = raycaster.intersectObjects(hoverTargets, true);
     const hitBodies = hits.map((hit) => findInteractiveObject(hit)).filter(Boolean);
 
-    const directMajor = hitBodies.find((body) => getInteractiveType(body) === "natural satellite")
-      ?? hitBodies.find((body) => getInteractiveType(body) === "planet")
-      ?? hitBodies.find((body) => getInteractiveType(body) === "star")
-      ?? null;
-    if (directMajor) {
-      setCelestialHover(directMajor);
-      return;
-    }
-
     const nearbyMajor = findNearestMajorBodyAtPointer({
       minimumVisibleRadiusPixels: 0.14,
       extraHitPixels: innerWidth <= 760 ? 12 : 7,
@@ -1324,7 +1354,7 @@ import { createSun, updateSun } from './stars/sun/sun.js';
       camera,
       viewportWidth: innerWidth,
       viewportHeight: innerHeight,
-      minimumVisibleRadiusPixels: 0.34,
+      minimumVisibleRadiusPixels: 0.22,
       maximumPixelRadius: innerWidth <= 760 ? 13 : 10,
     });
     setCelestialHover(nearbyInstance);
@@ -1379,11 +1409,10 @@ import { createSun, updateSun } from './stars/sun/sun.js';
 
     // When a small asteroid crosses the same line of sight as a planet, the
     // user's likely target is the clearly recognisable major body behind it.
-    const directMajorBody = bodies.find((body) => getInteractiveType(body) === "natural satellite")
-      ?? bodies.find((body) => getInteractiveType(body) === "planet")
-      ?? bodies.find((body) => getInteractiveType(body) === "star")
-      ?? null;
-    if (directMajorBody) return directMajorBody;
+    // Major bodies are selected from their visible projected disk instead of
+    // broad hidden proxy geometry. This prevents Earth, the Moon, or the Sun
+    // from owning nearby empty space simply because a large interaction sphere
+    // happened to intersect the ray.
 
     // Give visible planets, moons and the Sun a small screen-space click cushion.
     // This is intentionally disabled while they are sub-pixel dots; clicking then
@@ -1393,7 +1422,11 @@ import { createSun, updateSun } from './stars/sun/sun.js';
 
     // Once the green locator is visible, the click is unambiguous even if a
     // revolving body travels a few pixels between hover detection and pointerup.
-    if (hoveredCelestialBody && asteroidHoverLocator.visible) return hoveredCelestialBody;
+    if (hoveredCelestialBody
+      && asteroidHoverLocator.visible
+      && isPointerStillOnHoveredBody(hoveredCelestialBody)) {
+      return hoveredCelestialBody;
+    }
 
     // Individually modelled asteroids still use exact geometry, but must be large
     // enough on screen for the user to actually see what they are selecting.
@@ -1410,8 +1443,8 @@ import { createSun, updateSun } from './stars/sun/sun.js';
       camera,
       viewportWidth: innerWidth,
       viewportHeight: innerHeight,
-      minimumVisibleRadiusPixels: innerWidth <= 760 ? 1.1 : 0.75,
-      maximumPixelRadius: innerWidth <= 760 ? 14 : 9,
+      minimumVisibleRadiusPixels: innerWidth <= 760 ? 0.95 : 0.60,
+      maximumPixelRadius: innerWidth <= 760 ? 15 : 10,
     });
   }
 
@@ -1694,12 +1727,8 @@ import { createSun, updateSun } from './stars/sun/sun.js';
   addEventListener("pointermove", (event) => {
     updatePointerFromEvent(event);
     lastPointerType = event.pointerType || "mouse";
-    if (hoveredCelestialBody) {
-      const hoverPointerDistance = Math.hypot(
-        event.clientX - celestialHoverAnchor.x,
-        event.clientY - celestialHoverAnchor.y,
-      );
-      if (hoverPointerDistance > 48) clearCelestialHover();
+    if (hoveredCelestialBody && !isPointerStillOnHoveredBody(hoveredCelestialBody)) {
+      clearCelestialHover();
     }
     if (event.target.closest?.(".hud, .body-card, .body-card-restore, .progress, .earth-return-button")) {
       clearCelestialHover();
@@ -1840,7 +1869,7 @@ import { createSun, updateSun } from './stars/sun/sun.js';
     }
     elapsedTime += deltaTime;
     // Focus mode slows physical scene motion without slowing camera input/easing.
-    const motionScale = focusedBody ? 0.12 : hoveredCelestialBody ? 0.045 : 1;
+    const motionScale = focusedBody ? 0.12 : hoveredCelestialBody ? 0.018 : 1;
     simulationTime += deltaTime * motionScale;
     // Easing with lerp each frame creates inertia. Larger factors catch up faster.
     smoothProgress = THREE.MathUtils.lerp(smoothProgress, scrollProgress, 0.065);
@@ -1937,7 +1966,7 @@ import { createSun, updateSun } from './stars/sun/sun.js';
     updateSun(sun, simulationTime, motionScale);
     updateSunApparentScale();
     updateCelestialHoverVisual();
-    updateAsteroidBelt(asteroidBelt, motionScale, jupiter);
+    updateAsteroidBelt(asteroidBelt, motionScale, jupiter, camera, currentSunAngularRadius);
     // One journey value coordinates exposure, stellar layers, galaxies, local
     // dust, and zodiacal light for scroll, reverse travel, and body focus alike.
     spaceEnvironment.setJourneyProgress(getEnvironmentJourneyProgress());

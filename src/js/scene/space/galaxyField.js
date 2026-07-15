@@ -42,6 +42,8 @@ export function createGalaxyField({ count, radius }) {
       uVisibility: { value: 0 },
       uExposure: { value: 1 },
       uJourneyProgress: { value: 0 },
+      uSunDirection: { value: new THREE.Vector3(0, 0, -1) },
+      uSunAngularRadius: { value: 0 },
     },
     vertexShader: galaxyVertexShader,
     fragmentShader: galaxyFragmentShader,
@@ -105,10 +107,12 @@ export function createGalaxyField({ count, radius }) {
 
   return {
     object: galaxies,
-    update({ visibility, exposure, journeyProgress = 0 }) {
+    update({ visibility, exposure, journeyProgress = 0, sunDirection, sunAngularRadius = 0 }) {
       material.uniforms.uVisibility.value = visibility;
       material.uniforms.uExposure.value = exposure;
       material.uniforms.uJourneyProgress.value = journeyProgress;
+      if (sunDirection) material.uniforms.uSunDirection.value.copy(sunDirection);
+      material.uniforms.uSunAngularRadius.value = sunAngularRadius;
     },
     dispose() {
       geometry.dispose();

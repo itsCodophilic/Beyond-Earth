@@ -8,6 +8,7 @@ export function createZodiacalLight({ radius }) {
     uniforms: {
       uVisibility: { value: 0 },
       uSunDirection: { value: new THREE.Vector3(0, 0, -1) },
+      uSunAngularRadius: { value: 0 },
     },
     vertexShader: zodiacalVertexShader,
     fragmentShader: zodiacalFragmentShader,
@@ -25,9 +26,10 @@ export function createZodiacalLight({ radius }) {
 
   return {
     object: mesh,
-    update({ visibility, sunDirection }) {
+    update({ visibility, sunDirection, sunAngularRadius = 0 }) {
       material.uniforms.uVisibility.value = visibility;
       material.uniforms.uSunDirection.value.copy(sunDirection);
+      material.uniforms.uSunAngularRadius.value = sunAngularRadius;
     },
     dispose() {
       geometry.dispose();

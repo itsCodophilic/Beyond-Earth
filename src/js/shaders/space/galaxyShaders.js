@@ -3,12 +3,14 @@ export const galaxyVertexShader = `
   varying vec2 vUv;
   varying vec3 vColor;
   varying vec4 vData;
+  varying vec3 vWorldDirection;
 
   void main() {
     vUv = uv;
     vColor = instanceColor;
     vData = aGalaxyData;
     vec4 worldPosition = modelMatrix * instanceMatrix * vec4(position, 1.0);
+    vWorldDirection = normalize(worldPosition.xyz - cameraPosition);
     gl_Position = projectionMatrix * viewMatrix * worldPosition;
   }
 `;
@@ -17,9 +19,12 @@ export const galaxyFragmentShader = `
   varying vec2 vUv;
   varying vec3 vColor;
   varying vec4 vData;
+  varying vec3 vWorldDirection;
   uniform float uVisibility;
   uniform float uExposure;
   uniform float uJourneyProgress;
+  uniform vec3 uSunDirection;
+  uniform float uSunAngularRadius;
 
   float hash21(vec2 point) {
     return fract(sin(dot(point, vec2(127.1, 311.7))) * 43758.5453);
@@ -63,7 +68,15 @@ export const galaxyFragmentShader = `
     // Galaxies exist during the whole journey. Zooming outward increases both
     // their visible envelope and nucleus glow instead of spawning them abruptly.
     float adaptation = mix(0.96, 1.70, uJourneyProgress);
-    float alpha = shape * vData.x * uVisibility * adaptation;
+    float sunAlignment = clamp(dot(normalize(vWorldDirection), normalize(uSunDirection)), -1.0, 1.0);
+    float angularSeparation = acos(sunAlignment);
+    float diskFeather = clamp(uSunAngularRadius * 0.035, 0.00008, 0.0012);
+    float solarDiskVisibility = smoothstep(
+      max(0.0, uSunAngularRadius - diskFeather),
+      uSunAngularRadius + diskFeather,
+      angularSeparation
+    );
+    float alpha = shape * vData.x * uVisibility * adaptation * solarDiskVisibility;
     if (alpha < 0.0017) discard;
 
     vec3 warmCore = vec3(1.0, 0.82, 0.62);

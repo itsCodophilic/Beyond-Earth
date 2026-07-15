@@ -291,7 +291,7 @@ function createCompositionMaterials() {
           metalness: composition.metalness,
           envMapIntensity: key === "M" ? 0.18 : 0.045,
           emissive: key === "C" ? 0x050605 : 0x070504,
-          emissiveIntensity: 0.08,
+          emissiveIntensity: 0.16,
           flatShading: false,
         }),
       );
@@ -310,7 +310,7 @@ function createStoneMaterial(compositionKey) {
     metalness: composition.metalness,
     envMapIntensity: compositionKey === "M" ? 0.18 : 0.045,
     emissive: compositionKey === "C" ? 0x050605 : 0x070504,
-    emissiveIntensity: 0.08,
+    emissiveIntensity: 0.16,
     flatShading: false,
     dithering: true,
   });
@@ -1180,39 +1180,57 @@ function createDistantDebris() {
     uniforms: {
       uPixelRatio: { value: Math.min(window.devicePixelRatio, 2) },
       // Pebbles establish belt density but should not veil the solid rocks.
-      uOpacity: { value: 0.74 },
+      uOpacity: { value: 0.84 },
+      uSunDirection: { value: new THREE.Vector3(0, 0, -1) },
+      uSunAngularRadius: { value: 0 },
     },
     vertexShader: `
       attribute float aSize;
       varying vec3 vColor;
+      varying float vSolarClearance;
       uniform float uPixelRatio;
+      uniform vec3 uSunDirection;
+      uniform float uSunAngularRadius;
 
       void main() {
         vColor = color;
-        vec4 viewPosition = modelViewMatrix * vec4(position, 1.0);
+        vec4 worldPosition = modelMatrix * vec4(position, 1.0);
+        vec4 viewPosition = viewMatrix * worldPosition;
+        vec3 grainDirection = normalize(worldPosition.xyz - cameraPosition);
+        float sunAlignment = clamp(dot(grainDirection, normalize(uSunDirection)), -1.0, 1.0);
+        float angularSeparation = acos(sunAlignment);
+        float diskFeather = clamp(uSunAngularRadius * 0.035, 0.00008, 0.0012);
+        vSolarClearance = smoothstep(
+          max(0.0, uSunAngularRadius - diskFeather),
+          uSunAngularRadius + diskFeather,
+          angularSeparation
+        );
         gl_Position = projectionMatrix * viewPosition;
-        gl_PointSize = clamp(aSize * uPixelRatio * (235.0 / max(1.0, -viewPosition.z)), 0.95, 4.35);
+        gl_PointSize = clamp(aSize * uPixelRatio * (255.0 / max(1.0, -viewPosition.z)), 1.10, 4.75);
       }
     `,
     fragmentShader: `
       varying vec3 vColor;
+      varying float vSolarClearance;
       uniform float uOpacity;
 
       void main() {
         float distanceFromCentre = length(gl_PointCoord - vec2(0.5));
         float edge = 1.0 - smoothstep(0.40, 0.5, distanceFromCentre);
         if (edge < 0.02) discard;
-        gl_FragColor = vec4(vColor, edge * uOpacity);
+        gl_FragColor = vec4(vColor, edge * uOpacity * vSolarClearance);
       }
     `,
     vertexColors: true,
     transparent: true,
     depthWrite: false,
+    depthTest: true,
     blending: THREE.NormalBlending,
   });
   const points = new THREE.Points(geometry, material);
   points.name = "Virtual million-object pebble population";
   points.frustumCulled = false;
+  points.renderOrder = -6;
   return points;
 }
 
@@ -1521,10 +1539,21 @@ export function createAsteroidBelt({ world, hoverTargets = [] }) {
 }
 
 /** Advances the orbit and spin of every resolved asteroid. */
-export function updateAsteroidBelt(asteroidBelt, motionScale = 1, jupiter = null) {
+export function updateAsteroidBelt(asteroidBelt, motionScale = 1, jupiter = null, camera = null, sunAngularRadius = 0) {
   if (!asteroidBelt) return;
 
   const jupiterAngle = jupiter?.userData?.angle ?? 0;
+
+  const debrisUniforms = asteroidBelt.distantDebris?.material?.uniforms;
+  if (camera && debrisUniforms?.uSunDirection) {
+    debrisUniforms.uSunDirection.value.copy(camera.position).multiplyScalar(-1);
+    if (debrisUniforms.uSunDirection.value.lengthSq() < 1e-8) {
+      debrisUniforms.uSunDirection.value.set(0, 0, -1);
+    } else {
+      debrisUniforms.uSunDirection.value.normalize();
+    }
+    debrisUniforms.uSunAngularRadius.value = Math.max(0, sunAngularRadius);
+  }
 
   asteroidBelt.rocks.forEach((rock) => {
     const orbit = rock.userData.orbit;

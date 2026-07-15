@@ -1,6 +1,10 @@
 import * as THREE from "three";
 import { dustFragmentShader, dustVertexShader } from "../../shaders/space/dustShaders.js";
 import { createSeededRandom, gaussian } from "./seededRandom.js";
+import { PLANET_SCALE_PROFILES } from "../../config/celestialScale.js";
+
+const SUN_VISUAL_RADIUS = PLANET_SCALE_PROFILES.Sun.visualRadius;
+const SUN_DUST_CLEARANCE_RADIUS = SUN_VISUAL_RADIUS * 1.06;
 
 /**
  * Stylized interplanetary and near-interstellar dust.
@@ -68,6 +72,22 @@ export function createCosmicDustField({ count, maximumRadius, pixelRatio }) {
       sizes[index] = (0.46 + Math.pow(random(), 2.6) * 1.16) * cluster.sizeBias;
     }
 
+    // The cinematic Sun is intentionally much larger than the original dust
+    // field's inner radius. Keep physical dust grains outside a generous solar
+    // clearance volume so they cannot occupy the photosphere or corona.
+    const distanceFromSun = Math.hypot(
+      positions[offset],
+      positions[offset + 1],
+      positions[offset + 2],
+    );
+    if (distanceFromSun < SUN_DUST_CLEARANCE_RADIUS) {
+      const safeDistance = Math.max(distanceFromSun, 0.0001);
+      const outwardDistance = SUN_DUST_CLEARANCE_RADIUS + random() * SUN_VISUAL_RADIUS * 0.72;
+      positions[offset] = positions[offset] / safeDistance * outwardDistance;
+      positions[offset + 1] = positions[offset + 1] / safeDistance * outwardDistance;
+      positions[offset + 2] = positions[offset + 2] / safeDistance * outwardDistance;
+    }
+
     phases[index] = random() * Math.PI * 2;
   }
 
@@ -83,6 +103,8 @@ export function createCosmicDustField({ count, maximumRadius, pixelRatio }) {
       uVisibility: { value: 0 },
       uReducedMotion: { value: 0 },
       uSunPosition: { value: new THREE.Vector3() },
+      uSunRadius: { value: SUN_VISUAL_RADIUS },
+      uSunAngularRadius: { value: 0 },
     },
     vertexShader: dustVertexShader,
     fragmentShader: dustFragmentShader,
@@ -96,14 +118,15 @@ export function createCosmicDustField({ count, maximumRadius, pixelRatio }) {
   const points = new THREE.Points(geometry, material);
   points.name = "Clustered cosmic dust and interplanetary haze";
   points.frustumCulled = false;
-  points.renderOrder = -12;
+  points.renderOrder = -120;
 
   return {
     object: points,
-    update({ time, visibility, sunPosition, reducedMotion }) {
+    update({ time, visibility, sunPosition, sunAngularRadius = 0, reducedMotion }) {
       material.uniforms.uTime.value = time;
       material.uniforms.uVisibility.value = visibility;
       material.uniforms.uSunPosition.value.copy(sunPosition);
+      material.uniforms.uSunAngularRadius.value = sunAngularRadius;
       material.uniforms.uReducedMotion.value = reducedMotion ? 1 : 0;
       if (!reducedMotion) points.rotation.y = time * 0.00014;
     },

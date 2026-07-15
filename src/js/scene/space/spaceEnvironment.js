@@ -32,6 +32,7 @@ export class SpaceEnvironment {
     this.paused = false;
     this.sunPosition = new THREE.Vector3();
     this.sunDirection = new THREE.Vector3(0, 0, -1);
+    this.sunAngularRadius = 0;
     this.deepSkyAnchor = new THREE.Vector3();
     this.hasSolarDirectionOverride = false;
     this.updateContext = {
@@ -41,6 +42,7 @@ export class SpaceEnvironment {
       solarSuppression: 1,
       sunDirection: this.sunDirection,
       sunPosition: this.sunPosition,
+      sunAngularRadius: 0,
       reducedMotion: false,
       contrast: 1,
     };
@@ -127,6 +129,11 @@ export class SpaceEnvironment {
     this.hasSolarDirectionOverride = false;
   }
 
+  /** Sets the physical photosphere's current apparent angular radius in radians. */
+  setSunAngularRadius(radians) {
+    this.sunAngularRadius = Math.max(0, Number(radians) || 0);
+  }
+
   /** Optional override for integrations with a directional solar-light model. */
   setSolarDirection(direction) {
     this.sunDirection.copy(direction).normalize();
@@ -163,6 +170,7 @@ export class SpaceEnvironment {
 
     const context = this.updateContext;
     context.time = elapsedTime;
+    context.sunAngularRadius = this.sunAngularRadius;
     context.exposure = state.backgroundContrast;
     context.solarSuppression = state.solarGlare;
     context.reducedMotion = this.reducedMotion;

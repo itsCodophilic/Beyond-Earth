@@ -87,6 +87,7 @@ export function createMilkyWayBackground({ count, radius, pixelRatio, rotation }
       uContrast: { value: 1 },
       uSolarSuppression: { value: 1 },
       uSunDirection: { value: new THREE.Vector3(0, 0, -1) },
+      uSunAngularRadius: { value: 0 },
     },
     vertexShader: milkyWayVertexShader,
     fragmentShader: milkyWayFragmentShader,
@@ -112,17 +113,19 @@ export function createMilkyWayBackground({ count, radius, pixelRatio, rotation }
 
   return {
     object: group,
-    update({ time, visibility, contrast, exposure, solarSuppression, sunDirection, reducedMotion }) {
+    update({ time, visibility, contrast, exposure, solarSuppression, sunDirection, sunAngularRadius = 0, reducedMotion }) {
       glowMaterial.uniforms.uVisibility.value = visibility;
       glowMaterial.uniforms.uContrast.value = contrast;
       glowMaterial.uniforms.uSolarSuppression.value = solarSuppression;
       glowMaterial.uniforms.uSunDirection.value.copy(sunDirection);
+      glowMaterial.uniforms.uSunAngularRadius.value = sunAngularRadius;
 
       starMaterial.uniforms.uTime.value = time;
       starMaterial.uniforms.uVisibility.value = Math.min(1.48, visibility * 1.16);
       starMaterial.uniforms.uExposure.value = exposure;
       starMaterial.uniforms.uSolarSuppression.value = solarSuppression;
       starMaterial.uniforms.uSunDirection.value.copy(sunDirection);
+      starMaterial.uniforms.uSunAngularRadius.value = sunAngularRadius;
       starMaterial.uniforms.uReducedMotion.value = reducedMotion ? 1 : 0;
     },
     resize(pixelRatioValue) {

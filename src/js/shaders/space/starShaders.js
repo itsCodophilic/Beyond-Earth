@@ -51,6 +51,7 @@ export const starFragmentShader = `
   uniform float uSolarSuppression;
   uniform float uReducedMotion;
   uniform vec3 uSunDirection;
+  uniform float uSunAngularRadius;
 
   void main() {
     vec2 point = gl_PointCoord - vec2(0.5);
@@ -61,15 +62,22 @@ export const starFragmentShader = `
     float halo = (1.0 - smoothstep(0.14, 0.50, radius)) * vHalo * 0.58;
 
     float shimmer = 1.0 + sin(uTime * vSpeed + vPhase) * 0.018 * (1.0 - uReducedMotion);
-    float sunAlignment = max(dot(normalize(vWorldDirection), normalize(uSunDirection)), 0.0);
-    float localGlare = pow(sunAlignment, 20.0) * uSolarSuppression;
-    float glareSuppression = 1.0 - localGlare * 0.91;
+    float sunAlignment = clamp(dot(normalize(vWorldDirection), normalize(uSunDirection)), -1.0, 1.0);
+    float angularSeparation = acos(sunAlignment);
+    float diskFeather = clamp(uSunAngularRadius * 0.035, 0.00008, 0.0012);
+    float solarDiskVisibility = smoothstep(
+      max(0.0, uSunAngularRadius - diskFeather),
+      uSunAngularRadius + diskFeather,
+      angularSeparation
+    );
 
+    // Only the physical photosphere occludes the deep sky. The surrounding
+    // stars stay present beneath the additive corona instead of forming a dark halo.
     float alpha = (pinCore + softCore + halo)
       * vBrightness
       * shimmer
       * uVisibility
-      * glareSuppression;
+      * solarDiskVisibility;
 
     if (alpha < 0.0035 || radius > 0.5) discard;
 
@@ -130,6 +138,7 @@ export const heroStarFragmentShader = `
   uniform float uSolarSuppression;
   uniform float uReducedMotion;
   uniform vec3 uSunDirection;
+  uniform float uSunAngularRadius;
 
   void main() {
     vec2 point = gl_PointCoord - vec2(0.5);
@@ -158,14 +167,21 @@ export const heroStarFragmentShader = `
     float glintWave = 0.5 + 0.5 * sin(uTime * (vSpeed * 0.42) + vPhase * 1.7);
     float rareGlint = 1.0 + pow(glintWave, 16.0) * vGlintStrength * 0.45 * (1.0 - uReducedMotion);
 
-    float glare = pow(max(dot(normalize(vWorldDirection), normalize(uSunDirection)), 0.0), 18.0);
+    float sunAlignment = clamp(dot(normalize(vWorldDirection), normalize(uSunDirection)), -1.0, 1.0);
+    float angularSeparation = acos(sunAlignment);
+    float diskFeather = clamp(uSunAngularRadius * 0.035, 0.00008, 0.0012);
+    float solarDiskVisibility = smoothstep(
+      max(0.0, uSunAngularRadius - diskFeather),
+      uSunAngularRadius + diskFeather,
+      angularSeparation
+    );
     float spikes = (horizontal + vertical) * (0.54 + vGlintStrength * 0.28) + diagonals;
     float alpha = (core + halo + spikes)
       * vBrightness
       * slowShimmer
       * rareGlint
       * uVisibility
-      * (1.0 - glare * uSolarSuppression * 0.90);
+      * solarDiskVisibility;
 
     if (alpha < 0.0030 || radius > 0.5) discard;
     gl_FragColor = vec4(vColor * uExposure * (1.08 + core * 0.82 + spikes * 0.42), alpha);

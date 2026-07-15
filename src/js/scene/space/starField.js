@@ -30,6 +30,7 @@ export function createStarMaterial({ pixelRatio, maxPointSize = 4.8 }) {
       uSolarSuppression: { value: 1 },
       uReducedMotion: { value: 0 },
       uSunDirection: { value: new THREE.Vector3(0, 0, -1) },
+      uSunAngularRadius: { value: 0 },
     },
     vertexShader: starVertexShader,
     fragmentShader: starFragmentShader,
@@ -133,12 +134,13 @@ export function createStarField({
   return {
     object: points,
     material,
-    update({ time, visibility, exposure, solarSuppression, sunDirection, reducedMotion }) {
+    update({ time, visibility, exposure, solarSuppression, sunDirection, sunAngularRadius = 0, reducedMotion }) {
       material.uniforms.uTime.value = time;
       material.uniforms.uVisibility.value = visibility;
       material.uniforms.uExposure.value = exposure;
       material.uniforms.uSolarSuppression.value = solarSuppression;
       material.uniforms.uSunDirection.value.copy(sunDirection);
+      material.uniforms.uSunAngularRadius.value = sunAngularRadius;
       material.uniforms.uReducedMotion.value = reducedMotion ? 1 : 0;
     },
     resize(pixelRatioValue) {

@@ -18,6 +18,7 @@ export const milkyWayFragmentShader = `
   uniform float uContrast;
   uniform float uSolarSuppression;
   uniform vec3 uSunDirection;
+  uniform float uSunAngularRadius;
 
   float hash(vec3 point) {
     point = fract(point * 0.3183099 + 0.1);
@@ -119,10 +120,16 @@ export const milkyWayFragmentShader = `
     color = mix(color, warmCore, centralBulge * 0.50 + warmKnots * 0.30);
     color = mix(color, highLatitudeDust, clamp(offPlaneClouds * 5.5, 0.0, 0.42));
 
-    float sunAlignment = max(dot(normalize(vWorldDirection), normalize(uSunDirection)), 0.0);
-    float localGlare = pow(sunAlignment, 18.0) * uSolarSuppression;
+    float sunAlignment = clamp(dot(normalize(vWorldDirection), normalize(uSunDirection)), -1.0, 1.0);
+    float angularSeparation = acos(sunAlignment);
+    float diskFeather = clamp(uSunAngularRadius * 0.035, 0.00008, 0.0012);
+    float solarDiskVisibility = smoothstep(
+      max(0.0, uSunAngularRadius - diskFeather),
+      uSunAngularRadius + diskFeather,
+      angularSeparation
+    );
 
-    float alpha = density * uVisibility * uContrast * (1.0 - localGlare * 0.88);
+    float alpha = density * uVisibility * uContrast * solarDiskVisibility;
     alpha = min(alpha, 0.66);
     if (alpha < 0.0010) discard;
 
