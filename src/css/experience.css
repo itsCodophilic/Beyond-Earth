@@ -793,6 +793,55 @@ body.is-hovering-celestial #universe {
   transform: translateX(0);
 }
 
+/* One-time post-loader entrance. The control drops vertically into its dock,
+   compresses on impact, and settles through progressively smaller ball-like
+   rebounds without drifting sideways. */
+.earth-return-button.is-awaiting-entrance {
+  opacity: 0;
+  pointer-events: none;
+  transform: translate3d(0, -170px, 0) scale(0.82);
+}
+
+.earth-return-button.is-entering {
+  animation: earth-return-arrival 1400ms cubic-bezier(0.16, 0.84, 0.2, 1) both;
+  pointer-events: none;
+  will-change: opacity, transform, filter;
+}
+
+.earth-return-button:disabled {
+  cursor: default;
+}
+
+@keyframes earth-return-arrival {
+  0% {
+    opacity: 0;
+    filter: blur(3px);
+    transform: translate3d(0, -170px, 0) scale(0.82);
+  }
+  35% {
+    opacity: 1;
+    filter: blur(0);
+    transform: translate3d(0, 22px, 0) scale(1.08, 0.92);
+  }
+  52% {
+    transform: translate3d(0, -34px, 0) scale(0.96, 1.04);
+  }
+  67% {
+    transform: translate3d(0, 13px, 0) scale(1.045, 0.955);
+  }
+  79% {
+    transform: translate3d(0, -8px, 0) scale(0.98, 1.02);
+  }
+  89% {
+    transform: translate3d(0, 3px, 0) scale(1.012, 0.988);
+  }
+  100% {
+    opacity: 1;
+    filter: blur(0);
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
 /* v19: make the measurement method an explicit, readable control instead of
    hiding a second meaning behind the edge information icon. */
 .progress.distance-readout {
@@ -947,6 +996,15 @@ body.is-hovering-celestial #universe {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .earth-return-button.is-entering {
+    animation: earth-return-arrival-reduced 260ms ease-out both;
+  }
+
+  @keyframes earth-return-arrival-reduced {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
   .distance-readout__method,
   .distance-readout__method-icon,
   .distance-readout__method-arrow {

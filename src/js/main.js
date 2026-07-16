@@ -37,6 +37,7 @@ import {
 import { SpaceEnvironment } from './scene/space/spaceEnvironment.js';
 import { JOURNEY_MAP } from './scene/space/spaceEnvironmentConfig.js';
 import { createSun, updateSun } from './stars/sun/sun.js';
+import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
 
 // An async immediately-invoked function lets us await texture loading while
 // keeping all application variables private to this module.
@@ -59,6 +60,7 @@ import { createSun, updateSun } from './stars/sun/sun.js';
   let distanceUnitEquivalent = null;
   let distanceMeasurementInfoButton = null;
   let distanceMeasurementSummaryLabel = null;
+  let distanceCinematicPanel = null;
   let activeDistanceInfo = null;
   let currentDistanceMeasurementInfo = null;
   let currentDistanceUnits = new Set();
@@ -97,26 +99,27 @@ import { createSun, updateSun } from './stars/sun/sun.js';
         </span>
         <span class="distance-readout__method-arrow" aria-hidden="true">›</span>
       </button>
-      <div class="distance-unit-popover" id="distance-unit-popover" role="dialog" aria-modal="false" aria-live="polite" aria-labelledby="distance-unit-title" hidden>
-        <button class="distance-unit-popover__close" type="button" aria-label="Close distance information">×</button>
-        <span class="distance-unit-popover__eyebrow" id="distance-unit-eyebrow">Distance information</span>
-        <strong id="distance-unit-title"></strong>
-        <p id="distance-unit-description"></p>
-        <small id="distance-unit-equivalent"></small>
-      </div>
     `;
     distanceValueLabel = progressShell.querySelector("#distance-travel-value");
     distanceSecondaryLabel = progressShell.querySelector("#distance-travel-secondary");
     distanceRegionLabel = progressShell.querySelector("#distance-travel-region");
     distanceModeLabel = progressShell.querySelector("#distance-travel-mode");
     distanceRangeLabel = progressShell.querySelector("#distance-travel-range");
-    distanceUnitPopover = progressShell.querySelector("#distance-unit-popover");
-    distanceUnitEyebrow = progressShell.querySelector("#distance-unit-eyebrow");
-    distanceUnitTitle = progressShell.querySelector("#distance-unit-title");
-    distanceUnitDescription = progressShell.querySelector("#distance-unit-description");
-    distanceUnitEquivalent = progressShell.querySelector("#distance-unit-equivalent");
     distanceMeasurementInfoButton = progressShell.querySelector("#distance-measurement-info");
     distanceMeasurementSummaryLabel = progressShell.querySelector("#distance-measurement-summary");
+
+    // Explanations are mounted outside `.progress`. Keeping them in a separate
+    // overlay prevents the readout from becoming a card containing another card
+    // and gives the connector/card reveal sequence room to play cinematically.
+    distanceCinematicPanel = createDistanceCinematicPanel({ readoutElement: progressShell });
+    if (distanceCinematicPanel) {
+      const cinematicElements = distanceCinematicPanel.elements;
+      distanceUnitPopover = cinematicElements.panel;
+      distanceUnitEyebrow = cinematicElements.eyebrow;
+      distanceUnitTitle = cinematicElements.title;
+      distanceUnitDescription = cinematicElements.description;
+      distanceUnitEquivalent = cinematicElements.equivalent;
+    }
   }
 
   const DISTANCE_UNIT_EXPLANATIONS = Object.freeze({
@@ -224,9 +227,7 @@ import { createSun, updateSun } from './stars/sun/sun.js';
       setDistanceText(distanceUnitEquivalent, info.equivalent ?? "", { skipFirstUnit: true });
       distanceUnitPopover.scrollTop = 0;
     }
-
-    distanceUnitPopover.hidden = false;
-    requestAnimationFrame(() => distanceUnitPopover.classList.add("is-visible"));
+    distanceCinematicPanel?.position();
   }
 
   function ensureDistancePopoverJourneyLock() {
@@ -236,38 +237,82 @@ import { createSun, updateSun } from './stars/sun/sun.js';
     }
   }
 
-  function closeDistanceInfoPopover({ releaseJourneyLock = true } = {}) {
-    if (!distanceUnitPopover) return;
-    distanceUnitPopover.hidden = true;
-    distanceUnitPopover.classList.remove("is-visible");
+  function closeDistanceInfoPopover({ releaseJourneyLock = true, onComplete } = {}) {
+    if (!distanceCinematicPanel) {
+      onComplete?.();
+      return;
+    }
+
+    // Clear the logical state immediately. The visual card may continue its
+    // cinematic exit, but per-frame distance updates must not keep requesting
+    // another close and restarting the connector retraction timer.
     activeDistanceInfo = null;
     distancePopoverTouchY = null;
 
-    if (releaseJourneyLock && distancePopoverOwnsJourneyLock && !focusedBody) {
-      distancePopoverOwnsJourneyLock = false;
-      unlockJourneyScroll();
-    } else if (!releaseJourneyLock) {
-      distancePopoverOwnsJourneyLock = false;
+    // The controller removes the card first and retracts its connector second.
+    // Journey input is restored only after the entire closing shot has finished.
+    distanceCinematicPanel.close({
+      onComplete: () => {
+        if (releaseJourneyLock && distancePopoverOwnsJourneyLock && !focusedBody) {
+          distancePopoverOwnsJourneyLock = false;
+          unlockJourneyScroll();
+        } else if (!releaseJourneyLock || focusedBody) {
+          distancePopoverOwnsJourneyLock = false;
+        }
+        onComplete?.();
+      },
+    });
+  }
+
+  /**
+   * Opens one external explanation. Switching between unit and measurement
+   * layouts completes the old card/line exit before drawing the new connector.
+   */
+  function presentDistanceInfo({ info, activeInfo, layout, anchor }) {
+    if (!info || !distanceCinematicPanel || !anchor) return;
+    ensureDistancePopoverJourneyLock();
+
+    // A unit link inside the open card changes its content without connecting
+    // the card back to itself; it keeps the original readout anchor instead.
+    const resolvedAnchor = distanceUnitPopover?.contains(anchor)
+      ? distanceCinematicPanel.getAnchor()
+      : anchor;
+    if (!resolvedAnchor) return;
+
+    const reveal = () => {
+      activeDistanceInfo = activeInfo;
+      renderDistancePopover(info);
+      distanceCinematicPanel.open({ layout, anchor: resolvedAnchor });
+    };
+
+    if (distanceCinematicPanel.isOpen() && distanceCinematicPanel.getLayout() !== layout) {
+      distanceCinematicPanel.close({ onComplete: reveal });
+      return;
     }
+    reveal();
   }
 
-  function showDistanceUnitPopover(unitKey) {
+  function showDistanceUnitPopover(unitKey, anchor) {
     const info = DISTANCE_UNIT_EXPLANATIONS[unitKey];
-    if (!info || !distanceUnitPopover) return;
-    ensureDistancePopoverJourneyLock();
-    activeDistanceInfo = { type: "unit", key: unitKey };
-    renderDistancePopover(info);
+    presentDistanceInfo({
+      info,
+      activeInfo: { type: "unit", key: unitKey },
+      layout: "unit",
+      anchor,
+    });
   }
 
-  function showDistanceMeasurementPopover() {
-    if (!currentDistanceMeasurementInfo || !distanceUnitPopover) return;
-    ensureDistancePopoverJourneyLock();
-    activeDistanceInfo = { type: "measurement" };
-    renderDistancePopover(currentDistanceMeasurementInfo);
+  function showDistanceMeasurementPopover(anchor) {
+    presentDistanceInfo({
+      info: currentDistanceMeasurementInfo,
+      activeInfo: { type: "measurement" },
+      layout: "measurement",
+      anchor,
+    });
   }
 
   function refreshOpenDistancePopover() {
-    if (!activeDistanceInfo || !distanceUnitPopover || distanceUnitPopover.hidden) return;
+    if (!activeDistanceInfo || !distanceCinematicPanel?.isOpen()) return;
     if (activeDistanceInfo.type === "measurement") {
       renderDistancePopover(currentDistanceMeasurementInfo);
       return;
@@ -305,8 +350,8 @@ import { createSun, updateSun } from './stars/sun/sun.js';
 
     event.preventDefault();
     event.stopPropagation();
-    if (unitButton) showDistanceUnitPopover(unitButton.dataset.distanceUnit);
-    else if (measurementButton) showDistanceMeasurementPopover();
+    if (unitButton) showDistanceUnitPopover(unitButton.dataset.distanceUnit, unitButton);
+    else if (measurementButton) showDistanceMeasurementPopover(measurementButton);
     else closeDistanceInfoPopover();
     return true;
   }
@@ -314,10 +359,37 @@ import { createSun, updateSun } from './stars/sun/sun.js';
   // Pointer-down activation remains reliable even while the numeric camera
   // value is easing and its text is being refreshed. Keyboard activation still
   // arrives through a normal click event with detail === 0.
-  progressShell?.addEventListener("pointerdown", activateDistanceReadoutControl);
-  progressShell?.addEventListener("click", (event) => {
-    if (event.detail === 0) activateDistanceReadoutControl(event);
-  });
+  function bindDistanceReadoutControls(element) {
+    element?.addEventListener("pointerdown", activateDistanceReadoutControl);
+    element?.addEventListener("click", (event) => {
+      if (event.detail === 0) activateDistanceReadoutControl(event);
+      // Pointer activation was already handled on pointerdown. Swallow its
+      // later click so an external card can never click through to WebGL.
+      else event.stopPropagation();
+    });
+  }
+
+  bindDistanceReadoutControls(progressShell);
+  bindDistanceReadoutControls(distanceUnitPopover);
+
+  // Any unrelated HTML control owns the next action. Dismiss the distance
+  // explanation first so cards and connector paths never survive navigation,
+  // focus controls, the brand link, or the return-to-Earth button.
+  function dismissDistanceInfoForExternalControl(event) {
+    if (!activeDistanceInfo || !distanceCinematicPanel?.isOpen()) return;
+    if (event.target.closest?.(".progress, .distance-cinematic-layer")) return;
+    // Returning to Earth is a staged cinematic action: its own handler waits
+    // for the card and connector to retire before moving the camera.
+    if (event.target.closest?.("#earth-return-button")) return;
+    if (!event.target.closest?.("button, a, [role='button']")) return;
+    closeDistanceInfoPopover();
+  }
+
+  addEventListener("pointerdown", dismissDistanceInfoForExternalControl, { capture: true });
+  addEventListener("click", (event) => {
+    // Keyboard-activated buttons dispatch click without a preceding pointerdown.
+    if (event.detail === 0) dismissDistanceInfoForExternalControl(event);
+  }, { capture: true });
 
   // Keep modal scrolling inside the information box. It must never move the
   // scroll-driven camera journey underneath it.
@@ -472,6 +544,10 @@ import { createSun, updateSun } from './stars/sun/sun.js';
     `;
     document.body.append(earthReturnButton);
   }
+  // The rocket remains outside the frame while the loader is visible. It is
+  // enabled only after its single overshoot-and-settle entrance has started.
+  earthReturnButton.classList.add("is-awaiting-entrance");
+  earthReturnButton.disabled = true;
 
   // Scene is the root container of the 3D scene graph. Anything not attached to
   // the scene (directly or through a Group) cannot be rendered.
@@ -1637,7 +1713,7 @@ import { createSun, updateSun } from './stars/sun/sun.js';
 
     // Measurement/unit explanations belong to the previous readout state and
     // should not remain open while focus is changed or dismissed.
-    if (distanceUnitPopover && !distanceUnitPopover.hidden) {
+    if (activeDistanceInfo && distanceUnitPopover && !distanceUnitPopover.hidden) {
       closeDistanceInfoPopover({ releaseJourneyLock: false });
     }
 
@@ -1699,16 +1775,16 @@ import { createSun, updateSun } from './stars/sun/sun.js';
     }
   }
 
-  function travelBackToEarth() {
+  let isEarthReturnQueued = false;
+
+  /** Performs the camera reset only after any open distance shot has ended. */
+  function completeTravelBackToEarth() {
     clearCelestialHover();
     if (celestialHoverTimer) {
       clearTimeout(celestialHoverTimer);
       celestialHoverTimer = null;
     }
 
-    if (distanceUnitPopover && !distanceUnitPopover.hidden) {
-      closeDistanceInfoPopover({ releaseJourneyLock: false });
-    }
     if (focusedBody) setAsteroidInspectionDetail(focusedBody, false);
     focusedBody = null;
     focusedBodyLocator.visible = false;
@@ -1749,6 +1825,30 @@ import { createSun, updateSun } from './stars/sun/sun.js';
     setTimeout(() => earthReturnButton.classList.remove("is-returning"), 850);
   }
 
+  function travelBackToEarth() {
+    if (isEarthReturnQueued) return;
+
+    // Keep the current camera perfectly still while the explanation card
+    // shrinks away and its luminous route retracts. Starting the Earth reset
+    // only after that sequence completes prevents the line from visibly
+    // lingering over an already-arrived Earth scene.
+    if (distanceCinematicPanel?.isOpen()) {
+      isEarthReturnQueued = true;
+      earthReturnButton.disabled = true;
+      closeDistanceInfoPopover({
+        releaseJourneyLock: false,
+        onComplete: () => {
+          isEarthReturnQueued = false;
+          earthReturnButton.disabled = false;
+          completeTravelBackToEarth();
+        },
+      });
+      return;
+    }
+
+    completeTravelBackToEarth();
+  }
+
   earthReturnButton.addEventListener("click", travelBackToEarth);
 
   function exploreSpaceAtPointer() {
@@ -1787,7 +1887,7 @@ import { createSun, updateSun } from './stars/sun/sun.js';
 
   const preventFocusedJourneyScroll = (event) => {
     // Cards and the distance explanation retain their own internal scrolling.
-    if (event.target.closest?.(".body-card, .body-card-restore, .progress")) return;
+    if (event.target.closest?.(".body-card, .body-card-restore, .progress, .distance-cinematic-layer")) return;
     if (!isJourneyScrollLocked) return;
 
     event.preventDefault();
@@ -1796,7 +1896,7 @@ import { createSun, updateSun } from './stars/sun/sun.js';
   addEventListener("wheel", preventFocusedJourneyScroll, { passive: false });
 
   addEventListener("touchstart", (event) => {
-    if (event.target.closest?.(".body-card, .body-card-restore, .progress")) return;
+    if (event.target.closest?.(".body-card, .body-card-restore, .progress, .distance-cinematic-layer")) return;
     if (!focusedBody || event.touches.length !== 2) return;
     focusPinchDistance = Math.hypot(
       event.touches[0].clientX - event.touches[1].clientX,
@@ -1805,7 +1905,7 @@ import { createSun, updateSun } from './stars/sun/sun.js';
   }, { passive: true });
 
   addEventListener("touchmove", (event) => {
-    if (event.target.closest?.(".body-card, .body-card-restore, .progress")) return;
+    if (event.target.closest?.(".body-card, .body-card-restore, .progress, .distance-cinematic-layer")) return;
     if (!focusedBody || event.touches.length !== 2 || focusPinchDistance == null) return;
     event.preventDefault();
 
@@ -1833,7 +1933,7 @@ import { createSun, updateSun } from './stars/sun/sun.js';
     if (hoveredCelestialBody && !isPointerStillOnHoveredBody(hoveredCelestialBody)) {
       clearCelestialHover();
     }
-    if (event.target.closest?.(".hud, .body-card, .body-card-restore, .progress, .earth-return-button")) {
+    if (event.target.closest?.(".hud, .body-card, .body-card-restore, .progress, .distance-cinematic-layer, .earth-return-button")) {
       clearCelestialHover();
       lastPointer = { x: event.clientX, y: event.clientY };
       return;
@@ -1865,7 +1965,7 @@ import { createSun, updateSun } from './stars/sun/sun.js';
   addEventListener("pointerleave", clearCelestialHover);
 
   addEventListener("pointerdown", (event) => {
-    if (event.target.closest?.(".body-card-restore, .progress, .earth-return-button")) return;
+    if (event.target.closest?.(".body-card-restore, .progress, .distance-cinematic-layer, .earth-return-button")) return;
     updatePointerFromEvent(event);
     isDragging = true;
     dragDistance = 0;
@@ -1877,7 +1977,7 @@ import { createSun, updateSun } from './stars/sun/sun.js';
     updatePointerFromEvent(event);
     isDragging = false;
     // HUD clicks belong to HTML controls and must not select objects behind them.
-    if (event.target.closest?.(".hud, .body-card, .body-card-restore, .progress, .earth-return-button")) return;
+    if (event.target.closest?.(".hud, .body-card, .body-card-restore, .progress, .distance-cinematic-layer, .earth-return-button")) return;
     if (dragDistance > 12) return;
     // Details are opened only after this intentional click/tap raycast.
     const body = getBodyAtPointer();
@@ -1957,7 +2057,10 @@ import { createSun, updateSun } from './stars/sun/sun.js';
   addEventListener("pagehide", (event) => {
     // A page kept in the back-forward cache will resume with its WebGL context;
     // only a true discard should release the environment resources.
-    if (!event.persisted) spaceEnvironment.dispose();
+    if (!event.persisted) {
+      spaceEnvironment.dispose();
+      distanceCinematicPanel?.dispose();
+    }
   });
 
   /*
@@ -2095,5 +2198,13 @@ import { createSun, updateSun } from './stars/sun/sun.js';
   // Keep the loader visible briefly after setup so the opening transition feels intentional.
   setTimeout(() => {
     loader.classList.add("is-hidden");
+    // Let the loader nearly complete its fade before the persistent navigation
+    // rocket flies in, overshoots its resting point, and bounces into place.
+    setTimeout(() => {
+      earthReturnButton.disabled = false;
+      earthReturnButton.classList.remove("is-awaiting-entrance");
+      earthReturnButton.classList.add("is-entering");
+      setTimeout(() => earthReturnButton.classList.remove("is-entering"), 1500);
+    }, 620);
   }, 1350);
 })();

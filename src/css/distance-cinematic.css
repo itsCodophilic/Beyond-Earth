@@ -1,0 +1,265 @@
+/* --------------------------------------------------------------------------
+   Cinematic distance explanations
+
+   These cards are appended directly to <body>, outside the lower-left readout.
+   A connector draws first; the card then develops from the connector endpoint.
+   -------------------------------------------------------------------------- */
+
+.distance-cinematic-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 31;
+  pointer-events: none;
+}
+
+.distance-cinematic-panel.distance-unit-popover {
+  position: fixed;
+  z-index: 2;
+  margin: 0;
+  max-width: calc(100vw - 24px);
+  max-height: min(42vh, 320px);
+  padding: 17px 52px 17px 19px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  border: 1px solid rgba(125, 231, 255, 0.38);
+  border-radius: 13px;
+  background:
+    linear-gradient(145deg, rgba(8, 18, 32, 0.97), rgba(2, 7, 15, 0.94)),
+    rgba(2, 7, 15, 0.96);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.07),
+    inset 0 0 36px rgba(84, 184, 255, 0.035),
+    0 20px 48px rgba(0, 0, 0, 0.52),
+    0 0 28px rgba(90, 210, 255, 0.10);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  opacity: 0;
+  pointer-events: auto;
+  transform: translateY(9px) scale(0.985);
+  clip-path: inset(100% 0 0 0 round 13px);
+  transition:
+    clip-path 520ms cubic-bezier(0.18, 0.82, 0.22, 1),
+    opacity 300ms ease,
+    transform 520ms cubic-bezier(0.18, 0.82, 0.22, 1);
+}
+
+.distance-cinematic-panel.distance-unit-popover[data-layout="measurement"] {
+  border-color: rgba(105, 255, 184, 0.40);
+  background:
+    linear-gradient(145deg, rgba(5, 27, 25, 0.97), rgba(2, 9, 16, 0.95)),
+    rgba(2, 8, 15, 0.96);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.07),
+    inset 0 0 38px rgba(88, 255, 177, 0.035),
+    0 20px 48px rgba(0, 0, 0, 0.52),
+    0 0 30px rgba(88, 255, 177, 0.10);
+}
+
+.distance-cinematic-panel.distance-unit-popover[data-connection="horizontal"] {
+  transform: translateX(-11px) scale(0.985);
+  clip-path: inset(0 100% 0 0 round 13px);
+}
+
+.distance-cinematic-panel.distance-unit-popover.is-visible {
+  opacity: 1;
+  transform: translate(0, 0) scale(1);
+  clip-path: inset(0 0 0 0 round 13px);
+}
+
+.distance-cinematic-panel.distance-unit-popover.is-closing {
+  /* Keep intercepting the release/click until the closing sequence is fully
+     removed; otherwise the pointer could select the WebGL object behind it. */
+  pointer-events: auto;
+}
+
+.distance-cinematic-panel .distance-unit-popover__eyebrow {
+  font-size: 0.62rem;
+  letter-spacing: 0.16em;
+}
+
+.distance-cinematic-panel[data-layout="measurement"] .distance-unit-popover__eyebrow {
+  color: #88ffc5;
+}
+
+.distance-cinematic-panel.distance-unit-popover strong {
+  margin-top: 5px;
+  font-size: clamp(0.86rem, 1.6vw, 1.02rem);
+}
+
+.distance-cinematic-panel.distance-unit-popover p {
+  margin-top: 8px;
+  font-size: clamp(0.68rem, 1.15vw, 0.77rem);
+  line-height: 1.58;
+}
+
+.distance-cinematic-panel.distance-unit-popover small {
+  margin-top: 9px;
+  font-size: clamp(0.64rem, 1vw, 0.72rem);
+  line-height: 1.48;
+}
+
+.distance-cinematic-panel .distance-unit-popover__close {
+  top: 12px;
+  right: 13px;
+  width: 32px;
+  height: 32px;
+  background: rgba(3, 10, 20, 0.92);
+  box-shadow: 0 0 14px rgba(125, 231, 255, 0.12);
+}
+
+.distance-cinematic-panel[data-layout="measurement"] .distance-unit-popover__close {
+  border-color: rgba(105, 255, 184, 0.35);
+  box-shadow: 0 0 14px rgba(105, 255, 184, 0.10);
+}
+
+.distance-cinematic-connector {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  width: 100vw;
+  height: 100vh;
+  overflow: visible;
+  pointer-events: none;
+  color: #79eaff;
+  filter: drop-shadow(0 0 4px rgba(125, 231, 255, 0.78));
+}
+
+/* Unlike HTML controls, an SVG does not consistently receive the browser's
+   default `[hidden] { display: none; }` behavior. Declare it explicitly so a
+   fully retracted cinematic line cannot remain in the render layer. */
+.distance-cinematic-connector[hidden] {
+  display: none;
+}
+
+.distance-cinematic-connector__trail,
+.distance-cinematic-connector__beam {
+  fill: none;
+  vector-effect: non-scaling-stroke;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  transition: stroke-dashoffset 680ms cubic-bezier(0.16, 0.84, 0.2, 1);
+}
+
+.distance-cinematic-connector__trail {
+  stroke: currentColor;
+  stroke-width: 6;
+  opacity: 0.14;
+}
+
+.distance-cinematic-connector__beam {
+  stroke: currentColor;
+  stroke-width: 1.65;
+  opacity: 0.96;
+}
+
+.distance-cinematic-connector__origin,
+.distance-cinematic-connector__destination {
+  vector-effect: non-scaling-stroke;
+  fill: currentColor;
+  stroke: rgba(231, 251, 255, 0.96);
+  stroke-width: 1;
+  opacity: 0;
+  transform-box: fill-box;
+  transform-origin: center;
+  transform: scale(0.25);
+  transition: opacity 180ms ease, transform 260ms cubic-bezier(0.18, 0.82, 0.22, 1);
+}
+
+.distance-cinematic-connector__origin {
+  transition-delay: 0ms;
+}
+
+.distance-cinematic-connector__destination {
+  transition-delay: 500ms;
+}
+
+.distance-cinematic-connector[data-variant="measurement"] {
+  color: #69ffb8;
+  filter: drop-shadow(0 0 4px rgba(105, 255, 184, 0.80));
+}
+
+.distance-cinematic-connector.is-visible .distance-cinematic-connector__trail,
+.distance-cinematic-connector.is-visible .distance-cinematic-connector__beam {
+  stroke-dashoffset: 0;
+}
+
+.distance-cinematic-connector.is-visible .distance-cinematic-connector__origin,
+.distance-cinematic-connector.is-visible .distance-cinematic-connector__destination {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.distance-cinematic-connector.is-visible .distance-cinematic-connector__origin {
+  animation: distance-connector-origin-pulse 1.8s 680ms ease-in-out infinite;
+}
+
+.distance-cinematic-connector.is-retiring .distance-cinematic-connector__trail,
+.distance-cinematic-connector.is-retiring .distance-cinematic-connector__beam {
+  transition-duration: 560ms;
+  transition-timing-function: cubic-bezier(0.7, 0, 0.84, 0.16);
+}
+
+.distance-cinematic-connector.is-retiring .distance-cinematic-connector__origin,
+.distance-cinematic-connector.is-retiring .distance-cinematic-connector__destination {
+  transition-delay: 0ms;
+}
+
+@keyframes distance-connector-origin-pulse {
+  0%, 100% { opacity: 0.82; transform: scale(0.92); }
+  50% { opacity: 1; transform: scale(1.25); }
+}
+
+/* Leave enough horizontal room for the measurement card on desktop and on the
+   high-density, half-CSS-width view used by the in-app browser. */
+@media (min-width: 1101px) {
+  .progress.distance-readout {
+    max-width: min(620px, calc(100vw - 32px));
+  }
+}
+
+@media (min-width: 700px) and (max-width: 1100px) {
+  .progress.distance-readout {
+    max-width: min(430px, calc(100vw - 32px));
+  }
+}
+
+@media (max-width: 699px) {
+  .distance-cinematic-panel.distance-unit-popover {
+    max-height: min(38vh, 280px);
+    padding: 14px 44px 14px 15px;
+    border-radius: 11px;
+  }
+
+  .distance-cinematic-panel.distance-unit-popover strong {
+    font-size: 0.82rem;
+  }
+
+  .distance-cinematic-panel.distance-unit-popover p {
+    font-size: 0.66rem;
+  }
+
+  .distance-cinematic-panel.distance-unit-popover small {
+    font-size: 0.62rem;
+  }
+
+  .distance-cinematic-panel .distance-unit-popover__close {
+    top: 9px;
+    right: 9px;
+    width: 29px;
+    height: 29px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .distance-cinematic-panel.distance-unit-popover,
+  .distance-cinematic-connector,
+  .distance-cinematic-connector__trail,
+  .distance-cinematic-connector__beam,
+  .distance-cinematic-connector__origin,
+  .distance-cinematic-connector__destination {
+    animation: none !important;
+    transition: none;
+  }
+}
