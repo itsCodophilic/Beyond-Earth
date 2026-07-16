@@ -32,17 +32,19 @@
   position: relative;
   isolation: isolate;
   justify-self: end;
-  display: flex;
+  display: grid;
+  grid-template-columns: auto auto auto;
   align-items: center;
-  gap: 12px;
-  padding: 0 18px;
+  gap: 0;
+  min-height: 58px;
+  max-width: min(820px, calc(100vw - 300px));
+  padding: 6px;
+  overflow: hidden;
   border-color: rgba(125, 231, 255, 0.5);
-  border-radius: 10px;
+  border-radius: 14px;
   color: #fff;
-  font-size: 0.8rem;
-  font-weight: 820;
-  letter-spacing: 0.025em;
-  white-space: nowrap;
+  font-size: 0.72rem;
+  letter-spacing: 0.02em;
   text-shadow:
     0 0 8px rgba(255, 255, 255, 0.72),
     0 0 18px rgba(125, 231, 255, 0.78);
@@ -64,6 +66,118 @@
   opacity: 0.72;
 }
 
+.ship-controls::after {
+  position: absolute;
+  top: -35%;
+  bottom: -35%;
+  left: -90px;
+  z-index: -1;
+  width: 62px;
+  content: "";
+  pointer-events: none;
+  background: linear-gradient(90deg, transparent, rgba(180, 245, 255, 0.18), transparent);
+  transform: skewX(-17deg);
+  animation: guidanceScan 5.4s ease-in-out infinite;
+}
+
+.ship-controls__step,
+.ship-controls__escape {
+  position: relative;
+  min-width: 0;
+  min-height: 46px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  padding: 5px 13px;
+}
+
+.ship-controls__step + .ship-controls__step,
+.ship-controls__escape {
+  border-left: 1px solid rgba(125, 231, 255, 0.18);
+}
+
+.ship-controls__index {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border: 1px solid rgba(125, 231, 255, 0.32);
+  border-radius: 50%;
+  color: #82eaff;
+  font-family: "Space Mono", monospace;
+  font-size: 0.55rem;
+  box-shadow: inset 0 0 9px rgba(125, 231, 255, 0.12);
+}
+
+.ship-controls__copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  text-align: left;
+}
+
+.ship-controls__copy strong {
+  color: #f8fcff;
+  font-size: 0.68rem;
+  font-weight: 850;
+  line-height: 1.15;
+  white-space: nowrap;
+}
+
+.ship-controls__copy small {
+  color: rgba(178, 211, 229, 0.72);
+  font-size: 0.55rem;
+  font-weight: 650;
+  line-height: 1.15;
+  white-space: nowrap;
+}
+
+.ship-controls__escape {
+  appearance: none;
+  border-top: 0;
+  border-right: 0;
+  border-bottom: 0;
+  background: linear-gradient(120deg, rgba(157, 140, 255, 0.10), rgba(125, 231, 255, 0.06));
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  text-shadow: inherit;
+  transition: background 180ms ease, box-shadow 180ms ease;
+}
+
+.ship-controls__escape kbd {
+  min-width: 38px;
+  padding: 6px 7px;
+  border: 1px solid rgba(255, 154, 202, 0.62);
+  border-radius: 8px;
+  background: rgba(14, 8, 28, 0.82);
+  color: #fff2fa;
+  font-family: "Space Mono", monospace;
+  font-size: 0.66rem;
+  font-weight: 850;
+  text-align: center;
+  box-shadow:
+    inset 0 -2px 0 rgba(255, 125, 168, 0.22),
+    0 0 14px rgba(255, 125, 168, 0.24);
+}
+
+.ship-controls__escape:hover,
+.ship-controls__escape:focus-visible {
+  outline: none;
+  background: linear-gradient(120deg, rgba(157, 140, 255, 0.20), rgba(125, 231, 255, 0.13));
+  box-shadow: inset 0 0 18px rgba(125, 231, 255, 0.08);
+}
+
+.ship-controls__escape:hover kbd,
+.ship-controls__escape:focus-visible kbd {
+  border-color: rgba(125, 231, 255, 0.78);
+  box-shadow:
+    inset 0 -2px 0 rgba(125, 231, 255, 0.26),
+    0 0 20px rgba(125, 231, 255, 0.42);
+}
+
 @keyframes guidanceGlow {
   0%, 100% {
     border-color: rgba(125, 231, 255, 0.42);
@@ -80,6 +194,12 @@
       0 0 24px rgba(125, 231, 255, 0.48),
       0 0 52px rgba(255, 125, 168, 0.28);
   }
+}
+
+@keyframes guidanceScan {
+  0%, 62% { transform: translateX(0) skewX(-17deg); opacity: 0; }
+  68% { opacity: 1; }
+  92%, 100% { transform: translateX(900px) skewX(-17deg); opacity: 0; }
 }
 
 @media (max-width: 860px) {
@@ -104,17 +224,37 @@
 
   .ship-controls {
     grid-column: 2;
-    max-width: 50vw;
-    overflow: hidden;
+    max-width: calc(100vw - 88px);
+    min-height: 46px;
+    padding: 4px;
   }
 
-  .ship-controls span:not(:first-child) {
+  .ship-controls__step,
+  .ship-controls__escape {
+    min-height: 38px;
+    gap: 5px;
+    padding: 3px 8px;
+  }
+
+  .ship-controls__index,
+  .ship-controls__copy small {
     display: none;
+  }
+
+  .ship-controls__copy strong {
+    font-size: 0.57rem;
+  }
+
+  .ship-controls__escape kbd {
+    min-width: 34px;
+    padding: 5px;
+    font-size: 0.58rem;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .ship-controls {
+  .ship-controls,
+  .ship-controls::after {
     animation: none;
   }
 }

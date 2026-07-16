@@ -237,7 +237,11 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
     }
   }
 
-  function closeDistanceInfoPopover({ releaseJourneyLock = true, onComplete } = {}) {
+  function closeDistanceInfoPopover({
+    releaseJourneyLock = true,
+    resumeJourneyImmediately = false,
+    onComplete,
+  } = {}) {
     if (!distanceCinematicPanel) {
       onComplete?.();
       return;
@@ -249,8 +253,20 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
     activeDistanceInfo = null;
     distancePopoverTouchY = null;
 
+    // Movement-intent dismissals release the frozen page synchronously. The
+    // wheel, drag, key, or scene click that caused the dismissal can therefore
+    // affect the camera immediately while the visual card keeps retracting.
+    if (resumeJourneyImmediately
+      && releaseJourneyLock
+      && distancePopoverOwnsJourneyLock
+      && !focusedBody) {
+      distancePopoverOwnsJourneyLock = false;
+      unlockJourneyScroll();
+    }
+
     // The controller removes the card first and retracts its connector second.
-    // Journey input is restored only after the entire closing shot has finished.
+    // Explicit close buttons retain the slower reading-mode release; movement
+    // dismissals may already have restored input through the block above.
     distanceCinematicPanel.close({
       onComplete: () => {
         if (releaseJourneyLock && distancePopoverOwnsJourneyLock && !focusedBody) {
@@ -372,23 +388,50 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
   bindDistanceReadoutControls(progressShell);
   bindDistanceReadoutControls(distanceUnitPopover);
 
-  // Any unrelated HTML control owns the next action. Dismiss the distance
-  // explanation first so cards and connector paths never survive navigation,
-  // focus controls, the brand link, or the return-to-Earth button.
-  function dismissDistanceInfoForExternalControl(event) {
+  // Any new interaction outside the distance instrument ends reading mode.
+  // Camera input resumes immediately and runs in parallel with the cinematic
+  // card/connector exit, so the triggering gesture is never discarded.
+  function dismissDistanceInfoForJourneyIntent(event) {
     if (!activeDistanceInfo || !distanceCinematicPanel?.isOpen()) return;
     if (event.target.closest?.(".progress, .distance-cinematic-layer")) return;
-    // Returning to Earth is a staged cinematic action: its own handler waits
-    // for the card and connector to retire before moving the camera.
-    if (event.target.closest?.("#earth-return-button")) return;
-    if (!event.target.closest?.("button, a, [role='button']")) return;
-    closeDistanceInfoPopover();
+    // These two controls run their own coordinated exit sequence.
+    if (event.target.closest?.("#earth-return-button, #space-exit-control")) return;
+
+    // A wheel event that starts against a position-fixed page may be discarded
+    // even if the lock is removed during capture. Prevent that ambiguous native
+    // default and apply its exact distance after restoring the scroll journey.
+    // Focused-body wheels are excluded because their later handler controls the
+    // optical zoom rather than document scroll.
+    const resumesPageJourney = event.type === "wheel"
+      && distancePopoverOwnsJourneyLock
+      && !focusedBody;
+    const journeyScrollY = journeyScrollSnapshot?.scrollY ?? window.scrollY;
+    if (resumesPageJourney) event.preventDefault();
+
+    closeDistanceInfoPopover({ resumeJourneyImmediately: true });
+
+    if (resumesPageJourney) {
+      const deltaScale = event.deltaMode === 1
+        ? 32
+        : event.deltaMode === 2
+          ? innerHeight
+          : 1;
+      const targetScrollY = journeyScrollY + event.deltaY * deltaScale;
+      // Restoring `position: fixed` changes document layout. Apply the original
+      // position plus this wheel delta on the next paint, after that layout has
+      // settled, instead of relying on a relative scroll from a transient 0px.
+      requestAnimationFrame(() => {
+        window.scrollTo({ top: targetScrollY, left: 0, behavior: "auto" });
+        updateScrollProgress();
+      });
+    }
   }
 
-  addEventListener("pointerdown", dismissDistanceInfoForExternalControl, { capture: true });
+  addEventListener("pointerdown", dismissDistanceInfoForJourneyIntent, { capture: true });
+  addEventListener("wheel", dismissDistanceInfoForJourneyIntent, { capture: true, passive: false });
   addEventListener("click", (event) => {
     // Keyboard-activated buttons dispatch click without a preceding pointerdown.
-    if (event.detail === 0) dismissDistanceInfoForExternalControl(event);
+    if (event.detail === 0) dismissDistanceInfoForJourneyIntent(event);
   }, { capture: true });
 
   // Keep modal scrolling inside the information box. It must never move the
@@ -487,23 +530,57 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
     cardFacts.append(scaleRow);
   }
 
-  // Replace the original generic scroll guidance with the actual interaction model.
-  // Prefer the existing HUD guidance element so the instruction is shown only once.
+  // Replace the original generic sentence with three explicit actions. The Esc
+  // key is a real button as well as a keyboard shortcut, so either interaction
+  // runs the same exit logic.
   let spaceExploreHint = document.querySelector(".ship-controls");
+  const spaceGuidanceMarkup = `
+    <span class="ship-controls__step ship-controls__step--space">
+      <span class="ship-controls__index" aria-hidden="true">01</span>
+      <span class="ship-controls__copy">
+        <strong>Click empty space</strong>
+        <small>Travel into that region</small>
+      </span>
+    </span>
+    <span class="ship-controls__step ship-controls__step--body">
+      <span class="ship-controls__index" aria-hidden="true">02</span>
+      <span class="ship-controls__copy">
+        <strong>Click a celestial body</strong>
+        <small>Inspect its information</small>
+      </span>
+    </span>
+    <button
+      class="ship-controls__escape"
+      id="space-exit-control"
+      type="button"
+      aria-label="Exit the current space view"
+      aria-keyshortcuts="Escape"
+      title="Exit the current view (Escape)"
+    >
+      <kbd>Esc</kbd>
+      <span class="ship-controls__copy">
+        <strong>Exit current view</strong>
+        <small>Click here or press the key</small>
+      </span>
+    </button>
+  `;
   if (spaceExploreHint) {
-    spaceExploreHint.textContent = "Click a space region to move closer · Click a celestial body to inspect · Esc resets view";
-    spaceExploreHint.setAttribute("aria-label", spaceExploreHint.textContent);
+    spaceExploreHint.innerHTML = spaceGuidanceMarkup;
+    spaceExploreHint.setAttribute("aria-label", "Universe navigation instructions");
   } else {
-    spaceExploreHint = document.querySelector("#space-explore-hint");
-    if (!spaceExploreHint) {
-      spaceExploreHint = document.createElement("div");
-      spaceExploreHint.id = "space-explore-hint";
-      spaceExploreHint.className = "space-explore-hint";
-      spaceExploreHint.setAttribute("aria-hidden", "true");
-      spaceExploreHint.textContent = "Click a space region to move closer · Click a celestial body to inspect · Esc resets view";
-      document.body.append(spaceExploreHint);
-    }
+    spaceExploreHint = document.createElement("div");
+    spaceExploreHint.className = "ship-controls";
+    spaceExploreHint.setAttribute("aria-label", "Universe navigation instructions");
+    spaceExploreHint.innerHTML = spaceGuidanceMarkup;
+    document.querySelector(".hud")?.append(spaceExploreHint);
   }
+  const spaceExitControl = spaceExploreHint?.querySelector("#space-exit-control");
+  spaceExitControl?.addEventListener("click", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    exitCurrentView();
+    spaceExitControl.blur();
+  });
 
   // Hover does not open the full information card. It reveals a compact,
   // magnetic locator for every celestial body and slows orbital motion long
@@ -1966,6 +2043,9 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
 
   addEventListener("pointerdown", (event) => {
     if (event.target.closest?.(".body-card-restore, .progress, .distance-cinematic-layer, .earth-return-button")) return;
+    // A panel closed by its own close button remains modal until it retires. A
+    // journey-intent dismissal has already unlocked input and may continue.
+    if (distanceCinematicPanel?.isOpen() && isJourneyScrollLocked) return;
     updatePointerFromEvent(event);
     isDragging = true;
     dragDistance = 0;
@@ -1978,6 +2058,7 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
     isDragging = false;
     // HUD clicks belong to HTML controls and must not select objects behind them.
     if (event.target.closest?.(".hud, .body-card, .body-card-restore, .progress, .distance-cinematic-layer, .earth-return-button")) return;
+    if (distanceCinematicPanel?.isOpen() && isJourneyScrollLocked) return;
     if (dragDistance > 12) return;
     // Details are opened only after this intentional click/tap raycast.
     const body = getBodyAtPointer();
@@ -2000,6 +2081,23 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
     clearCelestialHover();
   });
 
+  /** Exits whichever temporary view currently owns the experience. */
+  function exitCurrentView() {
+    const isDistancePopoverOpen = Boolean(distanceUnitPopover && !distanceUnitPopover.hidden);
+    if (isDistancePopoverOpen) {
+      closeDistanceInfoPopover();
+      return;
+    }
+    if (focusedBody) {
+      focusBody(null);
+      updateBodyCard(null);
+      return;
+    }
+    if (hasExploredFreeSpace || freeOpticalZoomTarget !== 1 || freeExploreOffsetTarget.lengthSq() > 0.0001) {
+      resetFreeExploration();
+    }
+  }
+
   addEventListener("keydown", (event) => {
     const journeyKeys = [
       " ", "PageUp", "PageDown", "Home", "End",
@@ -2008,8 +2106,7 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
     const isDistancePopoverOpen = Boolean(distanceUnitPopover && !distanceUnitPopover.hidden);
 
     if (isDistancePopoverOpen && journeyKeys.includes(event.key)) {
-      event.preventDefault();
-      return;
+      closeDistanceInfoPopover({ resumeJourneyImmediately: true });
     }
 
     // Keyboard controls modify the same targets as dragging, so smoothing still applies.
@@ -2018,18 +2115,9 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
     }
 
     if (event.key === "Escape") {
-      if (isDistancePopoverOpen) {
-        closeDistanceInfoPopover();
-        return;
-      }
-      if (focusedBody) {
-        focusBody(null);
-        updateBodyCard(null);
-        return;
-      }
-      if (hasExploredFreeSpace || freeOpticalZoomTarget !== 1 || freeExploreOffsetTarget.lengthSq() > 0.0001) {
-        resetFreeExploration();
-      }
+      event.preventDefault();
+      exitCurrentView();
+      return;
     }
     if (event.key === "ArrowLeft") targetYaw += 0.18;
     if (event.key === "ArrowRight") targetYaw -= 0.18;
