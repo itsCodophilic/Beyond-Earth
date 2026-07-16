@@ -1,233 +1,346 @@
-.brand__mark {
-  --cyan: #7de7ff;
+/*
+ * CINEMATIC BEYOND EARTH EMBLEM
+ *
+ * The brand is built entirely from HTML and CSS so it stays sharp at every
+ * resolution. Layered gradients create a lit planet, while two orbit planes
+ * and their moons give the badge genuine visual depth without another WebGL
+ * scene competing with the main universe canvas.
+ */
+
+.brand {
+  --brand-cyan: #7de7ff;
+  --brand-blue: #527cff;
+  --brand-violet: #aa86ff;
 
   position: relative;
-  width: 42px;
+  isolation: isolate;
+  display: inline-grid;
+  grid-template-columns: 62px auto;
+  align-items: center;
+  gap: 12px;
+  min-width: 258px;
+  min-height: 68px;
+  padding: 6px 18px 6px 9px;
+  overflow: visible;
+  border: 1px solid rgba(125, 231, 255, 0.38);
+  border-radius: 17px;
+  color: var(--ink);
+  text-decoration: none;
+  cursor: pointer;
+  perspective: 620px;
+  transform-style: preserve-3d;
+  background:
+    linear-gradient(112deg, rgba(8, 21, 39, 0.88), rgba(4, 8, 20, 0.76) 58%, rgba(18, 11, 38, 0.78)),
+    rgba(3, 8, 18, 0.84);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.09),
+    inset 0 -12px 28px rgba(2, 6, 17, 0.58),
+    0 16px 42px rgba(0, 0, 0, 0.36),
+    0 0 22px rgba(82, 124, 255, 0.14);
+  backdrop-filter: blur(18px) saturate(1.25);
+  animation: brandCinematicArrival 1s 1.55s cubic-bezier(0.16, 1, 0.3, 1) backwards;
+  transition:
+    transform 600ms cubic-bezier(0.16, 1, 0.3, 1),
+    border-color 500ms ease,
+    box-shadow 500ms ease;
+}
+
+/* A dim lower edge makes the glass plaque read as a shallow 3D object. */
+.brand::after {
+  position: absolute;
+  right: 10px;
+  bottom: -5px;
+  left: 10px;
+  z-index: -2;
+  height: 13px;
+  border-radius: 0 0 15px 15px;
+  content: "";
+  background: linear-gradient(90deg, rgba(54, 129, 176, 0.42), rgba(28, 34, 75, 0.74), rgba(105, 53, 143, 0.36));
+  filter: blur(0.5px);
+  transform: rotateX(-64deg) translateZ(-7px);
+  transform-origin: top;
+  opacity: 0.78;
+}
+
+/* A narrow light sweep gives the plaque a cinematic, glass-like arrival. */
+.brand::before {
+  position: absolute;
+  inset: 1px;
+  z-index: -1;
+  border-radius: 16px;
+  content: "";
+  pointer-events: none;
+  background: linear-gradient(108deg, transparent 20%, rgba(153, 235, 255, 0.16) 43%, rgba(255, 255, 255, 0.28) 50%, transparent 61%);
+  background-size: 260% 100%;
+  background-position: 150% 0;
+  mix-blend-mode: screen;
+  animation: brandGlassSweep 6.8s 2.1s ease-in-out infinite;
+}
+
+.brand__mark {
+  position: relative;
+  display: grid;
+  width: 58px;
+  aspect-ratio: 1;
+  place-items: center;
+  transform: translateZ(22px) rotateX(-5deg) rotateY(8deg);
+  transform-style: preserve-3d;
+  transition: transform 700ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Atmospheric bloom behind the planet and its orbit paths. */
+.brand__mark::before {
+  position: absolute;
+  inset: 5px;
+  z-index: -2;
+  border-radius: 50%;
+  content: "";
+  background: rgba(72, 153, 255, 0.48);
+  box-shadow:
+    0 0 19px rgba(125, 231, 255, 0.75),
+    0 0 38px rgba(88, 91, 255, 0.42),
+    0 0 58px rgba(170, 74, 255, 0.18);
+  filter: blur(9px);
+  animation: brandAtmosphere 4.8s ease-in-out infinite;
+}
+
+/* The radial layers form a sphere with a bright limb and dark terminator. */
+.brand__planet {
+  position: relative;
+  z-index: 2;
+  width: 33px;
+  aspect-ratio: 1;
+  overflow: hidden;
+  border: 1px solid rgba(199, 246, 255, 0.82);
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 30% 24%, rgba(255, 255, 255, 0.98) 0 3%, rgba(190, 244, 255, 0.8) 4%, transparent 14%),
+    radial-gradient(ellipse at 37% 38%, rgba(47, 198, 255, 0.82) 0 17%, transparent 19%),
+    radial-gradient(ellipse at 58% 65%, rgba(79, 73, 220, 0.75) 0 18%, transparent 20%),
+    radial-gradient(circle at 31% 30%, #7eeaff 0, #237bc7 31%, #1b2876 58%, #060817 76%);
+  box-shadow:
+    inset -9px -7px 11px rgba(0, 0, 0, 0.82),
+    inset 5px 4px 8px rgba(202, 250, 255, 0.35),
+    0 0 7px rgba(220, 252, 255, 0.96),
+    0 0 22px rgba(68, 176, 255, 0.88),
+    0 0 42px rgba(87, 72, 255, 0.48);
+  transform: translateZ(13px);
+  animation: brandPlanetFloat 5.4s ease-in-out infinite;
+}
+
+/* Fine cloud/continent fragments keep the planetary core from feeling flat. */
+.brand__planet::before {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  content: "";
+  background:
+    radial-gradient(ellipse at 32% 58%, rgba(157, 248, 242, 0.6) 0 6%, transparent 8%),
+    radial-gradient(ellipse at 54% 28%, rgba(220, 251, 255, 0.5) 0 5%, transparent 7%),
+    repeating-linear-gradient(9deg, transparent 0 4px, rgba(191, 239, 255, 0.14) 5px, transparent 7px);
+  filter: blur(0.35px);
+  animation: brandPlanetTexture 13s linear infinite;
+}
+
+/* Strong side shadow reinforces the sphere's direction of light. */
+.brand__planet::after {
+  position: absolute;
+  inset: -2px;
+  border-radius: 50%;
+  content: "";
+  background: radial-gradient(circle at 22% 24%, transparent 0 39%, rgba(1, 3, 14, 0.22) 56%, rgba(1, 2, 10, 0.88) 82%);
+}
+
+.brand__orbit {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 3;
+  display: block;
+  border: 1px solid rgba(191, 244, 255, 0.76);
+  border-radius: 50%;
+  box-shadow:
+    inset 0 0 5px rgba(125, 231, 255, 0.2),
+    0 0 6px rgba(125, 231, 255, 0.68);
+  transform-style: preserve-3d;
+}
+
+.brand__orbit::after {
+  position: absolute;
+  top: 50%;
+  right: -3px;
+  width: 5px;
   aspect-ratio: 1;
   border-radius: 50%;
-
-  /* Galaxy Core */
-  background:
-    radial-gradient(circle at center,
-      #ffffff 0%,
-      #bff7ff 12%,
-      #6fd8ff 28%,
-      rgba(61,120,255,.95) 42%,
-      rgba(10,16,35,.95) 70%,
-      #02030a 100%);
-
-  box-shadow:
-    0 0 12px rgba(125,231,255,.7),
-    0 0 30px rgba(72,170,255,.5),
-    0 0 60px rgba(72,170,255,.25);
-
-  overflow: visible;
-
-  animation: galaxyPulse 4s ease-in-out infinite;
+  content: "";
+  background: #f3fdff;
+  box-shadow: 0 0 5px #fff, 0 0 11px var(--brand-cyan);
+  transform: translateY(-50%) translateZ(6px);
 }
 
-
-/* Nebula Glow */
-
-.brand__mark::before{
-    content:"";
-    position:absolute;
-    inset:-16px;
-    border-radius:50%;
-
-    background:
-    radial-gradient(circle,
-        rgba(80,180,255,.35),
-        rgba(20,60,180,.15),
-        transparent 70%);
-
-    filter:blur(12px);
-
-    animation:nebula 6s linear infinite;
+.brand__orbit--outer {
+  width: 64px;
+  height: 27px;
+  margin: -13.5px 0 0 -32px;
+  animation: brandOuterOrbit 10s linear infinite;
 }
 
-/* Infinity Orbit */
-
-.brand__mark::after{
-
-    content:"";
-
-    position:absolute;
-
-    left:50%;
-    top:50%;
-
-    width:150%;
-    height:58%;
-
-    transform:
-        translate(-50%,-50%)
-        rotate(28deg);
-
-    border:1.6px solid rgba(255,255,255,.75);
-
-    border-radius:50%;
-
-    box-shadow:
-        0 0 10px rgba(125,231,255,.9);
-
-    animation:orbitSpin 10s linear infinite;
+.brand__orbit--inner {
+  width: 48px;
+  height: 38px;
+  margin: -19px 0 0 -24px;
+  border-color: rgba(187, 143, 255, 0.58);
+  box-shadow: 0 0 7px rgba(170, 134, 255, 0.6);
+  animation: brandInnerOrbit 7.4s linear infinite reverse;
 }
 
-/* Animations */
-
-@keyframes orbitSpin{
-
-    from{
-        transform:
-        translate(-50%,-50%)
-        rotate(0deg);
-    }
-
-    to{
-        transform:
-        translate(-50%,-50%)
-        rotate(360deg);
-    }
-
+.brand__orbit--inner::after {
+  top: 18%;
+  right: 1px;
+  width: 4px;
+  background: #dfc8ff;
+  box-shadow: 0 0 6px #fff, 0 0 12px var(--brand-violet);
 }
 
-@keyframes galaxyPulse{
-
-    0%,100%{
-
-        transform:scale(1);
-
-        box-shadow:
-        0 0 12px rgba(125,231,255,.7),
-        0 0 30px rgba(72,170,255,.5),
-        0 0 60px rgba(72,170,255,.25);
-
-    }
-
-    50%{
-
-        transform:scale(1.08);
-
-        box-shadow:
-        0 0 18px rgba(125,231,255,.9),
-        0 0 40px rgba(72,170,255,.8),
-        0 0 80px rgba(72,170,255,.45);
-
-    }
-
+.brand__copy {
+  position: relative;
+  z-index: 3;
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+  transform: translateZ(14px);
+  transform-style: preserve-3d;
 }
 
-@keyframes nebula{
-
-    0%{
-        transform:rotate(0deg) scale(1);
-    }
-
-    50%{
-        transform:rotate(180deg) scale(1.15);
-    }
-
-    100%{
-        transform:rotate(360deg) scale(1);
-    }
-
+.brand__kicker {
+  color: rgba(147, 226, 255, 0.82);
+  font-size: 0.49rem;
+  font-weight: 760;
+  line-height: 1.2;
+  letter-spacing: 0.21em;
+  text-transform: uppercase;
 }
 
-/* Achor */
-.brand {
-    cursor: pointer;
-    display: inline-flex;
-    align-items: center;
-    gap: 10px;
-    padding: 0 14px;
-    color: var(--ink);
-    text-decoration: none;
-    border-radius: 8px;
-    font-weight: 760;
-}
-
-/* Text */
 .brand__text {
-    position: relative;
-    font-size: 1.15rem;
-    font-weight: 600;
-    letter-spacing: 0.15rem;
-    color: rgb(253, 253, 253);
-
-    transition:
-        color .5s ease,
-        text-shadow .5s ease,
-        transform .45s cubic-bezier(.22,1,.36,1);
-
-    will-change: transform;
+  color: #f8fcff;
+  font-size: clamp(0.98rem, 1.35vw, 1.16rem);
+  font-weight: 720;
+  line-height: 1.2;
+  letter-spacing: 0.105em;
+  white-space: nowrap;
+  text-shadow:
+    0 0 10px rgba(226, 250, 255, 0.34),
+    0 0 24px rgba(90, 161, 255, 0.23);
+  transition: color 450ms ease, letter-spacing 600ms cubic-bezier(0.16, 1, 0.3, 1), text-shadow 450ms ease;
 }
 
-/* Soft animated glow behind text */
-
-.brand__text::before{
-    content:"";
-    position:absolute;
-    inset:-12px;
-    z-index:-1;
-
-    background:
-        radial-gradient(circle,
-            rgba(110,220,255,.45),
-            rgba(60,120,255,.15),
-            transparent 70%);
-
-    filter:blur(18px);
-
-    opacity:0;
-
-    transition:opacity .5s ease;
+.brand:hover,
+.brand:focus-visible {
+  border-color: rgba(146, 238, 255, 0.74);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.16),
+    inset 0 -12px 28px rgba(2, 6, 17, 0.48),
+    0 20px 48px rgba(0, 0, 0, 0.42),
+    0 0 24px rgba(96, 207, 255, 0.32),
+    0 0 48px rgba(138, 91, 255, 0.16);
+  transform: translateY(-3px) rotateX(3deg) rotateY(-4deg);
 }
 
-/* Hover */
-
-.brand:hover .brand__text{
-
-    color:#fff;
-
-    text-shadow:
-        0 0 10px rgba(140,230,255,.75),
-        0 0 20px rgba(90,170,255,.55),
-        0 0 40px rgba(90,170,255,.35);
-
-    transform:
-        translateY(-1px)
-        scale(1.015);
+.brand:hover .brand__mark,
+.brand:focus-visible .brand__mark {
+  transform: translateZ(31px) rotateX(-9deg) rotateY(13deg) scale(1.06);
 }
 
-.brand:hover .brand__text::before{
-
-    opacity:1;
-
-    animation:
-        cosmicGlow 3s ease-in-out infinite;
+.brand:hover .brand__text,
+.brand:focus-visible .brand__text {
+  color: #fff;
+  letter-spacing: 0.125em;
+  text-shadow: 0 0 11px rgba(255, 255, 255, 0.74), 0 0 28px rgba(90, 196, 255, 0.62);
 }
 
-/* Gentle breathing */
+.brand:focus-visible {
+  outline: 1px solid rgba(255, 255, 255, 0.92);
+  outline-offset: 4px;
+}
 
-@keyframes cosmicGlow{
+@keyframes brandCinematicArrival {
+  0% { opacity: 0; filter: blur(10px); transform: translate3d(-42px, -12px, -80px) rotateY(22deg) scale(0.78); }
+  58% { opacity: 1; filter: blur(0); transform: translate3d(5px, 1px, 12px) rotateY(-4deg) scale(1.025); }
+  100% { opacity: 1; filter: blur(0); transform: none; }
+}
 
-    0%,100%{
+@keyframes brandGlassSweep {
+  0%, 66% { background-position: 150% 0; opacity: 0; }
+  73% { opacity: 0.88; }
+  88%, 100% { background-position: -105% 0; opacity: 0; }
+}
 
-        transform:scale(.95);
+@keyframes brandAtmosphere {
+  0%, 100% { opacity: 0.62; transform: scale(0.9); }
+  50% { opacity: 1; transform: scale(1.16); }
+}
 
-        filter:blur(18px);
+@keyframes brandPlanetFloat {
+  0%, 100% { transform: translateZ(13px) translateY(0) rotate(-2deg); }
+  50% { transform: translateZ(18px) translateY(-1.5px) rotate(2deg); }
+}
 
-        opacity:.55;
-    }
+@keyframes brandPlanetTexture {
+  to { transform: rotate(360deg) scale(1.04); }
+}
 
-    50%{
+@keyframes brandOuterOrbit {
+  from { transform: rotateX(67deg) rotateZ(-21deg) rotateY(0deg); }
+  to { transform: rotateX(67deg) rotateZ(339deg) rotateY(360deg); }
+}
 
-        transform:scale(1.12);
+@keyframes brandInnerOrbit {
+  from { transform: rotateY(68deg) rotateZ(18deg) rotateX(0deg); }
+  to { transform: rotateY(68deg) rotateZ(378deg) rotateX(360deg); }
+}
 
-        filter:blur(26px);
+@media (max-width: 860px) {
+  .brand {
+    grid-template-columns: 58px;
+    min-width: 64px;
+    max-width: 64px;
+    min-height: 64px;
+    padding: 3px;
+    overflow: visible;
+    border-radius: 17px;
+  }
 
-        opacity:1;
-    }
+  .brand > .brand__copy {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+}
 
+@media (max-width: 480px) {
+  .brand {
+    grid-template-columns: 51px;
+    min-width: 57px;
+    max-width: 57px;
+    min-height: 57px;
+  }
+
+  .brand__mark {
+    width: 51px;
+    transform: translateZ(16px) scale(0.88);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .brand,
+  .brand::before,
+  .brand__mark::before,
+  .brand__planet,
+  .brand__planet::before,
+  .brand__orbit {
+    animation: none !important;
+  }
 }

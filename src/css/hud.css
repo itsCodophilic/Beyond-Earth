@@ -214,7 +214,7 @@
     overflow: hidden;
   }
 
-  .brand span:last-child {
+  .brand > .brand__copy {
     position: absolute;
     width: 1px;
     height: 1px;

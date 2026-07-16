@@ -261,7 +261,7 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
       && distancePopoverOwnsJourneyLock
       && !focusedBody) {
       distancePopoverOwnsJourneyLock = false;
-      unlockJourneyScroll();
+      unlockJourneyScroll({ preserveLiveCamera: true });
     }
 
     // The controller removes the card first and retracts its connector second.
@@ -582,6 +582,23 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
     spaceExitControl.blur();
   });
 
+  // Empty-space travel receives its own cinematic confirmation. The element is
+  // reused for every click so repeated dives never leave abandoned DOM nodes.
+  let spaceDivePulse = document.querySelector("#space-dive-pulse");
+  if (!spaceDivePulse) {
+    spaceDivePulse = document.createElement("div");
+    spaceDivePulse.id = "space-dive-pulse";
+    spaceDivePulse.className = "space-dive-pulse";
+    spaceDivePulse.setAttribute("aria-hidden", "true");
+    spaceDivePulse.innerHTML = `
+      <span class="space-dive-pulse__ring"></span>
+      <span class="space-dive-pulse__reticle"></span>
+      <span class="space-dive-pulse__point"></span>
+    `;
+    document.body.append(spaceDivePulse);
+  }
+  let spaceDivePulseTimer = null;
+
   // Hover does not open the full information card. It reveals a compact,
   // magnetic locator for every celestial body and slows orbital motion long
   // enough for small planets, moons and asteroids to be selected reliably.
@@ -753,6 +770,11 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
   const exploreIntersection = new THREE.Vector3();
   const exploreDelta = new THREE.Vector3();
   let hasExploredFreeSpace = false;
+  let spaceDiveModeUntil = 0;
+  // Scroll progress ends at the local stellar neighbourhood. Region clicks at
+  // that boundary continue accumulating physical travel here, allowing the
+  // distance instrument to move beyond the page's final scroll position.
+  let regionalDiveDistanceKilometres = 0;
   let hoveredCelestialBody = null;
   let celestialHoverTimer = null;
   let focusSelectionPulseStartedAt = -Infinity;
@@ -937,6 +959,16 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
   }
 
   function createCameraMeasurementInfo(travel, formatted) {
+    if (travel.isRegionalDive) {
+      return {
+        eyebrow: "How this distance is measured",
+        title: "Selected-region journey from Earth",
+        summary: "Scroll scale + region travel",
+        description: "The main scroll establishes the large-scale camera distance from Earth. After the outer scroll boundary is reached, each confirmed empty-space click adds another regional travel step in the chosen direction. This is an experience scale, not a live spacecraft location.",
+        equivalent: `Current display: ${formatted.primary} from Earth · Region: ${travel.region}.`,
+      };
+    }
+
     return {
       eyebrow: "How this distance is measured",
       title: "Scroll-driven camera distance from Earth",
@@ -975,7 +1007,15 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
       return;
     }
 
-    const travel = interpolateCameraDistanceFromEarth(progress);
+    const scrollTravel = interpolateCameraDistanceFromEarth(progress);
+    const travel = regionalDiveDistanceKilometres > 0
+      ? {
+          ...scrollTravel,
+          kilometres: scrollTravel.kilometres + regionalDiveDistanceKilometres,
+          region: "Selected stellar region",
+          isRegionalDive: true,
+        }
+      : scrollTravel;
     const formatted = formatEarthDistance(travel.kilometres);
     const progressDelta = progress - previousDistanceProgress;
     setDistanceText(distanceValueLabel, `${formatted.primary} from Earth`);
@@ -984,7 +1024,10 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
     if (distanceRangeLabel) distanceRangeLabel.hidden = true;
 
     if (distanceModeLabel) {
-      if (progressDelta > 0.00008) distanceModeLabel.textContent = "Moving outward";
+      if (elapsedTime < spaceDiveModeUntil) {
+        distanceModeLabel.textContent = "Diving into region";
+      }
+      else if (progressDelta > 0.00008) distanceModeLabel.textContent = "Moving outward";
       else if (progressDelta < -0.00008) distanceModeLabel.textContent = "Returning inward";
       else distanceModeLabel.textContent = "Camera position";
     }
@@ -1006,7 +1049,16 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
   function updateScrollProgress() {
     if (isJourneyScrollLocked) return;
     const maxScroll = document.documentElement.scrollHeight - innerHeight;
-    scrollProgress = maxScroll > 0 ? scrollY / maxScroll : 0;
+    const nextProgress = maxScroll > 0 ? scrollY / maxScroll : 0;
+
+    // Once the user scrolls away from an extended region dive, return control
+    // to the ordinary scroll-mapped scientific scale. A click at the maximum
+    // boundary itself causes no scroll event, so its extra distance persists.
+    if (regionalDiveDistanceKilometres > 0
+      && Math.abs(nextProgress - scrollProgress) > 0.0002) {
+      regionalDiveDistanceKilometres = 0;
+    }
+    scrollProgress = nextProgress;
   }
 
   function getCameraDistance(progress) {
@@ -1559,8 +1611,10 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
   }
 
   function findCelestialForHover() {
-    if (isDragging || lastPointerType === "touch"
-      || (distanceUnitPopover && !distanceUnitPopover.hidden)) {
+    // Reading a distance explanation no longer disables discovery in the 3D
+    // scene. Moving outside the card can still reveal the green target and its
+    // hover label, preparing the exact body the user may click next.
+    if (isDragging || lastPointerType === "touch") {
       clearCelestialHover();
       return;
     }
@@ -1743,7 +1797,7 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
   }
 
   /** Restores the exact scroll/camera journey position from before inspection. */
-  function unlockJourneyScroll() {
+  function unlockJourneyScroll({ preserveLiveCamera = false } = {}) {
     if (!isJourneyScrollLocked || !journeyScrollSnapshot) return;
     const snapshot = journeyScrollSnapshot;
 
@@ -1761,14 +1815,19 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
 
     scrollProgress = snapshot.scrollProgress;
     smoothProgress = snapshot.smoothProgress;
-    yaw = snapshot.yaw;
-    pitch = snapshot.pitch;
-    targetYaw = snapshot.targetYaw;
-    targetPitch = snapshot.targetPitch;
-    camera.fov = snapshot.cameraFov;
-    camera.updateProjectionMatrix();
-    cameraFocusPoint.copy(snapshot.cameraFocusPoint);
-    hasCameraFocusPoint = true;
+    // Explicit close controls restore the exact pre-reading shot. Interaction-
+    // driven exits preserve the camera angle currently under the pointer so a
+    // planet cannot jump away between pointer-down and pointer-up.
+    if (!preserveLiveCamera) {
+      yaw = snapshot.yaw;
+      pitch = snapshot.pitch;
+      targetYaw = snapshot.targetYaw;
+      targetPitch = snapshot.targetPitch;
+      camera.fov = snapshot.cameraFov;
+      camera.updateProjectionMatrix();
+      cameraFocusPoint.copy(snapshot.cameraFocusPoint);
+      hasCameraFocusPoint = true;
+    }
     previousDistanceProgress = snapshot.smoothProgress;
     isJourneyScrollLocked = false;
     journeyScrollSnapshot = null;
@@ -1832,7 +1891,9 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
   // keep scrolling responsive while JavaScript updates its normalized value.
   addEventListener("scroll", updateScrollProgress, { passive: true });
   function adjustFocusedZoom(delta) {
-    if (!focusedBody || (distanceUnitPopover && !distanceUnitPopover.hidden)) return;
+    // A wheel outside an open distance card starts closing that card in the
+    // capture phase, then continues here as a focused-body zoom gesture.
+    if (!focusedBody) return;
     focusZoomTarget = THREE.MathUtils.clamp(
       focusZoomTarget * Math.exp(delta * 0.00125),
       0.58,
@@ -1844,6 +1905,13 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
     freeOpticalZoomTarget = 1;
     freeExploreOffsetTarget.set(0, 0, 0);
     hasExploredFreeSpace = false;
+    spaceDiveModeUntil = 0;
+    regionalDiveDistanceKilometres = 0;
+    spaceDivePulse?.classList.remove("is-active");
+    if (spaceDivePulseTimer) {
+      clearTimeout(spaceDivePulseTimer);
+      spaceDivePulseTimer = null;
+    }
     spaceExploreHint?.classList.remove("is-hidden");
 
     if (immediate) {
@@ -1928,14 +1996,39 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
 
   earthReturnButton.addEventListener("click", travelBackToEarth);
 
+  /** Plays one precise HUD confirmation at the raycast-approved space point. */
+  function showSpaceDivePulse() {
+    if (!spaceDivePulse) return;
+    const screenX = (pointer.x * 0.5 + 0.5) * innerWidth;
+    const screenY = (-pointer.y * 0.5 + 0.5) * innerHeight;
+
+    spaceDivePulse.style.left = `${THREE.MathUtils.clamp(screenX, 54, innerWidth - 54)}px`;
+    spaceDivePulse.style.top = `${THREE.MathUtils.clamp(screenY, 54, innerHeight - 54)}px`;
+    spaceDivePulse.classList.remove("is-active");
+    // Reading layout restarts all child animations for rapid consecutive clicks.
+    void spaceDivePulse.offsetWidth;
+    spaceDivePulse.classList.add("is-active");
+
+    if (spaceDivePulseTimer) clearTimeout(spaceDivePulseTimer);
+    spaceDivePulseTimer = setTimeout(() => {
+      spaceDivePulse?.classList.remove("is-active");
+      spaceDivePulseTimer = null;
+    }, 1180);
+  }
+
   function exploreSpaceAtPointer() {
-    if (focusedBody || (distanceUnitPopover && !distanceUnitPopover.hidden)) return;
+    // The pointer-down capture already retires any distance explanation, so an
+    // empty-space click can move toward its region during the same transition.
+    if (focusedBody) return;
 
     raycaster.setFromCamera(pointer, camera);
     camera.getWorldDirection(explorePlaneNormal).normalize();
     explorePlane.setFromNormalAndCoplanarPoint(explorePlaneNormal, cameraFocusPoint);
 
     if (!raycaster.ray.intersectPlane(explorePlane, exploreIntersection)) return;
+
+    // Only a successful empty-space raycast earns the visual confirmation.
+    showSpaceDivePulse();
 
     const currentDistance = Math.max(1, camera.position.distanceTo(cameraFocusPoint));
     const maximumStep = Math.max(4, currentDistance * 0.44);
@@ -1957,6 +2050,42 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
       0.28,
       1,
     );
+
+    // A region dive is also an outward journey from Earth. Advance the same
+    // normalized scroll scale used by the camera and distance instrument so the
+    // scientific readout changes together with the visual move. The step grows
+    // smaller in deep space, preserving fine control near the end of the map.
+    const maxScroll = Math.max(0, document.documentElement.scrollHeight - innerHeight);
+    if (maxScroll > 0) {
+      const pageProgress = window.scrollY / maxScroll;
+      const currentProgress = THREE.MathUtils.clamp(
+        Math.max(pageProgress, scrollProgress, smoothProgress),
+        0,
+        1,
+      );
+      const progressStep = THREE.MathUtils.lerp(0.045, 0.012, currentProgress);
+      const nextProgress = THREE.MathUtils.clamp(currentProgress + progressStep, 0, 1);
+      scrollProgress = nextProgress;
+      spaceDiveModeUntil = elapsedTime + 1.5;
+
+      if (nextProgress > currentProgress + 0.00001) {
+        window.scrollTo({
+          top: nextProgress * maxScroll,
+          left: 0,
+          behavior: "smooth",
+        });
+      } else {
+        // At 100% scroll there is nowhere left for the page to move, but the
+        // viewer can still travel into a chosen stellar region. Add a readable
+        // 14% step beyond the current six-light-year journey on every click.
+        const boundaryTravel = interpolateCameraDistanceFromEarth(currentProgress);
+        regionalDiveDistanceKilometres += Math.max(
+          180_000,
+          boundaryTravel.kilometres * 0.14,
+        );
+        updateDistanceReadout(smoothProgress);
+      }
+    }
 
     hasExploredFreeSpace = true;
     spaceExploreHint?.classList.add("is-hidden");
@@ -2026,10 +2155,13 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
       targetYaw -= (event.clientX - lastPointer.x) * 0.006;
       targetPitch -= (event.clientY - lastPointer.y) * 0.004;
       targetPitch = THREE.MathUtils.clamp(targetPitch, -1.1, 1.1);
-    } else if (!spaceEnvironment.reducedMotion && !hoveredCelestialBody) {
+    } else if (!spaceEnvironment.reducedMotion
+      && !hoveredCelestialBody
+      && !distanceCinematicPanel?.isOpen()) {
       // Even without dragging, a tiny pointer parallax keeps the scene feeling alive.
       // It pauses while a hover target is magnetically locked so the camera does
-      // not pull a tiny body away from the cursor.
+      // not pull a tiny body away from the cursor, and while distance reading
+      // mode is open so a newly available hover target remains click-stable.
       targetYaw += pointer.x * 0.0005;
       targetPitch += pointer.y * 0.00025;
     }
@@ -2043,9 +2175,6 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
 
   addEventListener("pointerdown", (event) => {
     if (event.target.closest?.(".body-card-restore, .progress, .distance-cinematic-layer, .earth-return-button")) return;
-    // A panel closed by its own close button remains modal until it retires. A
-    // journey-intent dismissal has already unlocked input and may continue.
-    if (distanceCinematicPanel?.isOpen() && isJourneyScrollLocked) return;
     updatePointerFromEvent(event);
     isDragging = true;
     dragDistance = 0;
@@ -2058,7 +2187,6 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
     isDragging = false;
     // HUD clicks belong to HTML controls and must not select objects behind them.
     if (event.target.closest?.(".hud, .body-card, .body-card-restore, .progress, .distance-cinematic-layer, .earth-return-button")) return;
-    if (distanceCinematicPanel?.isOpen() && isJourneyScrollLocked) return;
     if (dragDistance > 12) return;
     // Details are opened only after this intentional click/tap raycast.
     const body = getBodyAtPointer();
