@@ -13,8 +13,8 @@
     <!-- <link rel="preconnect" href="https://unpkg.com" />
     <link rel="preconnect" href="https://threejs.org" /> -->
     <!-- Main stylesheet for page layout, HUD, and effects. -->
-    <script type="module" crossorigin src="/Beyond-Earth/assets/index-rraB6Fe_.js"></script>
-    <link rel="stylesheet" crossorigin href="/Beyond-Earth/assets/index-DehiIM72.css">
+    <script type="module" crossorigin src="/Beyond-Earth/assets/index-BtBorN1_.js"></script>
+    <link rel="stylesheet" crossorigin href="/Beyond-Earth/assets/index-CY1N7Epy.css">
   </head>
   <body>
     <!-- Loader overlay displayed while Three.js assets and textures initialize. -->
@@ -33,8 +33,15 @@
     <!-- Scrollable interface content that shapes the camera journey. -->
     <main class="experience">
       <header class="hud" aria-label="Universe navigation">
-        <!-- Brand and home anchor. -->
-        <a class="brand" href="#voyage" aria-label="Beyond Earth">
+        <!-- Cinematic project information trigger. -->
+        <button
+          class="brand"
+          id="about-experience-trigger"
+          type="button"
+          aria-label="Open information about Beyond Earth"
+          aria-haspopup="dialog"
+          aria-controls="about-experience-panel"
+        >
           <span class="brand__mark" aria-hidden="true">
             <span class="brand__orbit brand__orbit--outer"></span>
             <span class="brand__orbit brand__orbit--inner"></span>
@@ -44,7 +51,7 @@
             <span class="brand__kicker">Interstellar experience</span>
             <span class="brand__text">Beyond Earth</span>
           </span>
-        </a>
+        </button>
 
         <!-- Primary invitation into the focused slow-motion inspection experience. -->
         <div class="ship-controls" aria-label="Celestial inspection guidance">
