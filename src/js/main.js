@@ -760,6 +760,7 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
   let isDragging = false;
   let lastPointer = { x: 0, y: 0 };
   let pointerDownPosition = { x: 0, y: 0 };
+  let pointerDownCelestialBody = null;
   let dragDistance = 0;
   // focusedBody is null during free flight or references the clicked Mesh.
   let focusedBody = null;
@@ -1583,6 +1584,10 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
     );
   }
 
+  function getAsteroidEncounterIntensity() {
+    return THREE.MathUtils.clamp(Number(asteroidBelt?.encounterIntensity ?? 0), 0, 1);
+  }
+
   function projectedBodyRadiusPixels(body) {
     if (!body) return 0;
     const worldPosition = body.getWorldPosition(radiusWorldPosition);
@@ -1688,9 +1693,14 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
     const radiusPixels = projectedBodyRadiusPixels(body);
 
     if (isAsteroidBody(body)) {
-      // Asteroids keep a slightly magnetic lock because they move quickly and
-      // may be only a few pixels wide. The lock is still local to the locator.
-      return distancePixels <= THREE.MathUtils.clamp(radiusPixels + 8, 8, 18);
+      // Keep the selected rock stable, but do not let a large invisible cushion
+      // trap the cursor on an older neighbour in a dense belt region.
+      const encounterAssist = THREE.MathUtils.lerp(4.5, 6.5, getAsteroidEncounterIntensity());
+      return distancePixels <= THREE.MathUtils.clamp(
+        radiusPixels + encounterAssist,
+        6,
+        14,
+      );
     }
 
     // For visible planets, stars and moons, follow the rendered silhouette.
@@ -1775,14 +1785,19 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
       return;
     }
 
+    const encounterIntensity = getAsteroidEncounterIntensity();
     const nearbyInstance = findNearestAsteroidInstanceAtPointer({
       meshes: asteroidBelt.instancedBoulders,
       pointer,
       camera,
       viewportWidth: innerWidth,
       viewportHeight: innerHeight,
-      minimumVisibleRadiusPixels: 0.22,
-      maximumPixelRadius: innerWidth <= 760 ? 13 : 10,
+      minimumVisibleRadiusPixels: THREE.MathUtils.lerp(0.22, 0.14, encounterIntensity),
+      maximumPixelRadius: THREE.MathUtils.lerp(
+        innerWidth <= 760 ? 13 : 10,
+        innerWidth <= 760 ? 18 : 15,
+        encounterIntensity,
+      ),
     });
     setCelestialHover(nearbyInstance);
   }
@@ -1857,8 +1872,14 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
 
     // Individually modelled asteroids still use exact geometry, but must be large
     // enough on screen for the user to actually see what they are selecting.
+    const encounterIntensity = getAsteroidEncounterIntensity();
     const visibleDirectAsteroid = bodies.find((body) => (
-      isAsteroidBody(body) && projectedBodyRadiusPixels(body) >= (innerWidth <= 760 ? 1.1 : 0.65)
+      isAsteroidBody(body)
+      && projectedBodyRadiusPixels(body) >= THREE.MathUtils.lerp(
+        innerWidth <= 760 ? 1.1 : 0.65,
+        innerWidth <= 760 ? 0.72 : 0.42,
+        encounterIntensity,
+      )
     ));
     if (visibleDirectAsteroid) return visibleDirectAsteroid;
 
@@ -1870,8 +1891,16 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
       camera,
       viewportWidth: innerWidth,
       viewportHeight: innerHeight,
-      minimumVisibleRadiusPixels: innerWidth <= 760 ? 0.95 : 0.60,
-      maximumPixelRadius: innerWidth <= 760 ? 15 : 10,
+      minimumVisibleRadiusPixels: THREE.MathUtils.lerp(
+        innerWidth <= 760 ? 0.95 : 0.60,
+        innerWidth <= 760 ? 0.62 : 0.36,
+        encounterIntensity,
+      ),
+      maximumPixelRadius: THREE.MathUtils.lerp(
+        innerWidth <= 760 ? 15 : 10,
+        innerWidth <= 760 ? 20 : 16,
+        encounterIntensity,
+      ),
     });
   }
 
@@ -2306,11 +2335,11 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
       targetPitch = THREE.MathUtils.clamp(targetPitch, -1.1, 1.1);
     } else if (!spaceEnvironment.reducedMotion
       && !hoveredCelestialBody
+      && getAsteroidEncounterIntensity() < 0.18
       && !distanceCinematicPanel?.isOpen()) {
-      // Even without dragging, a tiny pointer parallax keeps the scene feeling alive.
-      // It pauses while a hover target is magnetically locked so the camera does
-      // not pull a tiny body away from the cursor, and while distance reading
-      // mode is open so a newly available hover target remains click-stable.
+      // Even without dragging, a tiny pointer parallax keeps the wider scene
+      // alive. It is disabled inside the asteroid belt because moving the camera
+      // under the pointer makes tiny rocks appear to repel the cursor.
       targetYaw += pointer.x * 0.0005;
       targetPitch += pointer.y * 0.00025;
     }
@@ -2330,6 +2359,14 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
     dragDistance = 0;
     pointerDownPosition = { x: event.clientX, y: event.clientY };
     lastPointer = { x: event.clientX, y: event.clientY };
+    // Capture the exact candidate at press time. Dense belt rocks can still move
+    // slightly before pointerup, so this prevents the click target from swapping
+    // to a neighbour or disappearing during a deliberate press.
+    pointerDownCelestialBody = hoveredCelestialBody
+      && asteroidHoverLocator.visible
+      && isPointerStillOnHoveredBody(hoveredCelestialBody)
+        ? hoveredCelestialBody
+        : getBodyAtPointer();
   });
 
   addEventListener("pointerup", (event) => {
@@ -2337,10 +2374,18 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
     updatePointerFromEvent(event);
     isDragging = false;
     // HUD clicks belong to HTML controls and must not select objects behind them.
-    if (event.target.closest?.(".about-experience, .hud, .body-card, .body-card-restore, .progress, .distance-cinematic-layer, .earth-return-button")) return;
-    if (dragDistance > 12) return;
-    // Details are opened only after this intentional click/tap raycast.
-    const body = getBodyAtPointer();
+    if (event.target.closest?.(".about-experience, .hud, .body-card, .body-card-restore, .progress, .distance-cinematic-layer, .earth-return-button")) {
+      pointerDownCelestialBody = null;
+      return;
+    }
+    if (dragDistance > 12) {
+      pointerDownCelestialBody = null;
+      return;
+    }
+    // Prefer the press-time target in dense populations. Fall back to a fresh
+    // visibility-aware scan only when the press began on empty space.
+    const body = pointerDownCelestialBody ?? getBodyAtPointer();
+    pointerDownCelestialBody = null;
     if (body) {
       focusBody(body);
       return;
@@ -2357,6 +2402,7 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
   addEventListener("pointercancel", () => {
     // Browsers can cancel input when a gesture leaves the window or becomes a system gesture.
     isDragging = false;
+    pointerDownCelestialBody = null;
     clearCelestialHover();
   });
 
@@ -2619,6 +2665,10 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
         jupiter,
         camera,
         currentSunAngularRadius,
+        {
+          focusedBody,
+          hoveredBody: hoveredCelestialBody,
+        },
       );
     }
     // One journey value coordinates exposure, stellar layers, galaxies, local

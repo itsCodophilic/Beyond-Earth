@@ -37,6 +37,19 @@ const ASTEROID_QUALITY_PRESETS = Object.freeze({
   low: Object.freeze({ instanceDensity: 0.44, debrisDensity: 0.34 }),
 });
 
+// The belt is physically sparse, but in a browser a real-scale pebble can become
+// too dark and too small to read. Encounter mode preserves the same population
+// and positions while increasing only local visual legibility near the belt.
+const ASTEROID_ENCOUNTER = Object.freeze({
+  verticalHalfThickness: 125,
+  fullStrengthDistance: 28,
+  fadeDistance: 210,
+  maximumVisualScale: 1.72,
+  maximumEmissiveBoost: 0.20,
+  maximumEnvironmentBoost: 0.10,
+  minimumMotionMultiplier: 0.25,
+});
+
 const COMPOSITIONS = {
   S: {
     label: "S-type (silicate)",
@@ -304,6 +317,34 @@ function createCompositionMaterials() {
       return [key, variants];
     }),
   );
+}
+
+/**
+ * Adds a GPU-side local scale to an instanced rock material. Scaling happens
+ * before the instance matrix is applied, so rock positions and orbital spacing
+ * never move. The belt can therefore become readable near the camera without
+ * expanding its orbit or rebuilding thousands of instance matrices.
+ */
+function installInstancedAsteroidVisibilityScale(material) {
+  if (!material || material.userData?.asteroidVisibilityScaleUniform) return;
+
+  const scaleUniform = { value: 1 };
+  material.userData.asteroidVisibilityScaleUniform = scaleUniform;
+  const previousCompile = material.onBeforeCompile;
+  material.onBeforeCompile = (shader, renderer) => {
+    previousCompile?.(shader, renderer);
+    shader.uniforms.uAsteroidVisualScale = scaleUniform;
+    shader.vertexShader = shader.vertexShader
+      .replace(
+        "#include <common>",
+        "#include <common>\nuniform float uAsteroidVisualScale;",
+      )
+      .replace(
+        "#include <begin_vertex>",
+        "vec3 transformed = vec3( position ) * uAsteroidVisualScale;",
+      );
+  };
+  material.customProgramCacheKey = () => "beyond-earth-instanced-asteroid-visibility-v1";
 }
 
 /** Creates a close-up stone material with no image-based surface shortcuts. */
@@ -618,7 +659,12 @@ export function resolveAsteroidInstanceHit(hit) {
   }
 
   const cachedTarget = mesh.userData.inspectionTargets.get(instanceId);
-  if (cachedTarget) return cachedTarget;
+  if (cachedTarget) {
+    const baseVisualRadius = Number(cachedTarget.userData.baseVisualRadius ?? 0);
+    const visibilityScale = Number(mesh.userData.visualScaleFactor ?? 1);
+    if (baseVisualRadius > 0) cachedTarget.userData.visualRadius = baseVisualRadius * visibilityScale;
+    return cachedTarget;
+  }
 
   const record = mesh.userData.instanceRecords[instanceId];
   if (!record) return null;
@@ -640,6 +686,9 @@ export function resolveAsteroidInstanceHit(hit) {
   target.userData.instanceRecord = record;
   target.userData.instanceScale = _instanceScale.clone();
   target.userData.originalInstanceMatrix = _instanceMatrix.clone();
+  target.userData.baseVisualRadius = Number(record.visualRadius ?? target.userData.visualRadius ?? 0);
+  target.userData.visualRadius = target.userData.baseVisualRadius
+    * Number(mesh.userData.visualScaleFactor ?? 1);
 
   mesh.add(target);
   mesh.userData.inspectionTargets.set(instanceId, target);
@@ -689,7 +738,9 @@ export function findNearestAsteroidInstanceAtPointer({
       if (projected.z < -1 || projected.z > 1) continue;
 
       const cameraDistance = Math.max(0.0001, cameraPosition.distanceTo(_position));
-      const projectedRadiusPixels = Number(record.visualRadius ?? 0) / cameraDistance * focalPixels;
+      const visibilityScale = Number(mesh.userData.visualScaleFactor ?? 1);
+      const projectedRadiusPixels = Number(record.visualRadius ?? 0)
+        * visibilityScale / cameraDistance * focalPixels;
       // Do not let a rock the user cannot actually see capture an empty-space click.
       if (!Number.isFinite(projectedRadiusPixels) || projectedRadiusPixels < minimumVisibleRadiusPixels) continue;
 
@@ -752,7 +803,9 @@ export function setAsteroidInspectionDetail(target, active) {
       count: record.composition === "C" ? 18 : 12,
       composition: record.composition,
     });
-    detailGroup.scale.copy(target.userData.instanceScale);
+    detailGroup.scale.copy(target.userData.instanceScale).multiplyScalar(
+      Number(mesh.userData.visualScaleFactor ?? 1),
+    );
     detailGroup.visible = false;
     target.add(detailGroup);
     target.userData.focusDetail = detailGroup;
@@ -1010,6 +1063,7 @@ function createInstancedBoulderField(materials, density = 1) {
         variant,
       );
       const material = materials[composition][variant].clone();
+      installInstancedAsteroidVisibilityScale(material);
       // Geometry and vertex colour now carry the detail; no UV colour/bump map
       // is allowed to paint ripples or repeated circular marks onto the stone.
       material.envMapIntensity = composition === "M" ? 0.12 : 0.025;
@@ -1119,6 +1173,7 @@ function createInstancedBoulderField(materials, density = 1) {
       mesh.userData.rotationSpeed = 0.000055 + compositionIndex * 0.000012 + variant * 0.000009;
       mesh.userData.capacity = count;
       mesh.userData.activeInstanceCount = count;
+      mesh.userData.visualScaleFactor = 1;
       mesh.userData.isInteractiveAsteroidField = true;
       mesh.userData.instanceRecords = instanceRecords;
       mesh.userData.inspectionTargets = new Map();
@@ -1194,6 +1249,7 @@ function createDistantDebris(count = UNRESOLVED_PEBBLE_COUNT) {
       uPixelRatio: { value: Math.min(window.devicePixelRatio, 2) },
       // Pebbles establish belt density but should not veil the solid rocks.
       uOpacity: { value: 0.84 },
+      uEncounterStrength: { value: 0 },
       uSunDirection: { value: new THREE.Vector3(0, 0, -1) },
       uSunAngularRadius: { value: 0 },
     },
@@ -1202,6 +1258,7 @@ function createDistantDebris(count = UNRESOLVED_PEBBLE_COUNT) {
       varying vec3 vColor;
       varying float vSolarClearance;
       uniform float uPixelRatio;
+      uniform float uEncounterStrength;
       uniform vec3 uSunDirection;
       uniform float uSunAngularRadius;
 
@@ -1219,19 +1276,28 @@ function createDistantDebris(count = UNRESOLVED_PEBBLE_COUNT) {
           angularSeparation
         );
         gl_Position = projectionMatrix * viewPosition;
-        gl_PointSize = clamp(aSize * uPixelRatio * (255.0 / max(1.0, -viewPosition.z)), 1.10, 4.75);
+        float encounterScale = mix(1.0, 1.62, uEncounterStrength);
+        float maximumPointSize = mix(4.75, 7.25, uEncounterStrength);
+        gl_PointSize = clamp(
+          aSize * uPixelRatio * encounterScale * (255.0 / max(1.0, -viewPosition.z)),
+          1.10,
+          maximumPointSize
+        );
       }
     `,
     fragmentShader: `
       varying vec3 vColor;
       varying float vSolarClearance;
       uniform float uOpacity;
+      uniform float uEncounterStrength;
 
       void main() {
         float distanceFromCentre = length(gl_PointCoord - vec2(0.5));
         float edge = 1.0 - smoothstep(0.40, 0.5, distanceFromCentre);
         if (edge < 0.02) discard;
-        gl_FragColor = vec4(vColor, edge * uOpacity * vSolarClearance);
+        vec3 visibleColor = vColor * mix(1.0, 1.52, uEncounterStrength);
+        float visibleOpacity = mix(uOpacity, min(1.0, uOpacity + 0.12), uEncounterStrength);
+        gl_FragColor = vec4(visibleColor, edge * visibleOpacity * vSolarClearance);
       }
     `,
     vertexColors: true,
@@ -1358,6 +1424,34 @@ function createGeometryPool() {
   });
 
   return pool;
+}
+
+function collectAsteroidVisibilityMaterials(root) {
+  const materials = new Set();
+  root?.traverse?.((object) => {
+    const objectMaterials = Array.isArray(object.material)
+      ? object.material
+      : object.material
+        ? [object.material]
+        : [];
+    objectMaterials.forEach((material) => {
+      if (!material?.isMeshStandardMaterial) return;
+      if (!Number.isFinite(material.userData.baseAsteroidEmissiveIntensity)) {
+        material.userData.baseAsteroidEmissiveIntensity = Number(material.emissiveIntensity ?? 0);
+      }
+      if (!material.userData.baseAsteroidEmissiveColor && material.emissive) {
+        material.userData.baseAsteroidEmissiveColor = material.emissive.clone();
+        material.userData.asteroidEncounterEmissiveColor = material.color
+          .clone()
+          .multiplyScalar(0.72);
+      }
+      if (!Number.isFinite(material.userData.baseAsteroidEnvironmentIntensity)) {
+        material.userData.baseAsteroidEnvironmentIntensity = Number(material.envMapIntensity ?? 0);
+      }
+      materials.add(material);
+    });
+  });
+  return [...materials];
 }
 
 /** Creates the complete interactive asteroid system. */
@@ -1546,6 +1640,7 @@ export function createAsteroidBelt({ world, hoverTargets = [], quality = "high" 
   // planet or empty space. They remain selectable through the visibility-aware
   // screen-space helper above once they are actually large enough to see.
   hoverTargets.push(...rocks);
+  const visibilityMaterials = collectAsteroidVisibilityMaterials(system);
 
   return {
     system,
@@ -1555,7 +1650,10 @@ export function createAsteroidBelt({ world, hoverTargets = [], quality = "high" 
     instancedBoulderField,
     instancedBoulders,
     distantDebris,
+    visibilityMaterials,
     capacityQualityName: initialQuality,
+    encounterIntensity: 0,
+    targetEncounterIntensity: 0,
   };
 }
 
@@ -1587,11 +1685,109 @@ export function setAsteroidBeltQuality(asteroidBelt, qualityName, pixelRatio = w
   }
 }
 
+function isAsteroidInteractionBody(body) {
+  if (!body) return false;
+  const type = String(body.userData?.info?.type ?? "").toLowerCase();
+  const name = String(body.userData?.name ?? body.name ?? "").toLowerCase();
+  return Boolean(
+    body.userData?.isAsteroid
+    || body.userData?.isInstancedAsteroid
+    || type.includes("asteroid")
+    || name.includes("asteroid")
+    || name.includes("family")
+  );
+}
+
+function getCameraAsteroidBeltProximity(camera) {
+  if (!camera) return 0;
+  const radialDistance = Math.hypot(camera.position.x, camera.position.z);
+  const radialGap = radialDistance < BELT_INNER_RADIUS
+    ? BELT_INNER_RADIUS - radialDistance
+    : radialDistance > BELT_OUTER_RADIUS
+      ? radialDistance - BELT_OUTER_RADIUS
+      : 0;
+  const verticalGap = Math.max(
+    0,
+    Math.abs(camera.position.y) - ASTEROID_ENCOUNTER.verticalHalfThickness,
+  );
+  const distanceToBeltVolume = Math.hypot(radialGap, verticalGap);
+  return 1 - THREE.MathUtils.smoothstep(
+    distanceToBeltVolume,
+    ASTEROID_ENCOUNTER.fullStrengthDistance,
+    ASTEROID_ENCOUNTER.fadeDistance,
+  );
+}
+
+function applyAsteroidEncounterVisibility(asteroidBelt, intensity) {
+  const safeIntensity = THREE.MathUtils.clamp(intensity, 0, 1);
+  const visualScale = THREE.MathUtils.lerp(
+    1,
+    ASTEROID_ENCOUNTER.maximumVisualScale,
+    safeIntensity,
+  );
+
+  asteroidBelt.instancedBoulders?.forEach((mesh) => {
+    mesh.userData.visualScaleFactor = visualScale;
+    const scaleUniform = mesh.material?.userData?.asteroidVisibilityScaleUniform;
+    if (scaleUniform) scaleUniform.value = visualScale;
+    mesh.userData.inspectionTargets?.forEach((target) => {
+      const baseVisualRadius = Number(target.userData.baseVisualRadius ?? 0);
+      if (baseVisualRadius > 0) target.userData.visualRadius = baseVisualRadius * visualScale;
+      if (target.userData.focusDetail && target.userData.instanceScale) {
+        target.userData.focusDetail.scale
+          .copy(target.userData.instanceScale)
+          .multiplyScalar(visualScale);
+      }
+    });
+  });
+
+  const debrisUniforms = asteroidBelt.distantDebris?.material?.uniforms;
+  if (debrisUniforms?.uEncounterStrength) debrisUniforms.uEncounterStrength.value = safeIntensity;
+
+  asteroidBelt.visibilityMaterials?.forEach((material) => {
+    const baseEmissive = Number(material.userData.baseAsteroidEmissiveIntensity ?? 0);
+    const baseEnvironment = Number(material.userData.baseAsteroidEnvironmentIntensity ?? 0);
+    const baseEmissiveColor = material.userData.baseAsteroidEmissiveColor;
+    const encounterEmissiveColor = material.userData.asteroidEncounterEmissiveColor;
+    if (material.emissive && baseEmissiveColor && encounterEmissiveColor) {
+      material.emissive
+        .copy(baseEmissiveColor)
+        .lerp(encounterEmissiveColor, safeIntensity * 0.56);
+    }
+    material.emissiveIntensity = baseEmissive
+      + ASTEROID_ENCOUNTER.maximumEmissiveBoost * safeIntensity;
+    material.envMapIntensity = baseEnvironment
+      + ASTEROID_ENCOUNTER.maximumEnvironmentBoost * safeIntensity;
+  });
+}
+
 /** Advances the orbit and spin of every resolved asteroid. */
-export function updateAsteroidBelt(asteroidBelt, motionScale = 1, jupiter = null, camera = null, sunAngularRadius = 0) {
+export function updateAsteroidBelt(
+  asteroidBelt,
+  motionScale = 1,
+  jupiter = null,
+  camera = null,
+  sunAngularRadius = 0,
+  interactionState = {},
+) {
   if (!asteroidBelt) return;
 
   const jupiterAngle = jupiter?.userData?.angle ?? 0;
+  const interactionStrength = isAsteroidInteractionBody(interactionState.focusedBody)
+    ? 1
+    : isAsteroidInteractionBody(interactionState.hoveredBody)
+      ? 0.96
+      : 0;
+  asteroidBelt.targetEncounterIntensity = Math.max(
+    interactionStrength,
+    getCameraAsteroidBeltProximity(camera),
+  );
+  asteroidBelt.encounterIntensity = THREE.MathUtils.lerp(
+    Number(asteroidBelt.encounterIntensity ?? 0),
+    asteroidBelt.targetEncounterIntensity,
+    0.16,
+  );
+  applyAsteroidEncounterVisibility(asteroidBelt, asteroidBelt.encounterIntensity);
 
   const debrisUniforms = asteroidBelt.distantDebris?.material?.uniforms;
   if (camera && debrisUniforms?.uSunDirection) {
@@ -1604,6 +1800,15 @@ export function updateAsteroidBelt(asteroidBelt, motionScale = 1, jupiter = null
     debrisUniforms.uSunAngularRadius.value = Math.max(0, sunAngularRadius);
   }
 
+  // Once the camera is inside the belt, the population intentionally enters a
+  // readable observation speed. This removes the feeling that tiny rocks slide
+  // away from the cursor while preserving motion in the wider solar-system view.
+  const beltMotionScale = motionScale * THREE.MathUtils.lerp(
+    1,
+    ASTEROID_ENCOUNTER.minimumMotionMultiplier,
+    asteroidBelt.encounterIntensity,
+  );
+
   asteroidBelt.rocks.forEach((rock) => {
     const orbit = rock.userData.orbit;
     if (!orbit) return;
@@ -1611,20 +1816,20 @@ export function updateAsteroidBelt(asteroidBelt, motionScale = 1, jupiter = null
     if (orbit.trojanOffset !== undefined) {
       orbit.angle = jupiterAngle + orbit.trojanOffset + orbit.trojanSpread;
     } else {
-      orbit.meanAnomaly = (orbit.meanAnomaly ?? orbit.angle ?? 0) + orbit.speed * motionScale;
+      orbit.meanAnomaly = (orbit.meanAnomaly ?? orbit.angle ?? 0) + orbit.speed * beltMotionScale;
       orbit.angle = asteroidTrueAnomalyFromMean(orbit.meanAnomaly, orbit.eccentricity ?? 0);
     }
 
     positionFromOrbit(rock.position, orbit, orbit.angle);
-    rock.rotation.x += rock.userData.spin.x * motionScale;
-    rock.rotation.y += rock.userData.spin.y * motionScale;
-    rock.rotation.z += rock.userData.spin.z * motionScale;
+    rock.rotation.x += rock.userData.spin.x * beltMotionScale;
+    rock.rotation.y += rock.userData.spin.y * beltMotionScale;
+    rock.rotation.z += rock.userData.spin.z * beltMotionScale;
   });
 
   // Each instanced population band advances at a slightly different rate. The
   // small difference prevents the belt from behaving like one rigid vinyl ring.
   asteroidBelt.instancedBoulders?.forEach((mesh) => {
-    mesh.rotation.y += mesh.userData.rotationSpeed * motionScale;
+    mesh.rotation.y += mesh.userData.rotationSpeed * beltMotionScale;
   });
-  asteroidBelt.distantDebris.rotation.y += 0.000045 * motionScale;
+  asteroidBelt.distantDebris.rotation.y += 0.000045 * beltMotionScale;
 }
