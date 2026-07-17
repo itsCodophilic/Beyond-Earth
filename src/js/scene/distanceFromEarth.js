@@ -152,6 +152,22 @@ function calculateApproximateEarthRange(elements) {
   };
 }
 
+/** Returns the scientific journey region nearest to an Earth distance. */
+export function getEarthDistanceRegion(kilometres) {
+  const safeKilometres = Math.max(0, Number(kilometres) || 0);
+
+  for (let index = 1; index < CAMERA_DISTANCE_STOPS.length; index += 1) {
+    const lower = CAMERA_DISTANCE_STOPS[index - 1];
+    const upper = CAMERA_DISTANCE_STOPS[index];
+    // The scroll interpolation is logarithmic, so the visual halfway point
+    // between two stops is their geometric mean rather than an arithmetic mean.
+    const midpoint = Math.sqrt(lower.kilometres * upper.kilometres);
+    if (safeKilometres <= midpoint) return lower.region;
+  }
+
+  return CAMERA_DISTANCE_STOPS[CAMERA_DISTANCE_STOPS.length - 1].region;
+}
+
 /** Smoothly converts scroll journey progress into the camera's Earth distance. */
 export function interpolateCameraDistanceFromEarth(progress) {
   const clampedProgress = THREE.MathUtils.clamp(progress, 0, 1);
@@ -247,7 +263,15 @@ export function formatEarthDistance(kilometres) {
   }
 
   const primaryValue = lightYears.toFixed(lightYears < 0.1 ? 3 : lightYears < 1 ? 2 : 1);
-  const secondaryValue = wholeNumberFormatter.format(astronomicalUnits);
+  // Once light-years become the primary display, derive AU from that exact
+  // displayed light-year value—not from the still-changing unrounded kilometre
+  // value. This keeps both labels perfectly synchronized: AU changes at the
+  // same instant the visible light-year number changes and is always its direct
+  // conversion (1 ly = LIGHT_YEAR_KM / ASTRONOMICAL_UNIT_KM AU).
+  const displayedLightYears = Number(primaryValue);
+  const displayedAstronomicalUnits = displayedLightYears
+    * (LIGHT_YEAR_KM / ASTRONOMICAL_UNIT_KM);
+  const secondaryValue = wholeNumberFormatter.format(displayedAstronomicalUnits);
   return {
     primary: `${primaryValue} light-years`,
     secondary: `${secondaryValue} AU`,

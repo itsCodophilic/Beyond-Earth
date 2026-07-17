@@ -21,6 +21,8 @@
   min-width: 258px;
   min-height: 68px;
   padding: 6px 18px 6px 9px;
+  font: inherit;
+  text-align: left;
   overflow: visible;
   border: 1px solid rgba(125, 231, 255, 0.38);
   border-radius: 17px;

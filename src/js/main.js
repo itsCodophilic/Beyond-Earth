@@ -32,6 +32,7 @@ import {
   createEarthDistanceTracker,
   formatEarthDistance,
   formatEarthDistanceRange,
+  getEarthDistanceRegion,
   interpolateCameraDistanceFromEarth,
 } from './scene/distanceFromEarth.js';
 import { SpaceEnvironment } from './scene/space/spaceEnvironment.js';
@@ -761,20 +762,25 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
   let focusZoomTarget = 1;
   let focusZoomCurrent = 1;
   let focusPinchDistance = null;
-  let freeOpticalZoomTarget = 1;
-  let freeOpticalZoomCurrent = 1;
-  const freeExploreOffsetTarget = new THREE.Vector3();
-  const freeExploreOffsetCurrent = new THREE.Vector3();
-  const explorePlane = new THREE.Plane();
-  const explorePlaneNormal = new THREE.Vector3();
-  const exploreIntersection = new THREE.Vector3();
-  const exploreDelta = new THREE.Vector3();
+  // Empty-space exploration moves the complete camera rig through the 3D
+  // scene. Separate camera/focus offsets let a clicked region become centred
+  // while the viewer physically advances toward it; distance is never inferred
+  // from an optical zoom or from a fixed amount added per click.
+  const freeExploreCameraOffsetTarget = new THREE.Vector3();
+  const freeExploreCameraOffsetCurrent = new THREE.Vector3();
+  const freeExploreFocusOffsetTarget = new THREE.Vector3();
+  const freeExploreFocusOffsetCurrent = new THREE.Vector3();
+  const exploreRayDirection = new THREE.Vector3();
+  const exploreBaseFocus = new THREE.Vector3();
+  const exploreBaseCamera = new THREE.Vector3();
+  const exploreDesiredCamera = new THREE.Vector3();
+  const exploreDesiredFocus = new THREE.Vector3();
+  const sphericalCameraOffset = new THREE.Vector3();
+  const cameraDistanceEarthPosition = new THREE.Vector3();
   let hasExploredFreeSpace = false;
+  let freeExploreDistanceReference = null;
+  let freeExploreDistanceResetTimer = null;
   let spaceDiveModeUntil = 0;
-  // Scroll progress ends at the local stellar neighbourhood. Region clicks at
-  // that boundary continue accumulating physical travel here, allowing the
-  // distance instrument to move beyond the page's final scroll position.
-  let regionalDiveDistanceKilometres = 0;
   let hoveredCelestialBody = null;
   let celestialHoverTimer = null;
   let focusSelectionPulseStartedAt = -Infinity;
@@ -787,6 +793,7 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
   let simulationTime = 0;
   let elapsedTime = 0;
   let isPageVisible = !document.hidden;
+  let isAboutExperienceOpen = false;
   const cameraFocusPoint = new THREE.Vector3();
   const targetFocusPoint = new THREE.Vector3();
 
@@ -876,6 +883,23 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
   const spaceEnvironment = new SpaceEnvironment({ scene, camera, renderer });
   await spaceEnvironment.init();
 
+  // The DOM-based project transmission announces its state so this WebGL
+  // director can truly freeze the universe behind the blurred information card.
+  addEventListener("beyond-earth:about-state", (event) => {
+    isAboutExperienceOpen = Boolean(event.detail?.open);
+    spaceEnvironment.setPaused(!isPageVisible || isAboutExperienceOpen);
+    if (isAboutExperienceOpen) {
+      isDragging = false;
+      clearCelestialHover();
+      if (activeDistanceInfo && distanceUnitPopover && !distanceUnitPopover.hidden) {
+        closeDistanceInfoPopover({ resumeJourneyImmediately: true });
+      }
+    } else {
+      // Ignore time spent reading so orbital bodies cannot jump on resume.
+      clock.getDelta();
+    }
+  });
+
   // Asteroid meshes provide nearby shape; dust points cheaply supply density.
   const asteroidBelt = createAsteroidBelt({ world, hoverTargets });
   const jupiter = planets.find((planet) => planet.name === "Jupiter");
@@ -959,12 +983,12 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
   }
 
   function createCameraMeasurementInfo(travel, formatted) {
-    if (travel.isRegionalDive) {
+    if (travel.basis === "camera-position") {
       return {
         eyebrow: "How this distance is measured",
-        title: "Selected-region journey from Earth",
-        summary: "Scroll scale + region travel",
-        description: "The main scroll establishes the large-scale camera distance from Earth. After the outer scroll boundary is reached, each confirmed empty-space click adds another regional travel step in the chosen direction. This is an experience scale, not a live spacecraft location.",
+        title: "Camera position relative to Earth",
+        summary: "Camera-to-Earth scene position",
+        description: "The current scroll scale calibrates the Three.js scene to a readable scientific distance. After a region is selected, the value follows the camera’s resulting 3D position relative to Earth instead of adding or subtracting a fixed amount for each click.",
         equivalent: `Current display: ${formatted.primary} from Earth · Region: ${travel.region}.`,
       };
     }
@@ -1008,14 +1032,19 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
     }
 
     const scrollTravel = interpolateCameraDistanceFromEarth(progress);
-    const travel = regionalDiveDistanceKilometres > 0
-      ? {
-          ...scrollTravel,
-          kilometres: scrollTravel.kilometres + regionalDiveDistanceKilometres,
-          region: "Selected stellar region",
-          isRegionalDive: true,
-        }
-      : scrollTravel;
+    let travel = scrollTravel;
+    if (freeExploreDistanceReference) {
+      earth.getWorldPosition(cameraDistanceEarthPosition);
+      const cameraSceneDistance = camera.position.distanceTo(cameraDistanceEarthPosition);
+      const cameraKilometres = cameraSceneDistance
+        * freeExploreDistanceReference.kilometresPerSceneUnit;
+      travel = {
+        ...scrollTravel,
+        kilometres: cameraKilometres,
+        region: `Selected region · ${getEarthDistanceRegion(cameraKilometres)}`,
+        basis: "camera-position",
+      };
+    }
     const formatted = formatEarthDistance(travel.kilometres);
     const progressDelta = progress - previousDistanceProgress;
     setDistanceText(distanceValueLabel, `${formatted.primary} from Earth`);
@@ -1035,7 +1064,7 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
     updateDistanceMeasurementContext({
       units: collectDistanceUnitKeys(formatted.primary, formatted.secondary),
       measurementInfo: createCameraMeasurementInfo(travel, formatted),
-      fingerprint: `camera:${travel.region}:${formatted.primaryUnit}`,
+      fingerprint: `camera:${travel.basis ?? "scroll"}:${travel.region}:${formatted.primaryUnit}`,
     });
     previousDistanceProgress = progress;
   }
@@ -1049,16 +1078,7 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
   function updateScrollProgress() {
     if (isJourneyScrollLocked) return;
     const maxScroll = document.documentElement.scrollHeight - innerHeight;
-    const nextProgress = maxScroll > 0 ? scrollY / maxScroll : 0;
-
-    // Once the user scrolls away from an extended region dive, return control
-    // to the ordinary scroll-mapped scientific scale. A click at the maximum
-    // boundary itself causes no scroll event, so its extra distance persists.
-    if (regionalDiveDistanceKilometres > 0
-      && Math.abs(nextProgress - scrollProgress) > 0.0002) {
-      regionalDiveDistanceKilometres = 0;
-    }
-    scrollProgress = nextProgress;
+    scrollProgress = maxScroll > 0 ? scrollY / maxScroll : 0;
   }
 
   function getCameraDistance(progress) {
@@ -1066,6 +1086,16 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
     const eased = progress * progress * (3 - 2 * progress);
     // lerp(a, b, t) returns a at t=0, b at t=1, and blends between them.
     return THREE.MathUtils.lerp(4.8, 2550, eased);
+  }
+
+  /** Converts the current yaw/pitch into the camera offset used by the journey. */
+  function setSphericalCameraOffset(target, distance) {
+    target.set(
+      Math.cos(pitch) * Math.sin(yaw) * distance,
+      Math.sin(pitch) * distance * 0.64,
+      Math.cos(pitch) * Math.cos(yaw) * distance,
+    );
+    return target;
   }
 
   /** Uses the focused body's physical region when inspection overrides scroll. */
@@ -1154,6 +1184,7 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
   const SUN_RADIUS_KM = PLANET_SCALE_PROFILES.Sun.diameterKm * 0.5;
   const SUN_BASE_VISUAL_RADIUS = PLANET_SCALE_PROFILES.Sun.visualRadius;
   let currentSunAngularRadius = 0;
+  let snapSunApparentScaleOnNextFrame = false;
 
   function findOrbitalParentPlanet(body) {
     if (!body) return null;
@@ -1226,7 +1257,13 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
     }
 
     const currentScale = sun.system.scale.x;
-    const nextScale = THREE.MathUtils.lerp(currentScale, targetScale, focusedBody ? 0.095 : 0.065);
+    const scaleEase = snapSunApparentScaleOnNextFrame
+      ? 1
+      : focusedBody
+        ? 0.095
+        : 0.065;
+    const nextScale = THREE.MathUtils.lerp(currentScale, targetScale, scaleEase);
+    snapSunApparentScaleOnNextFrame = false;
     sun.system.scale.setScalar(nextScale);
 
     const cameraToSun = Math.max(1, camera.position.distanceTo(sun.system.position));
@@ -1902,11 +1939,10 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
   }
 
   function resetFreeExploration({ immediate = false } = {}) {
-    freeOpticalZoomTarget = 1;
-    freeExploreOffsetTarget.set(0, 0, 0);
+    freeExploreCameraOffsetTarget.set(0, 0, 0);
+    freeExploreFocusOffsetTarget.set(0, 0, 0);
     hasExploredFreeSpace = false;
     spaceDiveModeUntil = 0;
-    regionalDiveDistanceKilometres = 0;
     spaceDivePulse?.classList.remove("is-active");
     if (spaceDivePulseTimer) {
       clearTimeout(spaceDivePulseTimer);
@@ -1915,8 +1951,22 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
     spaceExploreHint?.classList.remove("is-hidden");
 
     if (immediate) {
-      freeOpticalZoomCurrent = 1;
-      freeExploreOffsetCurrent.set(0, 0, 0);
+      freeExploreCameraOffsetCurrent.set(0, 0, 0);
+      freeExploreFocusOffsetCurrent.set(0, 0, 0);
+      freeExploreDistanceReference = null;
+      if (freeExploreDistanceResetTimer) {
+        clearTimeout(freeExploreDistanceResetTimer);
+        freeExploreDistanceResetTimer = null;
+      }
+    } else if (freeExploreDistanceReference) {
+      // Keep calculating from the physically returning camera while the full
+      // rig eases home. Only then hand the readout back to the scroll mapping.
+      if (freeExploreDistanceResetTimer) clearTimeout(freeExploreDistanceResetTimer);
+      freeExploreDistanceResetTimer = setTimeout(() => {
+        freeExploreDistanceReference = null;
+        freeExploreDistanceResetTimer = null;
+        updateDistanceReadout(smoothProgress);
+      }, 1250);
     }
   }
 
@@ -1950,19 +2000,26 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
     targetPitch = 0.22;
     yaw = targetYaw;
     pitch = targetPitch;
-    camera.fov = 56;
+    camera.fov = earth.userData?.focusFov ?? 34;
     camera.updateProjectionMatrix();
     earth.getWorldPosition(cameraFocusPoint);
     targetFocusPoint.copy(cameraFocusPoint);
     hasCameraFocusPoint = true;
-    updateBodyCard(null);
-    updateDistanceReadout(0);
 
-    document.documentElement.style.scrollBehavior = "smooth";
-    window.scrollTo({ top: 0, left: 0, behavior: "smooth" });
-    setTimeout(() => {
-      document.documentElement.style.scrollBehavior = "";
-    }, 650);
+    // Put the document at the real journey origin before focus locks scrolling.
+    // The camera itself provides the cinematic transition, while the stored
+    // focus snapshot now correctly restores to the top of the experience.
+    document.documentElement.style.scrollBehavior = "auto";
+    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+    document.documentElement.style.scrollBehavior = "";
+
+    // “Travel back to Earth” now lands in the exact same inspection state as
+    // clicking Earth: identical target, framing distance, FOV, readout, and
+    // apparent solar angle. This prevents the unfocused full-size Sun from
+    // appearing unnaturally close beside Earth during the return.
+    focusBody(earth);
+    updateBodyCard(earth);
+    snapSunApparentScaleOnNextFrame = true;
 
     earthReturnButton.classList.remove("is-returning");
     void earthReturnButton.offsetWidth;
@@ -2022,71 +2079,70 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
     if (focusedBody) return;
 
     raycaster.setFromCamera(pointer, camera);
-    camera.getWorldDirection(explorePlaneNormal).normalize();
-    explorePlane.setFromNormalAndCoplanarPoint(explorePlaneNormal, cameraFocusPoint);
+    exploreRayDirection.copy(raycaster.ray.direction).normalize();
 
-    if (!raycaster.ray.intersectPlane(explorePlane, exploreIntersection)) return;
-
-    // Only a successful empty-space raycast earns the visual confirmation.
+    // Any empty screen point defines a valid forward ray through the 3D world.
+    // The pulse confirms the exact region whose ray now becomes the view centre.
     showSpaceDivePulse();
 
-    const currentDistance = Math.max(1, camera.position.distanceTo(cameraFocusPoint));
-    const maximumStep = Math.max(4, currentDistance * 0.44);
-    const maximumTotalOffset = Math.max(8, currentDistance * 0.72);
-
-    exploreDelta
-      .copy(exploreIntersection)
-      .sub(cameraFocusPoint)
-      .clampLength(0, maximumStep);
-
-    freeExploreOffsetTarget
-      .add(exploreDelta.multiplyScalar(0.92))
-      .clampLength(0, maximumTotalOffset);
-
-    // Each empty-space click moves closer to the selected region. Repeated
-    // clicks progressively magnify it until a safe optical limit is reached.
-    freeOpticalZoomTarget = THREE.MathUtils.clamp(
-      freeOpticalZoomTarget * 0.68,
-      0.28,
-      1,
-    );
-
-    // A region dive is also an outward journey from Earth. Advance the same
-    // normalized scroll scale used by the camera and distance instrument so the
-    // scientific readout changes together with the visual move. The step grows
-    // smaller in deep space, preserving fine control near the end of the map.
-    const maxScroll = Math.max(0, document.documentElement.scrollHeight - innerHeight);
-    if (maxScroll > 0) {
-      const pageProgress = window.scrollY / maxScroll;
-      const currentProgress = THREE.MathUtils.clamp(
-        Math.max(pageProgress, scrollProgress, smoothProgress),
-        0,
-        1,
+    // Establish one local scene-to-kilometre calibration when regional travel
+    // starts. From this point onward the readout uses only the camera's actual
+    // 3D separation from Earth; clicks do not add an arbitrary distance value.
+    if (!freeExploreDistanceReference) {
+      const scrollTravel = interpolateCameraDistanceFromEarth(smoothProgress);
+      earth.getWorldPosition(cameraDistanceEarthPosition);
+      const cameraSceneDistance = Math.max(
+        0.0001,
+        camera.position.distanceTo(cameraDistanceEarthPosition),
       );
-      const progressStep = THREE.MathUtils.lerp(0.045, 0.012, currentProgress);
-      const nextProgress = THREE.MathUtils.clamp(currentProgress + progressStep, 0, 1);
-      scrollProgress = nextProgress;
-      spaceDiveModeUntil = elapsedTime + 1.5;
-
-      if (nextProgress > currentProgress + 0.00001) {
-        window.scrollTo({
-          top: nextProgress * maxScroll,
-          left: 0,
-          behavior: "smooth",
-        });
-      } else {
-        // At 100% scroll there is nowhere left for the page to move, but the
-        // viewer can still travel into a chosen stellar region. Add a readable
-        // 14% step beyond the current six-light-year journey on every click.
-        const boundaryTravel = interpolateCameraDistanceFromEarth(currentProgress);
-        regionalDiveDistanceKilometres += Math.max(
-          180_000,
-          boundaryTravel.kilometres * 0.14,
-        );
-        updateDistanceReadout(smoothProgress);
-      }
+      freeExploreDistanceReference = {
+        kilometresPerSceneUnit: scrollTravel.kilometres / cameraSceneDistance,
+      };
+    }
+    if (freeExploreDistanceResetTimer) {
+      clearTimeout(freeExploreDistanceResetTimer);
+      freeExploreDistanceResetTimer = null;
     }
 
+    const journeyDistance = getCameraDistance(smoothProgress);
+    const currentViewDistance = Math.max(1, camera.position.distanceTo(cameraFocusPoint));
+    const travelStep = THREE.MathUtils.clamp(currentViewDistance * 0.58, 3.5, 360);
+
+    // Build the unmodified scroll-journey pose for this frame. Regional targets
+    // are stored as offsets from that pose, so scrolling, focus transitions, and
+    // a later reset still have one reliable home position.
+    getFocusPoint(journeyDistance, exploreBaseFocus);
+    setSphericalCameraOffset(sphericalCameraOffset, journeyDistance);
+    exploreBaseCamera.copy(exploreBaseFocus).add(sphericalCameraOffset);
+
+    // Advance the camera itself along the clicked ray, then place the look-at
+    // point one current view-distance ahead. The selected region therefore
+    // becomes centred and closer because the complete camera rig travelled to
+    // it—not because the FOV pretended to zoom.
+    exploreDesiredCamera
+      .copy(camera.position)
+      .addScaledVector(exploreRayDirection, travelStep);
+    exploreDesiredFocus
+      .copy(exploreDesiredCamera)
+      .addScaledVector(exploreRayDirection, currentViewDistance);
+
+    freeExploreCameraOffsetTarget.copy(exploreDesiredCamera).sub(exploreBaseCamera);
+    freeExploreFocusOffsetTarget.copy(exploreDesiredFocus).sub(exploreBaseFocus);
+
+    // Keep repeated dives within the useful solar-system scene while preserving
+    // the exact relationship between the camera and its look-at point.
+    const maximumRigOffset = THREE.MathUtils.clamp(journeyDistance * 2.4, 12, 1250);
+    const largestOffset = Math.max(
+      freeExploreCameraOffsetTarget.length(),
+      freeExploreFocusOffsetTarget.length(),
+    );
+    if (largestOffset > maximumRigOffset) {
+      const scale = maximumRigOffset / largestOffset;
+      freeExploreCameraOffsetTarget.multiplyScalar(scale);
+      freeExploreFocusOffsetTarget.multiplyScalar(scale);
+    }
+
+    spaceDiveModeUntil = elapsedTime + 1.5;
     hasExploredFreeSpace = true;
     spaceExploreHint?.classList.add("is-hidden");
   }
@@ -2139,7 +2195,7 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
     if (hoveredCelestialBody && !isPointerStillOnHoveredBody(hoveredCelestialBody)) {
       clearCelestialHover();
     }
-    if (event.target.closest?.(".hud, .body-card, .body-card-restore, .progress, .distance-cinematic-layer, .earth-return-button")) {
+    if (event.target.closest?.(".about-experience, .hud, .body-card, .body-card-restore, .progress, .distance-cinematic-layer, .earth-return-button")) {
       clearCelestialHover();
       lastPointer = { x: event.clientX, y: event.clientY };
       return;
@@ -2174,7 +2230,7 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
   addEventListener("pointerleave", clearCelestialHover);
 
   addEventListener("pointerdown", (event) => {
-    if (event.target.closest?.(".body-card-restore, .progress, .distance-cinematic-layer, .earth-return-button")) return;
+    if (event.target.closest?.(".about-experience, .body-card-restore, .progress, .distance-cinematic-layer, .earth-return-button")) return;
     updatePointerFromEvent(event);
     isDragging = true;
     dragDistance = 0;
@@ -2186,7 +2242,7 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
     updatePointerFromEvent(event);
     isDragging = false;
     // HUD clicks belong to HTML controls and must not select objects behind them.
-    if (event.target.closest?.(".hud, .body-card, .body-card-restore, .progress, .distance-cinematic-layer, .earth-return-button")) return;
+    if (event.target.closest?.(".about-experience, .hud, .body-card, .body-card-restore, .progress, .distance-cinematic-layer, .earth-return-button")) return;
     if (dragDistance > 12) return;
     // Details are opened only after this intentional click/tap raycast.
     const body = getBodyAtPointer();
@@ -2221,12 +2277,20 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
       updateBodyCard(null);
       return;
     }
-    if (hasExploredFreeSpace || freeOpticalZoomTarget !== 1 || freeExploreOffsetTarget.lengthSq() > 0.0001) {
+    if (hasExploredFreeSpace
+      || freeExploreCameraOffsetTarget.lengthSq() > 0.0001
+      || freeExploreFocusOffsetTarget.lengthSq() > 0.0001
+      || freeExploreCameraOffsetCurrent.lengthSq() > 0.0001
+      || freeExploreFocusOffsetCurrent.lengthSq() > 0.0001) {
       resetFreeExploration();
     }
   }
 
   addEventListener("keydown", (event) => {
+    // The modal's capture-phase keyboard handler owns Escape and focus while
+    // its project transmission is visible.
+    if (isAboutExperienceOpen) return;
+
     const journeyKeys = [
       " ", "PageUp", "PageDown", "Home", "End",
       "ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown",
@@ -2265,7 +2329,7 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
   // simulation, raycast-interface, and shader-uniform update explicitly.
   addEventListener("visibilitychange", () => {
     isPageVisible = !document.hidden;
-    spaceEnvironment.setPaused(!isPageVisible);
+    spaceEnvironment.setPaused(!isPageVisible || isAboutExperienceOpen);
     if (isPageVisible) clock.getDelta();
   });
 
@@ -2285,7 +2349,7 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
   */
   function animate() {
     const deltaTime = Math.min(clock.getDelta(), 0.05);
-    if (!isPageVisible) {
+    if (!isPageVisible || isAboutExperienceOpen) {
       requestAnimationFrame(animate);
       return;
     }
@@ -2311,12 +2375,18 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
 
     // ----- Calculate the camera's spherical orbit around its focus point -----
     const distance = getCameraDistance(smoothProgress);
-    freeExploreOffsetCurrent.lerp(
-      freeExploreOffsetTarget,
+    freeExploreCameraOffsetCurrent.lerp(
+      freeExploreCameraOffsetTarget,
       focusedBody ? 0.055 : 0.09,
     );
+    freeExploreFocusOffsetCurrent.lerp(
+      freeExploreFocusOffsetTarget,
+      focusedBody ? 0.055 : 0.09,
+    );
+
     getFocusPoint(distance, targetFocusPoint);
-    if (!focusedBody) targetFocusPoint.add(freeExploreOffsetCurrent);
+    exploreBaseFocus.copy(targetFocusPoint);
+    if (!focusedBody) targetFocusPoint.add(freeExploreFocusOffsetCurrent);
     if (!hasCameraFocusPoint) {
       // Initialize once with copy; otherwise the first frame would ease from (0,0,0).
       cameraFocusPoint.copy(targetFocusPoint);
@@ -2324,9 +2394,17 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
     }
     // Asteroids can be tens of scene units away and visually tiny. Their metadata
     // supplies a stronger focus easing so the camera reaches them promptly.
-    const focusEase = focusedBody?.userData?.focusEase
-      ?? (focusedBody ? 0.055 : 0.075);
-    cameraFocusPoint.lerp(targetFocusPoint, focusEase);
+    // Regional travel already eases both rig offsets together, so copying the
+    // matching look-at target keeps the camera and perspective physically joined
+    // throughout the dive and its return animation.
+    const isRegionalRigActive = !focusedBody && Boolean(freeExploreDistanceReference);
+    if (isRegionalRigActive) {
+      cameraFocusPoint.copy(targetFocusPoint);
+    } else {
+      const focusEase = focusedBody?.userData?.focusEase
+        ?? (focusedBody ? 0.055 : 0.075);
+      cameraFocusPoint.lerp(targetFocusPoint, focusEase);
+    }
 
     const focusScale = focusedBody?.userData?.focusScale ?? 1;
     const minimumFocusDistance = focusedBody?.userData?.minFocusDistance ?? 4.5;
@@ -2335,11 +2413,6 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
       focusZoomCurrent,
       focusedBody ? focusZoomTarget : 1,
       focusedBody ? 0.12 : 0.18,
-    );
-    freeOpticalZoomCurrent = THREE.MathUtils.lerp(
-      freeOpticalZoomCurrent,
-      focusedBody ? 1 : freeOpticalZoomTarget,
-      0.13,
     );
 
     let cameraDistance = distance;
@@ -2363,19 +2436,26 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
         surroundingsMaximum,
       );
     }
-    // Yaw, pitch, and distance are spherical coordinates converted into x/y/z.
-    const x = Math.cos(pitch) * Math.sin(yaw) * cameraDistance;
-    const y = Math.sin(pitch) * cameraDistance * 0.64;
-    const z = Math.cos(pitch) * Math.cos(yaw) * cameraDistance;
-    camera.position.set(cameraFocusPoint.x + x, cameraFocusPoint.y + y, cameraFocusPoint.z + z);
+
+    setSphericalCameraOffset(sphericalCameraOffset, cameraDistance);
+    if (focusedBody) {
+      camera.position.copy(cameraFocusPoint).add(sphericalCameraOffset);
+    } else {
+      // The scroll pose remains the stable home pose. The two eased offsets move
+      // both halves of the rig into the selected 3D region and keep it centred.
+      camera.position
+        .copy(exploreBaseFocus)
+        .add(sphericalCameraOffset)
+        .add(freeExploreCameraOffsetCurrent);
+    }
     // lookAt rotates the camera so its forward direction points at the target.
     camera.lookAt(cameraFocusPoint);
-    // Focus mode moves the camera. Empty-space clicks use optical zoom plus a
-    // lateral exploration target while preserving the scroll journey readout.
+    // Focused bodies use their authored framing. Empty-space exploration no
+    // longer fakes travel with FOV zoom; physical camera movement does the work.
     const journeyFov = THREE.MathUtils.lerp(42, 72, smoothProgress);
     const targetFov = focusedBody
       ? focusedBody.userData.focusFov ?? 30
-      : THREE.MathUtils.clamp(journeyFov * freeOpticalZoomCurrent, 16, 94);
+      : THREE.MathUtils.clamp(journeyFov, 16, 94);
     camera.fov = THREE.MathUtils.lerp(camera.fov, targetFov, focusedBody ? 0.08 : 0.09);
     camera.updateProjectionMatrix();
 

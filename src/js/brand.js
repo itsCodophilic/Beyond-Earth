@@ -1,15 +1,17 @@
+import { createAboutExperiencePanel } from "./ui/aboutExperiencePanel.js";
+
 /**
- * Small DOM-only interaction for the logo in the fixed HUD.
+ * DOM-only interactions for the cinematic logo in the fixed HUD.
  *
- * This file does not use Three.js. It demonstrates that the page is made from
- * two layers: normal HTML/CSS for interface elements and WebGL for the universe.
- * Mouse coordinates are converted into a tiny translation so the text appears
- * to be magnetically attracted to the pointer.
+ * The emblem's tiny magnetic response lives here, while the separate About
+ * panel module owns its connector, modal lifecycle, focus, and scroll freeze.
  */
 const brand = document.querySelector(".brand");
 
 // Guarding the listener makes this module safe on pages that do not render a logo.
 if (brand) {
+    createAboutExperiencePanel({ trigger: brand });
+
     brand.addEventListener("mousemove", (e) => {
 
         const text = brand.querySelector(".brand__text");
