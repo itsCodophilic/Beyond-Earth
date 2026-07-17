@@ -20,7 +20,7 @@ function loadTexture(loader, url, fallbackKind, options = {}) {
         // not colors, so the caller deliberately sets `color: false` for them.
         if (options.color !== false) texture.colorSpace = THREE.SRGBColorSpace;
         // Anisotropy keeps a texture sharper when its surface is viewed at an angle.
-        texture.anisotropy = 8;
+        texture.anisotropy = options.anisotropy ?? 4;
         texture.wrapS = THREE.RepeatWrapping;
         texture.wrapT = THREE.ClampToEdgeWrapping;
         texture.userData.sourceUrl = url;
@@ -46,7 +46,7 @@ function loadTexture(loader, url, fallbackKind, options = {}) {
 }
 
 /** Loads all universe textures in parallel and returns them by their semantic names. */
-export async function loadUniverseTextures() {
+export async function loadUniverseTextures({ anisotropy = 4 } = {}) {
   const loader = new THREE.TextureLoader();
   loader.setCrossOrigin("anonymous");
   const textures = {};
@@ -56,6 +56,7 @@ export async function loadUniverseTextures() {
     textures[name] = await loadTexture(loader, url, TEXTURE_FALLBACKS[name] ?? name, {
       optional: OPTIONAL_TEXTURES.has(name),
       color: name !== "earthNormal",
+      anisotropy,
     });
   }));
 

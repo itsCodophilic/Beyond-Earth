@@ -27,6 +27,53 @@ import {
 
 const SUN_RADIUS = PLANET_SCALE_PROFILES.Sun.visualRadius;
 
+const SUN_CREATION_PROFILES = Object.freeze({
+  high: Object.freeze({
+    surfaceSegments: [192, 128],
+    chromosphereSegments: [144, 96],
+    innerCoronaSegments: [128, 88],
+    outerCoronaSegments: [112, 80],
+    spicules: 560,
+    jetParticles: 42,
+    loopParticles: 34,
+    flareArcParticles: 92,
+    flareEjectaParticles: 34,
+    flareRingSegments: 96,
+  }),
+  medium: Object.freeze({
+    surfaceSegments: [144, 96],
+    chromosphereSegments: [112, 72],
+    innerCoronaSegments: [96, 64],
+    outerCoronaSegments: [80, 56],
+    spicules: 420,
+    jetParticles: 32,
+    loopParticles: 26,
+    flareArcParticles: 68,
+    flareEjectaParticles: 26,
+    flareRingSegments: 72,
+  }),
+  low: Object.freeze({
+    surfaceSegments: [112, 72],
+    chromosphereSegments: [80, 56],
+    innerCoronaSegments: [72, 48],
+    outerCoronaSegments: [64, 40],
+    spicules: 280,
+    jetParticles: 24,
+    loopParticles: 20,
+    flareArcParticles: 48,
+    flareEjectaParticles: 18,
+    flareRingSegments: 48,
+  }),
+});
+
+const SUN_RUNTIME_PROFILES = Object.freeze({
+  high: Object.freeze({ detailRatio: 1, resolvePixels: 7 }),
+  medium: Object.freeze({ detailRatio: 0.76, resolvePixels: 12 }),
+  low: Object.freeze({ detailRatio: 0.50, resolvePixels: 18 }),
+});
+
+const sunCurvePoint = new THREE.Vector3();
+
 function createDistantStarTexture(size = 512) {
   const canvas = document.createElement("canvas");
   canvas.width = size;
@@ -329,7 +376,7 @@ function sphericalDirection(latitude, longitude) {
  * These represent spicules: narrow jets of plasma rising from the Sun's
  * chromosphere. They remain intentionally small and faint.
  */
-function createSpicules() {
+function createSpicules(count = 560) {
   const group = new THREE.Group();
 
   group.name = "Solar spicules";
@@ -352,8 +399,6 @@ function createSpicules() {
   });
 
   const up = new THREE.Vector3(0, 1, 0);
-
-  const count = 560;
 
   const mesh = new THREE.InstancedMesh(geometry, material, count);
 
@@ -422,6 +467,7 @@ function createSpicules() {
     mesh.instanceColor.needsUpdate = true;
   }
 
+  mesh.userData.capacity = count;
   group.add(mesh);
 
   return group;
@@ -505,6 +551,7 @@ function createSolarPlasmaTexture() {
 function createPlasmaJet(
   { latitude, longitude, height, bend, phase },
   fireTexture,
+  particleCount = 42,
 ) {
   const direction = sphericalDirection(latitude, longitude);
 
@@ -528,7 +575,7 @@ function createPlasmaJet(
 
   const particles = Array.from(
     {
-      length: 42,
+      length: particleCount,
     },
 
     (_, index) => {
@@ -544,7 +591,7 @@ function createPlasmaJet(
 
       const particle = new THREE.Sprite(material);
 
-      particle.userData.offset = index / 42;
+      particle.userData.offset = index / particleCount;
 
       particle.userData.phase = phase + index * 1.17;
 
@@ -594,7 +641,7 @@ function createPlasmaJet(
  * The loop is built from individual plasma fragments instead of a continuous
  * tube, preventing the effect from looking like a decorative neon ring.
  */
-function createCoronalLoop({ angle, width, height, tilt, phase }, fireTexture) {
+function createCoronalLoop({ angle, width, height, tilt, phase }, fireTexture, particleCount = 34) {
   const startAngle = angle - width * 0.5;
 
   const endAngle = angle + width * 0.5;
@@ -628,7 +675,7 @@ function createCoronalLoop({ angle, width, height, tilt, phase }, fireTexture) {
 
   const particles = Array.from(
     {
-      length: 34,
+      length: particleCount,
     },
 
     (_, index) => {
@@ -644,7 +691,7 @@ function createCoronalLoop({ angle, width, height, tilt, phase }, fireTexture) {
         }),
       );
 
-      particle.userData.offset = index / 34;
+      particle.userData.offset = index / particleCount;
 
       particle.userData.phase = phase + index * 0.93;
 
@@ -675,6 +722,7 @@ function createCoronalLoop({ angle, width, height, tilt, phase }, fireTexture) {
 function createSolarFlare(
   { latitude, longitude, height, width, bend, phase },
   glowTexture,
+  { arcCount = 92, ejectaCount = 34, ringSegments = 96 } = {},
 ) {
   const group = new THREE.Group();
   group.name = "Solar flare";
@@ -755,7 +803,7 @@ function createSolarFlare(
 
   const arcParticles = Array.from(
     {
-      length: 92,
+      length: arcCount,
     },
 
     (_, index) => {
@@ -771,7 +819,7 @@ function createSolarFlare(
         }),
       );
 
-      particle.userData.offset = index / 92;
+      particle.userData.offset = index / arcCount;
 
       particle.userData.phase = phase + index * 0.63;
 
@@ -786,7 +834,7 @@ function createSolarFlare(
    */
   const ejectaParticles = Array.from(
     {
-      length: 34,
+      length: ejectaCount,
     },
 
     (_, index) => {
@@ -802,9 +850,9 @@ function createSolarFlare(
         }),
       );
 
-      particle.userData.offset = index / 34;
+      particle.userData.offset = index / ejectaCount;
 
-      particle.userData.angle = (index / 34) * Math.PI * 2;
+      particle.userData.angle = (index / ejectaCount) * Math.PI * 2;
 
       particle.userData.phase = phase + index * 1.13;
 
@@ -821,7 +869,7 @@ function createSolarFlare(
    * away from the flare region.
    */
   const shockWave = new THREE.Mesh(
-    new THREE.RingGeometry(0.72, 1, 96),
+    new THREE.RingGeometry(0.72, 1, ringSegments),
 
     new THREE.MeshBasicMaterial({
       color: 0xffb347,
@@ -868,7 +916,9 @@ function createSolarFlare(
  *
  * The returned object is later passed to updateSun() every frame.
  */
-export function createSun({ world, hoverTargets, texture }) {
+export function createSun({ world, hoverTargets, texture, quality = "high" }) {
+  const qualityName = SUN_CREATION_PROFILES[quality] ? quality : "medium";
+  const creationProfile = SUN_CREATION_PROFILES[qualityName];
   const system = new THREE.Group();
 
   system.name = "Sun system";
@@ -884,7 +934,7 @@ export function createSun({ world, hoverTargets, texture }) {
    * A moderately dense sphere provides a smooth silhouette while keeping
    * the Sun suitable for real-time browser rendering.
    */
-  const surfaceGeometry = new THREE.SphereGeometry(SUN_RADIUS, 192, 128);
+  const surfaceGeometry = new THREE.SphereGeometry(SUN_RADIUS, ...creationProfile.surfaceSegments);
 
   const surfaceMaterial = makeSunSurfaceMaterial(surfaceTexture);
 
@@ -939,7 +989,7 @@ export function createSun({ world, hoverTargets, texture }) {
    * irregular orange-red edge.
    */
   const chromosphere = new THREE.Mesh(
-    new THREE.SphereGeometry(SUN_RADIUS * 1.012, 144, 96),
+    new THREE.SphereGeometry(SUN_RADIUS * 1.012, ...creationProfile.chromosphereSegments),
 
     createAtmosphereMaterial({
       color: 0xff6c18,
@@ -964,7 +1014,7 @@ export function createSun({ world, hoverTargets, texture }) {
    * Kept faint so the photosphere remains clearly visible.
    */
   const innerCorona = new THREE.Mesh(
-    new THREE.SphereGeometry(SUN_RADIUS * 1.027, 128, 88),
+    new THREE.SphereGeometry(SUN_RADIUS * 1.027, ...creationProfile.innerCoronaSegments),
 
     createAtmosphereMaterial({
       color: 0xff941f,
@@ -987,7 +1037,7 @@ export function createSun({ world, hoverTargets, texture }) {
    * Provides only a thin, transparent gold edge.
    */
   const outerCorona = new THREE.Mesh(
-    new THREE.SphereGeometry(SUN_RADIUS * 1.046, 112, 80),
+    new THREE.SphereGeometry(SUN_RADIUS * 1.046, ...creationProfile.outerCoronaSegments),
 
     createAtmosphereMaterial({
       color: 0xffc552,
@@ -1068,7 +1118,7 @@ export function createSun({ world, hoverTargets, texture }) {
   /*
    * Tiny chromospheric flames.
    */
-  const spicules = createSpicules();
+  const spicules = createSpicules(creationProfile.spicules);
 
   system.add(spicules);
 
@@ -1113,7 +1163,7 @@ export function createSun({ world, hoverTargets, texture }) {
   ];
 
   const plasmaJets = jetData.map((config) =>
-    createPlasmaJet(config, solarPlasmaTexture),
+    createPlasmaJet(config, solarPlasmaTexture, creationProfile.jetParticles),
   );
 
   system.add(...plasmaJets);
@@ -1137,7 +1187,11 @@ export function createSun({ world, hoverTargets, texture }) {
       tilt: -0.58,
       phase: 4.1,
     },
-  ].map((config) => createCoronalLoop(config, solarPlasmaTexture));
+  ].map((config) => createCoronalLoop(
+    config,
+    solarPlasmaTexture,
+    creationProfile.loopParticles,
+  ));
 
   /*
    * Larger solar flare events.
@@ -1174,7 +1228,11 @@ export function createSun({ world, hoverTargets, texture }) {
   ];
 
   const solarFlares = flareData.map((config) =>
-    createSolarFlare(config, solarPlasmaTexture),
+    createSolarFlare(config, solarPlasmaTexture, {
+      arcCount: creationProfile.flareArcParticles,
+      ejectaCount: creationProfile.flareEjectaParticles,
+      ringSegments: creationProfile.flareRingSegments,
+    }),
   );
 
   system.add(...solarFlares);
@@ -1215,7 +1273,74 @@ export function createSun({ world, hoverTargets, texture }) {
     coronalLoops,
     solarFlares,
     light,
+    capacityQualityName: qualityName,
+    performanceSignature: "",
   };
+}
+
+/**
+ * Applies a distance-aware runtime budget without changing the authored Sun.
+ * Invisible sub-pixel effects are disabled first; close focused views retain
+ * the richest version available in the device's creation tier.
+ */
+export function setSunPerformanceProfile(
+  sun,
+  qualityName,
+  { projectedRadiusPixels = Infinity, focused = false } = {},
+) {
+  if (!sun) return;
+  const requested = SUN_RUNTIME_PROFILES[qualityName] ?? SUN_RUNTIME_PROFILES.medium;
+  const capacity = SUN_RUNTIME_PROFILES[sun.capacityQualityName]
+    ?? SUN_RUNTIME_PROFILES.medium;
+  const relativeRatio = Math.min(1, requested.detailRatio / capacity.detailRatio);
+  const resolved = focused || projectedRadiusPixels >= requested.resolvePixels;
+  const close = focused || projectedRadiusPixels >= 72;
+  const signature = `${qualityName}|${resolved ? 1 : 0}|${close ? 1 : 0}`;
+  if (sun.performanceSignature === signature) return;
+  sun.performanceSignature = signature;
+  const spiculeMesh = sun.spicules?.children?.[0];
+  if (spiculeMesh) {
+    const capacityCount = spiculeMesh.userData.capacity ?? spiculeMesh.count;
+    spiculeMesh.count = resolved
+      ? Math.max(1, Math.round(capacityCount * relativeRatio))
+      : 0;
+  }
+  if (sun.spicules) sun.spicules.visible = resolved;
+
+  const visibleJetCount = resolved
+    ? Math.max(1, Math.ceil(sun.plasmaJets.length * (close ? relativeRatio : relativeRatio * 0.55)))
+    : 0;
+  const visibleLoopCount = resolved
+    ? Math.max(1, Math.ceil(sun.coronalLoops.length * (close ? relativeRatio : relativeRatio * 0.45)))
+    : 0;
+  const visibleFlareCount = resolved
+    ? Math.max(1, Math.ceil(sun.solarFlares.length * (close ? relativeRatio : relativeRatio * 0.34)))
+    : 0;
+
+  sun.plasmaJets.forEach((jet, index) => {
+    jet.visible = index < visibleJetCount;
+    const particleRatio = close ? relativeRatio : relativeRatio * 0.62;
+    jet.userData.particles.forEach((particle, particleIndex, particles) => {
+      particle.visible = particleIndex < Math.max(1, Math.round(particles.length * particleRatio));
+    });
+  });
+  sun.coronalLoops.forEach((loop, index) => {
+    loop.visible = index < visibleLoopCount;
+    const particleRatio = close ? relativeRatio : relativeRatio * 0.58;
+    loop.userData.particles.forEach((particle, particleIndex, particles) => {
+      particle.visible = particleIndex < Math.max(1, Math.round(particles.length * particleRatio));
+    });
+  });
+  sun.solarFlares.forEach((flare, index) => {
+    flare.visible = index < visibleFlareCount;
+    const particleRatio = close ? relativeRatio : relativeRatio * 0.52;
+    flare.userData.arcParticles.forEach((particle, particleIndex, particles) => {
+      particle.visible = particleIndex < Math.max(1, Math.round(particles.length * particleRatio));
+    });
+    flare.userData.ejectaParticles.forEach((particle, particleIndex, particles) => {
+      particle.visible = particleIndex < Math.max(1, Math.round(particles.length * particleRatio));
+    });
+  });
 }
 
 /**
@@ -1269,17 +1394,17 @@ export function updateSun(sun, time, motionScale = 1) {
   /*
    * Spicules rotate and breathe as one thin plasma fringe.
    */
-  sun.spicules.rotation.y += 0.00034 * motionScale;
+  if (sun.spicules.visible) sun.spicules.rotation.y += 0.00034 * motionScale;
 
-  sun.spicules.rotation.x = Math.sin(time * 0.11) * 0.005;
+  if (sun.spicules.visible) sun.spicules.rotation.x = Math.sin(time * 0.11) * 0.005;
 
   const spiculePulse = 1 + Math.sin(time * 4.8) * 0.01;
 
-  sun.spicules.scale.setScalar(spiculePulse);
+  if (sun.spicules.visible) sun.spicules.scale.setScalar(spiculePulse);
 
   const spiculeMesh = sun.spicules.children[0];
 
-  if (spiculeMesh?.material) {
+  if (sun.spicules.visible && spiculeMesh?.material) {
     spiculeMesh.material.opacity = 0.15 + Math.sin(time * 5.2) * 0.024;
   }
 
@@ -1287,6 +1412,7 @@ export function updateSun(sun, time, motionScale = 1) {
    * Animate localized plasma jets.
    */
   sun.plasmaJets.forEach((jet) => {
+    if (!jet.visible) return;
     const { direction, tangent, height, bend, phase, particles, core } =
       jet.userData;
 
@@ -1297,6 +1423,7 @@ export function updateSun(sun, time, motionScale = 1) {
     core.scale.set(coreSize, coreSize, 1);
 
     particles.forEach((particle) => {
+      if (!particle.visible) return;
       /*
        * Plasma repeatedly moves outward and fades.
        *
@@ -1335,12 +1462,14 @@ export function updateSun(sun, time, motionScale = 1) {
    * Animate coronal-loop fragments.
    */
   sun.coronalLoops.forEach((loop) => {
+    if (!loop.visible) return;
     const { curve, particles, phase } = loop.userData;
 
     particles.forEach((particle) => {
+      if (!particle.visible) return;
       const progress = (particle.userData.offset + time * 0.018) % 1;
 
-      const point = curve.getPoint(progress);
+      const point = curve.getPoint(progress, sunCurvePoint);
 
       /*
        * Tiny turbulence breaks the perfect mathematical curve.
@@ -1368,6 +1497,7 @@ export function updateSun(sun, time, motionScale = 1) {
    * Animate large solar flares.
    */
   sun.solarFlares.forEach((flare) => {
+    if (!flare.visible) return;
     const {
       direction,
       tangent,
@@ -1413,9 +1543,10 @@ export function updateSun(sun, time, motionScale = 1) {
      * Plasma moves in both directions around the magnetic arch.
      */
     arcParticles.forEach((particle) => {
+      if (!particle.visible) return;
       const travel = (particle.userData.offset + time * 0.028) % 1;
 
-      const point = curve.getPoint(travel);
+      const point = curve.getPoint(travel, sunCurvePoint);
 
       const turbulence = Math.sin(time * 5.8 + particle.userData.phase) * 0.045;
 
@@ -1445,6 +1576,7 @@ export function updateSun(sun, time, motionScale = 1) {
      * slow down, and fade.
      */
     ejectaParticles.forEach((particle) => {
+      if (!particle.visible) return;
       const progress = (cycle + particle.userData.offset * 0.42) % 1;
 
       const outwardLife = Math.sin(Math.PI * progress);

@@ -131,9 +131,15 @@ export function createStarField({
   points.frustumCulled = false;
   points.renderOrder = midDistance ? -24 : -29;
 
+  const capacity = geometry.getAttribute("position").count;
+
   return {
     object: points,
     material,
+    capacity,
+    setCount(count) {
+      geometry.setDrawRange(0, Math.max(0, Math.min(capacity, Math.floor(count))));
+    },
     update({ time, visibility, exposure, solarSuppression, sunDirection, sunAngularRadius = 0, reducedMotion }) {
       material.uniforms.uTime.value = time;
       material.uniforms.uVisibility.value = visibility;

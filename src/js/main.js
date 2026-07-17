@@ -23,10 +23,12 @@ import {
   createAsteroidBelt,
   findNearestAsteroidInstanceAtPointer,
   resolveAsteroidInstanceHit,
+  setAsteroidBeltQuality,
   setAsteroidInspectionDetail,
   updateAsteroidBelt,
 } from './scene/asteroidBelt.js';
 import { createPlanet, updatePlanetVisuals } from './scene/planetFactory.js';
+import { PerformanceManager } from './performance/performanceManager.js';
 import {
   ASTRONOMICAL_UNIT_KM,
   createEarthDistanceTracker,
@@ -37,7 +39,7 @@ import {
 } from './scene/distanceFromEarth.js';
 import { SpaceEnvironment } from './scene/space/spaceEnvironment.js';
 import { JOURNEY_MAP } from './scene/space/spaceEnvironmentConfig.js';
-import { createSun, updateSun } from './stars/sun/sun.js';
+import { createSun, setSunPerformanceProfile, updateSun } from './stars/sun/sun.js';
 import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
 
 // An async immediately-invoked function lets us await texture loading while
@@ -657,9 +659,16 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
   const camera = new THREE.PerspectiveCamera(56, innerWidth / innerHeight, 0.1, 7500);
   // The renderer owns the WebGL context and draws into the existing HTML canvas.
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false, powerPreference: "high-performance" });
-  // Cap pixel ratio at 2; very dense displays would otherwise become unnecessarily expensive.
-  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
-  renderer.setSize(innerWidth, innerHeight);
+  // The performance manager owns drawing-buffer resolution, caps excessive
+  // high-DPI fill-rate immediately, and adapts after sustained frame pressure.
+  // Navigation and camera maths never change.
+  const performanceManager = new PerformanceManager({
+    renderer,
+    reducedMotion: window.matchMedia("(prefers-reduced-motion: reduce)").matches,
+  });
+  // Asset/geometry capacity is fixed for the session. Runtime quality and
+  // drawing-buffer resolution may adapt independently after the scene loads.
+  const creationQuality = performanceManager.capacityName;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.18;
@@ -777,6 +786,17 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
   const exploreDesiredFocus = new THREE.Vector3();
   const sphericalCameraOffset = new THREE.Vector3();
   const cameraDistanceEarthPosition = new THREE.Vector3();
+  // Reused projection vectors prevent short-lived garbage-collection spikes in
+  // the animation loop and pointer hover path.
+  const heliocentricWorldPosition = new THREE.Vector3();
+  const connectorProjectedPosition = new THREE.Vector3();
+  const focusedLocatorWorldPosition = new THREE.Vector3();
+  const focusedLocatorProjectedPosition = new THREE.Vector3();
+  const radiusWorldPosition = new THREE.Vector3();
+  const pointerProjectedPosition = new THREE.Vector3();
+  const pointerWorldPosition = new THREE.Vector3();
+  const hoverWorldPosition = new THREE.Vector3();
+  const hoverProjectedPosition = new THREE.Vector3();
   let hasExploredFreeSpace = false;
   let freeExploreDistanceReference = null;
   let freeExploreDistanceResetTimer = null;
@@ -806,10 +826,22 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
   scene.add(fillLight);
 
   // Asset loading is isolated so scene setup only consumes a ready texture dictionary.
-  const textures = await loadUniverseTextures();
+  const preferredAnisotropy = creationQuality === "high"
+    ? 8
+    : creationQuality === "medium"
+      ? 4
+      : 2;
+  const textures = await loadUniverseTextures({
+    anisotropy: Math.min(renderer.capabilities.getMaxAnisotropy(), preferredAnisotropy),
+  });
 
   // The star module owns the Sun's surface, atmosphere, corona, flares, and light.
-  const sun = createSun({ world, hoverTargets, texture: textures.sun });
+  const sun = createSun({
+    world,
+    hoverTargets,
+    texture: textures.sun,
+    quality: creationQuality,
+  });
 
   // Every planet is built through one realistic factory. Earth receives its extra
   // cloud, atmosphere, night-light, and Moon layers below as before.
@@ -821,6 +853,7 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
       orbitRoot,
       planets,
       hoverTargets,
+      quality: creationQuality,
     });
   });
 
@@ -829,8 +862,13 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
 
   // Earth is layered like an onion: solid globe, cloud shell, atmospheric glow,
   // and optional light shell. Small radius differences avoid z-fighting.
+  const earthLayerSegments = creationQuality === "low"
+    ? 64
+    : creationQuality === "medium"
+      ? 80
+      : 96;
   const earthClouds = new THREE.Mesh(
-    new THREE.SphereGeometry(earthRadius * 1.028, 96, 96),
+    new THREE.SphereGeometry(earthRadius * 1.028, earthLayerSegments, earthLayerSegments),
     new THREE.MeshStandardMaterial({
       color: 0xffffff,
       // alphaMap controls which cloud pixels are opaque or transparent.
@@ -844,7 +882,7 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
   earth.add(earthClouds);
 
   const earthAtmosphere = new THREE.Mesh(
-    new THREE.SphereGeometry(earthRadius * 1.044, 96, 96),
+    new THREE.SphereGeometry(earthRadius * 1.044, earthLayerSegments, earthLayerSegments),
     new THREE.MeshBasicMaterial({ color: 0x5bdcff, transparent: true, opacity: 0.18, side: THREE.BackSide, blending: THREE.AdditiveBlending }),
   );
   earth.add(earthAtmosphere);
@@ -852,7 +890,7 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
   if (textures.earthLights) {
     // Additive blending makes bright city pixels glow over the globe underneath.
     const earthLights = new THREE.Mesh(
-      new THREE.SphereGeometry(earthRadius * 1.012, 96, 96),
+      new THREE.SphereGeometry(earthRadius * 1.012, earthLayerSegments, earthLayerSegments),
       new THREE.MeshBasicMaterial({
         color: 0xffd37a,
         map: textures.earthLights,
@@ -866,7 +904,12 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
   }
 
   // Earth owns its satellite builder; main.js only keeps references needed for animation.
-  const { moon, moonPivot } = createMoonSystem({ earth, textures, hoverTargets });
+  const { moon, moonPivot } = createMoonSystem({
+    earth,
+    textures,
+    hoverTargets,
+    quality: creationQuality,
+  });
 
   // Mars and the giant planets share one reusable major-satellite builder. The
   // moon meshes keep scientific diameter ordering while using a readable,
@@ -875,12 +918,19 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
     world,
     planets,
     hoverTargets,
+    quality: creationQuality,
   });
 
   // Space is a distant celestial sphere rather than a nearby cloud of coloured
   // particles. The environment owns steady stars, the tilted Milky Way, cloudy
   // galactic light, and its dark interstellar dust lanes.
-  const spaceEnvironment = new SpaceEnvironment({ scene, camera, renderer });
+  const spaceEnvironment = new SpaceEnvironment({
+    scene,
+    camera,
+    renderer,
+    quality: creationQuality,
+    pixelRatio: performanceManager.pixelRatio,
+  });
   await spaceEnvironment.init();
 
   // The DOM-based project transmission announces its state so this WebGL
@@ -901,7 +951,11 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
   });
 
   // Asteroid meshes provide nearby shape; dust points cheaply supply density.
-  const asteroidBelt = createAsteroidBelt({ world, hoverTargets });
+  const asteroidBelt = createAsteroidBelt({
+    world,
+    hoverTargets,
+    quality: creationQuality,
+  });
   const jupiter = planets.find((planet) => planet.name === "Jupiter");
 
   const earthDistanceTracker = createEarthDistanceTracker({ earth });
@@ -1184,7 +1238,24 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
   const SUN_RADIUS_KM = PLANET_SCALE_PROFILES.Sun.diameterKm * 0.5;
   const SUN_BASE_VISUAL_RADIUS = PLANET_SCALE_PROFILES.Sun.visualRadius;
   let currentSunAngularRadius = 0;
+  let currentSunProjectedRadiusPixels = Infinity;
   let snapSunApparentScaleOnNextFrame = false;
+
+  const unsubscribePerformanceManager = performanceManager.subscribe(({
+    qualityName,
+    preset,
+    pixelRatio,
+  }) => {
+    spaceEnvironment.setQuality(preset.environmentQuality);
+    spaceEnvironment.resize(innerWidth, innerHeight, pixelRatio);
+    setAsteroidBeltQuality(asteroidBelt, qualityName, pixelRatio);
+    setSunPerformanceProfile(sun, qualityName, {
+      projectedRadiusPixels: currentSunProjectedRadiusPixels,
+      focused: String(focusedBody?.userData?.name ?? focusedBody?.name ?? "")
+        .toLowerCase()
+        .includes("sun"),
+    });
+  });
 
   function findOrbitalParentPlanet(body) {
     if (!body) return null;
@@ -1232,14 +1303,19 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
     // position. A moon therefore sees the same solar disk as its planet.
     const sceneSemiMajor = Number(orbitalBody.userData?.orbitRadius);
     if (Number.isFinite(sceneSemiMajor) && sceneSemiMajor > 0) {
-      const currentSceneRadius = orbitalBody.getWorldPosition(new THREE.Vector3()).length();
+      const currentSceneRadius = orbitalBody.getWorldPosition(heliocentricWorldPosition).length();
       return semiMajorAU * currentSceneRadius / sceneSemiMajor;
     }
 
     return semiMajorAU;
   }
 
-  function updateSunApparentScale() {
+  function frameAdjustedEase(baseFactor, deltaSeconds) {
+    const clampedFactor = THREE.MathUtils.clamp(baseFactor, 0, 1);
+    return 1 - Math.pow(1 - clampedFactor, Math.max(0, deltaSeconds) * 60);
+  }
+
+  function updateSunApparentScale(deltaSeconds = 1 / 60) {
     let targetScale = 1;
     let focusedHeliocentricAU = null;
     const focusedName = String(focusedBody?.userData?.name ?? focusedBody?.name ?? '').toLowerCase();
@@ -1262,7 +1338,11 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
       : focusedBody
         ? 0.095
         : 0.065;
-    const nextScale = THREE.MathUtils.lerp(currentScale, targetScale, scaleEase);
+    const nextScale = THREE.MathUtils.lerp(
+      currentScale,
+      targetScale,
+      frameAdjustedEase(scaleEase, deltaSeconds),
+    );
     snapSunApparentScaleOnNextFrame = false;
     sun.system.scale.setScalar(nextScale);
 
@@ -1274,6 +1354,7 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
     const projectedRadiusPixels = (apparentWorldRadius / cameraToSun)
       / Math.max(0.0001, Math.tan(halfFov))
       * innerHeight * 0.5;
+    currentSunProjectedRadiusPixels = projectedRadiusPixels;
 
     // When the physical disk becomes only a few pixels wide, blend it into a
     // brilliant point-star flare. The flare still depth-tests, so a planet can
@@ -1325,6 +1406,11 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
       );
       sun.distantStar.material.rotation = elapsedTime * (0.035 + distanceGlow * 0.018);
     }
+
+    setSunPerformanceProfile(sun, performanceManager.qualityName, {
+      projectedRadiusPixels,
+      focused: focusedName.includes("sun"),
+    });
   }
 
   /** Writes a body's structured metadata into the right-side inspection panel. */
@@ -1369,7 +1455,7 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
       return;
     }
 
-    const projected = body.getWorldPosition(new THREE.Vector3()).project(camera);
+    const projected = body.getWorldPosition(connectorProjectedPosition).project(camera);
     const bodyX = (projected.x * 0.5 + 0.5) * innerWidth;
     const bodyY = (-projected.y * 0.5 + 0.5) * innerHeight;
     const isOnScreen = projected.z > -1 && projected.z < 1
@@ -1448,8 +1534,8 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
       return;
     }
 
-    const worldPosition = focusedBody.getWorldPosition(new THREE.Vector3());
-    const projected = worldPosition.clone().project(camera);
+    const worldPosition = focusedBody.getWorldPosition(focusedLocatorWorldPosition);
+    const projected = focusedLocatorProjectedPosition.copy(worldPosition).project(camera);
     if (projected.z < -1 || projected.z > 1) {
       focusedBodyLocator.visible = false;
       return;
@@ -1499,7 +1585,7 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
 
   function projectedBodyRadiusPixels(body) {
     if (!body) return 0;
-    const worldPosition = body.getWorldPosition(new THREE.Vector3());
+    const worldPosition = body.getWorldPosition(radiusWorldPosition);
     const cameraDistance = Math.max(0.0001, camera.position.distanceTo(worldPosition));
     const visualRadius = Number(
       body.userData?.focusVisualRadius
@@ -1533,10 +1619,10 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
 
     let nearest = null;
     let nearestScore = Infinity;
-    const projected = new THREE.Vector3();
+    const projected = pointerProjectedPosition;
 
     candidates.forEach((body) => {
-      const worldPosition = body.getWorldPosition(new THREE.Vector3());
+      const worldPosition = body.getWorldPosition(pointerWorldPosition);
       projected.copy(worldPosition).project(camera);
       if (projected.z < -1 || projected.z > 1) return;
 
@@ -1582,7 +1668,7 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
 
   function isPointerInsideVisibleBodyDisk(body, extraPixels = 0) {
     if (!body) return false;
-    const projected = body.getWorldPosition(new THREE.Vector3()).project(camera);
+    const projected = body.getWorldPosition(pointerProjectedPosition).project(camera);
     if (projected.z < -1 || projected.z > 1) return false;
     const dx = (projected.x - pointer.x) * innerWidth * 0.5;
     const dy = (projected.y - pointer.y) * innerHeight * 0.5;
@@ -1592,8 +1678,8 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
 
   function isPointerStillOnHoveredBody(body) {
     if (!body) return false;
-    const worldPosition = body.getWorldPosition(new THREE.Vector3());
-    const projected = worldPosition.project(camera);
+    const worldPosition = body.getWorldPosition(pointerWorldPosition);
+    const projected = pointerProjectedPosition.copy(worldPosition).project(camera);
     if (projected.z < -1 || projected.z > 1) return false;
 
     const dx = (projected.x - pointer.x) * innerWidth * 0.5;
@@ -1706,14 +1792,14 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
     celestialHoverTimer = setTimeout(() => {
       celestialHoverTimer = null;
       findCelestialForHover();
-    }, 18);
+    }, performanceManager.getHoverDelayMs());
   }
 
   function updateCelestialHoverVisual() {
     if (!hoveredCelestialBody || !asteroidHoverLocator.visible) return;
 
-    const worldPosition = hoveredCelestialBody.getWorldPosition(new THREE.Vector3());
-    const projected = worldPosition.clone().project(camera);
+    const worldPosition = hoveredCelestialBody.getWorldPosition(hoverWorldPosition);
+    const projected = hoverProjectedPosition.copy(worldPosition).project(camera);
     if (projected.z < -1 || projected.z > 1) {
       clearCelestialHover();
       return;
@@ -1926,7 +2012,10 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
   */
   // `passive` promises that the handler will not cancel scrolling, helping browsers
   // keep scrolling responsive while JavaScript updates its normalized value.
-  addEventListener("scroll", updateScrollProgress, { passive: true });
+  addEventListener("scroll", () => {
+    performanceManager.markInteraction(900);
+    updateScrollProgress();
+  }, { passive: true });
   function adjustFocusedZoom(delta) {
     // A wheel outside an open distance card starts closing that card in the
     // capture phase, then continues here as a focused-body zoom gesture.
@@ -2148,6 +2237,7 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
   }
 
   const preventFocusedJourneyScroll = (event) => {
+    performanceManager.markInteraction(1000);
     // Cards and the distance explanation retain their own internal scrolling.
     if (event.target.closest?.(".body-card, .body-card-restore, .progress, .distance-cinematic-layer")) return;
     if (!isJourneyScrollLocked) return;
@@ -2158,6 +2248,7 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
   addEventListener("wheel", preventFocusedJourneyScroll, { passive: false });
 
   addEventListener("touchstart", (event) => {
+    performanceManager.markInteraction(1200);
     if (event.target.closest?.(".body-card, .body-card-restore, .progress, .distance-cinematic-layer")) return;
     if (!focusedBody || event.touches.length !== 2) return;
     focusPinchDistance = Math.hypot(
@@ -2167,6 +2258,7 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
   }, { passive: true });
 
   addEventListener("touchmove", (event) => {
+    performanceManager.markInteraction(1200);
     if (event.target.closest?.(".body-card, .body-card-restore, .progress, .distance-cinematic-layer")) return;
     if (!focusedBody || event.touches.length !== 2 || focusPinchDistance == null) return;
     event.preventDefault();
@@ -2190,6 +2282,7 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
   }, { passive: true });
 
   addEventListener("pointermove", (event) => {
+    performanceManager.markInteraction(850);
     updatePointerFromEvent(event);
     lastPointerType = event.pointerType || "mouse";
     if (hoveredCelestialBody && !isPointerStillOnHoveredBody(hoveredCelestialBody)) {
@@ -2230,6 +2323,7 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
   addEventListener("pointerleave", clearCelestialHover);
 
   addEventListener("pointerdown", (event) => {
+    performanceManager.markInteraction(1400);
     if (event.target.closest?.(".about-experience, .body-card-restore, .progress, .distance-cinematic-layer, .earth-return-button")) return;
     updatePointerFromEvent(event);
     isDragging = true;
@@ -2239,6 +2333,7 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
   });
 
   addEventListener("pointerup", (event) => {
+    performanceManager.markInteraction(1400);
     updatePointerFromEvent(event);
     isDragging = false;
     // HUD clicks belong to HTML controls and must not select objects behind them.
@@ -2287,6 +2382,7 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
   }
 
   addEventListener("keydown", (event) => {
+    performanceManager.markInteraction(1100);
     // The modal's capture-phase keyboard handler owns Escape and focus while
     // its project transmission is visible.
     if (isAboutExperienceOpen) return;
@@ -2321,7 +2417,18 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
     // Both the camera projection and drawing buffer must match the new viewport.
     camera.aspect = innerWidth / innerHeight;
     camera.updateProjectionMatrix();
-    spaceEnvironment.resize(innerWidth, innerHeight, devicePixelRatio);
+    const pixelRatio = performanceManager.resize(
+      innerWidth,
+      innerHeight,
+      devicePixelRatio,
+    );
+    spaceEnvironment.resize(innerWidth, innerHeight, pixelRatio);
+    setAsteroidBeltQuality(
+      asteroidBelt,
+      performanceManager.qualityName,
+      pixelRatio,
+    );
+    distanceCinematicPanel?.position();
   });
 
   // Hidden tabs should not spend CPU time advancing an invisible WebGL scene.
@@ -2338,6 +2445,8 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
     // A page kept in the back-forward cache will resume with its WebGL context;
     // only a true discard should release the environment resources.
     if (!event.persisted) {
+      unsubscribePerformanceManager();
+      performanceManager.dispose();
       spaceEnvironment.dispose();
       distanceCinematicPanel?.dispose();
     }
@@ -2356,33 +2465,50 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
     elapsedTime += deltaTime;
     // Focus mode slows physical scene motion without slowing camera input/easing.
     const motionScale = hoveredCelestialBody ? 0.018 : focusedBody ? 0.12 : 1;
+    const frameMotionScale = motionScale * deltaTime * 60;
     simulationTime += deltaTime * motionScale;
     // Easing with lerp each frame creates inertia. Larger factors catch up faster.
-    smoothProgress = THREE.MathUtils.lerp(smoothProgress, scrollProgress, 0.065);
-    updateDistanceReadout(smoothProgress);
-    yaw = THREE.MathUtils.lerp(yaw, targetYaw, 0.075);
-    pitch = THREE.MathUtils.lerp(pitch, targetPitch, 0.075);
+    smoothProgress = THREE.MathUtils.lerp(
+      smoothProgress,
+      scrollProgress,
+      frameAdjustedEase(0.065, deltaTime),
+    );
+    if (performanceManager.consumeTaskDelta("distanceReadout", deltaTime) > 0) {
+      updateDistanceReadout(smoothProgress);
+    }
+    const cameraInputEase = frameAdjustedEase(0.075, deltaTime);
+    yaw = THREE.MathUtils.lerp(yaw, targetYaw, cameraInputEase);
+    pitch = THREE.MathUtils.lerp(pitch, targetPitch, cameraInputEase);
 
     // ----- Update planet revolution and self-rotation -----
+    const planetVisualDelta = performanceManager.consumeTaskDelta("planetVisuals", deltaTime);
     planets.forEach((planet) => {
       const data = planet.userData;
-      data.meanAnomaly = (data.meanAnomaly ?? data.angle ?? 0) + data.orbitSpeed * 0.0022 * motionScale;
+      data.meanAnomaly = (data.meanAnomaly ?? data.angle ?? 0)
+        + data.orbitSpeed * 0.0022 * frameMotionScale;
       updatePlanetOrbitPosition(planet);
-      planet.rotation.y += data.spinSpeed * motionScale;
-      updatePlanetVisuals(planet, simulationTime, motionScale);
+      planet.rotation.y += data.spinSpeed * frameMotionScale;
+      if (planetVisualDelta > 0) {
+        updatePlanetVisuals(
+          planet,
+          simulationTime,
+          motionScale * planetVisualDelta * 60,
+        );
+      }
     });
-    updateMajorSatelliteSystems(majorSatelliteSystems, motionScale);
+    const satelliteDelta = performanceManager.consumeTaskDelta("satellites", deltaTime);
+    if (satelliteDelta > 0) {
+      updateMajorSatelliteSystems(
+        majorSatelliteSystems,
+        motionScale * satelliteDelta * 60,
+      );
+    }
 
     // ----- Calculate the camera's spherical orbit around its focus point -----
     const distance = getCameraDistance(smoothProgress);
-    freeExploreCameraOffsetCurrent.lerp(
-      freeExploreCameraOffsetTarget,
-      focusedBody ? 0.055 : 0.09,
-    );
-    freeExploreFocusOffsetCurrent.lerp(
-      freeExploreFocusOffsetTarget,
-      focusedBody ? 0.055 : 0.09,
-    );
+    const exploreRigEase = frameAdjustedEase(focusedBody ? 0.055 : 0.09, deltaTime);
+    freeExploreCameraOffsetCurrent.lerp(freeExploreCameraOffsetTarget, exploreRigEase);
+    freeExploreFocusOffsetCurrent.lerp(freeExploreFocusOffsetTarget, exploreRigEase);
 
     getFocusPoint(distance, targetFocusPoint);
     exploreBaseFocus.copy(targetFocusPoint);
@@ -2403,7 +2529,10 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
     } else {
       const focusEase = focusedBody?.userData?.focusEase
         ?? (focusedBody ? 0.055 : 0.075);
-      cameraFocusPoint.lerp(targetFocusPoint, focusEase);
+      cameraFocusPoint.lerp(
+        targetFocusPoint,
+        frameAdjustedEase(focusEase, deltaTime),
+      );
     }
 
     const focusScale = focusedBody?.userData?.focusScale ?? 1;
@@ -2412,7 +2541,7 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
     focusZoomCurrent = THREE.MathUtils.lerp(
       focusZoomCurrent,
       focusedBody ? focusZoomTarget : 1,
-      focusedBody ? 0.12 : 0.18,
+      frameAdjustedEase(focusedBody ? 0.12 : 0.18, deltaTime),
     );
 
     let cameraDistance = distance;
@@ -2456,24 +2585,47 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
     const targetFov = focusedBody
       ? focusedBody.userData.focusFov ?? 30
       : THREE.MathUtils.clamp(journeyFov, 16, 94);
-    camera.fov = THREE.MathUtils.lerp(camera.fov, targetFov, focusedBody ? 0.08 : 0.09);
+    camera.fov = THREE.MathUtils.lerp(
+      camera.fov,
+      targetFov,
+      frameAdjustedEase(focusedBody ? 0.08 : 0.09, deltaTime),
+    );
     camera.updateProjectionMatrix();
 
     // ----- Animate special meshes and scene effects -----
-    earthClouds.rotation.y += 0.0032;
-    earthAtmosphere.rotation.y -= 0.0014;
-    moonPivot.rotation.y += 0.011 * motionScale;
+    const frameScale = deltaTime * 60;
+    earthClouds.rotation.y += 0.0032 * frameScale;
+    earthAtmosphere.rotation.y -= 0.0014 * frameScale;
+    moonPivot.rotation.y += 0.011 * frameMotionScale;
     // A small oscillation suggests lunar libration while the pivot maintains tidal lock.
     moon.rotation.y = Math.sin(simulationTime * 0.35) * 0.04;
-    updateSun(sun, simulationTime, motionScale);
-    updateSunApparentScale();
-    updateCelestialHoverVisual();
-    updateFocusedSelectionVisual();
-    updateAsteroidBelt(asteroidBelt, motionScale, jupiter, camera, currentSunAngularRadius);
+
+    const sunDelta = performanceManager.consumeTaskDelta("sun", deltaTime);
+    if (sunDelta > 0) {
+      updateSun(sun, simulationTime, motionScale * sunDelta * 60);
+    }
+    updateSunApparentScale(deltaTime);
+
+    if (performanceManager.consumeTaskDelta("hoverVisual", deltaTime) > 0) {
+      updateCelestialHoverVisual();
+      updateFocusedSelectionVisual();
+    }
+
+    const asteroidDelta = performanceManager.consumeTaskDelta("asteroids", deltaTime);
+    if (asteroidDelta > 0) {
+      updateAsteroidBelt(
+        asteroidBelt,
+        motionScale * asteroidDelta * 60,
+        jupiter,
+        camera,
+        currentSunAngularRadius,
+      );
+    }
     // One journey value coordinates exposure, stellar layers, galaxies, local
     // dust, and zodiacal light for scroll, reverse travel, and body focus alike.
     spaceEnvironment.setJourneyProgress(getEnvironmentJourneyProgress());
-    spaceEnvironment.update(deltaTime, elapsedTime);
+    const environmentDelta = performanceManager.consumeTaskDelta("environment", deltaTime);
+    if (environmentDelta > 0) spaceEnvironment.update(environmentDelta, elapsedTime);
     orbitRoot.children.forEach((orbit) => {
       orbit.material.opacity = THREE.MathUtils.clamp((smoothProgress - 0.035) / 0.18, 0.04, 0.22);
     });
@@ -2481,13 +2633,18 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
     // ----- Sync HTML, draw the frame, then schedule the next frame -----
     // Matrix updates make the latest camera transform available to 3D→2D projection.
     camera.updateMatrixWorld();
-    updateInspectionInterface();
+    if (performanceManager.consumeTaskDelta("inspectionUi", deltaTime) > 0) {
+      updateInspectionInterface();
+    }
     renderer.render(scene, camera);
+    performanceManager.recordFrame(deltaTime);
     // requestAnimationFrame runs before the browser's next repaint (usually ~60 FPS).
     requestAnimationFrame(animate);
   }
 
-  // Seed state and begin the self-scheduling render loop.
+  // Seed state and begin the self-scheduling render loop. One-time shader and
+  // geometry compilation is excluded from adaptive frame-rate decisions.
+  performanceManager.startMonitoring();
   updateScrollProgress();
   animate();
 

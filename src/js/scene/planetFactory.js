@@ -490,7 +490,11 @@ function createAtmosphereMaterial(color, opacity) {
   });
 }
 
-function addRealisticAtmosphere(planet, config) {
+function getSegmentCount(base, scale, minimum) {
+  return Math.max(minimum, Math.round(base * scale));
+}
+
+function addRealisticAtmosphere(planet, config, segmentScale = 1) {
   let color;
   let opacity;
   let scale;
@@ -505,7 +509,11 @@ function addRealisticAtmosphere(planet, config) {
   else return null;
 
   const shell = new THREE.Mesh(
-    new THREE.SphereGeometry(config.radius * scale, 144, 120),
+    new THREE.SphereGeometry(
+      config.radius * scale,
+      getSegmentCount(144, segmentScale, 72),
+      getSegmentCount(120, segmentScale, 56),
+    ),
     createAtmosphereMaterial(color, opacity),
   );
   shell.name = `${config.name} atmosphere`;
@@ -613,12 +621,12 @@ function createVenusCloudShader(baseColor, opacity, cloudTexture) {
   });
 }
 
-function addVenusClouds(planet, config, textures) {
+function addVenusClouds(planet, config, textures, segmentScale = 1) {
   const cloudGroup = new THREE.Group();
   cloudGroup.name = "Venus cloud deck";
 
   const lowerClouds = new THREE.Mesh(
-    new THREE.SphereGeometry(config.radius * 1.012, 192, 152),
+    new THREE.SphereGeometry(config.radius * 1.012, getSegmentCount(192, segmentScale, 96), getSegmentCount(152, segmentScale, 72)),
     new THREE.MeshStandardMaterial({
       map: textures.venusAtmosphere,
       color: 0xffffff,
@@ -631,7 +639,7 @@ function addVenusClouds(planet, config, textures) {
   cloudGroup.add(lowerClouds);
 
   const middleClouds = new THREE.Mesh(
-    new THREE.SphereGeometry(config.radius * 1.018, 160, 128),
+    new THREE.SphereGeometry(config.radius * 1.018, getSegmentCount(160, segmentScale, 80), getSegmentCount(128, segmentScale, 64)),
     createVenusCloudShader(0xf2b66d, 0.22, textures.venusAtmosphere),
   );
   middleClouds.name = "Venus middle cloud layer";
@@ -640,7 +648,7 @@ function addVenusClouds(planet, config, textures) {
   cloudGroup.add(middleClouds);
 
   const upperClouds = new THREE.Mesh(
-    new THREE.SphereGeometry(config.radius * 1.028, 160, 128),
+    new THREE.SphereGeometry(config.radius * 1.028, getSegmentCount(160, segmentScale, 80), getSegmentCount(128, segmentScale, 64)),
     createVenusCloudShader(0xffdeb0, 0.12, textures.venusAtmosphere),
   );
   upperClouds.name = "Venus upper haze layer";
@@ -648,7 +656,7 @@ function addVenusClouds(planet, config, textures) {
   cloudGroup.add(upperClouds);
 
   const softGlow = new THREE.Mesh(
-    new THREE.SphereGeometry(config.radius * 1.052, 128, 96),
+    new THREE.SphereGeometry(config.radius * 1.052, getSegmentCount(128, segmentScale, 64), getSegmentCount(96, segmentScale, 48)),
     createAtmosphereMaterial(0xffca78, 0.22),
   );
   softGlow.name = "Venus soft glow";
@@ -666,7 +674,15 @@ function addVenusClouds(planet, config, textures) {
  * RingGeometry lies in the XY plane, so it is rotated into the planet's
  * equatorial XZ plane before being added to the ring group.
  */
-function createRingBand({ innerRadius, outerRadius, color, opacity, roughness = 0.9, texture = null }) {
+function createRingBand({
+  innerRadius,
+  outerRadius,
+  color,
+  opacity,
+  roughness = 0.9,
+  texture = null,
+  segments = 320,
+}) {
   const material = new THREE.MeshStandardMaterial({
     map: texture,
     color,
@@ -680,7 +696,7 @@ function createRingBand({ innerRadius, outerRadius, color, opacity, roughness = 
   });
 
   const band = new THREE.Mesh(
-    new THREE.RingGeometry(innerRadius, outerRadius, 320),
+    new THREE.RingGeometry(innerRadius, outerRadius, segments),
     material,
   );
   band.rotation.x = Math.PI * 0.5;
@@ -697,9 +713,11 @@ function createRingBand({ innerRadius, outerRadius, color, opacity, roughness = 
  * - Jupiter: extremely faint dusty rings
  * - Neptune: dim rings with brighter fragmented arcs
  */
-function addGiantPlanetRings(planet, config, textures) {
+function addGiantPlanetRings(planet, config, textures, segmentScale = 1) {
   const group = new THREE.Group();
   group.name = `${config.name} ring system`;
+  const ringSegments = getSegmentCount(320, segmentScale, 128);
+  const torusSegments = getSegmentCount(360, segmentScale, 160);
 
   if (config.name === "Saturn") {
     const r = config.radius;
@@ -718,7 +736,7 @@ function addGiantPlanetRings(planet, config, textures) {
     ];
 
     bands.forEach((profile, index) => {
-      const band = createRingBand(profile);
+      const band = createRingBand({ ...profile, segments: ringSegments });
       band.name = `Saturn ring band ${index + 1}`;
       group.add(band);
     });
@@ -729,6 +747,7 @@ function addGiantPlanetRings(planet, config, textures) {
       outerRadius: r * 2.105,
       color: 0xfff7df,
       opacity: 0.28,
+      segments: ringSegments,
     });
     group.add(outerGlint);
   }
@@ -741,7 +760,7 @@ function addGiantPlanetRings(planet, config, textures) {
       { innerRadius: r * 1.49, outerRadius: r * 1.66, color: 0xb3a39a, opacity: 0.025 },
     ];
     bands.forEach((profile, index) => {
-      const band = createRingBand(profile);
+      const band = createRingBand({ ...profile, segments: ringSegments });
       band.name = `Jupiter dust ring ${index + 1}`;
       group.add(band);
     });
@@ -783,7 +802,7 @@ function addGiantPlanetRings(planet, config, textures) {
           r * radiusScale,
           Math.max(0.012, r * tubeScale),
           8,
-          360,
+          torusSegments,
         ),
         material,
       );
@@ -800,6 +819,7 @@ function addGiantPlanetRings(planet, config, textures) {
       color: 0x87b6bd,
       opacity: 0.035,
       roughness: 1,
+      segments: ringSegments,
     });
     dustSheet.name = "Uranus faint ring dust sheet";
     group.add(dustSheet);
@@ -815,7 +835,7 @@ function addGiantPlanetRings(planet, config, textures) {
     ];
 
     bands.forEach((profile, index) => {
-      const band = createRingBand(profile);
+      const band = createRingBand({ ...profile, segments: ringSegments });
       band.name = `Neptune faint ring ${index + 1}`;
       group.add(band);
     });
@@ -911,8 +931,29 @@ function createPlanetMaterial(config, textures) {
 }
 
 /** Builds one planet, its specialised layers, and registers it for animation. */
-export function createPlanet({ config, textures, world, orbitRoot, planets, hoverTargets }) {
-  const segments = GAS_PROFILES[config.name] ? [192, 128] : config.name === "Mercury" ? [192, 160] : config.name === "Mars" ? [200, 168] : config.name === "Venus" ? [184, 152] : [144, 112];
+export function createPlanet({
+  config,
+  textures,
+  world,
+  orbitRoot,
+  planets,
+  hoverTargets,
+  quality = "high",
+}) {
+  const segmentScale = quality === "low" ? 0.58 : quality === "medium" ? 0.78 : 1;
+  const baseSegments = GAS_PROFILES[config.name]
+    ? [192, 128]
+    : config.name === "Mercury"
+      ? [192, 160]
+      : config.name === "Mars"
+        ? [200, 168]
+        : config.name === "Venus"
+          ? [184, 152]
+          : [144, 112];
+  const segments = [
+    getSegmentCount(baseSegments[0], segmentScale, 80),
+    getSegmentCount(baseSegments[1], segmentScale, 64),
+  ];
   const geometry = new THREE.SphereGeometry(config.radius, segments[0], segments[1]);
   sculptRockyGeometry(geometry, config);
   const mesh = new THREE.Mesh(
@@ -964,13 +1005,13 @@ export function createPlanet({ config, textures, world, orbitRoot, planets, hove
     mesh.add(hitTarget);
   }
 
-  const atmosphere = addRealisticAtmosphere(mesh, config);
+  const atmosphere = addRealisticAtmosphere(mesh, config, segmentScale);
   if (atmosphere) mesh.userData.visualLayers.atmosphere = atmosphere;
   if (config.name === "Venus") {
-    mesh.userData.visualLayers.clouds = addVenusClouds(mesh, config, textures);
+    mesh.userData.visualLayers.clouds = addVenusClouds(mesh, config, textures, segmentScale);
   }
   if (["Jupiter", "Saturn", "Uranus", "Neptune"].includes(config.name)) {
-    mesh.userData.visualLayers.ringSystem = addGiantPlanetRings(mesh, config, textures);
+    mesh.userData.visualLayers.ringSystem = addGiantPlanetRings(mesh, config, textures, segmentScale);
     const ringBoundsMultiplier = {
       Jupiter: 1.92,
       Saturn: 2.58,

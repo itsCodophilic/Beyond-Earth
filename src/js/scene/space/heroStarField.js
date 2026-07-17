@@ -72,8 +72,14 @@ export function createHeroStarField({ count, radius, pixelRatio }) {
   points.frustumCulled = false;
   points.renderOrder = -24;
 
+  const capacity = geometry.getAttribute("position").count;
+
   return {
     object: points,
+    capacity,
+    setCount(count) {
+      geometry.setDrawRange(0, Math.max(0, Math.min(capacity, Math.floor(count))));
+    },
     update({ time, visibility, exposure, solarSuppression, sunDirection, sunAngularRadius = 0, reducedMotion }) {
       material.uniforms.uTime.value = time;
       material.uniforms.uVisibility.value = reducedMotion ? visibility * 0.76 : visibility;

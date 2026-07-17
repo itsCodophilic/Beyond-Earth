@@ -31,6 +31,12 @@ const JUPITER_ORBIT_RADIUS = 75 * SOLAR_ORBIT_SCALE;
 const INSTANCED_BOULDER_COUNTS = { C: 7000, S: 5000, M: 2500 };
 const UNRESOLVED_PEBBLE_COUNT = 120000;
 
+const ASTEROID_QUALITY_PRESETS = Object.freeze({
+  high: Object.freeze({ instanceDensity: 1, debrisDensity: 1 }),
+  medium: Object.freeze({ instanceDensity: 0.72, debrisDensity: 0.65 }),
+  low: Object.freeze({ instanceDensity: 0.44, debrisDensity: 0.34 }),
+});
+
 const COMPOSITIONS = {
   S: {
     label: "S-type (silicate)",
@@ -669,8 +675,12 @@ export function findNearestAsteroidInstanceAtPointer({
     if (!mesh?.visible || !mesh.userData?.isInteractiveAsteroidField) return;
     mesh.updateWorldMatrix(true, false);
     const records = mesh.userData.instanceRecords ?? [];
+    const activeInstanceCount = Math.min(
+      records.length,
+      mesh.userData.activeInstanceCount ?? mesh.count ?? records.length,
+    );
 
-    for (let instanceId = 0; instanceId < records.length; instanceId += 1) {
+    for (let instanceId = 0; instanceId < activeInstanceCount; instanceId += 1) {
       const record = records[instanceId];
       if (!record) continue;
       mesh.getMatrixAt(instanceId, _instanceMatrix);
@@ -985,14 +995,15 @@ function createInstancedRockGeometry(seed, composition, variant) {
  * same geometry/material on the GPU. This is what makes a dense volumetric belt
  * possible without creating fifteen thousand JavaScript Mesh objects.
  */
-function createInstancedBoulderField(materials) {
+function createInstancedBoulderField(materials, density = 1) {
   const field = new THREE.Group();
   const meshes = [];
   field.name = "3D asteroid boulder field";
 
   Object.entries(INSTANCED_BOULDER_COUNTS).forEach(([composition, totalCount], compositionIndex) => {
     for (let variant = 0; variant < 2; variant += 1) {
-      const count = variant === 0 ? Math.ceil(totalCount / 2) : Math.floor(totalCount / 2);
+      const scaledTotal = Math.max(1, Math.round(totalCount * density));
+      const count = variant === 0 ? Math.ceil(scaledTotal / 2) : Math.floor(scaledTotal / 2);
       const geometry = createInstancedRockGeometry(
         8100 + compositionIndex * 307 + variant * 97,
         composition,
@@ -1106,6 +1117,8 @@ function createInstancedBoulderField(materials) {
       mesh.receiveShadow = true;
       mesh.frustumCulled = false;
       mesh.userData.rotationSpeed = 0.000055 + compositionIndex * 0.000012 + variant * 0.000009;
+      mesh.userData.capacity = count;
+      mesh.userData.activeInstanceCount = count;
       mesh.userData.isInteractiveAsteroidField = true;
       mesh.userData.instanceRecords = instanceRecords;
       mesh.userData.inspectionTargets = new Map();
@@ -1122,10 +1135,10 @@ function createInstancedBoulderField(materials) {
  * a pixel at this scale. It is intentionally a point layer, while every object
  * large enough to inspect is represented by actual 3D geometry above.
  */
-function createDistantDebris() {
-  const positions = new Float32Array(UNRESOLVED_PEBBLE_COUNT * 3);
-  const colors = new Float32Array(UNRESOLVED_PEBBLE_COUNT * 3);
-  const sizes = new Float32Array(UNRESOLVED_PEBBLE_COUNT);
+function createDistantDebris(count = UNRESOLVED_PEBBLE_COUNT) {
+  const positions = new Float32Array(count * 3);
+  const colors = new Float32Array(count * 3);
+  const sizes = new Float32Array(count);
   const colorPalette = [
     new THREE.Color(0x73665b),
     new THREE.Color(0x373937),
@@ -1135,7 +1148,7 @@ function createDistantDebris() {
 
   let accepted = 0;
   let attempt = 0;
-  while (accepted < UNRESOLVED_PEBBLE_COUNT) {
+  while (accepted < count) {
     const seed = 500000 + attempt * 19;
     attempt += 1;
     const radius = BELT_INNER_RADIUS
@@ -1229,6 +1242,7 @@ function createDistantDebris() {
   });
   const points = new THREE.Points(geometry, material);
   points.name = "Virtual million-object pebble population";
+  points.userData.capacity = count;
   points.frustumCulled = false;
   points.renderOrder = -6;
   return points;
@@ -1347,7 +1361,11 @@ function createGeometryPool() {
 }
 
 /** Creates the complete interactive asteroid system. */
-export function createAsteroidBelt({ world, hoverTargets = [] }) {
+export function createAsteroidBelt({ world, hoverTargets = [], quality = "high" }) {
+  const initialQuality = ASTEROID_QUALITY_PRESETS[quality]
+    ? quality
+    : "medium";
+  const qualityPreset = ASTEROID_QUALITY_PRESETS[initialQuality];
   const system = new THREE.Group();
   system.name = "Asteroid populations";
 
@@ -1512,8 +1530,10 @@ export function createAsteroidBelt({ world, hoverTargets = [] }) {
   // interactive; instanced boulders supply nearby 3D mass; points represent
   // only the enormous population that is too small to resolve at this scale.
   const { field: instancedBoulderField, meshes: instancedBoulders } =
-    createInstancedBoulderField(materials);
-  const distantDebris = createDistantDebris();
+    createInstancedBoulderField(materials, qualityPreset.instanceDensity);
+  const distantDebris = createDistantDebris(
+    Math.max(1, Math.round(UNRESOLVED_PEBBLE_COUNT * qualityPreset.debrisDensity)),
+  );
   mainBelt.add(instancedBoulderField, distantDebris);
 
   world.add(system);
@@ -1535,7 +1555,36 @@ export function createAsteroidBelt({ world, hoverTargets = [] }) {
     instancedBoulderField,
     instancedBoulders,
     distantDebris,
+    capacityQualityName: initialQuality,
   };
+}
+
+/** Adjusts only sub-pixel/instanced population density; resolved bodies remain. */
+export function setAsteroidBeltQuality(asteroidBelt, qualityName, pixelRatio = window.devicePixelRatio) {
+  if (!asteroidBelt) return;
+  const preset = ASTEROID_QUALITY_PRESETS[qualityName] ?? ASTEROID_QUALITY_PRESETS.medium;
+  const capacityPreset = ASTEROID_QUALITY_PRESETS[asteroidBelt.capacityQualityName]
+    ?? ASTEROID_QUALITY_PRESETS.medium;
+  const instanceRatio = Math.min(1, preset.instanceDensity / capacityPreset.instanceDensity);
+  const debrisRatio = Math.min(1, preset.debrisDensity / capacityPreset.debrisDensity);
+  asteroidBelt.instancedBoulders?.forEach((mesh) => {
+    const capacity = mesh.userData.capacity ?? mesh.count;
+    const activeCount = Math.max(1, Math.min(capacity, Math.round(capacity * instanceRatio)));
+    mesh.count = activeCount;
+    mesh.userData.activeInstanceCount = activeCount;
+  });
+
+  const debris = asteroidBelt.distantDebris;
+  if (debris?.geometry) {
+    const capacity = debris.userData.capacity
+      ?? debris.geometry.getAttribute("position")?.count
+      ?? 0;
+    const activeCount = Math.max(1, Math.min(capacity, Math.round(capacity * debrisRatio)));
+    debris.geometry.setDrawRange(0, activeCount);
+  }
+  if (debris?.material?.uniforms?.uPixelRatio) {
+    debris.material.uniforms.uPixelRatio.value = Math.min(Math.max(0.5, pixelRatio), 2);
+  }
 }
 
 /** Advances the orbit and spin of every resolved asteroid. */

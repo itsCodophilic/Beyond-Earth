@@ -120,8 +120,14 @@ export function createCosmicDustField({ count, maximumRadius, pixelRatio }) {
   points.frustumCulled = false;
   points.renderOrder = -120;
 
+  const capacity = geometry.getAttribute("position").count;
+
   return {
     object: points,
+    capacity,
+    setCount(count) {
+      geometry.setDrawRange(0, Math.max(0, Math.min(capacity, Math.floor(count))));
+    },
     update({ time, visibility, sunPosition, sunAngularRadius = 0, reducedMotion }) {
       material.uniforms.uTime.value = time;
       material.uniforms.uVisibility.value = visibility;

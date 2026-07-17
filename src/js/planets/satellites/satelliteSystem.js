@@ -44,9 +44,9 @@ const PARENT_ORBITAL_SCALE = Object.freeze({
   Neptune: { heliocentricAU: 30.0699, eccentricity: 0.0086 },
 });
 
-function createOrbitLines(moons, parentRadius) {
+function createOrbitLines(moons, parentRadius, quality = "high") {
   const positions = [];
-  const segments = 128;
+  const segments = quality === "low" ? 64 : quality === "medium" ? 96 : 128;
   moons.forEach((moon) => {
     const orbitRadius = parentRadius * moon.orbitScale;
     const cosTilt = Math.cos(moon.inclination ?? 0);
@@ -160,9 +160,11 @@ function createSatelliteMesh(profile, parentName, parentRadius, sharedGeometry, 
 }
 
 /** Builds the major moon systems without changing the existing planet meshes. */
-export function createMajorSatelliteSystems({ world, planets, hoverTargets }) {
-  const sharedTexture = makeNoiseTexture("moon", 768);
-  const sharedGeometry = new THREE.SphereGeometry(1, 56, 40);
+export function createMajorSatelliteSystems({ world, planets, hoverTargets, quality = "high" }) {
+  const textureSize = quality === "low" ? 384 : quality === "medium" ? 512 : 768;
+  const sphereSegments = quality === "low" ? [32, 24] : quality === "medium" ? [44, 32] : [56, 40];
+  const sharedTexture = makeNoiseTexture("moon", textureSize);
+  const sharedGeometry = new THREE.SphereGeometry(1, sphereSegments[0], sphereSegments[1]);
   const systems = [];
 
   Object.entries(MOON_SYSTEMS).forEach(([parentName, moonProfiles], systemIndex) => {
@@ -174,7 +176,7 @@ export function createMajorSatelliteSystems({ world, planets, hoverTargets }) {
     root.position.copy(parent.position);
     // Inherit the planet's axial tilt without inheriting its rapid self-spin.
     root.rotation.z = parent.rotation.z;
-    root.add(createOrbitLines(moonProfiles, parent.userData.visualRadius ?? 1));
+    root.add(createOrbitLines(moonProfiles, parent.userData.visualRadius ?? 1, quality));
 
     const moons = moonProfiles.map((profile, index) => {
       const orbitPlane = new THREE.Group();

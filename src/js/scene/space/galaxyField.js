@@ -105,8 +105,14 @@ export function createGalaxyField({ count, radius }) {
   if (galaxies.instanceColor) galaxies.instanceColor.needsUpdate = true;
   geometry.attributes.aGalaxyData.needsUpdate = true;
 
+  const capacity = count;
+
   return {
     object: galaxies,
+    capacity,
+    setCount(nextCount) {
+      galaxies.count = Math.max(0, Math.min(capacity, Math.floor(nextCount)));
+    },
     update({ visibility, exposure, journeyProgress = 0, sunDirection, sunAngularRadius = 0 }) {
       material.uniforms.uVisibility.value = visibility;
       material.uniforms.uExposure.value = exposure;

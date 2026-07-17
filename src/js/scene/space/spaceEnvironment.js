@@ -5,7 +5,6 @@ import { createGalaxyField } from "./galaxyField.js";
 import { createHeroStarField } from "./heroStarField.js";
 import { createMilkyWayBackground } from "./milkyWayBackground.js";
 import {
-  detectQualityPreset,
   QUALITY_PRESETS,
   SPACE_ENVIRONMENT_CONFIG,
 } from "./spaceEnvironmentConfig.js";
@@ -20,7 +19,7 @@ import { createZodiacalLight } from "./zodiacalLight.js";
  * galaxy, dust, exposure, and solar-glare transitions.
  */
 export class SpaceEnvironment {
-  constructor({ scene, camera, renderer, quality = null }) {
+  constructor({ scene, camera, renderer, quality = null, pixelRatio = window.devicePixelRatio }) {
     this.scene = scene;
     this.camera = camera;
     this.renderer = renderer;
@@ -54,15 +53,16 @@ export class SpaceEnvironment {
     };
     this.motionQuery.addEventListener?.("change", this.handleMotionPreference);
 
-    this.qualityName = quality ?? detectQualityPreset({ reducedMotion: this.reducedMotion });
-    this.quality = QUALITY_PRESETS[this.qualityName] ?? QUALITY_PRESETS.medium;
+    this.qualityName = QUALITY_PRESETS[quality] ? quality : "medium";
+    this.quality = QUALITY_PRESETS[this.qualityName];
+    this.pixelRatio = Math.max(0.5, Number(pixelRatio) || 1);
   }
 
   /** Builds all geometry once. No texture downloads or per-frame compilation occur. */
   async init() {
     if (this.initialized) return this;
     const radii = SPACE_ENVIRONMENT_CONFIG.radii;
-    const pixelRatio = Math.min(window.devicePixelRatio, this.quality.maxPixelRatio);
+    const pixelRatio = this.pixelRatio;
 
     this.backgroundStars = createStarField({
       count: this.quality.backgroundStars,
@@ -115,7 +115,7 @@ export class SpaceEnvironment {
     this.root.add(...this.layers.map((layer) => layer.object));
     this.scene.add(this.root);
     this.setQuality(this.qualityName);
-    this.resize(window.innerWidth, window.innerHeight, window.devicePixelRatio);
+    this.resize(window.innerWidth, window.innerHeight, this.pixelRatio);
     this.initialized = true;
     return this;
   }
@@ -194,21 +194,31 @@ export class SpaceEnvironment {
   }
 
   resize(width, height, requestedPixelRatio = window.devicePixelRatio) {
-    const pixelRatio = Math.min(requestedPixelRatio, this.quality.maxPixelRatio);
-    this.renderer.setPixelRatio(pixelRatio);
-    this.renderer.setSize(width, height);
-    this.layers.forEach((layer) => layer.resize?.(pixelRatio));
+    // PerformanceManager is the single owner of renderer pixel density. The
+    // environment only mirrors that effective value into point-size uniforms.
+    this.pixelRatio = Math.max(0.5, Number(requestedPixelRatio) || 1);
+    this.layers.forEach((layer) => layer.resize?.(this.pixelRatio));
+    return this.pixelRatio;
   }
 
   /**
-   * Runtime quality changes hide optional layers and adjust pixel density.
-   * Population counts are selected during init to avoid a disruptive rebuild.
+   * Runtime quality changes hide optional layers and adjust active populations.
+   * PerformanceManager supplies pixel density separately; geometry capacity is
+   * selected during init to avoid disruptive rebuilding.
    */
   setQuality(presetName) {
     const preset = QUALITY_PRESETS[presetName];
     if (!preset) return;
     this.qualityName = presetName;
     this.quality = preset;
+
+    this.backgroundStars?.setCount?.(preset.backgroundStars);
+    this.parallaxStars?.setCount?.(preset.parallaxStars);
+    this.milkyWay?.setCount?.(preset.galacticStars);
+    this.heroStars?.setCount?.(preset.heroStars);
+    this.galaxies?.setCount?.(preset.galaxies);
+    this.dust?.setCount?.(preset.dust);
+
     if (this.heroStars) this.heroStars.object.visible = preset.heroStarsEnabled;
     if (this.galaxies) this.galaxies.object.visible = preset.galaxiesEnabled;
     if (this.dust) this.dust.object.visible = preset.dustEnabled;

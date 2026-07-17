@@ -22,7 +22,6 @@ export const JOURNEY_MAP = Object.freeze({
 
 export const QUALITY_PRESETS = Object.freeze({
   high: {
-    maxPixelRatio: 2,
     backgroundStars: 30000,
     galacticStars: 26000,
     parallaxStars: 1300,
@@ -35,7 +34,6 @@ export const QUALITY_PRESETS = Object.freeze({
     dustEnabled: true,
   },
   medium: {
-    maxPixelRatio: 1.5,
     backgroundStars: 21000,
     galacticStars: 18500,
     parallaxStars: 900,
@@ -48,7 +46,6 @@ export const QUALITY_PRESETS = Object.freeze({
     dustEnabled: true,
   },
   low: {
-    maxPixelRatio: 1.25,
     backgroundStars: 12000,
     galacticStars: 10000,
     parallaxStars: 480,
@@ -85,17 +82,3 @@ export const SPACE_ENVIRONMENT_CONFIG = Object.freeze({
   // avoiding the previous horizontal line wrapped around the entire scene.
   milkyWayRotation: [0.25, -0.10, -0.32],
 });
-
-/** Selects quality from measurable capabilities rather than user-agent text. */
-export function detectQualityPreset({ reducedMotion = false } = {}) {
-  const shortSide = Math.min(window.innerWidth, window.innerHeight);
-  const cores = navigator.hardwareConcurrency ?? 8;
-  const memory = navigator.deviceMemory ?? 8;
-  const demandingDisplay = window.devicePixelRatio > 2.2;
-
-  if (shortSide < 560 || cores <= 4 || memory <= 3) return "low";
-  if (reducedMotion || shortSide < 850 || cores <= 6 || memory <= 6 || demandingDisplay) {
-    return "medium";
-  }
-  return "high";
-}

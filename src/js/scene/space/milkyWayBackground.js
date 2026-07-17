@@ -111,8 +111,14 @@ export function createMilkyWayBackground({ count, radius, pixelRatio, rotation }
   stars.renderOrder = -28;
   group.add(glow, stars);
 
+  const starCapacity = starGeometry.getAttribute("position").count;
+
   return {
     object: group,
+    capacity: starCapacity,
+    setCount(count) {
+      starGeometry.setDrawRange(0, Math.max(0, Math.min(starCapacity, Math.floor(count))));
+    },
     update({ time, visibility, contrast, exposure, solarSuppression, sunDirection, sunAngularRadius = 0, reducedMotion }) {
       glowMaterial.uniforms.uVisibility.value = visibility;
       glowMaterial.uniforms.uContrast.value = contrast;
