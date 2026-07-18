@@ -16,7 +16,8 @@ export const JOURNEY_MAP = Object.freeze({
   saturn: 0.67,
   uranus: 0.77,
   neptune: 0.86,
-  kuiperBelt: 0.94,
+  pluto: 0.92,
+  kuiperBelt: 0.95,
   interstellar: 1,
 });
 

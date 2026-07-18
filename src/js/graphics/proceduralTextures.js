@@ -29,6 +29,7 @@ export function makeNoiseTexture(kind, size = 1024) {
     saturn: ["#a98758", "#e8d09a", "#6b5030"],
     uranus: ["#78d6df", "#c0f4f6", "#4f93a6"],
     neptune: ["#183f9a", "#4a7dff", "#091f56"],
+    pluto: ["#8d766d", "#d7cec0", "#4c3b39"],
     sun: ["#ff7a18", "#ffd166", "#b32013"],
   };
   const palette = palettes[kind] ?? palettes.earth;
@@ -115,6 +116,28 @@ export function makeNoiseTexture(kind, size = 1024) {
     ctx.moveTo(size * 0.1, size * 0.2);
     ctx.bezierCurveTo(size * 0.32, size * 0.16, size * 0.52, size * 0.24, size * 0.9, size * 0.18);
     ctx.stroke();
+  }
+
+
+  if (kind === "pluto") {
+    // Pale nitrogen-ice plains and reddish tholin-rich terrain evoke the
+    // New Horizons visible-light appearance without requiring a remote asset.
+    ctx.globalAlpha = 0.42;
+    ctx.fillStyle = "#efe8d9";
+    ctx.beginPath();
+    ctx.ellipse(size * 0.63, size * 0.24, size * 0.12, size * 0.095, -0.14, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "#7a4b48";
+    ctx.beginPath();
+    ctx.ellipse(size * 0.22, size * 0.30, size * 0.22, size * 0.10, 0.08, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+    for (let index = 0; index < 52; index += 1) {
+      ctx.beginPath();
+      ctx.arc(Math.random() * size, Math.random() * size * 0.5, 2 + Math.random() * 13, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(55,42,41,${0.04 + Math.random() * 0.12})`;
+      ctx.fill();
+    }
   }
 
   if (kind === "uranus") {

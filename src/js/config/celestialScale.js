@@ -21,6 +21,7 @@ export const HELIOCENTRIC_ORBIT_AU = Object.freeze({
   Saturn: 9.5367,
   Uranus: 19.1892,
   Neptune: 30.0699,
+  Pluto: 39.482,
 });
 
 export const BODY_SIZE_DATA = Object.freeze({
@@ -33,6 +34,7 @@ export const BODY_SIZE_DATA = Object.freeze({
   Saturn: { diameterKm: 116_460, diameterEarths: 9.13, volumeEarths: 764 },
   Uranus: { diameterKm: 50_724, diameterEarths: 3.98, volumeEarths: 63.1 },
   Neptune: { diameterKm: 49_244, diameterEarths: 3.86, volumeEarths: 57.7 },
+  Pluto: { diameterKm: 2_376.6, diameterEarths: 0.1863, volumeEarths: 0.00651 },
 });
 
 function compressedPlanetRadius(diameterEarths) {
@@ -92,6 +94,13 @@ export const PLANET_SCALE_PROFILES = Object.freeze({
     visualRadius: compressedPlanetRadius(BODY_SIZE_DATA.Neptune.diameterEarths),
     orbitRadius: 178 * SOLAR_ORBIT_SCALE,
     focusDistance: 13.0,
+  },
+  Pluto: {
+    ...BODY_SIZE_DATA.Pluto,
+    visualRadius: compressedPlanetRadius(BODY_SIZE_DATA.Pluto.diameterEarths),
+    // Cinematically compressed Kuiper Belt placement, still beyond Neptune.
+    orbitRadius: 191 * SOLAR_ORBIT_SCALE,
+    focusDistance: 1.35,
   },
   Sun: {
     ...BODY_SIZE_DATA.Sun,

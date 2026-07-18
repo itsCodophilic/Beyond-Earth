@@ -31,6 +31,7 @@ const PLANET_ORBITAL_ELEMENTS = Object.freeze({
   saturn: { semiMajorAxisAU: 9.53667594, eccentricity: 0.05386179 },
   uranus: { semiMajorAxisAU: 19.18916464, eccentricity: 0.04725744 },
   neptune: { semiMajorAxisAU: 30.06992276, eccentricity: 0.00859048 },
+  pluto: { semiMajorAxisAU: 39.482, eccentricity: 0.2488 },
 });
 
 

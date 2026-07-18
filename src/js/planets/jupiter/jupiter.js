@@ -55,7 +55,7 @@ export const jupiter = {
       "≈ 588 million km at closest approach",
     sizeComparison: getPlanetSizeComparison("Jupiter"),
     description:
-      "A colossal striped world of hydrogen, powerful auroras, and storms large enough to swallow Earth.",
+      "A colossal striped world of hydrogen, powerful auroras, storms large enough to swallow Earth, and a richly populated system of 115 represented satellites.",
   },
 };
 

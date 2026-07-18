@@ -1242,6 +1242,7 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
     if (bodyName.includes("saturn")) return JOURNEY_MAP.saturn;
     if (bodyName.includes("uranus")) return JOURNEY_MAP.uranus;
     if (bodyName.includes("neptune")) return JOURNEY_MAP.neptune;
+    if (bodyName.includes("pluto")) return JOURNEY_MAP.pluto;
     if (bodyType.includes("asteroid") || bodyName.includes("asteroid") || bodyName.includes("family")) {
       return JOURNEY_MAP.asteroidBelt;
     }
@@ -1841,7 +1842,7 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
 
   function isMajorCelestialBody(body) {
     const type = getInteractiveType(body);
-    return type === "star" || type === "planet" || type === "natural satellite";
+    return type === "star" || type === "planet" || type === "dwarf planet" || type === "natural satellite";
   }
 
   function isAsteroidBody(body) {
@@ -1935,7 +1936,7 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
       if (distancePixels > clickRadius) return;
 
       const type = getInteractiveType(body);
-      const typeBias = type === "natural satellite" ? -2 : type === "planet" ? -1 : 0;
+      const typeBias = type === "natural satellite" ? -2 : (type === "planet" || type === "dwarf planet") ? -1 : 0;
       // Prefer the body whose visible disk most clearly contains the cursor.
       // This avoids selecting Earth when the pointer is actually in the gap
       // between Earth and the Moon.

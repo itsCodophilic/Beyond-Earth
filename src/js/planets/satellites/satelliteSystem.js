@@ -14,6 +14,14 @@ import {
   JUPITER_MOON_PROFILES,
 } from "../jupiter/satellites/jovianMoonCatalog.js";
 import { createJovianMoonSurface } from "../jupiter/satellites/jovianMoonFactory.js";
+import { SATURN_MOON_COUNT, SATURN_MOON_PROFILES } from "../saturn/satellites/saturnianMoonCatalog.js";
+import { createSaturnianMoonSurface } from "../saturn/satellites/saturnianMoonFactory.js";
+import { NEPTUNE_MOON_COUNT, NEPTUNE_MOON_PROFILES } from "../neptune/satellites/neptunianMoonCatalog.js";
+import { createNeptunianMoonSurface } from "../neptune/satellites/neptunianMoonFactory.js";
+import { URANUS_MOON_COUNT, URANUS_MOON_PROFILES } from "../uranus/satellites/uranianMoonCatalog.js";
+import { createUranianMoonSurface } from "../uranus/satellites/uranianMoonFactory.js";
+import { PLUTO_MOON_COUNT, PLUTO_MOON_PROFILES } from "../pluto/satellites/plutonianMoonCatalog.js";
+import { createPlutonianMoonSurface } from "../pluto/satellites/plutonianMoonFactory.js";
 
 const MOON_SYSTEMS = Object.freeze({
   Mars: [
@@ -21,27 +29,10 @@ const MOON_SYSTEMS = Object.freeze({
     DEIMOS_PROFILE,
   ],
   Jupiter: JUPITER_MOON_PROFILES,
-  Saturn: [
-    { name: "Mimas", diameterKm: 396.4, orbitScale: 2.48, speed: 0.014, inclination: 0.02, color: 0xb8b3a9, orbitalSpeed: "14.28 km/s around Saturn", description: "A small icy moon dominated by the enormous Herschel impact crater." },
-    { name: "Enceladus", diameterKm: 504.2, orbitScale: 2.78, speed: 0.012, inclination: 0.025, color: 0xe2e7e8, orbitalSpeed: "12.64 km/s around Saturn", description: "A bright icy moon venting water-rich plumes from a subsurface ocean." },
-    { name: "Tethys", diameterKm: 1_062.2, orbitScale: 3.16, speed: 0.0096, inclination: 0.03, color: 0xc8c7c1, orbitalSpeed: "11.35 km/s around Saturn", description: "An ice-rich moon crossed by the immense Ithaca Chasma canyon system." },
-    { name: "Dione", diameterKm: 1_122.8, orbitScale: 3.55, speed: 0.0078, inclination: 0.035, color: 0xaaa9a3, orbitalSpeed: "10.03 km/s around Saturn", description: "A cratered icy moon with bright tectonic cliffs and signs of a deep ocean." },
-    { name: "Rhea", diameterKm: 1_527.6, orbitScale: 4.05, speed: 0.0060, inclination: 0.04, color: 0xb7b6b0, orbitalSpeed: "8.48 km/s around Saturn", description: "Saturn's second-largest moon, an old icy surface marked by craters and wispy fractures." },
-    { name: "Titan", diameterKm: 5_149.5, orbitScale: 5.05, speed: 0.0038, inclination: 0.05, color: 0xc98d42, atmosphere: 0xd7a44e, orbitalSpeed: "5.57 km/s around Saturn", description: "A giant moon wrapped in nitrogen haze, with methane lakes, rain, dunes, and a hidden ocean." },
-    { name: "Iapetus", diameterKm: 1_469.0, orbitScale: 6.35, speed: 0.0024, inclination: 0.16, color: 0x756d63, orbitalSpeed: "3.26 km/s around Saturn", description: "A distant two-toned moon with a bright hemisphere, dark coating, and dramatic equatorial ridge." },
-  ],
-  Uranus: [
-    { name: "Miranda", diameterKm: 471.6, orbitScale: 2.35, speed: 0.011, inclination: 0.07, color: 0xa9afae, orbitalSpeed: "6.68 km/s around Uranus", description: "A small icy moon whose patchwork surface contains giant cliffs and jumbled coronae." },
-    { name: "Ariel", diameterKm: 1_157.8, orbitScale: 2.85, speed: 0.0084, inclination: 0.05, color: 0xc1c8c6, orbitalSpeed: "5.51 km/s around Uranus", description: "A bright Uranian moon carved by long valleys and relatively young icy terrain." },
-    { name: "Umbriel", diameterKm: 1_169.4, orbitScale: 3.32, speed: 0.0067, inclination: 0.04, color: 0x555b5d, orbitalSpeed: "4.67 km/s around Uranus", description: "A dark, heavily cratered moon with one conspicuously bright ring-shaped feature." },
-    { name: "Titania", diameterKm: 1_577.8, orbitScale: 3.95, speed: 0.0048, inclination: 0.045, color: 0x949b9c, orbitalSpeed: "3.64 km/s around Uranus", description: "The largest Uranian moon, fractured by faults and canyons across an icy-rocky surface." },
-    { name: "Oberon", diameterKm: 1_522.8, orbitScale: 4.60, speed: 0.0039, inclination: 0.055, color: 0x7d7872, orbitalSpeed: "3.15 km/s around Uranus", description: "An outer moon marked by old craters, dark floors, and bright ejecta rays." },
-  ],
-  Neptune: [
-    { name: "Proteus", diameterKm: 420, orbitScale: 2.25, speed: 0.010, inclination: 0.04, color: 0x64666b, shape: [1.12, 0.93, 0.89], orbitalSpeed: "7.62 km/s around Neptune", description: "A dark, irregular inner moon, among the largest bodies not rounded by its own gravity." },
-    { name: "Triton", diameterKm: 2_706.8, orbitScale: 3.05, speed: -0.0052, inclination: 0.30, color: 0xb9aaa4, orbitalSpeed: "4.39 km/s retrograde around Neptune", description: "A captured dwarf-planet-like moon with nitrogen frost, geysers, and a retrograde orbit." },
-    { name: "Nereid", diameterKm: 340, orbitScale: 4.65, speed: 0.0016, inclination: 0.12, color: 0x777b80, shape: [1.12, 0.90, 0.86], orbitalSpeed: "≈ 1.1 km/s around Neptune", description: "A distant irregular moon travelling on one of the most eccentric satellite orbits known." },
-  ],
+  Saturn: SATURN_MOON_PROFILES,
+  Uranus: URANUS_MOON_PROFILES,
+  Neptune: NEPTUNE_MOON_PROFILES,
+  Pluto: PLUTO_MOON_PROFILES,
 });
 
 const PARENT_ORBITAL_SCALE = Object.freeze({
@@ -50,6 +41,7 @@ const PARENT_ORBITAL_SCALE = Object.freeze({
   Saturn: { heliocentricAU: 9.5367, eccentricity: 0.0539 },
   Uranus: { heliocentricAU: 19.1892, eccentricity: 0.0473 },
   Neptune: { heliocentricAU: 30.0699, eccentricity: 0.0086 },
+  Pluto: { heliocentricAU: 39.482, eccentricity: 0.2488 },
 });
 
 const orbitPoint = new THREE.Vector3();
@@ -71,6 +63,7 @@ function getJovianInteractionTier(profile) {
 }
 
 function shouldCreateDirectPointerProxy(profile, parentName) {
+  if (profile.instanced) return false;
   if (!isJovianProfile(profile, parentName)) return true;
   return getJovianInteractionTier(profile) === "direct";
 }
@@ -156,6 +149,14 @@ function createSatelliteMesh(
     moon = createDeimosSurface(quality);
   } else if (parentName === "Jupiter") {
     moon = createJovianMoonSurface(profile, quality);
+  } else if (parentName === "Saturn") {
+    moon = createSaturnianMoonSurface(profile, quality);
+  } else if (parentName === "Neptune") {
+    moon = createNeptunianMoonSurface(profile, quality);
+  } else if (parentName === "Uranus") {
+    moon = createUranianMoonSurface(profile, quality);
+  } else if (parentName === "Pluto") {
+    moon = createPlutonianMoonSurface(profile, quality);
   } else {
     moon = new THREE.Mesh(sharedGeometry, createMoonMaterial(profile, sharedTexture));
   }
@@ -203,7 +204,15 @@ function createSatelliteMesh(
       ? "terrain-first-3d"
       : jovian
         ? "jovian-individual-3d"
-        : "shared-satellite-sphere",
+        : parentName === "Saturn"
+          ? "saturnian-individual-3d"
+          : parentName === "Neptune"
+            ? "neptunian-individual-3d"
+            : parentName === "Uranus"
+              ? "uranian-individual-3d"
+              : parentName === "Pluto"
+                ? "plutonian-individual-3d"
+                : "shared-satellite-sphere",
     visualRadius: Math.max(...moon.scale.toArray()),
     physicalDiameterKm: profile.diameterKm,
     diameterEarths: profile.diameterKm / 12_756,
@@ -268,6 +277,77 @@ function createSatelliteMesh(
   };
 }
 
+
+const denseMoonDummy = new THREE.Object3D();
+const denseMoonColour = new THREE.Color();
+
+function createDenseSatelliteFields(profiles, parentRadius, parentName, quality) {
+  const grouped = new Map();
+  profiles.forEach((profile) => {
+    const key = profile.appearance ?? profile.family ?? "background";
+    if (!grouped.has(key)) grouped.set(key, []);
+    grouped.get(key).push(profile);
+  });
+
+  return [...grouped.entries()].map(([key, records]) => {
+    const detail = quality === "low" ? 0 : 1;
+    const geometry = new THREE.IcosahedronGeometry(1, detail);
+    const material = new THREE.MeshStandardMaterial({
+      color: 0xffffff,
+      vertexColors: true,
+      roughness: 1,
+      metalness: 0,
+      envMapIntensity: 0.008,
+    });
+    const mesh = new THREE.InstancedMesh(geometry, material, records.length);
+    mesh.name = `${parentName} ${key} background satellites`;
+    mesh.frustumCulled = false;
+    mesh.castShadow = false;
+    mesh.receiveShadow = false;
+    mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+
+    const fieldRecords = records.map((profile, index) => {
+      denseMoonColour.set(profile.color ?? profile.colour ?? 0x666666);
+      const tint = 0.82 + ((profile.seed ?? index * 0.137) % 1) * 0.28;
+      denseMoonColour.multiplyScalar(tint);
+      mesh.setColorAt(index, denseMoonColour);
+      return {
+        profile,
+        angle: profile.meanAnomaly ?? ((index / Math.max(1, records.length)) * Math.PI * 2),
+        semiMajorVisualRadius: parentRadius * profile.orbitScale,
+      };
+    });
+    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+
+    return { key, mesh, records: fieldRecords };
+  });
+}
+
+function updateDenseSatelliteField(field, motionScale = 0) {
+  if (!field.mesh.visible && motionScale !== 0) return;
+  field.records.forEach((record, index) => {
+    const { profile, semiMajorVisualRadius } = record;
+    record.angle += (profile.speed ?? 0) * motionScale;
+    const radius = orbitRadiusAtAngle(semiMajorVisualRadius, profile.eccentricity, record.angle);
+    orbitPoint.set(Math.cos(record.angle) * radius, 0, -Math.sin(record.angle) * radius);
+    orbitPoint.applyAxisAngle(orbitTiltAxis, profile.inclination ?? 0);
+    orbitPoint.applyAxisAngle(THREE.Object3D.DEFAULT_UP, profile.node ?? 0);
+
+    denseMoonDummy.position.copy(orbitPoint);
+    denseMoonDummy.rotation.set(
+      (profile.seed ?? 0) * 0.7,
+      record.angle * (profile.retrograde ? -0.37 : 0.37),
+      (profile.seed ?? 0) * 0.4,
+    );
+    const shape = profile.shape ?? [1, 1, 1];
+    const radiusScale = profile.visualRadius ?? 0.02;
+    denseMoonDummy.scale.set(radiusScale * shape[0], radiusScale * shape[1], radiusScale * shape[2]);
+    denseMoonDummy.updateMatrix();
+    field.mesh.setMatrixAt(index, denseMoonDummy.matrix);
+  });
+  field.mesh.instanceMatrix.needsUpdate = true;
+}
+
 /** Builds every configured moon without modifying any parent planet mesh. */
 export function createMajorSatelliteSystems({ world, planets, hoverTargets, quality = "high" }) {
   const textureSize = quality === "low" ? 384 : quality === "medium" ? 512 : 768;
@@ -288,12 +368,24 @@ export function createMajorSatelliteSystems({ world, planets, hoverTargets, qual
     root.userData = {
       parentName,
       satelliteCount: moonProfiles.length,
-      catalogueCount: parentName === "Jupiter" ? JUPITER_MOON_COUNT : moonProfiles.length,
+      catalogueCount: parentName === "Jupiter"
+        ? JUPITER_MOON_COUNT
+        : parentName === "Saturn"
+          ? SATURN_MOON_COUNT
+          : parentName === "Neptune"
+            ? NEPTUNE_MOON_COUNT
+            : parentName === "Uranus"
+              ? URANUS_MOON_COUNT
+              : parentName === "Pluto"
+                ? PLUTO_MOON_COUNT
+                : moonProfiles.length,
     };
     root.add(createOrbitLines(moonProfiles, parentRadius, quality));
 
     let maximumOrbitRadius = 0;
-    const moons = moonProfiles.map((profile, index) => {
+    const directProfiles = moonProfiles.filter((profile) => !profile.instanced);
+    const denseProfiles = moonProfiles.filter((profile) => profile.instanced);
+    const moons = directProfiles.map((profile, index) => {
       const orbitNode = new THREE.Group();
       orbitNode.rotation.y = profile.node ?? 0;
 
@@ -302,7 +394,7 @@ export function createMajorSatelliteSystems({ world, planets, hoverTargets, qual
 
       const pivot = new THREE.Group();
       pivot.rotation.y = profile.meanAnomaly
-        ?? ((index / moonProfiles.length) * Math.PI * 2 + systemIndex * 0.73);
+        ?? ((index / Math.max(1, directProfiles.length)) * Math.PI * 2 + systemIndex * 0.73);
 
       const satellite = createSatelliteMesh(
         profile,
@@ -341,12 +433,25 @@ export function createMajorSatelliteSystems({ world, planets, hoverTargets, qual
       };
     });
 
+    const denseFields = createDenseSatelliteFields(denseProfiles, parentRadius, parentName, quality);
+    denseFields.forEach((field) => {
+      field.records.forEach(({ profile, semiMajorVisualRadius }) => {
+        maximumOrbitRadius = Math.max(
+          maximumOrbitRadius,
+          semiMajorVisualRadius * (1 + Math.min(0.86, profile.eccentricity ?? 0)),
+        );
+      });
+      updateDenseSatelliteField(field, 0);
+      root.add(field.mesh);
+    });
+
     world.add(root);
     systems.push({
       parent,
       parentName,
       root,
       moons,
+      denseFields,
       maximumOrbitRadius,
     });
   });
@@ -507,7 +612,8 @@ export function updateMajorSatelliteVisibility({
     / Math.max(0.0001, Math.tan(THREE.MathUtils.degToRad(camera.fov * 0.5)));
 
   systems.forEach((system) => {
-    if (system.parentName !== "Jupiter") return;
+    const denseSystem = system.parentName === "Saturn" || system.parentName === "Jupiter";
+    if (!denseSystem) return;
 
     system.parent.getWorldPosition(parentWorldPosition);
     const parentDistance = Math.max(0.0001, camera.position.distanceTo(parentWorldPosition));
@@ -515,35 +621,48 @@ export function updateMajorSatelliteVisibility({
     const parentRadiusPixels = parentRadius / parentDistance * focalPixels;
     const systemRadiusPixels = system.maximumOrbitRadius / parentDistance * focalPixels;
     const focusedInSystem = focusedBody === system.parent
-      || focusedBody?.userData?.parentPlanet === "Jupiter";
+      || focusedBody?.userData?.parentPlanet === system.parentName;
 
     const orbitGuides = system.root.children.find(
       (child) => child.name === "Major satellite orbit guides",
     );
     if (orbitGuides) orbitGuides.visible = focusedInSystem || systemRadiusPixels >= 12;
 
+    (system.denseFields ?? []).forEach((field) => {
+      field.mesh.visible = focusedInSystem || systemRadiusPixels >= (system.parentName === "Saturn" ? 34 : 72);
+    });
+
     system.moons.forEach(({ moon, hitTarget }) => {
+      if (system.parentName !== "Jupiter") {
+        moon.visible = true;
+        if (hitTarget) hitTarget.visible = true;
+        return;
+      }
       const held = moon === focusedBody || moon === hoveredBody;
       let visible = held;
 
       if (!visible) {
-        moon.getWorldPosition(moonWorldPosition);
-        const moonDistance = Math.max(0.0001, camera.position.distanceTo(moonWorldPosition));
-        const visualRadius = Number(moon.userData?.visualRadius ?? 0);
-        const radiusPixels = visualRadius / moonDistance * focalPixels;
-        const tier = moon.userData?.interactionTier ?? "background";
-
-        if (tier === "direct") {
-          visible = focusedInSystem
-            || parentRadiusPixels >= 0.55
-            || radiusPixels >= 0.16;
-        } else if (tier === "notable") {
-          visible = focusedInSystem
-            || (systemRadiusPixels >= 18 && radiusPixels >= 0.055);
+        // Entering Jupiter or any Jovian moon reveals the complete 115-body
+        // catalogue. This is deliberately independent of sub-pixel radius so
+        // the system feels populated even when the outer irregular moons are
+        // only tiny moving points. Broad Solar-System views still use the
+        // progressive visibility budget below.
+        if (focusedInSystem) {
+          visible = true;
         } else {
-          visible = focusedInSystem
-            ? radiusPixels >= 0.018
-            : systemRadiusPixels >= 72 && radiusPixels >= 0.055;
+          moon.getWorldPosition(moonWorldPosition);
+          const moonDistance = Math.max(0.0001, camera.position.distanceTo(moonWorldPosition));
+          const visualRadius = Number(moon.userData?.visualRadius ?? 0);
+          const radiusPixels = visualRadius / moonDistance * focalPixels;
+          const tier = moon.userData?.interactionTier ?? "background";
+
+          if (tier === "direct") {
+            visible = parentRadiusPixels >= 0.55 || radiusPixels >= 0.16;
+          } else if (tier === "notable") {
+            visible = systemRadiusPixels >= 18 && radiusPixels >= 0.055;
+          } else {
+            visible = systemRadiusPixels >= 72 && radiusPixels >= 0.055;
+          }
         }
       }
 
@@ -561,6 +680,7 @@ export function updateMajorSatelliteSystems(
   systems.forEach((system) => {
     system.root.position.copy(system.parent.position);
     system.root.updateMatrixWorld(true);
+    (system.denseFields ?? []).forEach((field) => updateDenseSatelliteField(field, motionScale));
 
     system.moons.forEach(({
       moon,

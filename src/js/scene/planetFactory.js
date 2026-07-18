@@ -991,7 +991,7 @@ export function createPlanet({
 
   // Small rocky planets can be only a few pixels wide at system scale. This
   // invisible child enlarges their raycast target without changing appearance.
-  if (["Mercury", "Venus", "Mars"].includes(config.name)) {
+  if (["Mercury", "Venus", "Mars", "Pluto"].includes(config.name)) {
     const hitTarget = new THREE.Mesh(
       new THREE.SphereGeometry(config.radius * 1.32, 24, 24),
       new THREE.MeshBasicMaterial({

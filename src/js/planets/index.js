@@ -18,6 +18,7 @@ import { jupiter } from "./jupiter/jupiter.js";
 import { saturn } from "./saturn/saturn.js";
 import { uranus } from "./uranus/uranus.js";
 import { neptune } from "./neptune/neptune.js";
+import { pluto } from "./pluto/pluto.js";
 
 // Export one canonical order for rendering, navigation, and future storytelling.
-export const PLANET_CONFIGS = [mercury, venus, earth, mars, jupiter, saturn, uranus, neptune];
+export const PLANET_CONFIGS = [mercury, venus, earth, mars, jupiter, saturn, uranus, neptune, pluto];
