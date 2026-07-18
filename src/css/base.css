@@ -70,3 +70,12 @@ body.is-celestial-focus .distance-unit-popover {
   touch-action: pan-y;
   overscroll-behavior: contain;
 }
+
+/*
+ * Focus-exit scroll restoration must be instantaneous. The !important guard is
+ * temporary and is removed by main.js once the broad camera and document scroll
+ * have remained stable for consecutive frames.
+ */
+html.is-focus-exit-restoring {
+  scroll-behavior: auto !important;
+}

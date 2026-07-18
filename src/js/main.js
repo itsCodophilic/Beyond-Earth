@@ -17,7 +17,13 @@ import './brand.js';
 import { HELIOCENTRIC_ORBIT_AU, PLANET_SCALE_PROFILES } from './config/celestialScale.js';
 import { loadUniverseTextures } from './graphics/loadTextures.js';
 import { createMoonSystem } from './planets/earth/satellites/moon.js';
-import { createMajorSatelliteSystems, updateMajorSatelliteSystems } from './planets/satellites/satelliteSystem.js';
+import {
+  createMajorSatelliteSystems,
+  findNearestJovianSatelliteAtPointer,
+  getJovianSatelliteEncounterIntensity,
+  updateMajorSatelliteSystems,
+  updateMajorSatelliteVisibility,
+} from './planets/satellites/satelliteSystem.js';
 import { PLANET_CONFIGS } from './planets/index.js';
 import {
   ASTEROID_INSPECTION_LAYER,
@@ -32,7 +38,6 @@ import {
   updateJupiterTrojanFrame,
 } from './scene/asteroidBelt.js';
 import { createPlanet, updatePlanetVisuals } from './scene/planetFactory.js';
-import { PerformanceManager } from './performance/performanceManager.js';
 import {
   ASTRONOMICAL_UNIT_KM,
   createEarthDistanceTracker,
@@ -665,17 +670,34 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
   // light/object layer to participate in rendering.
   camera.layers.enable(ASTEROID_INSPECTION_LAYER);
   // The renderer owns the WebGL context and draws into the existing HTML canvas.
-  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false, powerPreference: "high-performance" });
-  // The performance manager owns drawing-buffer resolution, caps excessive
-  // high-DPI fill-rate immediately, and adapts after sustained frame pressure.
-  // Navigation and camera maths never change.
-  const performanceManager = new PerformanceManager({
-    renderer,
-    reducedMotion: window.matchMedia("(prefers-reduced-motion: reduce)").matches,
+  // Rendering now stays on one deterministic cinematic profile: High geometry,
+  // High environment detail, and a stable high-resolution drawing buffer.
+  const renderer = new THREE.WebGLRenderer({
+    canvas,
+    antialias: true,
+    alpha: false,
+    powerPreference: "high-performance",
   });
-  // Asset/geometry capacity is fixed for the session. Runtime quality and
-  // drawing-buffer resolution may adapt independently after the scene loads.
-  const creationQuality = performanceManager.capacityName;
+  const creationQuality = "high";
+  const CINEMATIC_MAX_PIXEL_RATIO = 2;
+  const CINEMATIC_TARGET_FPS = 60;
+  const CINEMATIC_FRAME_INTERVAL_MS = 1000 / CINEMATIC_TARGET_FPS;
+  const CINEMATIC_HOVER_DELAY_MS = 18;
+  let cinematicPixelRatio = 1;
+  let lastCinematicFrameTime = 0;
+
+  function resizeCinematicRenderer() {
+    cinematicPixelRatio = THREE.MathUtils.clamp(
+      Number(window.devicePixelRatio) || 1,
+      1,
+      CINEMATIC_MAX_PIXEL_RATIO,
+    );
+    renderer.setPixelRatio(cinematicPixelRatio);
+    renderer.setSize(innerWidth, innerHeight, false);
+    return cinematicPixelRatio;
+  }
+
+  resizeCinematicRenderer();
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.18;
@@ -774,11 +796,38 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
   let dragDistance = 0;
   // focusedBody is null during free flight or references the clicked Mesh.
   let focusedBody = null;
+  // Focus navigation behaves like a real view stack. Every body-to-body jump
+  // stores the complete previous inspection state. Example:
+  // Jupiter -> Io -> Europa -> Jupiter
+  // Escape then restores Europa, followed by Io, followed by the original
+  // Jupiter inspection, and only then returns to free-flight.
+  const focusNavigationHistory = [];
+  const MAX_FOCUS_NAVIGATION_HISTORY = 48;
+  const focusHistoryWorldPosition = new THREE.Vector3();
   let displayedBody = null;
   // Focus mode freezes the page journey and restores this snapshot when the
   // user closes the celestial inspection card.
   let isJourneyScrollLocked = false;
   let journeyScrollSnapshot = null;
+  // Closing a focused body temporarily enters a deterministic restoration state.
+  // During these few frames, native scroll events are ignored and the pre-focus
+  // camera/progress values are held exactly. This prevents the broad camera from
+  // rendering once from Jupiter's close inspection position before the document
+  // scroll restoration has settled.
+  let focusExitTransition = null;
+  let suppressJourneyScrollSync = false;
+
+  // Reaching the outermost Solar-System view performs a bounded soft reset.
+  // It clears every temporary inspection/input/render state without reloading
+  // the document or moving the camera. Hysteresis ensures it runs only once per
+  // outward journey and rearms after the viewer travels inward or focuses again.
+  const BROAD_VIEW_RESET_ENTER_PROGRESS = 0.9985;
+  const BROAD_VIEW_RESET_REARM_PROGRESS = 0.965;
+  const BROAD_VIEW_RESET_STABLE_SECONDS = 0.72;
+  let broadViewResetArmed = true;
+  let broadViewResetStableSeconds = 0;
+  let broadViewResetCount = 0;
+
   let focusZoomTarget = 1;
   let focusZoomCurrent = 1;
   let focusPinchDistance = null;
@@ -951,7 +1000,7 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
     camera,
     renderer,
     quality: creationQuality,
-    pixelRatio: performanceManager.pixelRatio,
+    pixelRatio: cinematicPixelRatio,
   });
   await spaceEnvironment.init();
 
@@ -1152,7 +1201,7 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
       smoothed camera progress inside the animation loop.
   */
   function updateScrollProgress() {
-    if (isJourneyScrollLocked) return;
+    if (isJourneyScrollLocked || suppressJourneyScrollSync || focusExitTransition) return;
     const maxScroll = document.documentElement.scrollHeight - innerHeight;
     scrollProgress = maxScroll > 0 ? scrollY / maxScroll : 0;
   }
@@ -1263,20 +1312,14 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
   let currentSunProjectedRadiusPixels = Infinity;
   let snapSunApparentScaleOnNextFrame = false;
 
-  const unsubscribePerformanceManager = performanceManager.subscribe(({
-    qualityName,
-    preset,
-    pixelRatio,
-  }) => {
-    spaceEnvironment.setQuality(preset.environmentQuality);
-    spaceEnvironment.resize(innerWidth, innerHeight, pixelRatio);
-    setAsteroidBeltQuality(asteroidBelt, qualityName, pixelRatio);
-    setSunPerformanceProfile(sun, qualityName, {
-      projectedRadiusPixels: currentSunProjectedRadiusPixels,
-      focused: String(focusedBody?.userData?.name ?? focusedBody?.name ?? "")
-        .toLowerCase()
-        .includes("sun"),
-    });
+  // Apply the single cinematic profile once. No runtime tier, DPR, or update
+  // cadence changes are allowed after initialisation.
+  spaceEnvironment.setQuality("high");
+  spaceEnvironment.resize(innerWidth, innerHeight, cinematicPixelRatio);
+  setAsteroidBeltQuality(asteroidBelt, "high", cinematicPixelRatio);
+  setSunPerformanceProfile(sun, "high", {
+    projectedRadiusPixels: currentSunProjectedRadiusPixels,
+    focused: false,
   });
 
   function findOrbitalParentPlanet(body) {
@@ -1355,16 +1398,19 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
     }
 
     const currentScale = sun.system.scale.x;
-    const scaleEase = snapSunApparentScaleOnNextFrame
+    // Broad view is an invariant, not an animation target. Once no body owns
+    // the inspection camera, the Sun must be exactly at its authored scale on
+    // every frame. This removes the stale reduced-Sun state visible beside
+    // Jupiter after leaving a Jovian inspection.
+    const nextScale = !focusedBody
       ? 1
-      : focusedBody
-        ? 0.095
-        : 0.065;
-    const nextScale = THREE.MathUtils.lerp(
-      currentScale,
-      targetScale,
-      frameAdjustedEase(scaleEase, deltaSeconds),
-    );
+      : snapSunApparentScaleOnNextFrame
+        ? targetScale
+        : THREE.MathUtils.lerp(
+          currentScale,
+          targetScale,
+          frameAdjustedEase(0.095, deltaSeconds),
+        );
     snapSunApparentScaleOnNextFrame = false;
     sun.system.scale.setScalar(nextScale);
 
@@ -1414,7 +1460,15 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
       0.82,
     );
 
+    // Keep solar glare depth-tested. Disabling depth testing made foreground
+    // planets appear translucent against the Sun and could look like a detached
+    // brown shadow. Broad-view transit size is corrected separately below.
+    sun.glow.material.depthTest = true;
+    sun.glow.renderOrder = 0;
+
     if (sun.distantStar) {
+      sun.distantStar.material.depthTest = true;
+      sun.distantStar.renderOrder = 8;
       const starPixelSize = THREE.MathUtils.lerp(16, 108, starBlend)
         + distanceGlow * 52;
       const starWorldSize = starPixelSize * worldUnitsPerPixel;
@@ -1429,10 +1483,201 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
       sun.distantStar.material.rotation = elapsedTime * (0.035 + distanceGlow * 0.018);
     }
 
-    setSunPerformanceProfile(sun, performanceManager.qualityName, {
+    setSunPerformanceProfile(sun, "high", {
       projectedRadiusPixels,
       focused: focusedName.includes("sun"),
     });
+  }
+
+  /**
+   * Restores the authored broad Solar-System transforms deterministically.
+   *
+   * The Sun is temporarily reduced while inspecting distant planets and moons
+   * to reproduce its smaller apparent angular size. That temporary scale must
+   * never survive after focus closes. Keeping this reset independent from the
+   * runtime quality controller prevents a delayed task or quality transition
+   * from leaving a shrunken Sun beside a normal-sized gas giant.
+   */
+  function restoreBroadSolarSystemScale() {
+    sun.system.scale.setScalar(1);
+    sun.system.updateMatrixWorld(true);
+
+    planets.forEach((planet) => {
+      planet.scale.setScalar(1);
+      delete planet.userData.solarOverlapScale;
+      planet.updateMatrixWorld(true);
+    });
+  }
+
+  /**
+   * Clears all temporary runtime state at the fully zoomed-out boundary while
+   * preserving the exact visible camera pose and ongoing orbital simulation.
+   * This is intentionally a soft reload: GPU state, adaptive sampling, focus,
+   * hover, scroll locks and UI transients are rebuilt, but assets are not fetched
+   * again and the user never sees a loader, flash or camera jump.
+   */
+  function performSeamlessBroadViewReset() {
+    if (!broadViewResetArmed || focusedBody || focusExitTransition) return false;
+
+    const preservedCameraPosition = camera.position.clone();
+    const preservedCameraQuaternion = camera.quaternion.clone();
+    const preservedCameraFocus = cameraFocusPoint.clone();
+    const preservedFov = camera.fov;
+    const maximumScroll = Math.max(0, document.documentElement.scrollHeight - innerHeight);
+
+    // Remove every inspection state and any partially completed transition.
+    if (focusedBody) {
+      setAsteroidFocusAppearance(focusedBody, false);
+      setAsteroidInspectionDetail(focusedBody, false);
+    }
+    focusedBody = null;
+    displayedBody = null;
+    focusNavigationHistory.length = 0;
+    focusExitTransition = null;
+    suppressJourneyScrollSync = false;
+    focusZoomTarget = 1;
+    focusZoomCurrent = 1;
+    focusPinchDistance = null;
+    focusedBodyLocator.visible = false;
+    focusedBodyLocator.material.opacity = 0;
+    asteroidInspectionLight.visible = false;
+
+    clearCelestialHover();
+    if (celestialHoverTimer) {
+      clearTimeout(celestialHoverTimer);
+      celestialHoverTimer = null;
+    }
+    celestialHoverFramePending = false;
+    pointerDownCelestialBody = null;
+    dragDistance = 0;
+    isDragging = false;
+    targetYaw = yaw;
+    targetPitch = pitch;
+
+    setBodyCardCollapsed(false);
+    updateBodyCard(null);
+    activeDistanceInfo = null;
+    distancePopoverTouchY = null;
+    distancePopoverOwnsJourneyLock = false;
+    distanceCinematicPanel?.close();
+
+    // Remove any stale fixed-page state left by an interrupted focus transition.
+    const staleSnapshot = journeyScrollSnapshot;
+    document.documentElement.classList.remove("is-celestial-focus", "is-focus-exit-restoring");
+    document.body.classList.remove(
+      "is-celestial-focus",
+      "is-hovering-asteroid",
+      "is-hovering-celestial",
+    );
+    if (staleSnapshot) {
+      document.documentElement.style.overflow = staleSnapshot.htmlOverflow;
+      document.documentElement.style.scrollBehavior = "auto";
+      document.body.style.position = staleSnapshot.bodyPosition;
+      document.body.style.top = staleSnapshot.bodyTop;
+      document.body.style.left = staleSnapshot.bodyLeft;
+      document.body.style.right = staleSnapshot.bodyRight;
+      document.body.style.width = staleSnapshot.bodyWidth;
+      document.body.style.overflow = staleSnapshot.bodyOverflow;
+      document.body.style.paddingRight = staleSnapshot.bodyPaddingRight;
+    }
+    isJourneyScrollLocked = false;
+    journeyScrollSnapshot = null;
+
+    // Canonicalise the journey boundary. The camera is then rebased as offsets
+    // from that canonical pose so its current pixels remain exactly unchanged.
+    scrollProgress = 1;
+    smoothProgress = 1;
+    previousDistanceProgress = 1;
+    forceJourneyScrollPosition(maximumScroll);
+
+    const broadDistance = getCameraDistance(1);
+    getFocusPoint(broadDistance, exploreBaseFocus);
+    setSphericalCameraOffset(sphericalCameraOffset, broadDistance);
+    exploreBaseCamera.copy(exploreBaseFocus).add(sphericalCameraOffset);
+    freeExploreCameraOffsetCurrent.copy(preservedCameraPosition).sub(exploreBaseCamera);
+    freeExploreCameraOffsetTarget.copy(freeExploreCameraOffsetCurrent);
+    freeExploreFocusOffsetCurrent.copy(preservedCameraFocus).sub(exploreBaseFocus);
+    freeExploreFocusOffsetTarget.copy(freeExploreFocusOffsetCurrent);
+    hasExploredFreeSpace = freeExploreCameraOffsetCurrent.lengthSq() > 0.0001
+      || freeExploreFocusOffsetCurrent.lengthSq() > 0.0001;
+    freeExploreDistanceReference = null;
+    if (freeExploreDistanceResetTimer) {
+      clearTimeout(freeExploreDistanceResetTimer);
+      freeExploreDistanceResetTimer = null;
+    }
+
+    camera.position.copy(preservedCameraPosition);
+    camera.quaternion.copy(preservedCameraQuaternion);
+    cameraFocusPoint.copy(preservedCameraFocus);
+    targetFocusPoint.copy(preservedCameraFocus);
+    hasCameraFocusPoint = true;
+    camera.fov = preservedFov;
+    camera.updateProjectionMatrix();
+    camera.updateMatrixWorld(true);
+
+    // Restore authored broad-view transforms and flush cached WebGL state.
+    restoreBroadSolarSystemScale();
+    snapSunApparentScaleOnNextFrame = false;
+    updateMajorSatelliteVisibility({
+      systems: majorSatelliteSystems,
+      camera,
+      viewportHeight: innerHeight,
+      focusedBody: null,
+      hoveredBody: null,
+    });
+
+    const pixelRatio = resizeCinematicRenderer();
+    spaceEnvironment.setQuality("high");
+    spaceEnvironment.resize(innerWidth, innerHeight, pixelRatio);
+    spaceEnvironment.setJourneyProgress(1);
+    setAsteroidBeltQuality(asteroidBelt, "high", pixelRatio);
+
+    renderer.setRenderTarget(null);
+    renderer.renderLists?.dispose?.();
+    renderer.info.reset();
+    renderer.resetState?.();
+    scene.updateMatrixWorld(true);
+    camera.updateMatrixWorld(true);
+
+    // Restore the authored scroll-behaviour only after the position is pinned.
+    requestAnimationFrame(() => {
+      forceJourneyScrollPosition(maximumScroll);
+      document.documentElement.style.scrollBehavior = staleSnapshot?.htmlScrollBehavior ?? "";
+    });
+
+    broadViewResetArmed = false;
+    broadViewResetStableSeconds = 0;
+    broadViewResetCount += 1;
+    updateDistanceReadout(1);
+    return true;
+  }
+
+  /** Runs the soft reset once after the outer view has remained stable. */
+  function updateSeamlessBroadViewReset(deltaSeconds) {
+    const travelledInward = scrollProgress < BROAD_VIEW_RESET_REARM_PROGRESS
+      || smoothProgress < BROAD_VIEW_RESET_REARM_PROGRESS;
+    if (focusedBody || focusExitTransition || travelledInward) {
+      broadViewResetArmed = true;
+      broadViewResetStableSeconds = 0;
+      return;
+    }
+
+    const isAtOuterBoundary = scrollProgress >= BROAD_VIEW_RESET_ENTER_PROGRESS
+      && smoothProgress >= BROAD_VIEW_RESET_ENTER_PROGRESS;
+    const interactionIsIdle = !isDragging
+      && !hoveredCelestialBody
+      && !isJourneyScrollLocked
+      && !suppressJourneyScrollSync;
+
+    if (!broadViewResetArmed || !isAtOuterBoundary || !interactionIsIdle) {
+      broadViewResetStableSeconds = 0;
+      return;
+    }
+
+    broadViewResetStableSeconds += Math.max(0, deltaSeconds);
+    if (broadViewResetStableSeconds >= BROAD_VIEW_RESET_STABLE_SECONDS) {
+      performSeamlessBroadViewReset();
+    }
   }
 
   /** Writes a body's structured metadata into the right-side inspection panel. */
@@ -1509,7 +1754,6 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
   // Closing the card restores normal simulation speed and free flight.
   cardClose.addEventListener("click", () => {
     focusBody(null);
-    updateBodyCard(null);
   });
   cardCollapse?.addEventListener("click", () => setBodyCardCollapsed(true));
   cardRestore?.addEventListener("click", () => setBodyCardCollapsed(false));
@@ -1614,6 +1858,15 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
 
   function getAsteroidEncounterIntensity() {
     return THREE.MathUtils.clamp(Number(asteroidBelt?.encounterIntensity ?? 0), 0, 1);
+  }
+
+  function getJovianEncounterIntensity() {
+    return getJovianSatelliteEncounterIntensity({
+      systems: majorSatelliteSystems,
+      camera,
+      viewportHeight: innerHeight,
+      focusedBody,
+    });
   }
 
   function projectedBodyRadiusPixels(body) {
@@ -1731,9 +1984,25 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
       );
     }
 
-    // Non-lunar major satellites are tiny and orbit rapidly at the visual
-    // timescale. Give them a stable release radius after acquisition so a few
-    // pixels of projection change cannot repeatedly clear/reacquire the hover.
+    // Jupiter's dense catalogue needs a tighter release radius than the other
+    // satellite systems. A 14-pixel sticky region on 115 neighbouring moons
+    // would make the green locator jump between overlapping invisible targets.
+    if (body.userData?.isJovianSatellite) {
+      const tier = body.userData?.interactionTier ?? "background";
+      const satelliteAssist = tier === "direct"
+        ? (radiusPixels >= 10 ? 4 : radiusPixels >= 3 ? 7 : 9)
+        : tier === "notable"
+          ? (radiusPixels >= 4 ? 5 : 7)
+          : (radiusPixels >= 2 ? 3.5 : 5.5);
+      const maximumReleaseRadius = tier === "direct" ? 18 : tier === "notable" ? 13 : 9.5;
+      return distancePixels <= Math.min(
+        radiusPixels + satelliteAssist,
+        maximumReleaseRadius,
+      );
+    }
+
+    // Other non-lunar major satellites remain deliberately easy to hold after
+    // acquisition because their systems contain only a small number of moons.
     if (body.userData?.isSatellite && body.userData?.name !== "Moon") {
       const satelliteAssist = radiusPixels >= 12 ? 5 : radiusPixels >= 4 ? 9 : 14;
       return distancePixels <= radiusPixels + satelliteAssist;
@@ -1801,6 +2070,23 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
       .map((hit) => findInteractiveObject(hit))
       .filter((body) => Boolean(body && body !== focusedBody));
 
+    // Jupiter's full 115-moon system uses a dedicated visibility-aware search.
+    // Only the eight resolved regular moons own direct pointer proxies; notable
+    // and distant irregular moons become selectable progressively as the camera
+    // enters Jupiter's local system. This avoids 115 overlapping hidden spheres.
+    const nearbyJovianSatellite = findNearestJovianSatelliteAtPointer({
+      systems: majorSatelliteSystems,
+      pointer,
+      camera,
+      viewportWidth: innerWidth,
+      viewportHeight: innerHeight,
+      focusedBody,
+    });
+    if (nearbyJovianSatellite) {
+      setCelestialHover(nearbyJovianSatellite);
+      return;
+    }
+
     const nearbyMajor = findNearestMajorBodyAtPointer({
       minimumVisibleRadiusPixels: 0.14,
       extraHitPixels: innerWidth <= 760 ? 12 : 7,
@@ -1850,11 +2136,11 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
       celestialHoverTimer = null;
     }
 
-    // Inside the asteroid belt the pointer may cross several tiny rocks within
-    // a few milliseconds. Coalesce those events into one scan on the next frame
-    // rather than repeatedly restarting a timeout. This feels immediate while
-    // still performing at most one dense-belt search per rendered frame.
-    if (getAsteroidEncounterIntensity() >= 0.12) {
+    // Inside dense small-body regions (the asteroid belt or Jupiter's complete
+    // moon system), the pointer may cross several tiny objects within a few
+    // milliseconds. Coalesce those events into one scan on the next frame rather
+    // than repeatedly restarting a timeout.
+    if (getAsteroidEncounterIntensity() >= 0.12 || getJovianEncounterIntensity() >= 0.10) {
       if (celestialHoverFramePending) return;
       celestialHoverFramePending = true;
       requestAnimationFrame(() => {
@@ -1869,7 +2155,7 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
     celestialHoverTimer = setTimeout(() => {
       celestialHoverTimer = null;
       findCelestialForHover();
-    }, performanceManager.getHoverDelayMs());
+    }, CINEMATIC_HOVER_DELAY_MS);
   }
 
   function updateCelestialHoverVisual() {
@@ -1924,6 +2210,19 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
     // broad hidden proxy geometry. This prevents Earth, the Moon, or the Sun
     // from owning nearby empty space simply because a large interaction sphere
     // happened to intersect the ray.
+
+    // Use the same dense-system selector for pointerup that hover uses. This
+    // preserves the selected Jovian moon even if it advances slightly between
+    // pointermove and click, without letting an unseen irregular moon steal input.
+    const nearbyJovianSatellite = findNearestJovianSatelliteAtPointer({
+      systems: majorSatelliteSystems,
+      pointer,
+      camera,
+      viewportWidth: innerWidth,
+      viewportHeight: innerHeight,
+      focusedBody,
+    });
+    if (nearbyJovianSatellite) return nearbyJovianSatellite;
 
     // Give visible planets, moons and the Sun a small screen-space click cushion.
     // This is intentionally disabled while they are sub-pixel dots; clicking then
@@ -1994,7 +2293,14 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
       targetYaw,
       targetPitch,
       cameraFov: camera.fov,
+      cameraPosition: camera.position.clone(),
+      cameraQuaternion: camera.quaternion.clone(),
       cameraFocusPoint: cameraFocusPoint.clone(),
+      hasCameraFocusPoint,
+      freeExploreCameraOffsetTarget: freeExploreCameraOffsetTarget.clone(),
+      freeExploreCameraOffsetCurrent: freeExploreCameraOffsetCurrent.clone(),
+      freeExploreFocusOffsetTarget: freeExploreFocusOffsetTarget.clone(),
+      freeExploreFocusOffsetCurrent: freeExploreFocusOffsetCurrent.clone(),
       htmlOverflow: document.documentElement.style.overflow,
       htmlScrollBehavior: document.documentElement.style.scrollBehavior,
       bodyPosition: document.body.style.position,
@@ -2024,15 +2330,224 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
     if (scrollbarWidth > 0) document.body.style.paddingRight = `${scrollbarWidth}px`;
   }
 
+  /** Writes a document position without allowing CSS smooth scrolling to animate it. */
+  function forceJourneyScrollPosition(scrollYPosition) {
+    const target = Math.max(0, Number(scrollYPosition) || 0);
+    document.documentElement.scrollTop = target;
+    document.body.scrollTop = target;
+    window.scrollTo(0, target);
+  }
+
+  /** Restores every camera-rig value captured immediately before focus began. */
+  function restoreJourneyCameraSnapshot(snapshot, { preserveLiveCamera = false } = {}) {
+    scrollProgress = snapshot.scrollProgress;
+    smoothProgress = snapshot.smoothProgress;
+    previousDistanceProgress = snapshot.smoothProgress;
+
+    freeExploreCameraOffsetTarget.copy(snapshot.freeExploreCameraOffsetTarget);
+    freeExploreCameraOffsetCurrent.copy(snapshot.freeExploreCameraOffsetCurrent);
+    freeExploreFocusOffsetTarget.copy(snapshot.freeExploreFocusOffsetTarget);
+    freeExploreFocusOffsetCurrent.copy(snapshot.freeExploreFocusOffsetCurrent);
+
+    if (preserveLiveCamera) return;
+
+    yaw = snapshot.yaw;
+    pitch = snapshot.pitch;
+    targetYaw = snapshot.targetYaw;
+    targetPitch = snapshot.targetPitch;
+    camera.position.copy(snapshot.cameraPosition);
+    camera.quaternion.copy(snapshot.cameraQuaternion);
+    camera.fov = snapshot.cameraFov;
+    camera.updateProjectionMatrix();
+    cameraFocusPoint.copy(snapshot.cameraFocusPoint);
+    hasCameraFocusPoint = snapshot.hasCameraFocusPoint ?? true;
+    camera.updateMatrixWorld(true);
+  }
+
+  /**
+   * Begins a two-stage focus exit. The inspected body remains the active focus
+   * while the camera returns to the exact pre-focus pose. Only after the camera
+   * has arrived do we release the fixed document and clear focusedBody.
+   *
+   * This ordering is important: clearing focusedBody first lets the broad-view
+   * camera and solar rendering run for one or more frames from the close Jupiter
+   * inspection position, which is the source of the giant dark-disc artefact.
+   */
+  function beginFocusExitTransition(snapshot, body) {
+    if (!snapshot || !body || focusExitTransition) return;
+
+    focusExitTransition = {
+      phase: "camera",
+      snapshot,
+      body,
+      elapsed: 0,
+      duration: 0.72,
+      releaseElapsed: 0,
+      stableFrames: 0,
+      targetScrollY: snapshot.scrollY,
+      startCameraPosition: camera.position.clone(),
+      startCameraQuaternion: camera.quaternion.clone(),
+      startCameraFocusPoint: cameraFocusPoint.clone(),
+      startFov: camera.fov,
+    };
+
+    suppressJourneyScrollSync = true;
+    document.documentElement.classList.add("is-focus-exit-restoring");
+    document.documentElement.style.scrollBehavior = "auto";
+  }
+
+  /** Smoothstep used by the explicit camera return. */
+  function focusExitEase(value) {
+    const t = THREE.MathUtils.clamp(value, 0, 1);
+    return t * t * (3 - 2 * t);
+  }
+
+  /**
+   * Advances focus-exit state before the ordinary camera calculation.
+   * Returns true while the exit owns the camera and scroll journey.
+   */
+  function advanceFocusExitTransition(deltaTime) {
+    if (!focusExitTransition) return false;
+
+    const transition = focusExitTransition;
+    const { snapshot } = transition;
+    suppressJourneyScrollSync = true;
+    document.documentElement.style.scrollBehavior = "auto";
+
+    // Hold all broad-journey inputs at their pre-focus values. This prevents
+    // scroll events, pointer inertia, or free-space rig springs from fighting
+    // the explicit camera return.
+    scrollProgress = snapshot.scrollProgress;
+    smoothProgress = snapshot.smoothProgress;
+    previousDistanceProgress = snapshot.smoothProgress;
+    yaw = snapshot.yaw;
+    pitch = snapshot.pitch;
+    targetYaw = snapshot.targetYaw;
+    targetPitch = snapshot.targetPitch;
+    freeExploreCameraOffsetTarget.copy(snapshot.freeExploreCameraOffsetTarget);
+    freeExploreCameraOffsetCurrent.copy(snapshot.freeExploreCameraOffsetCurrent);
+    freeExploreFocusOffsetTarget.copy(snapshot.freeExploreFocusOffsetTarget);
+    freeExploreFocusOffsetCurrent.copy(snapshot.freeExploreFocusOffsetCurrent);
+
+    if (transition.phase === "camera") {
+      transition.elapsed += deltaTime;
+    } else {
+      transition.releaseElapsed += deltaTime;
+      if (Math.abs(window.scrollY - transition.targetScrollY) > 0.5) {
+        forceJourneyScrollPosition(transition.targetScrollY);
+        transition.stableFrames = 0;
+      } else {
+        transition.stableFrames += 1;
+      }
+    }
+
+    return true;
+  }
+
+  /**
+   * Overrides the final camera pose after ordinary focus/journey calculations.
+   * This guarantees there is never a rendered frame with broad-view state and
+   * Jupiter's close inspection camera mixed together.
+   */
+  function applyFocusExitCameraOverride() {
+    if (!focusExitTransition) return;
+
+    const transition = focusExitTransition;
+    const { snapshot } = transition;
+
+    if (transition.phase === "camera") {
+      const progress = focusExitEase(transition.elapsed / transition.duration);
+      camera.position.lerpVectors(
+        transition.startCameraPosition,
+        snapshot.cameraPosition,
+        progress,
+      );
+      camera.quaternion.slerpQuaternions(
+        transition.startCameraQuaternion,
+        snapshot.cameraQuaternion,
+        progress,
+      );
+      cameraFocusPoint.lerpVectors(
+        transition.startCameraFocusPoint,
+        snapshot.cameraFocusPoint,
+        progress,
+      );
+      camera.fov = THREE.MathUtils.lerp(transition.startFov, snapshot.cameraFov, progress);
+      camera.updateProjectionMatrix();
+      camera.updateMatrixWorld(true);
+
+      if (progress >= 1) {
+        // Camera is now safely back at the broad pose. Clear focus only now.
+        if (focusedBody) {
+          setAsteroidFocusAppearance(focusedBody, false);
+          setAsteroidInspectionDetail(focusedBody, false);
+        }
+        focusedBody = null;
+        displayedBody = null;
+        focusedBodyLocator.visible = false;
+        focusedBodyLocator.material.opacity = 0;
+        focusZoomTarget = 1;
+        focusZoomCurrent = 1;
+        focusPinchDistance = null;
+        focusNavigationHistory.length = 0;
+        restoreJourneyCameraSnapshot(snapshot);
+        restoreBroadSolarSystemScale();
+        snapSunApparentScaleOnNextFrame = false;
+        updateBodyCard(null);
+
+        // Release position:fixed under a hard `scroll-behavior:auto` guard.
+        document.documentElement.classList.remove("is-celestial-focus");
+        document.body.classList.remove("is-celestial-focus");
+        document.documentElement.style.overflow = snapshot.htmlOverflow;
+        document.body.style.position = snapshot.bodyPosition;
+        document.body.style.top = snapshot.bodyTop;
+        document.body.style.left = snapshot.bodyLeft;
+        document.body.style.right = snapshot.bodyRight;
+        document.body.style.width = snapshot.bodyWidth;
+        document.body.style.overflow = snapshot.bodyOverflow;
+        document.body.style.paddingRight = snapshot.bodyPaddingRight;
+        forceJourneyScrollPosition(snapshot.scrollY);
+
+        isJourneyScrollLocked = false;
+        journeyScrollSnapshot = null;
+        transition.phase = "release";
+        transition.releaseElapsed = 0;
+        transition.stableFrames = 0;
+      }
+      return;
+    }
+
+    // During fixed-body release, pin the exact broad camera pose. Chrome can
+    // otherwise emit transient scroll positions for a few frames.
+    restoreJourneyCameraSnapshot(snapshot);
+    forceJourneyScrollPosition(transition.targetScrollY);
+
+    const releaseSettled = transition.releaseElapsed >= 0.35
+      && transition.stableFrames >= 8;
+    const releaseSafetyLimit = transition.releaseElapsed >= 1.25;
+    if (releaseSettled || releaseSafetyLimit) {
+      forceJourneyScrollPosition(transition.targetScrollY);
+      document.documentElement.style.scrollBehavior = snapshot.htmlScrollBehavior;
+      document.documentElement.classList.remove("is-focus-exit-restoring");
+      suppressJourneyScrollSync = false;
+      focusExitTransition = null;
+      updateScrollProgress();
+    }
+  }
+
   /** Restores the exact scroll/camera journey position from before inspection. */
-  function unlockJourneyScroll({ preserveLiveCamera = false } = {}) {
+  function unlockJourneyScroll({ preserveLiveCamera = false, stabilizeFocusExit = false } = {}) {
     if (!isJourneyScrollLocked || !journeyScrollSnapshot) return;
     const snapshot = journeyScrollSnapshot;
 
+    // Suppress scroll-derived journey changes before releasing the fixed body.
+    // The computed CSS may request smooth scrolling, so keep an explicit inline
+    // `auto` value until the document has settled at the snapshot position.
+    suppressJourneyScrollSync = true;
+    document.documentElement.style.scrollBehavior = "auto";
     document.documentElement.classList.remove("is-celestial-focus");
     document.body.classList.remove("is-celestial-focus");
     document.documentElement.style.overflow = snapshot.htmlOverflow;
-    document.documentElement.style.scrollBehavior = snapshot.htmlScrollBehavior;
     document.body.style.position = snapshot.bodyPosition;
     document.body.style.top = snapshot.bodyTop;
     document.body.style.left = snapshot.bodyLeft;
@@ -2041,77 +2556,195 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
     document.body.style.overflow = snapshot.bodyOverflow;
     document.body.style.paddingRight = snapshot.bodyPaddingRight;
 
-    scrollProgress = snapshot.scrollProgress;
-    smoothProgress = snapshot.smoothProgress;
-    // Explicit close controls restore the exact pre-reading shot. Interaction-
-    // driven exits preserve the camera angle currently under the pointer so a
-    // planet cannot jump away between pointer-down and pointer-up.
-    if (!preserveLiveCamera) {
-      yaw = snapshot.yaw;
-      pitch = snapshot.pitch;
-      targetYaw = snapshot.targetYaw;
-      targetPitch = snapshot.targetPitch;
-      camera.fov = snapshot.cameraFov;
-      camera.updateProjectionMatrix();
-      cameraFocusPoint.copy(snapshot.cameraFocusPoint);
-      hasCameraFocusPoint = true;
-    }
-    previousDistanceProgress = snapshot.smoothProgress;
+    restoreJourneyCameraSnapshot(snapshot, { preserveLiveCamera });
+    forceJourneyScrollPosition(snapshot.scrollY);
+
     isJourneyScrollLocked = false;
     journeyScrollSnapshot = null;
-    window.scrollTo({ top: snapshot.scrollY, left: 0, behavior: "auto" });
+
+    // Generic lock users restore immediately. Celestial focus exits no longer
+    // use this path; they keep the body focused until the explicit camera return
+    // has completed, then release the document from applyFocusExitCameraOverride.
+    requestAnimationFrame(() => {
+      forceJourneyScrollPosition(snapshot.scrollY);
+      requestAnimationFrame(() => {
+        forceJourneyScrollPosition(snapshot.scrollY);
+        document.documentElement.style.scrollBehavior = snapshot.htmlScrollBehavior;
+        suppressJourneyScrollSync = false;
+        updateScrollProgress();
+      });
+    });
+
     updateDistanceReadout(smoothProgress);
   }
 
-  /*
-    focusBody
-    - Focuses the clicked object without changing the page's journey position.
-    - The vertical scroll journey is locked until focus is closed.
-    - Clicking the same body twice or clicking empty space while focused restores
-      the exact scroll/camera distance that the user was viewing before inspection.
-  */
-  function focusBody(body) {
-    const nextBody = body && focusedBody !== body ? body : null;
-    clearCelestialHover();
-    setBodyCardCollapsed(false);
+  /** Captures a focused body's complete inspection state for Back/Escape. */
+  function captureFocusedNavigationState(body) {
+    if (!body) return null;
 
-    // Measurement/unit explanations belong to the previous readout state and
-    // should not remain open while focus is changed or dismissed.
-    if (activeDistanceInfo && distanceUnitPopover && !distanceUnitPopover.hidden) {
-      closeDistanceInfoPopover({ releaseJourneyLock: false });
+    body.getWorldPosition(focusHistoryWorldPosition);
+    return {
+      body,
+      yaw,
+      pitch,
+      targetYaw,
+      targetPitch,
+      focusZoomTarget,
+      focusZoomCurrent,
+      cameraFov: camera.fov,
+      cameraOffset: camera.position.clone().sub(focusHistoryWorldPosition),
+      focusOffset: cameraFocusPoint.clone().sub(focusHistoryWorldPosition),
+      isBodyCardCollapsed,
+      displayedBody,
+      focusSelectionPulseStartedAt,
+    };
+  }
+
+  /** Adds the current focused state without allowing unbounded history growth. */
+  function pushFocusedNavigationState(body) {
+    const state = captureFocusedNavigationState(body);
+    if (!state) return;
+    focusNavigationHistory.push(state);
+    if (focusNavigationHistory.length > MAX_FOCUS_NAVIGATION_HISTORY) {
+      focusNavigationHistory.shift();
     }
+  }
 
-    // Restore a previous instanced rock before changing focus. Its inexpensive
-    // belt representation replaces the temporary high-resolution close-up.
+  /** Restores the previous body and camera relationship without unlocking scroll. */
+  function restorePreviousFocusedNavigationState() {
+    let state = focusNavigationHistory.pop();
+    while (state?.body && !state.body.parent && focusNavigationHistory.length > 0) {
+      state = focusNavigationHistory.pop();
+    }
+    if (!state?.body || !state.body.parent) return false;
+
+    focusExitTransition = null;
+    suppressJourneyScrollSync = false;
+
     if (focusedBody) {
       setAsteroidFocusAppearance(focusedBody, false);
       setAsteroidInspectionDetail(focusedBody, false);
     }
 
-    if (!nextBody) {
+    focusedBody = state.body;
+    focusedBody.getWorldPosition(focusHistoryWorldPosition);
+
+    yaw = state.yaw;
+    pitch = state.pitch;
+    targetYaw = state.targetYaw;
+    targetPitch = state.targetPitch;
+    focusZoomTarget = state.focusZoomTarget;
+    focusZoomCurrent = state.focusZoomCurrent;
+    focusPinchDistance = null;
+
+    camera.position.copy(focusHistoryWorldPosition).add(state.cameraOffset);
+    cameraFocusPoint.copy(focusHistoryWorldPosition).add(state.focusOffset);
+    targetFocusPoint.copy(cameraFocusPoint);
+    hasCameraFocusPoint = true;
+    camera.fov = state.cameraFov;
+    camera.lookAt(cameraFocusPoint);
+    camera.updateProjectionMatrix();
+    camera.updateMatrixWorld(true);
+
+    setBodyCardCollapsed(Boolean(state.isBodyCardCollapsed));
+    focusedBodyLocator.visible = true;
+    focusSelectionPulseStartedAt = Number.isFinite(state.focusSelectionPulseStartedAt)
+      ? state.focusSelectionPulseStartedAt
+      : elapsedTime;
+    displayedBody = state.displayedBody ?? focusedBody;
+    setAsteroidInspectionDetail(focusedBody, true);
+    setAsteroidFocusAppearance(focusedBody, true);
+    updateDistanceReadout(smoothProgress);
+    updateBodyCard(focusedBody);
+    return true;
+  }
+
+  /**
+   * Returns to the previous inspection state. Only when no earlier focused body
+   * remains do we begin the guarded camera transition back to free-flight.
+   *
+   * Keeping this as a stack prevents a moon -> planet -> Escape action from
+   * accidentally dropping straight into the broad Solar-System camera.
+   */
+  function navigateBackFromFocusedBody() {
+    if (focusExitTransition || !focusedBody) return false;
+
+    if (focusNavigationHistory.length > 0) {
+      return restorePreviousFocusedNavigationState();
+    }
+
+    if (!journeyScrollSnapshot) {
+      // Defensive fallback for any focus entered outside the ordinary journey
+      // lock path. Restore visual state without allowing a stale focused body.
+      setAsteroidFocusAppearance(focusedBody, false);
+      setAsteroidInspectionDetail(focusedBody, false);
       focusedBody = null;
+      displayedBody = null;
       focusedBodyLocator.visible = false;
       focusedBodyLocator.material.opacity = 0;
       focusZoomTarget = 1;
       focusZoomCurrent = 1;
       focusPinchDistance = null;
-      unlockJourneyScroll();
+      restoreBroadSolarSystemScale();
+      updateBodyCard(null);
+      return true;
+    }
+
+    // Do not clear focusedBody here. The explicit transition keeps the current
+    // body active until the pre-focus camera pose has been reached, preventing
+    // Jupiter's close inspection scale from leaking into the broad view.
+    beginFocusExitTransition(journeyScrollSnapshot, focusedBody);
+    return true;
+  }
+
+  /*
+    focusBody
+    - Focuses a clicked object without changing the page journey position.
+    - Every body-to-body jump stores the complete previous inspection state.
+    - Selecting the already focused body is a no-op; it never exits focus.
+    - Escape/clicking empty space performs one Back step.
+    - Free-flight is restored only after the focus stack becomes empty.
+  */
+  function focusBody(body) {
+    if (focusExitTransition) return;
+    clearCelestialHover();
+
+    if (activeDistanceInfo && distanceUnitPopover && !distanceUnitPopover.hidden) {
+      closeDistanceInfoPopover({ releaseJourneyLock: false });
+    }
+
+    if (!body) {
+      navigateBackFromFocusedBody();
       return;
     }
 
-    if (!isJourneyScrollLocked) lockJourneyScroll();
-    focusedBody = nextBody;
+    // Clicking the current body should keep its exact view. Treating it as null
+    // previously made repeated clicks unexpectedly leave the inspection stack.
+    if (body === focusedBody) return;
+
+    setBodyCardCollapsed(false);
+    if (!isJourneyScrollLocked) {
+      focusNavigationHistory.length = 0;
+      lockJourneyScroll();
+    }
+
+    if (focusedBody) {
+      pushFocusedNavigationState(focusedBody);
+      setAsteroidFocusAppearance(focusedBody, false);
+      setAsteroidInspectionDetail(focusedBody, false);
+    }
+
+    focusedBody = body;
     focusSelectionPulseStartedAt = elapsedTime;
     focusedBodyLocator.visible = true;
     focusZoomTarget = 1;
     focusZoomCurrent = 1;
     focusPinchDistance = null;
 
-    // Only instanced asteroids react here; planets, satellites, and individually
-    // modeled major asteroids continue using their normal meshes.
     setAsteroidInspectionDetail(focusedBody, true);
     setAsteroidFocusAppearance(focusedBody, true);
     updateDistanceReadout(smoothProgress);
+    updateBodyCard(focusedBody);
   }
 
   /*
@@ -2122,7 +2755,6 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
   // `passive` promises that the handler will not cancel scrolling, helping browsers
   // keep scrolling responsive while JavaScript updates its normalized value.
   addEventListener("scroll", () => {
-    performanceManager.markInteraction(900);
     updateScrollProgress();
   }, { passive: true });
   function adjustFocusedZoom(delta) {
@@ -2183,6 +2815,9 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
       setAsteroidInspectionDetail(focusedBody, false);
     }
     focusedBody = null;
+    focusNavigationHistory.length = 0;
+    focusExitTransition = null;
+    document.documentElement.classList.remove("is-focus-exit-restoring");
     focusedBodyLocator.visible = false;
     focusedBodyLocator.material.opacity = 0;
     displayedBody = null;
@@ -2349,7 +2984,6 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
   }
 
   const preventFocusedJourneyScroll = (event) => {
-    performanceManager.markInteraction(1000);
     // Cards and the distance explanation retain their own internal scrolling.
     if (event.target.closest?.(".body-card, .body-card-restore, .progress, .distance-cinematic-layer")) return;
     if (!isJourneyScrollLocked) return;
@@ -2360,7 +2994,6 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
   addEventListener("wheel", preventFocusedJourneyScroll, { passive: false });
 
   addEventListener("touchstart", (event) => {
-    performanceManager.markInteraction(1200);
     if (event.target.closest?.(".body-card, .body-card-restore, .progress, .distance-cinematic-layer")) return;
     if (!focusedBody || event.touches.length !== 2) return;
     focusPinchDistance = Math.hypot(
@@ -2370,7 +3003,6 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
   }, { passive: true });
 
   addEventListener("touchmove", (event) => {
-    performanceManager.markInteraction(1200);
     if (event.target.closest?.(".body-card, .body-card-restore, .progress, .distance-cinematic-layer")) return;
     if (!focusedBody || event.touches.length !== 2 || focusPinchDistance == null) return;
     event.preventDefault();
@@ -2394,7 +3026,6 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
   }, { passive: true });
 
   addEventListener("pointermove", (event) => {
-    performanceManager.markInteraction(850);
     updatePointerFromEvent(event);
     lastPointerType = event.pointerType || "mouse";
     if (hoveredCelestialBody && !isPointerStillOnHoveredBody(hoveredCelestialBody)) {
@@ -2419,10 +3050,12 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
     } else if (!spaceEnvironment.reducedMotion
       && !hoveredCelestialBody
       && getAsteroidEncounterIntensity() < 0.18
+      && getJovianEncounterIntensity() < 0.12
       && !distanceCinematicPanel?.isOpen()) {
       // Even without dragging, a tiny pointer parallax keeps the wider scene
-      // alive. It is disabled inside the asteroid belt because moving the camera
-      // under the pointer makes tiny rocks appear to repel the cursor.
+      // alive. It is disabled in the asteroid belt and Jupiter's moon region
+      // because moving the camera under the pointer makes tiny bodies appear to
+      // repel the cursor before hover acquisition completes.
       targetYaw += pointer.x * 0.0005;
       targetPitch += pointer.y * 0.00025;
     }
@@ -2435,7 +3068,6 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
   addEventListener("pointerleave", clearCelestialHover);
 
   addEventListener("pointerdown", (event) => {
-    performanceManager.markInteraction(1400);
     if (event.target.closest?.(".about-experience, .body-card-restore, .progress, .distance-cinematic-layer, .earth-return-button")) return;
     updatePointerFromEvent(event);
     isDragging = true;
@@ -2453,7 +3085,6 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
   });
 
   addEventListener("pointerup", (event) => {
-    performanceManager.markInteraction(1400);
     updatePointerFromEvent(event);
     isDragging = false;
     // HUD clicks belong to HTML controls and must not select objects behind them.
@@ -2498,7 +3129,6 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
     }
     if (focusedBody) {
       focusBody(null);
-      updateBodyCard(null);
       return;
     }
     if (hasExploredFreeSpace
@@ -2511,7 +3141,6 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
   }
 
   addEventListener("keydown", (event) => {
-    performanceManager.markInteraction(1100);
     // The modal's capture-phase keyboard handler owns Escape and focus while
     // its project transmission is visible.
     if (isAboutExperienceOpen) return;
@@ -2546,17 +3175,9 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
     // Both the camera projection and drawing buffer must match the new viewport.
     camera.aspect = innerWidth / innerHeight;
     camera.updateProjectionMatrix();
-    const pixelRatio = performanceManager.resize(
-      innerWidth,
-      innerHeight,
-      devicePixelRatio,
-    );
+    const pixelRatio = resizeCinematicRenderer();
     spaceEnvironment.resize(innerWidth, innerHeight, pixelRatio);
-    setAsteroidBeltQuality(
-      asteroidBelt,
-      performanceManager.qualityName,
-      pixelRatio,
-    );
+    setAsteroidBeltQuality(asteroidBelt, "high", pixelRatio);
     distanceCinematicPanel?.position();
   });
 
@@ -2574,8 +3195,6 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
     // A page kept in the back-forward cache will resume with its WebGL context;
     // only a true discard should release the environment resources.
     if (!event.persisted) {
-      unsubscribePerformanceManager();
-      performanceManager.dispose();
       spaceEnvironment.dispose();
       distanceCinematicPanel?.dispose();
     }
@@ -2585,32 +3204,51 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
     animate
     - Main render loop that updates the camera, rotates bodies, animates particles, and renders the scene.
   */
-  function animate() {
+  function animate(frameTime = performance.now()) {
+    // Keep a deterministic 60 FPS cinematic cadence even on 120/144 Hz panels.
+    // This preserves high-resolution rendering without allowing refresh-rate
+    // differences to multiply GPU load or simulation speed.
+    if (lastCinematicFrameTime > 0
+      && frameTime - lastCinematicFrameTime < CINEMATIC_FRAME_INTERVAL_MS - 0.5) {
+      requestAnimationFrame(animate);
+      return;
+    }
+    lastCinematicFrameTime = frameTime;
     const deltaTime = Math.min(clock.getDelta(), 0.05);
     if (!isPageVisible || isAboutExperienceOpen) {
       requestAnimationFrame(animate);
       return;
     }
     elapsedTime += deltaTime;
-    // Focus mode slows physical scene motion without slowing camera input/easing.
-    const motionScale = hoveredCelestialBody ? 0.018 : focusedBody ? 0.12 : 1;
+    const isRestoringFocusExit = advanceFocusExitTransition(deltaTime);
+    // Focus mode and its short deterministic exit hold slow physical scene motion
+    // without slowing input during ordinary exploration.
+    const motionScale = focusExitTransition
+      ? 0.02
+      : hoveredCelestialBody
+        ? 0.018
+        : focusedBody
+          ? 0.12
+          : 1;
     const frameMotionScale = motionScale * deltaTime * 60;
     simulationTime += deltaTime * motionScale;
-    // Easing with lerp each frame creates inertia. Larger factors catch up faster.
-    smoothProgress = THREE.MathUtils.lerp(
-      smoothProgress,
-      scrollProgress,
-      frameAdjustedEase(0.065, deltaTime),
-    );
-    if (performanceManager.consumeTaskDelta("distanceReadout", deltaTime) > 0) {
-      updateDistanceReadout(smoothProgress);
+
+    if (!isRestoringFocusExit) {
+      // Easing with lerp each frame creates inertia. Larger factors catch up faster.
+      smoothProgress = THREE.MathUtils.lerp(
+        smoothProgress,
+        scrollProgress,
+        frameAdjustedEase(0.065, deltaTime),
+      );
+      const cameraInputEase = frameAdjustedEase(0.075, deltaTime);
+      yaw = THREE.MathUtils.lerp(yaw, targetYaw, cameraInputEase);
+      pitch = THREE.MathUtils.lerp(pitch, targetPitch, cameraInputEase);
     }
-    const cameraInputEase = frameAdjustedEase(0.075, deltaTime);
-    yaw = THREE.MathUtils.lerp(yaw, targetYaw, cameraInputEase);
-    pitch = THREE.MathUtils.lerp(pitch, targetPitch, cameraInputEase);
+
+    updateDistanceReadout(smoothProgress);
 
     // ----- Update planet revolution and self-rotation -----
-    const planetVisualDelta = performanceManager.consumeTaskDelta("planetVisuals", deltaTime);
+    const planetVisualDelta = deltaTime;
     planets.forEach((planet) => {
       const data = planet.userData;
       data.meanAnomaly = (data.meanAnomaly ?? data.angle ?? 0)
@@ -2710,6 +3348,17 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
     // lookAt rotates the camera so its forward direction points at the target.
     camera.lookAt(cameraFocusPoint);
 
+    // The 115-moon Jovian catalogue is rendered progressively. Invisible
+    // sub-pixel moons no longer keep the GPU busy after returning to the broad
+    // Solar-System view, avoiding unnecessary broad-view GPU work.
+    updateMajorSatelliteVisibility({
+      systems: majorSatelliteSystems,
+      camera,
+      viewportHeight: innerHeight,
+      focusedBody,
+      hoveredBody: hoveredCelestialBody,
+    });
+
     const isAsteroidFocused = Boolean(
       focusedBody
       && (
@@ -2733,6 +3382,12 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
     );
     camera.updateProjectionMatrix();
 
+    // Focus exit owns the final camera pose. Applying the override after every
+    // ordinary camera calculation prevents any mixed close-focus/broad-view
+    // frame from reaching the renderer.
+    applyFocusExitCameraOverride();
+    updateSeamlessBroadViewReset(deltaTime);
+
     // ----- Animate special meshes and scene effects -----
     const frameScale = deltaTime * 60;
     earthClouds.rotation.y += 0.0032 * frameScale;
@@ -2741,16 +3396,16 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
     // A small oscillation suggests lunar libration while the pivot maintains tidal lock.
     moon.rotation.y = Math.sin(simulationTime * 0.35) * 0.04;
 
-    const sunDelta = performanceManager.consumeTaskDelta("sun", deltaTime);
-    if (sunDelta > 0) {
-      updateSun(sun, simulationTime, motionScale * sunDelta * 60);
-    }
+    updateSun(sun, simulationTime, motionScale * deltaTime * 60);
     updateSunApparentScale(deltaTime);
-
-    if (performanceManager.consumeTaskDelta("hoverVisual", deltaTime) > 0) {
-      updateCelestialHoverVisual();
-      updateFocusedSelectionVisual();
+    // Last-line safety invariant: temporary inspection code must not be
+    // allowed to leave temporary inspection transforms in the broad view.
+    if (!focusedBody && Math.abs(sun.system.scale.x - 1) > 1e-6) {
+      restoreBroadSolarSystemScale();
     }
+
+    updateCelestialHoverVisual();
+    updateFocusedSelectionVisual();
 
     // Asteroid self-rotation is cheap and does not change object positions, so
     // keep its GPU clock smooth even when the heavier belt-orbit update is
@@ -2761,27 +3416,23 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
     });
     // Jupiter moves every frame, so its Trojan clouds must follow on the same
     // clock. Keeping this tiny 84-object pass outside the throttled main-belt
-    // update removes stepping/flicker without weakening the performance manager.
+    // update removes stepping/flicker while keeping the main belt smooth.
     updateJupiterTrojanFrame(asteroidBelt, jupiter);
 
-    const asteroidDelta = performanceManager.consumeTaskDelta("asteroids", deltaTime);
-    if (asteroidDelta > 0) {
-      updateAsteroidBelt(
-        asteroidBelt,
-        motionScale * asteroidDelta * 60,
-        camera,
-        currentSunAngularRadius,
-        {
-          focusedBody,
-          hoveredBody: hoveredCelestialBody,
-        },
-      );
-    }
+    updateAsteroidBelt(
+      asteroidBelt,
+      motionScale * deltaTime * 60,
+      camera,
+      currentSunAngularRadius,
+      {
+        focusedBody,
+        hoveredBody: hoveredCelestialBody,
+      },
+    );
     // One journey value coordinates exposure, stellar layers, galaxies, local
     // dust, and zodiacal light for scroll, reverse travel, and body focus alike.
     spaceEnvironment.setJourneyProgress(getEnvironmentJourneyProgress());
-    const environmentDelta = performanceManager.consumeTaskDelta("environment", deltaTime);
-    if (environmentDelta > 0) spaceEnvironment.update(environmentDelta, elapsedTime);
+    spaceEnvironment.update(deltaTime, elapsedTime);
     orbitRoot.children.forEach((orbit) => {
       orbit.material.opacity = THREE.MathUtils.clamp((smoothProgress - 0.035) / 0.18, 0.04, 0.22);
     });
@@ -2789,20 +3440,15 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
     // ----- Sync HTML, draw the frame, then schedule the next frame -----
     // Matrix updates make the latest camera transform available to 3D→2D projection.
     camera.updateMatrixWorld();
-    if (performanceManager.consumeTaskDelta("inspectionUi", deltaTime) > 0) {
-      updateInspectionInterface();
-    }
+    updateInspectionInterface();
     renderer.render(scene, camera);
-    performanceManager.recordFrame(deltaTime);
     // requestAnimationFrame runs before the browser's next repaint (usually ~60 FPS).
     requestAnimationFrame(animate);
   }
 
-  // Seed state and begin the self-scheduling render loop. One-time shader and
-  // geometry compilation is excluded from adaptive frame-rate decisions.
-  performanceManager.startMonitoring();
+  // Seed state and begin the deterministic requestAnimationFrame render loop.
   updateScrollProgress();
-  animate();
+  requestAnimationFrame(animate);
 
   // Keep the loader visible briefly after setup so the opening transition feels intentional.
   setTimeout(() => {

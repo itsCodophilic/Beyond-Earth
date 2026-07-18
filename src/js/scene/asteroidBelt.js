@@ -2405,7 +2405,7 @@ function applyAsteroidEncounterVisibility(asteroidBelt, intensity) {
  *
  * This lightweight function is called every rendered frame so GPU-instanced
  * rocks rotate smoothly even when orbital calculations are throttled by the
- * Performance Manager. Hover/focus slows spin only slightly; unlike orbiting,
+ * render loop. Hover/focus slows spin only slightly; unlike orbiting,
  * spinning around the object's own centre cannot make it escape the cursor.
  */
 export function updateAsteroidSpinClock(
@@ -2479,7 +2479,7 @@ export function updateAsteroidSpinClock(
  * updating these small nearby rocks only on the slower belt clock can make their
  * positions and lighting jump, which reads as flicker. This lightweight pass
  * updates only the 84 Trojan bodies every frame, preserving the broader
- * Performance Manager throttling for the dense main belt.
+ * render loop throttling for the dense main belt.
  */
 export function updateJupiterTrojanFrame(asteroidBelt, jupiter = null) {
   if (!asteroidBelt?.trojanRocks?.length || !jupiter) return;

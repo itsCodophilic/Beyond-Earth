@@ -194,8 +194,8 @@ export class SpaceEnvironment {
   }
 
   resize(width, height, requestedPixelRatio = window.devicePixelRatio) {
-    // PerformanceManager is the single owner of renderer pixel density. The
-    // environment only mirrors that effective value into point-size uniforms.
+    // The application owns renderer pixel density. The environment mirrors the
+    // fixed cinematic value into point-size uniforms.
     this.pixelRatio = Math.max(0.5, Number(requestedPixelRatio) || 1);
     this.layers.forEach((layer) => layer.resize?.(this.pixelRatio));
     return this.pixelRatio;
@@ -203,8 +203,8 @@ export class SpaceEnvironment {
 
   /**
    * Runtime quality changes hide optional layers and adjust active populations.
-   * PerformanceManager supplies pixel density separately; geometry capacity is
-   * selected during init to avoid disruptive rebuilding.
+   * Pixel density is supplied separately; geometry capacity is selected once
+   * during init and remains on the fixed cinematic profile.
    */
   setQuality(presetName) {
     const preset = QUALITY_PRESETS[presetName];
