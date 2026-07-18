@@ -562,10 +562,10 @@ export function makeSunSurfaceMaterial(texture) {
          * These masks form the convection cells:
          *
          * brightCell:
-         * ordinary hot orange/gold cell centres.
+         * ordinary white-hot cell centres.
          *
          * whiteCell:
-         * occasional near-white regions.
+         * occasional brilliant-white regions.
          *
          * darkCellBorder:
          * darker plasma between the rising cells.
@@ -592,55 +592,62 @@ export function makeSunSurfaceMaterial(texture) {
             cellularEnergy
           );
 
-        vec3 deepRed =
+        /*
+         * Natural visible-light photosphere palette.
+         *
+         * Sunlight contains the complete visible spectrum, so the unresolved
+         * stellar disk is perceived as white from space. Warm ivory is kept
+         * only in the cooler granule boundaries and limb-darkened regions.
+         */
+        vec3 granuleShadow =
           vec3(
-            0.095,
-            0.004,
-            0.0
+            0.34,
+            0.315,
+            0.285
           );
 
-        vec3 redOrange =
+        vec3 warmIvory =
           vec3(
-            0.48,
-            0.045,
-            0.001
+            0.84,
+            0.81,
+            0.74
           );
 
-        vec3 hotOrange =
+        vec3 softWhite =
           vec3(
             1.0,
-            0.24,
-            0.003
+            0.985,
+            0.94
           );
 
-        vec3 gold =
+        vec3 photosphereWhite =
           vec3(
             1.0,
-            0.57,
-            0.055
+            0.998,
+            0.985
           );
 
-        vec3 creamWhite =
+        vec3 brilliantWhite =
           vec3(
             1.0,
-            0.94,
-            0.73
+            1.0,
+            1.0
           );
 
         vec3 finalSurface =
           mix(
-            redOrange,
-            hotOrange,
+            warmIvory,
+            softWhite,
             brightCell
           );
 
         finalSurface =
           mix(
             finalSurface,
-            gold,
+            photosphereWhite,
             smoothstep(
-              0.52,
-              0.82,
+              0.48,
+              0.80,
               cellularEnergy
             )
           );
@@ -648,15 +655,15 @@ export function makeSunSurfaceMaterial(texture) {
         finalSurface =
           mix(
             finalSurface,
-            creamWhite,
-            whiteCell * 0.72
+            brilliantWhite,
+            whiteCell * 0.82
           );
 
         finalSurface =
           mix(
             finalSurface,
-            deepRed,
-            darkCellBorder * 0.34
+            granuleShadow,
+            darkCellBorder * 0.28
           );
 
         finalSurface *=
@@ -668,7 +675,7 @@ export function makeSunSurfaceMaterial(texture) {
          * Small irregular spot groups.
          *
          * Each region contains:
-         * - a reddish penumbra
+         * - a grey-brown penumbra
          * - a tiny dark umbra
          * - a broken bright magnetic rim
          */
@@ -731,7 +738,7 @@ export function makeSunSurfaceMaterial(texture) {
           /*
            * Build a local coordinate system for every sunspot.
            *
-           * This allows the reddish penumbra lines to radiate from each
+           * This allows the grey-brown penumbra lines to radiate from each
            * individual spot instead of from the centre of the whole Sun.
            */
           vec3 referenceAxis =
@@ -778,30 +785,30 @@ export function makeSunSurfaceMaterial(texture) {
           vec3 penumbraColor =
             mix(
               vec3(
-                0.24,
-                0.012,
-                0.001
+                0.16,
+                0.145,
+                0.135
               ),
               vec3(
-                0.66,
-                0.10,
-                0.005
+                0.42,
+                0.385,
+                0.35
               ),
               striations
             );
 
           vec3 umbraColor =
             vec3(
-              0.018,
-              0.0015,
-              0.0005
+              0.012,
+              0.011,
+              0.010
             );
 
           vec3 activeColor =
             vec3(
               1.0,
-              0.82,
-              0.42
+              1.0,
+              0.97
             );
 
           finalSurface =
@@ -828,7 +835,7 @@ export function makeSunSurfaceMaterial(texture) {
         }
 
         /*
-         * Fragmented white/orange magnetic regions near the hottest cells.
+         * Fragmented white magnetic regions near the hottest cells.
          */
         float activeNoise =
           fbm3D(
@@ -856,19 +863,19 @@ export function makeSunSurfaceMaterial(texture) {
         finalSurface +=
           vec3(
             1.0,
-            0.75,
-            0.31
+            0.995,
+            0.96
           )
           *
           activeRegions
           *
-          0.28;
+          0.25;
 
         finalSurface +=
           vec3(
             1.0,
-            0.97,
-            0.82
+            1.0,
+            1.0
           )
           *
           smoothstep(
@@ -897,16 +904,16 @@ export function makeSunSurfaceMaterial(texture) {
 
         finalSurface +=
           vec3(
-            0.55,
-            0.07,
-            0.003
+            0.92,
+            0.88,
+            0.80
           )
           *
           pow(limb, 5.0)
           *
           uGlow
           *
-          0.22;
+          0.12;
 
         /*
          * Retain the supplied texture as subtle organic variation only.

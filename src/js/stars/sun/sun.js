@@ -5,8 +5,8 @@
  * combines several lightweight layers, each responsible for a different effect:
  *
  * - photosphere: animated granular surface
- * - chromosphere: thin orange-red rim above the photosphere
- * - corona shells: subtle plasma glow around the silhouette
+ * - chromosphere: thin red-pink rim above the photosphere
+ * - corona shells: white and silver-white plasma glow around the silhouette
  * - glow sprite: soft light extending into surrounding space
  * - spicules: tiny uneven flames attached to the outer edge
  * - plasma jets: sparse localized eruptions
@@ -85,10 +85,10 @@ function createDistantStarTexture(size = 512) {
 
   const halo = context.createRadialGradient(centre, centre, 0, centre, centre, centre);
   halo.addColorStop(0, "rgba(255,255,255,1)");
-  halo.addColorStop(0.035, "rgba(255,250,220,1)");
-  halo.addColorStop(0.12, "rgba(255,202,100,0.82)");
-  halo.addColorStop(0.34, "rgba(255,132,42,0.24)");
-  halo.addColorStop(1, "rgba(255,90,12,0)");
+  halo.addColorStop(0.035, "rgba(255,255,250,1)");
+  halo.addColorStop(0.12, "rgba(255,248,226,0.72)");
+  halo.addColorStop(0.34, "rgba(236,244,255,0.20)");
+  halo.addColorStop(1, "rgba(220,235,255,0)");
   context.fillStyle = halo;
   context.fillRect(0, 0, size, size);
 
@@ -100,13 +100,13 @@ function createDistantStarTexture(size = 512) {
     context.rotate(angle);
     const length = index < 2 ? centre * 0.94 : centre * 0.60;
     const ray = context.createLinearGradient(-length, 0, length, 0);
-    ray.addColorStop(0, "rgba(255,180,70,0)");
-    ray.addColorStop(0.44, "rgba(255,220,140,0.025)");
-    ray.addColorStop(0.495, "rgba(255,250,220,0.62)");
+    ray.addColorStop(0, "rgba(235,245,255,0)");
+    ray.addColorStop(0.44, "rgba(248,252,255,0.025)");
+    ray.addColorStop(0.495, "rgba(255,255,250,0.62)");
     ray.addColorStop(0.5, "rgba(255,255,255,0.95)");
-    ray.addColorStop(0.505, "rgba(255,250,220,0.62)");
-    ray.addColorStop(0.56, "rgba(255,220,140,0.025)");
-    ray.addColorStop(1, "rgba(255,180,70,0)");
+    ray.addColorStop(0.505, "rgba(255,255,250,0.62)");
+    ray.addColorStop(0.56, "rgba(248,252,255,0.025)");
+    ray.addColorStop(1, "rgba(235,245,255,0)");
     context.fillStyle = ray;
     context.fillRect(-length, index < 2 ? -1.5 : -0.8, length * 2, index < 2 ? 3 : 1.6);
     context.restore();
@@ -986,13 +986,13 @@ export function createSun({ world, hoverTargets, texture, quality = "high" }) {
    * Chromosphere
    *
    * This shell stays very close to the photosphere and creates a narrow,
-   * irregular orange-red edge.
+   * irregular pale red-pink edge.
    */
   const chromosphere = new THREE.Mesh(
     new THREE.SphereGeometry(SUN_RADIUS * 1.012, ...creationProfile.chromosphereSegments),
 
     createAtmosphereMaterial({
-      color: 0xff6c18,
+      color: 0xff6b4a,
 
       intensity: 0.3,
 
@@ -1017,7 +1017,7 @@ export function createSun({ world, hoverTargets, texture, quality = "high" }) {
     new THREE.SphereGeometry(SUN_RADIUS * 1.027, ...creationProfile.innerCoronaSegments),
 
     createAtmosphereMaterial({
-      color: 0xff941f,
+      color: 0xfffbf2,
 
       intensity: 0.105,
 
@@ -1034,13 +1034,13 @@ export function createSun({ world, hoverTargets, texture, quality = "high" }) {
   /*
    * Outer corona
    *
-   * Provides only a thin, transparent gold edge.
+   * Provides only a thin, transparent silver-blue edge.
    */
   const outerCorona = new THREE.Mesh(
     new THREE.SphereGeometry(SUN_RADIUS * 1.046, ...creationProfile.outerCoronaSegments),
 
     createAtmosphereMaterial({
-      color: 0xffc552,
+      color: 0xe4efff,
 
       intensity: 0.032,
 
@@ -1066,7 +1066,7 @@ export function createSun({ world, hoverTargets, texture, quality = "high" }) {
   const glowTexture = makeGlowTexture();
 
   /*
-   * Warm texture used only by solar plasma.
+   * Warm texture used only by chromospheric plasma and prominences.
    * This prevents blue/cyan edges from appearing in flares.
    */
   const solarPlasmaTexture = createSolarPlasmaTexture();
@@ -1075,7 +1075,7 @@ export function createSun({ world, hoverTargets, texture, quality = "high" }) {
     new THREE.SpriteMaterial({
       map: glowTexture,
 
-      color: 0xff6818,
+      color: 0xfffdf4,
 
       transparent: true,
 
@@ -1101,7 +1101,7 @@ export function createSun({ world, hoverTargets, texture, quality = "high" }) {
   const distantStar = new THREE.Sprite(
     new THREE.SpriteMaterial({
       map: createDistantStarTexture(),
-      color: 0xfff4cf,
+      color: 0xffffff,
       transparent: true,
       opacity: 0,
       blending: THREE.AdditiveBlending,
@@ -1245,7 +1245,7 @@ export function createSun({ world, hoverTargets, texture, quality = "high" }) {
    * This light does not directly illuminate the Sun's ShaderMaterial because
    * its surface lighting is calculated inside the custom shader.
    */
-  const light = new THREE.PointLight(0xffdda0, 28000, 6500, 1.28);
+  const light = new THREE.PointLight(0xffffff, 28000, 6500, 1.28);
 
   light.name = "Solar point light";
 
