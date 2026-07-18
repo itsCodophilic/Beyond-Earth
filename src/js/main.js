@@ -1539,9 +1539,16 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
     if (instanceTarget) return instanceTarget;
 
     let object = hit?.object;
+    // Satellite pointer proxies are deliberately kept outside irregular moon
+    // meshes so they remain spherical. Resolve the invisible proxy directly to
+    // the visible satellite before walking the normal scene hierarchy.
+    if (object?.userData?.interactionOwner) {
+      return object.userData.interactionOwner;
+    }
     // Raycasting may hit a child such as an atmosphere or ring. Walking through
     // `.parent` finds the first ancestor carrying our identifying metadata.
     while (object) {
+      if (object.userData?.interactionOwner) return object.userData.interactionOwner;
       if (object.userData?.name) return object;
       object = object.parent;
     }
@@ -1724,8 +1731,15 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
       );
     }
 
-    // For visible planets, stars and moons, follow the rendered silhouette.
-    // Only sub-pixel bodies receive a larger discovery cushion.
+    // Non-lunar major satellites are tiny and orbit rapidly at the visual
+    // timescale. Give them a stable release radius after acquisition so a few
+    // pixels of projection change cannot repeatedly clear/reacquire the hover.
+    if (body.userData?.isSatellite && body.userData?.name !== "Moon") {
+      const satelliteAssist = radiusPixels >= 12 ? 5 : radiusPixels >= 4 ? 9 : 14;
+      return distancePixels <= radiusPixels + satelliteAssist;
+    }
+
+    // For planets, stars and Earth's Moon, stay close to the visible silhouette.
     const assistPixels = radiusPixels >= 12 ? 1.5 : radiusPixels >= 4 ? 3.0 : 7;
     return distancePixels <= radiusPixels + assistPixels;
   }
@@ -2611,13 +2625,14 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
         );
       }
     });
-    const satelliteDelta = performanceManager.consumeTaskDelta("satellites", deltaTime);
-    if (satelliteDelta > 0) {
-      updateMajorSatelliteSystems(
-        majorSatelliteSystems,
-        motionScale * satelliteDelta * 60,
-      );
-    }
+    // Major satellite transforms are inexpensive (only a few dozen objects)
+    // and must remain synchronized with their parent planets every frame.
+    // Throttling this update caused visible stepping and cursor/target flicker.
+    updateMajorSatelliteSystems(
+      majorSatelliteSystems,
+      motionScale * deltaTime * 60,
+      { hoveredBody: hoveredCelestialBody, focusedBody },
+    );
 
     // ----- Calculate the camera's spherical orbit around its focus point -----
     const distance = getCameraDistance(smoothProgress);

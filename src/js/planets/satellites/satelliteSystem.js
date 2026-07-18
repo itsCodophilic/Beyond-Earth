@@ -148,15 +148,26 @@ function createSatelliteMesh(profile, parentName, parentRadius, sharedGeometry, 
     moon.add(atmosphere);
   }
 
+  // Keep the pointer proxy independent from the visible moon. Irregular moons
+  // use non-uniform scale, so placing a hit sphere inside the moon would stretch
+  // and rotate that sphere as well. The caller attaches this proxy beside the
+  // moon under the orbital pivot, preserving a stable circular hit region.
   const hitTarget = new THREE.Mesh(
     new THREE.SphereGeometry(1, 16, 12),
-    new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, colorWrite: false, depthWrite: false }),
+    new THREE.MeshBasicMaterial({
+      transparent: true,
+      opacity: 0,
+      colorWrite: false,
+      depthWrite: false,
+    }),
   );
   hitTarget.name = `${profile.name} interaction target`;
-  const hitRadius = Math.max(visualRadius * 1.75, 0.12);
+  const hitRadius = Math.max(visualRadius * 1.9, 0.14);
   hitTarget.scale.setScalar(hitRadius);
-  moon.add(hitTarget);
-  return moon;
+  hitTarget.position.copy(moon.position);
+  hitTarget.userData.interactionOwner = moon;
+  moon.userData.interactionTarget = hitTarget;
+  return { moon, hitTarget };
 }
 
 /** Builds the major moon systems without changing the existing planet meshes. */
@@ -183,18 +194,20 @@ export function createMajorSatelliteSystems({ world, planets, hoverTargets, qual
       orbitPlane.rotation.z = profile.inclination ?? 0;
       const pivot = new THREE.Group();
       pivot.rotation.y = (index / moonProfiles.length) * Math.PI * 2 + systemIndex * 0.73;
-      const moon = createSatelliteMesh(
+      const { moon, hitTarget } = createSatelliteMesh(
         profile,
         parentName,
         parent.userData.visualRadius ?? 1,
         sharedGeometry,
         sharedTexture,
       );
-      pivot.add(moon);
+      pivot.add(moon, hitTarget);
       orbitPlane.add(pivot);
       root.add(orbitPlane);
-      hoverTargets.push(moon);
-      return { moon, pivot, speed: profile.speed };
+      // Exact surface and stable proxy are both raycastable. The proxy resolves
+      // back to its visible moon through `interactionOwner` in main.js.
+      hoverTargets.push(moon, hitTarget);
+      return { moon, hitTarget, pivot, speed: profile.speed };
     });
 
     world.add(root);
@@ -204,12 +217,28 @@ export function createMajorSatelliteSystems({ world, planets, hoverTargets, qual
   return systems;
 }
 
-export function updateMajorSatelliteSystems(systems, motionScale = 1) {
+export function updateMajorSatelliteSystems(
+  systems,
+  motionScale = 1,
+  { hoveredBody = null, focusedBody = null } = {},
+) {
   systems.forEach((system) => {
+    // Parent-following is deliberately performed every rendered frame. Keeping
+    // this inside a throttled visual task makes the moon system trail the planet
+    // and appear to jump beneath a stationary cursor.
     system.root.position.copy(system.parent.position);
-    system.moons.forEach(({ moon, pivot, speed }, index) => {
-      pivot.rotation.y += speed * motionScale;
-      moon.rotation.y += (0.0025 + index * 0.00013) * motionScale;
+    system.root.updateMatrixWorld(true);
+
+    system.moons.forEach(({ moon, hitTarget, pivot, speed }, index) => {
+      const isHeld = moon === hoveredBody || moon === focusedBody;
+      if (!isHeld) {
+        pivot.rotation.y += speed * motionScale;
+        moon.rotation.y += (0.0025 + index * 0.00013) * motionScale;
+      }
+
+      // The proxy is a sibling rather than a child, so it stays spherical and
+      // remains centred on the visible satellite even for stretched bodies.
+      hitTarget.position.copy(moon.position);
     });
   });
 }
