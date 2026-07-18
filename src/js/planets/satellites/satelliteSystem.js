@@ -1,11 +1,19 @@
 import * as THREE from "three";
 import { makeNoiseTexture } from "../../graphics/proceduralTextures.js";
 import { getMoonVisualRadius, getSizeComparisonText } from "../../config/celestialScale.js";
+import {
+  PHOBOS_PROFILE,
+  createPhobosSurface,
+} from "../mars/satellites/phobos.js";
+import {
+  DEIMOS_PROFILE,
+  createDeimosSurface,
+} from "../mars/satellites/deimos.js";
 
 const MOON_SYSTEMS = Object.freeze({
   Mars: [
-    { name: "Phobos", diameterKm: 22.2, orbitScale: 1.75, speed: 0.024, inclination: 0.02, color: 0x81766c, shape: [1.25, 0.86, 0.78], orbitalSpeed: "2.14 km/s around Mars", description: "The larger, deeply cratered inner moon of Mars, slowly spiralling toward the planet." },
-    { name: "Deimos", diameterKm: 12.4, orbitScale: 2.75, speed: 0.008, inclination: 0.04, color: 0x9a9082, shape: [1.16, 0.90, 0.84], orbitalSpeed: "1.35 km/s around Mars", description: "Mars's small outer moon, a dark irregular body with a smoother blanket of impact debris." },
+    PHOBOS_PROFILE,
+    DEIMOS_PROFILE,
   ],
   Jupiter: [
     { name: "Io", diameterKm: 3_643.2, orbitScale: 1.78, speed: 0.0125, inclination: 0.01, color: 0xd9b15a, orbitalSpeed: "17.33 km/s around Jupiter", description: "A volcanic world reshaped by intense tidal heating, sulphur plains, and towering eruptions." },
@@ -87,13 +95,29 @@ function createMoonMaterial(profile, sharedTexture) {
   });
 }
 
-function createSatelliteMesh(profile, parentName, parentRadius, sharedGeometry, sharedTexture) {
+function createSatelliteMesh(
+  profile,
+  parentName,
+  parentRadius,
+  sharedGeometry,
+  sharedTexture,
+  quality,
+) {
   const visualRadius = getMoonVisualRadius(profile.diameterKm, {
     minimum: profile.diameterKm < 50 ? 0.045 : 0.055,
     maximum: 0.68,
   });
-  const material = createMoonMaterial(profile, sharedTexture);
-  const moon = new THREE.Mesh(sharedGeometry, material);
+  // Phobos and Deimos own dedicated, vertex-sculpted meshes. Other satellite
+  // systems continue sharing their lightweight sphere until each planet gets a
+  // dedicated moon pass of its own.
+  let moon;
+  if (profile.name === "Phobos") {
+    moon = createPhobosSurface(quality);
+  } else if (profile.name === "Deimos") {
+    moon = createDeimosSurface(quality);
+  } else {
+    moon = new THREE.Mesh(sharedGeometry, createMoonMaterial(profile, sharedTexture));
+  }
   moon.name = profile.name;
   const shape = profile.shape ?? [1, 1, 1];
   moon.scale.set(
@@ -102,6 +126,9 @@ function createSatelliteMesh(profile, parentName, parentRadius, sharedGeometry, 
     visualRadius * shape[2],
   );
   moon.position.x = parentRadius * profile.orbitScale;
+  if (profile.initialRotation) {
+    moon.rotation.set(...profile.initialRotation);
+  }
 
   const orbitalScale = PARENT_ORBITAL_SCALE[parentName];
   const sizeComparison = getSizeComparisonText({ diameterKm: profile.diameterKm, name: profile.name });
@@ -113,6 +140,8 @@ function createSatelliteMesh(profile, parentName, parentRadius, sharedGeometry, 
     heliocentricAU: orbitalScale.heliocentricAU,
     orbitalEccentricity: orbitalScale.eccentricity,
     distanceBasis: "satellite-parent-orbit",
+    tidallyLocked: Boolean(profile.tidallyLocked),
+    surfaceModel: parentName === "Mars" ? "terrain-first-3d" : "shared-satellite-sphere",
     visualRadius: Math.max(...moon.scale.toArray()),
     physicalDiameterKm: profile.diameterKm,
     diameterEarths: profile.diameterKm / 12_756,
@@ -124,7 +153,9 @@ function createSatelliteMesh(profile, parentName, parentRadius, sharedGeometry, 
     focusFov: parentName === "Mars" ? 36 : 34,
     info: {
       type: "Natural satellite",
-      diameter: `${profile.diameterKm.toLocaleString("en-US", { maximumFractionDigits: 1 })} km`,
+      diameter: profile.dimensions
+        ? `${profile.dimensions} · ${profile.diameterKm.toLocaleString("en-US", { maximumFractionDigits: 1 })} km mean`
+        : `${profile.diameterKm.toLocaleString("en-US", { maximumFractionDigits: 1 })} km`,
       orbitalSpeed: profile.orbitalSpeed,
       distanceFromEarth: `Varies with ${parentName}'s orbit`,
       sizeComparison,
@@ -200,6 +231,7 @@ export function createMajorSatelliteSystems({ world, planets, hoverTargets, qual
         parent.userData.visualRadius ?? 1,
         sharedGeometry,
         sharedTexture,
+        quality,
       );
       pivot.add(moon, hitTarget);
       orbitPlane.add(pivot);
@@ -233,7 +265,12 @@ export function updateMajorSatelliteSystems(
       const isHeld = moon === hoveredBody || moon === focusedBody;
       if (!isHeld) {
         pivot.rotation.y += speed * motionScale;
-        moon.rotation.y += (0.0025 + index * 0.00013) * motionScale;
+        // Mars's moons are tidally locked: the orbital pivot already rotates
+        // both their position and orientation together, keeping one face aimed
+        // toward Mars. Extra self-spin would break that relationship.
+        if (!moon.userData.tidallyLocked) {
+          moon.rotation.y += (0.0025 + index * 0.00013) * motionScale;
+        }
       }
 
       // The proxy is a sibling rather than a child, so it stays spherical and
