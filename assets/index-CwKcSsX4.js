@@ -5331,10 +5331,10 @@ void main() {
          * These masks form the convection cells:
          *
          * brightCell:
-         * ordinary hot orange/gold cell centres.
+         * ordinary white-hot cell centres.
          *
          * whiteCell:
-         * occasional near-white regions.
+         * occasional brilliant-white regions.
          *
          * darkCellBorder:
          * darker plasma between the rising cells.
@@ -5361,55 +5361,62 @@ void main() {
             cellularEnergy
           );
 
-        vec3 deepRed =
+        /*
+         * Natural visible-light photosphere palette.
+         *
+         * Sunlight contains the complete visible spectrum, so the unresolved
+         * stellar disk is perceived as white from space. Warm ivory is kept
+         * only in the cooler granule boundaries and limb-darkened regions.
+         */
+        vec3 granuleShadow =
           vec3(
-            0.095,
-            0.004,
-            0.0
+            0.34,
+            0.315,
+            0.285
           );
 
-        vec3 redOrange =
+        vec3 warmIvory =
           vec3(
-            0.48,
-            0.045,
-            0.001
+            0.84,
+            0.81,
+            0.74
           );
 
-        vec3 hotOrange =
+        vec3 softWhite =
           vec3(
             1.0,
-            0.24,
-            0.003
+            0.985,
+            0.94
           );
 
-        vec3 gold =
+        vec3 photosphereWhite =
           vec3(
             1.0,
-            0.57,
-            0.055
+            0.998,
+            0.985
           );
 
-        vec3 creamWhite =
+        vec3 brilliantWhite =
           vec3(
             1.0,
-            0.94,
-            0.73
+            1.0,
+            1.0
           );
 
         vec3 finalSurface =
           mix(
-            redOrange,
-            hotOrange,
+            warmIvory,
+            softWhite,
             brightCell
           );
 
         finalSurface =
           mix(
             finalSurface,
-            gold,
+            photosphereWhite,
             smoothstep(
-              0.52,
-              0.82,
+              0.48,
+              0.80,
               cellularEnergy
             )
           );
@@ -5417,15 +5424,15 @@ void main() {
         finalSurface =
           mix(
             finalSurface,
-            creamWhite,
-            whiteCell * 0.72
+            brilliantWhite,
+            whiteCell * 0.82
           );
 
         finalSurface =
           mix(
             finalSurface,
-            deepRed,
-            darkCellBorder * 0.34
+            granuleShadow,
+            darkCellBorder * 0.28
           );
 
         finalSurface *=
@@ -5437,7 +5444,7 @@ void main() {
          * Small irregular spot groups.
          *
          * Each region contains:
-         * - a reddish penumbra
+         * - a grey-brown penumbra
          * - a tiny dark umbra
          * - a broken bright magnetic rim
          */
@@ -5500,7 +5507,7 @@ void main() {
           /*
            * Build a local coordinate system for every sunspot.
            *
-           * This allows the reddish penumbra lines to radiate from each
+           * This allows the grey-brown penumbra lines to radiate from each
            * individual spot instead of from the centre of the whole Sun.
            */
           vec3 referenceAxis =
@@ -5547,30 +5554,30 @@ void main() {
           vec3 penumbraColor =
             mix(
               vec3(
-                0.24,
-                0.012,
-                0.001
+                0.16,
+                0.145,
+                0.135
               ),
               vec3(
-                0.66,
-                0.10,
-                0.005
+                0.42,
+                0.385,
+                0.35
               ),
               striations
             );
 
           vec3 umbraColor =
             vec3(
-              0.018,
-              0.0015,
-              0.0005
+              0.012,
+              0.011,
+              0.010
             );
 
           vec3 activeColor =
             vec3(
               1.0,
-              0.82,
-              0.42
+              1.0,
+              0.97
             );
 
           finalSurface =
@@ -5597,7 +5604,7 @@ void main() {
         }
 
         /*
-         * Fragmented white/orange magnetic regions near the hottest cells.
+         * Fragmented white magnetic regions near the hottest cells.
          */
         float activeNoise =
           fbm3D(
@@ -5625,19 +5632,19 @@ void main() {
         finalSurface +=
           vec3(
             1.0,
-            0.75,
-            0.31
+            0.995,
+            0.96
           )
           *
           activeRegions
           *
-          0.28;
+          0.25;
 
         finalSurface +=
           vec3(
             1.0,
-            0.97,
-            0.82
+            1.0,
+            1.0
           )
           *
           smoothstep(
@@ -5666,16 +5673,16 @@ void main() {
 
         finalSurface +=
           vec3(
-            0.55,
-            0.07,
-            0.003
+            0.92,
+            0.88,
+            0.80
           )
           *
           pow(limb, 5.0)
           *
           uGlow
           *
-          0.22;
+          0.12;
 
         /*
          * Retain the supplied texture as subtle organic variation only.
@@ -5714,7 +5721,7 @@ void main() {
             1.0
           );
       }
-    `,transparent:!1,depthWrite:!0,depthTest:!0})}var Mh=pu.Sun.visualRadius,Nh=Object.freeze({high:Object.freeze({surfaceSegments:[192,128],chromosphereSegments:[144,96],innerCoronaSegments:[128,88],outerCoronaSegments:[112,80],spicules:560,jetParticles:42,loopParticles:34,flareArcParticles:92,flareEjectaParticles:34,flareRingSegments:96}),medium:Object.freeze({surfaceSegments:[144,96],chromosphereSegments:[112,72],innerCoronaSegments:[96,64],outerCoronaSegments:[80,56],spicules:420,jetParticles:32,loopParticles:26,flareArcParticles:68,flareEjectaParticles:26,flareRingSegments:72}),low:Object.freeze({surfaceSegments:[112,72],chromosphereSegments:[80,56],innerCoronaSegments:[72,48],outerCoronaSegments:[64,40],spicules:280,jetParticles:24,loopParticles:20,flareArcParticles:48,flareEjectaParticles:18,flareRingSegments:48})}),Ph=Object.freeze({high:Object.freeze({detailRatio:1,resolvePixels:7}),medium:Object.freeze({detailRatio:.76,resolvePixels:12}),low:Object.freeze({detailRatio:.5,resolvePixels:18})}),Fh=new G;function Ih(e=512){let t=document.createElement(`canvas`);t.width=e,t.height=e;let n=t.getContext(`2d`),r=e*.5;n.clearRect(0,0,e,e);let i=n.createRadialGradient(r,r,0,r,r,r);i.addColorStop(0,`rgba(255,255,255,1)`),i.addColorStop(.035,`rgba(255,250,220,1)`),i.addColorStop(.12,`rgba(255,202,100,0.82)`),i.addColorStop(.34,`rgba(255,132,42,0.24)`),i.addColorStop(1,`rgba(255,90,12,0)`),n.fillStyle=i,n.fillRect(0,0,e,e),n.save(),n.translate(r,r),n.globalCompositeOperation=`lighter`,[0,Math.PI*.5,Math.PI*.25,-Math.PI*.25].forEach((e,t)=>{n.save(),n.rotate(e);let i=t<2?r*.94:r*.6,a=n.createLinearGradient(-i,0,i,0);a.addColorStop(0,`rgba(255,180,70,0)`),a.addColorStop(.44,`rgba(255,220,140,0.025)`),a.addColorStop(.495,`rgba(255,250,220,0.62)`),a.addColorStop(.5,`rgba(255,255,255,0.95)`),a.addColorStop(.505,`rgba(255,250,220,0.62)`),a.addColorStop(.56,`rgba(255,220,140,0.025)`),a.addColorStop(1,`rgba(255,180,70,0)`),n.fillStyle=a,n.fillRect(-i,t<2?-1.5:-.8,i*2,t<2?3:1.6),n.restore()}),n.restore();let a=new $i(t);return a.colorSpace=Re,a.needsUpdate=!0,a}function Lh({color:e,intensity:t,speed:n,power:r,waveScale:i=1}){return new Oa({uniforms:{uTime:{value:0},uColor:{value:new J(e)},uIntensity:{value:t},uSpeed:{value:n},uPower:{value:r},uWaveScale:{value:i}},vertexShader:`
+    `,transparent:!1,depthWrite:!0,depthTest:!0})}var Mh=pu.Sun.visualRadius,Nh=Object.freeze({high:Object.freeze({surfaceSegments:[192,128],chromosphereSegments:[144,96],innerCoronaSegments:[128,88],outerCoronaSegments:[112,80],spicules:560,jetParticles:42,loopParticles:34,flareArcParticles:92,flareEjectaParticles:34,flareRingSegments:96}),medium:Object.freeze({surfaceSegments:[144,96],chromosphereSegments:[112,72],innerCoronaSegments:[96,64],outerCoronaSegments:[80,56],spicules:420,jetParticles:32,loopParticles:26,flareArcParticles:68,flareEjectaParticles:26,flareRingSegments:72}),low:Object.freeze({surfaceSegments:[112,72],chromosphereSegments:[80,56],innerCoronaSegments:[72,48],outerCoronaSegments:[64,40],spicules:280,jetParticles:24,loopParticles:20,flareArcParticles:48,flareEjectaParticles:18,flareRingSegments:48})}),Ph=Object.freeze({high:Object.freeze({detailRatio:1,resolvePixels:7}),medium:Object.freeze({detailRatio:.76,resolvePixels:12}),low:Object.freeze({detailRatio:.5,resolvePixels:18})}),Fh=new G;function Ih(e=512){let t=document.createElement(`canvas`);t.width=e,t.height=e;let n=t.getContext(`2d`),r=e*.5;n.clearRect(0,0,e,e);let i=n.createRadialGradient(r,r,0,r,r,r);i.addColorStop(0,`rgba(255,255,255,1)`),i.addColorStop(.035,`rgba(255,255,250,1)`),i.addColorStop(.12,`rgba(255,248,226,0.72)`),i.addColorStop(.34,`rgba(236,244,255,0.20)`),i.addColorStop(1,`rgba(220,235,255,0)`),n.fillStyle=i,n.fillRect(0,0,e,e),n.save(),n.translate(r,r),n.globalCompositeOperation=`lighter`,[0,Math.PI*.5,Math.PI*.25,-Math.PI*.25].forEach((e,t)=>{n.save(),n.rotate(e);let i=t<2?r*.94:r*.6,a=n.createLinearGradient(-i,0,i,0);a.addColorStop(0,`rgba(235,245,255,0)`),a.addColorStop(.44,`rgba(248,252,255,0.025)`),a.addColorStop(.495,`rgba(255,255,250,0.62)`),a.addColorStop(.5,`rgba(255,255,255,0.95)`),a.addColorStop(.505,`rgba(255,255,250,0.62)`),a.addColorStop(.56,`rgba(248,252,255,0.025)`),a.addColorStop(1,`rgba(235,245,255,0)`),n.fillStyle=a,n.fillRect(-i,t<2?-1.5:-.8,i*2,t<2?3:1.6),n.restore()}),n.restore();let a=new $i(t);return a.colorSpace=Re,a.needsUpdate=!0,a}function Lh({color:e,intensity:t,speed:n,power:r,waveScale:i=1}){return new Oa({uniforms:{uTime:{value:0},uColor:{value:new J(e)},uIntensity:{value:t},uSpeed:{value:n},uPower:{value:r},uWaveScale:{value:i}},vertexShader:`
       varying vec3 vNormalView;
       varying vec3 vViewDirection;
       varying vec3 vObjectDirection;
@@ -5895,7 +5902,7 @@ void main() {
             alpha
           );
       }
-    `,transparent:!0,blending:2,depthWrite:!1,depthTest:!0,side:1})}function Rh(e,t){let n=U.degToRad(90-e),r=U.degToRad(t);return new G(Math.sin(n)*Math.cos(r),Math.cos(n),Math.sin(n)*Math.sin(r))}function zh(e=560){let t=new Sn;t.name=`Solar spicules`;let n=new oa(.024,.34,4,1,!0),r=new ei({color:16777215,vertexColors:!0,transparent:!0,opacity:.18,blending:2,depthWrite:!1,depthTest:!0,side:2}),i=new G(0,1,0),a=new Ci(n,r,e);a.name=`Instanced solar spicules`;let o=new qt,s=new Tt,c=new G,l=new G,u=[new J(16728592),new J(16739608),new J(16751140),new J(16761677)];for(let t=0;t<e;t+=1){let n=1-t/(e-1)*2,r=Math.sqrt(1-n*n),d=t*Math.PI*(3-Math.sqrt(5)),f=new G(Math.cos(d)*r,n,Math.sin(d)*r),p=.1+t*37%41/41*.44;l.copy(f).multiplyScalar(Mh+p*.44),s.setFromUnitVectors(i,f),c.set(.44+t%4*.08,p/.34,.44+t%3*.09),o.compose(l,s,c),a.setMatrixAt(t,o),a.setColorAt(t,u[t%u.length])}return a.instanceMatrix.needsUpdate=!0,a.instanceColor&&(a.instanceColor.needsUpdate=!0),a.userData.capacity=e,t.add(a),t}function Bh(){let e=document.createElement(`canvas`);e.width=256,e.height=256;let t=e.getContext(`2d`);t.save(),t.translate(128,128),t.scale(.72,1);let n=t.createRadialGradient(0,0,0,0,0,128);n.addColorStop(0,`rgba(255, 255, 245, 1)`),n.addColorStop(.08,`rgba(255, 248, 205, 0.98)`),n.addColorStop(.2,`rgba(255, 205, 95, 0.92)`),n.addColorStop(.4,`rgba(255, 111, 22, 0.72)`),n.addColorStop(.64,`rgba(210, 38, 4, 0.34)`),n.addColorStop(.82,`rgba(105, 9, 0, 0.10)`),n.addColorStop(1,`rgba(0, 0, 0, 0)`),t.fillStyle=n,t.fillRect(-128,-128,256,256),t.restore();let r=new $i(e);return r.colorSpace=Re,r.minFilter=o,r.magFilter=o,r.generateMipmaps=!1,r}function Vh({latitude:e,longitude:t,height:n,bend:r,phase:i},a,o=42){let s=Rh(e,t),c=Math.abs(s.y)>.9?new G(1,0,0):new G(0,1,0),l=new G().crossVectors(c,s).normalize(),u=new Sn;u.name=`Solar plasma jet`;let d=[16725256,16731915,16740372,16751909,16762954,16777121],f=Array.from({length:o},(e,t)=>{let n=new Wr(new Ar({map:a,color:d[t%d.length],transparent:!0,opacity:0,blending:2,depthWrite:!1,depthTest:!0}));return n.userData.offset=t/o,n.userData.phase=i+t*1.17,u.add(n),n}),p=new Wr(new Ar({map:a,color:16777198,transparent:!0,opacity:.52,blending:2,depthWrite:!1,depthTest:!0}));return p.position.copy(s).multiplyScalar(Mh*1.008),p.scale.set(.46,.46,1),u.add(p),u.userData={direction:s,tangent:l,height:n,bend:r,phase:i,particles:f,core:p},u}function Hh({angle:e,width:t,height:n,tilt:r,phase:i},a,o=34){let s=e-t*.5,c=e+t*.5,l=(e,t=Mh*1.008)=>new G(Math.cos(e)*t,0,Math.sin(e)*t),u=l(s),d=l(c),f=(s+c)*.5,p=l(f-t*.18,Mh+n),m=l(f+t*.18,Mh+n);p.y=n*.2,m.y=n*.2;let h=new ma(u,p,m,d),g=new Sn;g.name=`Coronal loop`,g.rotation.x=r;let _=[16728848,16740635,16753712,16777123];return g.userData={curve:h,particles:Array.from({length:o},(e,t)=>{let n=new Wr(new Ar({map:a,color:_[t%_.length],transparent:!0,opacity:0,blending:2,depthWrite:!1,depthTest:!0}));return n.userData.offset=t/o,n.userData.phase=i+t*.93,g.add(n),n}),phase:i},g}function Uh({latitude:e,longitude:t,height:n,width:r,bend:i,phase:a},o,{arcCount:s=92,ejectaCount:c=34,ringSegments:l=96}={}){let u=new Sn;u.name=`Solar flare`;let d=Rh(e,t),f=Math.abs(d.y)>.88?new G(1,0,0):new G(0,1,0),p=new G().crossVectors(f,d).normalize(),m=new G().crossVectors(d,p).normalize(),h=new Wr(new Ar({map:o,color:16777170,transparent:!0,opacity:0,blending:2,depthWrite:!1,depthTest:!0}));h.position.copy(d).multiplyScalar(Mh*1.008),h.scale.set(.35,.35,1),u.add(h);let g=d.clone().multiplyScalar(Mh*1.01).addScaledVector(p,-r*.5),_=d.clone().multiplyScalar(Mh*1.01).addScaledVector(p,r*.5),v=new ma(g,d.clone().multiplyScalar(Mh+n).addScaledVector(p,-r*.2).addScaledVector(m,i),d.clone().multiplyScalar(Mh+n).addScaledVector(p,r*.2).addScaledVector(m,i),_),y=[16728592,16740120,16754221,16767068,16777156,16777215],b=Array.from({length:s},(e,t)=>{let n=new Wr(new Ar({map:o,color:y[t%y.length],transparent:!0,opacity:0,blending:2,depthWrite:!1,depthTest:!0}));return n.userData.offset=t/s,n.userData.phase=a+t*.63,u.add(n),n}),x=Array.from({length:c},(e,t)=>{let n=new Wr(new Ar({map:o,color:y[t%y.length],transparent:!0,opacity:0,blending:2,depthWrite:!1,depthTest:!0}));return n.userData.offset=t/c,n.userData.angle=t/c*Math.PI*2,n.userData.phase=a+t*1.13,u.add(n),n}),S=new X(new _a(.72,1,l),new ei({color:16757575,transparent:!0,opacity:0,blending:2,depthWrite:!1,depthTest:!0,side:2}));return S.position.copy(d).multiplyScalar(Mh*1.025),S.quaternion.setFromUnitVectors(new G(0,0,1),d),S.scale.setScalar(.1),u.add(S),u.userData={direction:d,tangent:p,bitangent:m,curve:v,height:n,width:r,bend:i,phase:a,core:h,arcParticles:b,ejectaParticles:x,shockWave:S},u}function Wh({world:e,hoverTargets:t,texture:n,quality:r=`high`}){let i=Nh[r]?r:`medium`,a=Nh[i],o=new Sn;o.name=`Sun system`;let s=n??wu(`sun`),c=new X(new va(Mh,...a.surfaceSegments),jh(s));c.name=`Sun`,c.userData={name:`Sun`,detail:`G-type star | 99.86% of solar system mass`,focusScale:1.2,visualRadius:Mh,focusVisualRadius:Mh*1.62,physicalDiameterKm:pu.Sun.diameterKm,diameterEarths:pu.Sun.diameterEarths,volumeEarths:pu.Sun.volumeEarths,sizeComparison:gu(`Sun`),minFocusDistance:pu.Sun.focusDistance*.88,focusDistance:pu.Sun.focusDistance,focusEase:.065,focusFov:34,info:{type:`Star`,diameter:`1,392,700 km`,orbitalSpeed:`System reference body`,distanceFromEarth:`≈ 149.6 million km`,sizeComparison:gu(`Sun`),description:`A living ocean of plasma whose magnetic storms, radiant light, and immense gravity sustain every world in this planetary system.`}},o.add(c);let l=new X(new va(Mh*1.012,...a.chromosphereSegments),Lh({color:16739352,intensity:.3,speed:.028,power:3.15,waveScale:18}));l.name=`Solar chromosphere`,o.add(l);let u=new X(new va(Mh*1.027,...a.innerCoronaSegments),Lh({color:16749599,intensity:.105,speed:.017,power:4.25,waveScale:11}));u.name=`Inner solar corona`;let d=new X(new va(Mh*1.046,...a.outerCoronaSegments),Lh({color:16762194,intensity:.032,speed:-.011,power:5.5,waveScale:8}));d.name=`Outer solar corona`,o.add(u,d);let f=Tu(),p=Bh(),m=new Wr(new Ar({map:f,color:16738328,transparent:!0,opacity:.024,blending:2,depthWrite:!1,depthTest:!0}));m.name=`Solar glow`,m.scale.set(Mh*2.1,Mh*2.1,1),o.add(m);let h=new Wr(new Ar({map:Ih(),color:16774351,transparent:!0,opacity:0,blending:2,depthWrite:!1,depthTest:!0}));h.name=`Distant solar star flare`,h.visible=!1,h.renderOrder=8,h.scale.set(1,1,1),o.add(h);let g=zh(a.spicules);o.add(g);let _=[{latitude:-24,longitude:18,height:1.75,bend:.42,phase:.4},{latitude:32,longitude:-48,height:1.15,bend:-.28,phase:1.9},{latitude:8,longitude:72,height:1.45,bend:.31,phase:3.2},{latitude:-46,longitude:-82,height:.95,bend:-.22,phase:4.5}].map(e=>Vh(e,p,a.jetParticles));o.add(..._);let v=[{angle:2.75,width:.25,height:1.65,tilt:.42,phase:1.2},{angle:5.35,width:.18,height:1.05,tilt:-.58,phase:4.1}].map(e=>Hh(e,p,a.loopParticles)),y=[{latitude:18,longitude:38,height:3.2,width:1.5,bend:.45,phase:.7},{latitude:-31,longitude:-62,height:2.4,width:1.1,bend:-.34,phase:3.4},{latitude:47,longitude:124,height:2.75,width:1.25,bend:.28,phase:6.2}].map(e=>Uh(e,p,{arcCount:a.flareArcParticles,ejectaCount:a.flareEjectaParticles,ringSegments:a.flareRingSegments}));o.add(...y),o.add(...v);let b=new ho(16768416,28e3,6500,1.28);return b.name=`Solar point light`,o.add(b),e.add(o),t.push(c),{system:o,surface:c,chromosphere:l,innerCorona:u,outerCorona:d,glow:m,distantStar:h,spicules:g,plasmaJets:_,coronalLoops:v,solarFlares:y,light:b,capacityQualityName:i,performanceSignature:``}}function Gh(e,t,{projectedRadiusPixels:n=1/0,focused:r=!1}={}){if(!e)return;let i=Ph[t]??Ph.medium,a=Ph[e.capacityQualityName]??Ph.medium,o=Math.min(1,i.detailRatio/a.detailRatio),s=r||n>=i.resolvePixels,c=r||n>=72,l=`${t}|${+!!s}|${+!!c}`;if(e.performanceSignature===l)return;e.performanceSignature=l;let u=e.spicules?.children?.[0];if(u){let e=u.userData.capacity??u.count;u.count=s?Math.max(1,Math.round(e*o)):0}e.spicules&&(e.spicules.visible=s);let d=s?Math.max(1,Math.ceil(e.plasmaJets.length*(c?o:o*.55))):0,f=s?Math.max(1,Math.ceil(e.coronalLoops.length*(c?o:o*.45))):0,p=s?Math.max(1,Math.ceil(e.solarFlares.length*(c?o:o*.34))):0;e.plasmaJets.forEach((e,t)=>{e.visible=t<d;let n=c?o:o*.62;e.userData.particles.forEach((e,t,r)=>{e.visible=t<Math.max(1,Math.round(r.length*n))})}),e.coronalLoops.forEach((e,t)=>{e.visible=t<f;let n=c?o:o*.58;e.userData.particles.forEach((e,t,r)=>{e.visible=t<Math.max(1,Math.round(r.length*n))})}),e.solarFlares.forEach((e,t)=>{e.visible=t<p;let n=c?o:o*.52;e.userData.arcParticles.forEach((e,t,r)=>{e.visible=t<Math.max(1,Math.round(r.length*n))}),e.userData.ejectaParticles.forEach((e,t,r)=>{e.visible=t<Math.max(1,Math.round(r.length*n))})})}function Kh(e,t,n=1){e.surface.rotation.y+=.00135*n,e.chromosphere.rotation.y-=42e-5*n,e.innerCorona.rotation.y+=25e-5*n,e.outerCorona.rotation.y-=14e-5*n,e.surface.material.uniforms?.uTime&&(e.surface.material.uniforms.uTime.value=t),e.chromosphere.material.uniforms?.uTime&&(e.chromosphere.material.uniforms.uTime.value=t),e.innerCorona.material.uniforms?.uTime&&(e.innerCorona.material.uniforms.uTime.value=t),e.outerCorona.material.uniforms?.uTime&&(e.outerCorona.material.uniforms.uTime.value=t);let r=1+Math.sin(t*.52)*.012;e.glow.scale.set(19.2*r,19.2*r,1),e.glow.material.opacity=.022+Math.sin(t*.67)*.0035,e.spicules.visible&&(e.spicules.rotation.y+=34e-5*n),e.spicules.visible&&(e.spicules.rotation.x=Math.sin(t*.11)*.005);let i=1+Math.sin(t*4.8)*.01;e.spicules.visible&&e.spicules.scale.setScalar(i);let a=e.spicules.children[0];e.spicules.visible&&a?.material&&(a.material.opacity=.15+Math.sin(t*5.2)*.024),e.plasmaJets.forEach(e=>{if(!e.visible)return;let{direction:n,tangent:r,height:i,bend:a,phase:o,particles:s,core:c}=e.userData;c.material.opacity=.25+Math.sin(t*2.8+o)*.09;let l=.39+Math.sin(t*3.4+o)*.055;c.scale.set(l,l,1),s.forEach(e=>{if(!e.visible)return;let s=(t*.072+e.userData.offset+o*.05)%1,c=Mh*1.008+s*i,l=Math.sin(Math.PI*s)*a;e.position.copy(n).multiplyScalar(c).addScaledVector(r,l);let u=Math.sin(Math.PI*s)*(1-s*.62),d=Math.sin(t*5.4+e.userData.phase)*u*.075;e.position.addScaledVector(r,d);let f=.78+Math.sin(t*6.2+e.userData.phase)*.22,p=(.09+u*.29)*(.88+f*.18);e.scale.set(p*1.1,p*(1.35+s*.55),1),e.material.opacity=u*(.3+f*.22)})}),e.coronalLoops.forEach(e=>{if(!e.visible)return;let{curve:n,particles:r,phase:i}=e.userData;r.forEach(e=>{if(!e.visible)return;let r=(e.userData.offset+t*.018)%1,a=n.getPoint(r,Fh),o=Math.sin(t*3.6+e.userData.phase+i)*.028;a.y+=o,e.position.copy(a);let s=Math.sin(Math.PI*r),c=.72+Math.sin(t*5.1+e.userData.phase)*.28,l=(.047+s*.125)*(.82+c*.25);e.scale.set(l,l*1.2,1),e.material.opacity=s*(.1+c*.22)})}),e.solarFlares.forEach(e=>{if(!e.visible)return;let{direction:r,tangent:i,bitangent:a,curve:o,height:s,phase:c,core:l,arcParticles:u,ejectaParticles:d,shockWave:f}=e.userData,p=(t*.055+c*.13)%1,m=U.smoothstep(p,.05,.18)*(1-U.smoothstep(p,.68,.96)),h=.72+Math.sin(t*9+c)*.28,g=.24+m*.52*h;l.scale.set(g,g,1),l.material.opacity=m*(.36+h*.38),u.forEach(e=>{if(!e.visible)return;let n=(e.userData.offset+t*.028)%1,i=o.getPoint(n,Fh),s=Math.sin(t*5.8+e.userData.phase)*.045;i.addScaledVector(a,s).addScaledVector(r,s*.25),e.position.copy(i);let c=Math.sin(Math.PI*n),l=.68+Math.sin(t*8.5+e.userData.phase)*.32,u=(.065+c*.17)*(.82+l*.35)*m;e.scale.set(u*1.12,u*1.55,1),e.material.opacity=c*m*(.18+l*.5)}),d.forEach(e=>{if(!e.visible)return;let n=(p+e.userData.offset*.42)%1,o=Math.sin(Math.PI*n),c=Mh*1.015+n*s*1.35,l=Math.sin(Math.PI*n)*(.18+n*.85),u=e.userData.angle;e.position.copy(r).multiplyScalar(c).addScaledVector(i,Math.cos(u)*l).addScaledVector(a,Math.sin(u)*l);let d=.66+Math.sin(t*7.2+e.userData.phase)*.34,f=(.035+o*.16)*d*m;e.scale.set(f,f*(1.25+n*.8),1),e.material.opacity=o*m*(.12+d*.34)});let _=U.clamp((p-.15)/.55,0,1),v=.2+_*3.8;f.scale.setScalar(v),f.material.opacity=Math.sin(Math.PI*_)*m*.16,f.rotation.z+=.0015*n})}function qh({readoutElement:e}){if(!e)return null;let t=document.createElement(`div`);t.className=`distance-cinematic-layer`,t.setAttribute(`aria-live`,`polite`),t.innerHTML=`
+    `,transparent:!0,blending:2,depthWrite:!1,depthTest:!0,side:1})}function Rh(e,t){let n=U.degToRad(90-e),r=U.degToRad(t);return new G(Math.sin(n)*Math.cos(r),Math.cos(n),Math.sin(n)*Math.sin(r))}function zh(e=560){let t=new Sn;t.name=`Solar spicules`;let n=new oa(.024,.34,4,1,!0),r=new ei({color:16777215,vertexColors:!0,transparent:!0,opacity:.18,blending:2,depthWrite:!1,depthTest:!0,side:2}),i=new G(0,1,0),a=new Ci(n,r,e);a.name=`Instanced solar spicules`;let o=new qt,s=new Tt,c=new G,l=new G,u=[new J(16728592),new J(16739608),new J(16751140),new J(16761677)];for(let t=0;t<e;t+=1){let n=1-t/(e-1)*2,r=Math.sqrt(1-n*n),d=t*Math.PI*(3-Math.sqrt(5)),f=new G(Math.cos(d)*r,n,Math.sin(d)*r),p=.1+t*37%41/41*.44;l.copy(f).multiplyScalar(Mh+p*.44),s.setFromUnitVectors(i,f),c.set(.44+t%4*.08,p/.34,.44+t%3*.09),o.compose(l,s,c),a.setMatrixAt(t,o),a.setColorAt(t,u[t%u.length])}return a.instanceMatrix.needsUpdate=!0,a.instanceColor&&(a.instanceColor.needsUpdate=!0),a.userData.capacity=e,t.add(a),t}function Bh(){let e=document.createElement(`canvas`);e.width=256,e.height=256;let t=e.getContext(`2d`);t.save(),t.translate(128,128),t.scale(.72,1);let n=t.createRadialGradient(0,0,0,0,0,128);n.addColorStop(0,`rgba(255, 255, 245, 1)`),n.addColorStop(.08,`rgba(255, 248, 205, 0.98)`),n.addColorStop(.2,`rgba(255, 205, 95, 0.92)`),n.addColorStop(.4,`rgba(255, 111, 22, 0.72)`),n.addColorStop(.64,`rgba(210, 38, 4, 0.34)`),n.addColorStop(.82,`rgba(105, 9, 0, 0.10)`),n.addColorStop(1,`rgba(0, 0, 0, 0)`),t.fillStyle=n,t.fillRect(-128,-128,256,256),t.restore();let r=new $i(e);return r.colorSpace=Re,r.minFilter=o,r.magFilter=o,r.generateMipmaps=!1,r}function Vh({latitude:e,longitude:t,height:n,bend:r,phase:i},a,o=42){let s=Rh(e,t),c=Math.abs(s.y)>.9?new G(1,0,0):new G(0,1,0),l=new G().crossVectors(c,s).normalize(),u=new Sn;u.name=`Solar plasma jet`;let d=[16725256,16731915,16740372,16751909,16762954,16777121],f=Array.from({length:o},(e,t)=>{let n=new Wr(new Ar({map:a,color:d[t%d.length],transparent:!0,opacity:0,blending:2,depthWrite:!1,depthTest:!0}));return n.userData.offset=t/o,n.userData.phase=i+t*1.17,u.add(n),n}),p=new Wr(new Ar({map:a,color:16777198,transparent:!0,opacity:.52,blending:2,depthWrite:!1,depthTest:!0}));return p.position.copy(s).multiplyScalar(Mh*1.008),p.scale.set(.46,.46,1),u.add(p),u.userData={direction:s,tangent:l,height:n,bend:r,phase:i,particles:f,core:p},u}function Hh({angle:e,width:t,height:n,tilt:r,phase:i},a,o=34){let s=e-t*.5,c=e+t*.5,l=(e,t=Mh*1.008)=>new G(Math.cos(e)*t,0,Math.sin(e)*t),u=l(s),d=l(c),f=(s+c)*.5,p=l(f-t*.18,Mh+n),m=l(f+t*.18,Mh+n);p.y=n*.2,m.y=n*.2;let h=new ma(u,p,m,d),g=new Sn;g.name=`Coronal loop`,g.rotation.x=r;let _=[16728848,16740635,16753712,16777123];return g.userData={curve:h,particles:Array.from({length:o},(e,t)=>{let n=new Wr(new Ar({map:a,color:_[t%_.length],transparent:!0,opacity:0,blending:2,depthWrite:!1,depthTest:!0}));return n.userData.offset=t/o,n.userData.phase=i+t*.93,g.add(n),n}),phase:i},g}function Uh({latitude:e,longitude:t,height:n,width:r,bend:i,phase:a},o,{arcCount:s=92,ejectaCount:c=34,ringSegments:l=96}={}){let u=new Sn;u.name=`Solar flare`;let d=Rh(e,t),f=Math.abs(d.y)>.88?new G(1,0,0):new G(0,1,0),p=new G().crossVectors(f,d).normalize(),m=new G().crossVectors(d,p).normalize(),h=new Wr(new Ar({map:o,color:16777170,transparent:!0,opacity:0,blending:2,depthWrite:!1,depthTest:!0}));h.position.copy(d).multiplyScalar(Mh*1.008),h.scale.set(.35,.35,1),u.add(h);let g=d.clone().multiplyScalar(Mh*1.01).addScaledVector(p,-r*.5),_=d.clone().multiplyScalar(Mh*1.01).addScaledVector(p,r*.5),v=new ma(g,d.clone().multiplyScalar(Mh+n).addScaledVector(p,-r*.2).addScaledVector(m,i),d.clone().multiplyScalar(Mh+n).addScaledVector(p,r*.2).addScaledVector(m,i),_),y=[16728592,16740120,16754221,16767068,16777156,16777215],b=Array.from({length:s},(e,t)=>{let n=new Wr(new Ar({map:o,color:y[t%y.length],transparent:!0,opacity:0,blending:2,depthWrite:!1,depthTest:!0}));return n.userData.offset=t/s,n.userData.phase=a+t*.63,u.add(n),n}),x=Array.from({length:c},(e,t)=>{let n=new Wr(new Ar({map:o,color:y[t%y.length],transparent:!0,opacity:0,blending:2,depthWrite:!1,depthTest:!0}));return n.userData.offset=t/c,n.userData.angle=t/c*Math.PI*2,n.userData.phase=a+t*1.13,u.add(n),n}),S=new X(new _a(.72,1,l),new ei({color:16757575,transparent:!0,opacity:0,blending:2,depthWrite:!1,depthTest:!0,side:2}));return S.position.copy(d).multiplyScalar(Mh*1.025),S.quaternion.setFromUnitVectors(new G(0,0,1),d),S.scale.setScalar(.1),u.add(S),u.userData={direction:d,tangent:p,bitangent:m,curve:v,height:n,width:r,bend:i,phase:a,core:h,arcParticles:b,ejectaParticles:x,shockWave:S},u}function Wh({world:e,hoverTargets:t,texture:n,quality:r=`high`}){let i=Nh[r]?r:`medium`,a=Nh[i],o=new Sn;o.name=`Sun system`;let s=n??wu(`sun`),c=new X(new va(Mh,...a.surfaceSegments),jh(s));c.name=`Sun`,c.userData={name:`Sun`,detail:`G-type star | 99.86% of solar system mass`,focusScale:1.2,visualRadius:Mh,focusVisualRadius:Mh*1.62,physicalDiameterKm:pu.Sun.diameterKm,diameterEarths:pu.Sun.diameterEarths,volumeEarths:pu.Sun.volumeEarths,sizeComparison:gu(`Sun`),minFocusDistance:pu.Sun.focusDistance*.88,focusDistance:pu.Sun.focusDistance,focusEase:.065,focusFov:34,info:{type:`Star`,diameter:`1,392,700 km`,orbitalSpeed:`System reference body`,distanceFromEarth:`≈ 149.6 million km`,sizeComparison:gu(`Sun`),description:`A living ocean of plasma whose magnetic storms, radiant light, and immense gravity sustain every world in this planetary system.`}},o.add(c);let l=new X(new va(Mh*1.012,...a.chromosphereSegments),Lh({color:16739146,intensity:.3,speed:.028,power:3.15,waveScale:18}));l.name=`Solar chromosphere`,o.add(l);let u=new X(new va(Mh*1.027,...a.innerCoronaSegments),Lh({color:16776178,intensity:.105,speed:.017,power:4.25,waveScale:11}));u.name=`Inner solar corona`;let d=new X(new va(Mh*1.046,...a.outerCoronaSegments),Lh({color:15003647,intensity:.032,speed:-.011,power:5.5,waveScale:8}));d.name=`Outer solar corona`,o.add(u,d);let f=Tu(),p=Bh(),m=new Wr(new Ar({map:f,color:16776692,transparent:!0,opacity:.024,blending:2,depthWrite:!1,depthTest:!0}));m.name=`Solar glow`,m.scale.set(Mh*2.1,Mh*2.1,1),o.add(m);let h=new Wr(new Ar({map:Ih(),color:16777215,transparent:!0,opacity:0,blending:2,depthWrite:!1,depthTest:!0}));h.name=`Distant solar star flare`,h.visible=!1,h.renderOrder=8,h.scale.set(1,1,1),o.add(h);let g=zh(a.spicules);o.add(g);let _=[{latitude:-24,longitude:18,height:1.75,bend:.42,phase:.4},{latitude:32,longitude:-48,height:1.15,bend:-.28,phase:1.9},{latitude:8,longitude:72,height:1.45,bend:.31,phase:3.2},{latitude:-46,longitude:-82,height:.95,bend:-.22,phase:4.5}].map(e=>Vh(e,p,a.jetParticles));o.add(..._);let v=[{angle:2.75,width:.25,height:1.65,tilt:.42,phase:1.2},{angle:5.35,width:.18,height:1.05,tilt:-.58,phase:4.1}].map(e=>Hh(e,p,a.loopParticles)),y=[{latitude:18,longitude:38,height:3.2,width:1.5,bend:.45,phase:.7},{latitude:-31,longitude:-62,height:2.4,width:1.1,bend:-.34,phase:3.4},{latitude:47,longitude:124,height:2.75,width:1.25,bend:.28,phase:6.2}].map(e=>Uh(e,p,{arcCount:a.flareArcParticles,ejectaCount:a.flareEjectaParticles,ringSegments:a.flareRingSegments}));o.add(...y),o.add(...v);let b=new ho(16777215,28e3,6500,1.28);return b.name=`Solar point light`,o.add(b),e.add(o),t.push(c),{system:o,surface:c,chromosphere:l,innerCorona:u,outerCorona:d,glow:m,distantStar:h,spicules:g,plasmaJets:_,coronalLoops:v,solarFlares:y,light:b,capacityQualityName:i,performanceSignature:``}}function Gh(e,t,{projectedRadiusPixels:n=1/0,focused:r=!1}={}){if(!e)return;let i=Ph[t]??Ph.medium,a=Ph[e.capacityQualityName]??Ph.medium,o=Math.min(1,i.detailRatio/a.detailRatio),s=r||n>=i.resolvePixels,c=r||n>=72,l=`${t}|${+!!s}|${+!!c}`;if(e.performanceSignature===l)return;e.performanceSignature=l;let u=e.spicules?.children?.[0];if(u){let e=u.userData.capacity??u.count;u.count=s?Math.max(1,Math.round(e*o)):0}e.spicules&&(e.spicules.visible=s);let d=s?Math.max(1,Math.ceil(e.plasmaJets.length*(c?o:o*.55))):0,f=s?Math.max(1,Math.ceil(e.coronalLoops.length*(c?o:o*.45))):0,p=s?Math.max(1,Math.ceil(e.solarFlares.length*(c?o:o*.34))):0;e.plasmaJets.forEach((e,t)=>{e.visible=t<d;let n=c?o:o*.62;e.userData.particles.forEach((e,t,r)=>{e.visible=t<Math.max(1,Math.round(r.length*n))})}),e.coronalLoops.forEach((e,t)=>{e.visible=t<f;let n=c?o:o*.58;e.userData.particles.forEach((e,t,r)=>{e.visible=t<Math.max(1,Math.round(r.length*n))})}),e.solarFlares.forEach((e,t)=>{e.visible=t<p;let n=c?o:o*.52;e.userData.arcParticles.forEach((e,t,r)=>{e.visible=t<Math.max(1,Math.round(r.length*n))}),e.userData.ejectaParticles.forEach((e,t,r)=>{e.visible=t<Math.max(1,Math.round(r.length*n))})})}function Kh(e,t,n=1){e.surface.rotation.y+=.00135*n,e.chromosphere.rotation.y-=42e-5*n,e.innerCorona.rotation.y+=25e-5*n,e.outerCorona.rotation.y-=14e-5*n,e.surface.material.uniforms?.uTime&&(e.surface.material.uniforms.uTime.value=t),e.chromosphere.material.uniforms?.uTime&&(e.chromosphere.material.uniforms.uTime.value=t),e.innerCorona.material.uniforms?.uTime&&(e.innerCorona.material.uniforms.uTime.value=t),e.outerCorona.material.uniforms?.uTime&&(e.outerCorona.material.uniforms.uTime.value=t);let r=1+Math.sin(t*.52)*.012;e.glow.scale.set(19.2*r,19.2*r,1),e.glow.material.opacity=.022+Math.sin(t*.67)*.0035,e.spicules.visible&&(e.spicules.rotation.y+=34e-5*n),e.spicules.visible&&(e.spicules.rotation.x=Math.sin(t*.11)*.005);let i=1+Math.sin(t*4.8)*.01;e.spicules.visible&&e.spicules.scale.setScalar(i);let a=e.spicules.children[0];e.spicules.visible&&a?.material&&(a.material.opacity=.15+Math.sin(t*5.2)*.024),e.plasmaJets.forEach(e=>{if(!e.visible)return;let{direction:n,tangent:r,height:i,bend:a,phase:o,particles:s,core:c}=e.userData;c.material.opacity=.25+Math.sin(t*2.8+o)*.09;let l=.39+Math.sin(t*3.4+o)*.055;c.scale.set(l,l,1),s.forEach(e=>{if(!e.visible)return;let s=(t*.072+e.userData.offset+o*.05)%1,c=Mh*1.008+s*i,l=Math.sin(Math.PI*s)*a;e.position.copy(n).multiplyScalar(c).addScaledVector(r,l);let u=Math.sin(Math.PI*s)*(1-s*.62),d=Math.sin(t*5.4+e.userData.phase)*u*.075;e.position.addScaledVector(r,d);let f=.78+Math.sin(t*6.2+e.userData.phase)*.22,p=(.09+u*.29)*(.88+f*.18);e.scale.set(p*1.1,p*(1.35+s*.55),1),e.material.opacity=u*(.3+f*.22)})}),e.coronalLoops.forEach(e=>{if(!e.visible)return;let{curve:n,particles:r,phase:i}=e.userData;r.forEach(e=>{if(!e.visible)return;let r=(e.userData.offset+t*.018)%1,a=n.getPoint(r,Fh),o=Math.sin(t*3.6+e.userData.phase+i)*.028;a.y+=o,e.position.copy(a);let s=Math.sin(Math.PI*r),c=.72+Math.sin(t*5.1+e.userData.phase)*.28,l=(.047+s*.125)*(.82+c*.25);e.scale.set(l,l*1.2,1),e.material.opacity=s*(.1+c*.22)})}),e.solarFlares.forEach(e=>{if(!e.visible)return;let{direction:r,tangent:i,bitangent:a,curve:o,height:s,phase:c,core:l,arcParticles:u,ejectaParticles:d,shockWave:f}=e.userData,p=(t*.055+c*.13)%1,m=U.smoothstep(p,.05,.18)*(1-U.smoothstep(p,.68,.96)),h=.72+Math.sin(t*9+c)*.28,g=.24+m*.52*h;l.scale.set(g,g,1),l.material.opacity=m*(.36+h*.38),u.forEach(e=>{if(!e.visible)return;let n=(e.userData.offset+t*.028)%1,i=o.getPoint(n,Fh),s=Math.sin(t*5.8+e.userData.phase)*.045;i.addScaledVector(a,s).addScaledVector(r,s*.25),e.position.copy(i);let c=Math.sin(Math.PI*n),l=.68+Math.sin(t*8.5+e.userData.phase)*.32,u=(.065+c*.17)*(.82+l*.35)*m;e.scale.set(u*1.12,u*1.55,1),e.material.opacity=c*m*(.18+l*.5)}),d.forEach(e=>{if(!e.visible)return;let n=(p+e.userData.offset*.42)%1,o=Math.sin(Math.PI*n),c=Mh*1.015+n*s*1.35,l=Math.sin(Math.PI*n)*(.18+n*.85),u=e.userData.angle;e.position.copy(r).multiplyScalar(c).addScaledVector(i,Math.cos(u)*l).addScaledVector(a,Math.sin(u)*l);let d=.66+Math.sin(t*7.2+e.userData.phase)*.34,f=(.035+o*.16)*d*m;e.scale.set(f,f*(1.25+n*.8),1),e.material.opacity=o*m*(.12+d*.34)});let _=U.clamp((p-.15)/.55,0,1),v=.2+_*3.8;f.scale.setScalar(v),f.material.opacity=Math.sin(Math.PI*_)*m*.16,f.rotation.z+=.0015*n})}function qh({readoutElement:e}){if(!e)return null;let t=document.createElement(`div`);t.className=`distance-cinematic-layer`,t.setAttribute(`aria-live`,`polite`),t.innerHTML=`
     <svg
       class="distance-cinematic-connector"
       aria-hidden="true"
