@@ -26,6 +26,8 @@ import {
   setAsteroidBeltQuality,
   setAsteroidInspectionDetail,
   updateAsteroidBelt,
+  updateAsteroidSpinClock,
+  updateJupiterTrojanFrame,
 } from './scene/asteroidBelt.js';
 import { createPlanet, updatePlanetVisuals } from './scene/planetFactory.js';
 import { PerformanceManager } from './performance/performanceManager.js';
@@ -2657,12 +2659,23 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
       updateFocusedSelectionVisual();
     }
 
+    // Asteroid self-rotation is cheap and does not change object positions, so
+    // keep its GPU clock smooth even when the heavier belt-orbit update is
+    // throttled on lower-performance devices.
+    updateAsteroidSpinClock(asteroidBelt, deltaTime, {
+      focusedBody,
+      hoveredBody: hoveredCelestialBody,
+    });
+    // Jupiter moves every frame, so its Trojan clouds must follow on the same
+    // clock. Keeping this tiny 84-object pass outside the throttled main-belt
+    // update removes stepping/flicker without weakening the performance manager.
+    updateJupiterTrojanFrame(asteroidBelt, jupiter);
+
     const asteroidDelta = performanceManager.consumeTaskDelta("asteroids", deltaTime);
     if (asteroidDelta > 0) {
       updateAsteroidBelt(
         asteroidBelt,
         motionScale * asteroidDelta * 60,
-        jupiter,
         camera,
         currentSunAngularRadius,
         {

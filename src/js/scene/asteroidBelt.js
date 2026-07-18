@@ -50,6 +50,25 @@ const ASTEROID_ENCOUNTER = Object.freeze({
   minimumMotionMultiplier: 0.25,
 });
 
+// Physical asteroid spin periods range from minutes to many days. Rendering
+// those values in literal real time would make almost every asteroid appear
+// motionless during a website visit, so the project preserves the *relative*
+// speed ordering while compressing periods into a readable cinematic range.
+// Orbital motion remains separately slowed near the belt for click stability;
+// self-rotation does not move an asteroid's centre, so it can stay visible.
+const ASTEROID_ROTATION = Object.freeze({
+  referencePhysicalHours: 6,
+  referenceVisualSeconds: 18,
+  minimumVisualSeconds: 4.8,
+  maximumVisualSeconds: 52,
+  fastRotatorChance: 0.0035,
+  slowRotatorChance: 0.15,
+  tumbleChance: 0.16,
+  encounterRateMultiplier: 0.88,
+  hoveredRateMultiplier: 0.78,
+  focusedRateMultiplier: 0.68,
+});
+
 const COMPOSITIONS = {
   S: {
     label: "S-type (silicate)",
@@ -113,6 +132,7 @@ const MAJOR_BODIES = [
     eccentricity: 0.075,
     inclination: 0.18,
     orbitalSpeed: 0.00052,
+    rotationPeriodHours: 9.074,
     archetype: "rounded",
     roundness: 0.82,
     description: "The largest body in the main belt and a dwarf planet, with a comparatively rounded shape and bright salt-bearing deposits.",
@@ -128,6 +148,7 @@ const MAJOR_BODIES = [
     eccentricity: 0.089,
     inclination: 0.12,
     orbitalSpeed: 0.00063,
+    rotationPeriodHours: 5.342,
     archetype: "basin",
     roundness: 0.38,
     description: "A differentiated rocky protoplanet with a basaltic crust and an enormous south-polar impact basin.",
@@ -143,6 +164,7 @@ const MAJOR_BODIES = [
     eccentricity: 0.23,
     inclination: 0.52,
     orbitalSpeed: 0.00049,
+    rotationPeriodHours: 7.813,
     archetype: "irregular",
     roundness: 0.28,
     description: "A large, heavily cratered body following one of the most inclined orbits among the major main-belt asteroids.",
@@ -158,6 +180,7 @@ const MAJOR_BODIES = [
     eccentricity: 0.12,
     inclination: 0.07,
     orbitalSpeed: 0.00043,
+    rotationPeriodHours: 13.83,
     archetype: "rounded",
     roundness: 0.72,
     description: "A very dark carbonaceous body and the largest member of the Hygiea collision family.",
@@ -173,6 +196,7 @@ const MAJOR_BODIES = [
     eccentricity: 0.14,
     inclination: 0.05,
     orbitalSpeed: 0.00058,
+    rotationPeriodHours: 4.196,
     archetype: "irregular",
     roundness: 0.22,
     description: "A large metal-rich asteroid whose exposed mixture of metal and silicate rock may preserve material from an early planetesimal.",
@@ -187,6 +211,11 @@ const _axisB = new THREE.Vector3();
 const _instanceMatrix = new THREE.Matrix4();
 const _instanceQuaternion = new THREE.Quaternion();
 const _instanceScale = new THREE.Vector3();
+const _spinQuaternion = new THREE.Quaternion();
+const _tumbleQuaternion = new THREE.Quaternion();
+const _combinedSpinQuaternion = new THREE.Quaternion();
+const _spinAxis = new THREE.Vector3();
+const _tumbleAxis = new THREE.Vector3();
 const _perlinNoise = new ImprovedNoise();
 const _surfaceColor = new THREE.Color();
 const _rustMineralColor = new THREE.Color(0x6d4938);
@@ -320,31 +349,71 @@ function createCompositionMaterials() {
 }
 
 /**
- * Adds a GPU-side local scale to an instanced rock material. Scaling happens
- * before the instance matrix is applied, so rock positions and orbital spacing
- * never move. The belt can therefore become readable near the camera without
- * expanding its orbit or rebuilding thousands of instance matrices.
+ * Adds GPU-side local scale and independent per-instance spin.
+ *
+ * Thousands of instance matrices remain static. The vertex shader rotates each
+ * rock around its own axis using compact per-instance attributes, avoiding a
+ * CPU loop and GPU buffer upload for every boulder on every frame.
  */
-function installInstancedAsteroidVisibilityScale(material) {
+function installInstancedAsteroidVisualMotion(material) {
   if (!material || material.userData?.asteroidVisibilityScaleUniform) return;
 
   const scaleUniform = { value: 1 };
+  const spinTimeUniform = { value: 0 };
   material.userData.asteroidVisibilityScaleUniform = scaleUniform;
+  material.userData.asteroidSpinTimeUniform = spinTimeUniform;
   const previousCompile = material.onBeforeCompile;
   material.onBeforeCompile = (shader, renderer) => {
     previousCompile?.(shader, renderer);
     shader.uniforms.uAsteroidVisualScale = scaleUniform;
+    shader.uniforms.uAsteroidSpinTime = spinTimeUniform;
     shader.vertexShader = shader.vertexShader
       .replace(
         "#include <common>",
-        "#include <common>\nuniform float uAsteroidVisualScale;",
+        `#include <common>
+        uniform float uAsteroidVisualScale;
+        uniform float uAsteroidSpinTime;
+        attribute vec3 aSpinAxis;
+        attribute vec3 aTumbleAxis;
+        attribute float aSpinRate;
+        attribute float aTumbleRate;
+        attribute float aSpinPhase;
+
+        vec3 rotateAsteroidVector(vec3 value, vec3 axis, float angle) {
+          // Axes are normalized once on the CPU; avoid a square root for every
+          // vertex of every asteroid on every frame.
+          vec3 safeAxis = axis;
+          float cosine = cos(angle);
+          float sine = sin(angle);
+          return value * cosine
+            + cross(safeAxis, value) * sine
+            + safeAxis * dot(safeAxis, value) * (1.0 - cosine);
+        }
+
+        vec3 applyAsteroidSpin(vec3 value) {
+          float spinAngle = aSpinPhase + uAsteroidSpinTime * aSpinRate;
+          vec3 rotated = rotateAsteroidVector(value, aSpinAxis, spinAngle);
+          if (abs(aTumbleRate) > 0.000001) {
+            float tumbleAngle = aSpinPhase * 0.618
+              + uAsteroidSpinTime * aTumbleRate;
+            rotated = rotateAsteroidVector(rotated, aTumbleAxis, tumbleAngle);
+          }
+          return rotated;
+        }`,
+      )
+      .replace(
+        "#include <beginnormal_vertex>",
+        `vec3 objectNormal = applyAsteroidSpin(vec3(normal));
+        #ifdef USE_TANGENT
+          vec3 objectTangent = applyAsteroidSpin(vec3(tangent.xyz));
+        #endif`,
       )
       .replace(
         "#include <begin_vertex>",
-        "vec3 transformed = vec3( position ) * uAsteroidVisualScale;",
+        "vec3 transformed = applyAsteroidSpin(vec3(position)) * uAsteroidVisualScale;",
       );
   };
-  material.customProgramCacheKey = () => "beyond-earth-instanced-asteroid-visibility-v1";
+  material.customProgramCacheKey = () => "beyond-earth-instanced-asteroid-motion-v2";
 }
 
 /** Creates a close-up stone material with no image-based surface shortcuts. */
@@ -372,6 +441,150 @@ function randomUnitVector(seed) {
     y,
     Math.sin(angle) * radius,
   ).normalize();
+}
+
+function randomPerpendicularUnitVector(axis, seed) {
+  const candidate = randomUnitVector(seed);
+  candidate.addScaledVector(axis, -candidate.dot(axis));
+  if (candidate.lengthSq() < 1e-6) {
+    candidate.set(Math.abs(axis.x) < 0.8 ? 1 : 0, Math.abs(axis.x) < 0.8 ? 0 : 1, 0);
+    candidate.addScaledVector(axis, -candidate.dot(axis));
+  }
+  return candidate.normalize();
+}
+
+function logarithmicRange(minimum, maximum, value) {
+  return Math.exp(THREE.MathUtils.lerp(
+    Math.log(Math.max(1e-6, minimum)),
+    Math.log(Math.max(minimum + 1e-6, maximum)),
+    THREE.MathUtils.clamp(value, 0, 1),
+  ));
+}
+
+/** Converts a physical period to a visible but still relatively ordered period. */
+function physicalPeriodToVisualSeconds(periodHours) {
+  const safeHours = Math.max(1.88 / 60, Number(periodHours) || ASTEROID_ROTATION.referencePhysicalHours);
+  const visualSeconds = ASTEROID_ROTATION.referenceVisualSeconds
+    * Math.sqrt(safeHours / ASTEROID_ROTATION.referencePhysicalHours);
+  return THREE.MathUtils.clamp(
+    visualSeconds,
+    ASTEROID_ROTATION.minimumVisualSeconds,
+    ASTEROID_ROTATION.maximumVisualSeconds,
+  );
+}
+
+function formatRotationPeriod(periodHours) {
+  const safeHours = Math.max(0, Number(periodHours) || 0);
+  if (safeHours < 1) {
+    return `${Math.max(1, safeHours * 60).toFixed(safeHours < 0.1 ? 2 : 1)} minutes`;
+  }
+  if (safeHours < 48) return `${safeHours.toFixed(safeHours < 10 ? 2 : 1)} hours`;
+  return `${(safeHours / 24).toFixed(1)} days`;
+}
+
+/**
+ * Builds a deterministic, physics-inspired spin profile.
+ *
+ * Most generated objects stay above the approximately 2.2-hour rubble-pile
+ * barrier. A very small tail represents cohesive super-fast rotators, while a
+ * second tail represents slow rotators. Irregular/rubble bodies are more likely
+ * to receive non-principal-axis tumbling.
+ */
+function createAsteroidSpinProfile({
+  seed,
+  diameterKm = null,
+  archetype = "irregular",
+  rotationPeriodHours = null,
+  rotationState = null,
+}) {
+  const physicalDiameter = Math.max(0, Number(diameterKm) || 0);
+  const sample = seededRandom(seed + 1701);
+  const fastChance = ASTEROID_ROTATION.fastRotatorChance
+    * (physicalDiameter > 0 && physicalDiameter < 2 ? 1.7 : 1);
+
+  let periodHours = Number(rotationPeriodHours);
+  let populationClass = "measured/assigned";
+
+  if (!Number.isFinite(periodHours) || periodHours <= 0) {
+    if (sample < fastChance) {
+      // 1.88 minutes is the current record for a >500 m asteroid; 2.18 hours
+      // keeps this synthetic tail just below the main-belt spin barrier.
+      periodHours = logarithmicRange(
+        1.88 / 60,
+        2.18,
+        seededRandom(seed + 1702),
+      );
+      populationClass = "rare super-fast rotator";
+    } else if (sample > 1 - ASTEROID_ROTATION.slowRotatorChance) {
+      periodHours = logarithmicRange(24, 144, seededRandom(seed + 1703));
+      populationClass = "slow rotator";
+    } else {
+      periodHours = logarithmicRange(2.25, 24, seededRandom(seed + 1704));
+      populationClass = "main rotation population";
+    }
+  }
+
+  const spinAxis = randomUnitVector(seed + 1711);
+  const tumbleAxis = randomPerpendicularUnitVector(spinAxis, seed + 1721);
+  const archetypeText = String(archetype).toLowerCase();
+  const shapeTumbleBonus = archetypeText.includes("rubble")
+    || archetypeText.includes("irregular")
+    || archetypeText.includes("fractured")
+    ? 0.08
+    : 0;
+  const slowTumbleBonus = periodHours >= 24 ? 0.07 : 0;
+  const veryFastPenalty = periodHours < 2.2 ? -0.11 : 0;
+  const tumbleProbability = THREE.MathUtils.clamp(
+    ASTEROID_ROTATION.tumbleChance + shapeTumbleBonus + slowTumbleBonus + veryFastPenalty,
+    0.025,
+    0.38,
+  );
+  const isTumbling = rotationState === "tumbling"
+    || (rotationState !== "principal-axis" && seededRandom(seed + 1731) < tumbleProbability);
+
+  const visualPeriodSeconds = physicalPeriodToVisualSeconds(periodHours);
+  const direction = seededRandom(seed + 1741) < 0.5 ? -1 : 1;
+  const radiansPerSecond = direction * Math.PI * 2 / visualPeriodSeconds;
+  const tumbleDirection = seededRandom(seed + 1742) < 0.5 ? -1 : 1;
+  const tumbleRadiansPerSecond = isTumbling
+    ? tumbleDirection * Math.abs(radiansPerSecond)
+      * (0.11 + seededRandom(seed + 1743) * 0.19)
+    : 0;
+  const stateLabel = isTumbling
+    ? "Non-principal-axis tumbling"
+    : "Principal-axis rotation";
+
+  return {
+    axis: spinAxis.toArray(),
+    tumbleAxis: tumbleAxis.toArray(),
+    radiansPerSecond,
+    tumbleRadiansPerSecond,
+    phase: seededRandom(seed + 1751) * Math.PI * 2,
+    physicalPeriodHours: periodHours,
+    visualPeriodSeconds,
+    isTumbling,
+    stateLabel,
+    populationClass,
+  };
+}
+
+function composeAsteroidSpinQuaternion(target, profile, elapsedSeconds) {
+  if (!profile) return target.identity();
+  _spinAxis.fromArray(profile.axis ?? [0, 1, 0]).normalize();
+  _tumbleAxis.fromArray(profile.tumbleAxis ?? [1, 0, 0]).normalize();
+  _spinQuaternion.setFromAxisAngle(
+    _spinAxis,
+    Number(profile.phase ?? 0) + Number(profile.radiansPerSecond ?? 0) * elapsedSeconds,
+  );
+  if (Math.abs(Number(profile.tumbleRadiansPerSecond ?? 0)) > 1e-8) {
+    _tumbleQuaternion.setFromAxisAngle(
+      _tumbleAxis,
+      Number(profile.phase ?? 0) * 0.618
+        + Number(profile.tumbleRadiansPerSecond) * elapsedSeconds,
+    );
+    return target.copy(_tumbleQuaternion).multiply(_spinQuaternion);
+  }
+  return target.copy(_spinQuaternion);
 }
 
 /**
@@ -581,6 +794,8 @@ function attachAsteroidMetadata(object, {
   diameter,
   semiMajor,
   orbitalSpeed,
+  rotationPeriodHours = null,
+  rotationState = "Principal-axis rotation",
   description,
   family = "Background population",
   population = "Main belt",
@@ -591,6 +806,11 @@ function attachAsteroidMetadata(object, {
 }) {
   const compositionData = COMPOSITIONS[composition];
   const physicalDiameterKm = parseDiameterKm(diameter);
+  const safeRotationPeriodHours = Number(rotationPeriodHours);
+  const rotationPeriodText = Number.isFinite(safeRotationPeriodHours)
+    && safeRotationPeriodHours > 0
+      ? formatRotationPeriod(safeRotationPeriodHours)
+      : "Unknown";
   const sizeComparison = physicalDiameterKm
     ? getSizeComparisonText({ diameterKm: physicalDiameterKm, name })
     : "Scale comparison unavailable";
@@ -618,6 +838,10 @@ function attachAsteroidMetadata(object, {
     isAsteroid: true,
     visualRadius,
     physicalDiameterKm,
+    rotationPeriodHours: Number.isFinite(safeRotationPeriodHours)
+      ? safeRotationPeriodHours
+      : null,
+    rotationState,
     diameterEarths: physicalDiameterKm ? physicalDiameterKm / 12_756 : null,
     volumeEarths: physicalDiameterKm ? Math.pow(physicalDiameterKm / 12_756, 3) : null,
     sizeComparison,
@@ -633,11 +857,12 @@ function attachAsteroidMetadata(object, {
       type: population === "Trojan cloud" ? "Jupiter Trojan asteroid" : "Asteroid",
       diameter,
       orbitalSpeed,
+      rotationPeriod: rotationPeriodText,
       distanceFromEarth: population === "Trojan cloud"
         ? "Near Jupiter's orbit; distance from Earth continuously varies"
         : `≈ ${au.toFixed(2)} AU from the Sun; distance from Earth continuously varies`,
       sizeComparison,
-      description: `${description} Composition: ${compositionData.density}. Shape: ${archetype}. Orbital group: ${family}.`,
+      description: `${description} Composition: ${compositionData.density}. Shape: ${archetype}. Orbital group: ${family}. Rotation: ${rotationPeriodText}, ${rotationState.toLowerCase()}.`,
     },
   };
 }
@@ -806,13 +1031,27 @@ export function setAsteroidInspectionDetail(target, active) {
     detailGroup.scale.copy(target.userData.instanceScale).multiplyScalar(
       Number(mesh.userData.visualScaleFactor ?? 1),
     );
+    composeAsteroidSpinQuaternion(
+      detailGroup.quaternion,
+      record.spinProfile,
+      Number(mesh.material?.userData?.asteroidSpinTimeUniform?.value ?? 0),
+    );
     detailGroup.visible = false;
     target.add(detailGroup);
     target.userData.focusDetail = detailGroup;
   }
 
   const detailGroup = target.userData.focusDetail;
-  if (detailGroup) detailGroup.visible = active;
+  if (detailGroup) {
+    if (active) {
+      composeAsteroidSpinQuaternion(
+        detailGroup.quaternion,
+        record.spinProfile,
+        Number(mesh.material?.userData?.asteroidSpinTimeUniform?.value ?? 0),
+      );
+    }
+    detailGroup.visible = active;
+  }
 
   // Collapse only the selected low-detail instance so it cannot intersect the
   // high-detail replacement. Its exact matrix is restored on focus exit.
@@ -881,6 +1120,8 @@ function createAsteroidObject({
   archetype,
   surfaceBoulders = 0,
   heliocentricAU = null,
+  rotationPeriodHours = null,
+  rotationState = null,
 }) {
   const compositionData = COMPOSITIONS[composition];
   const chosenArchetype = archetype
@@ -944,12 +1185,22 @@ function createAsteroidObject({
 
   positionFromOrbit(group.position, orbit, orbit.angle);
 
+  const spinProfile = createAsteroidSpinProfile({
+    seed: index,
+    diameterKm: physicalDiameterKm,
+    archetype: chosenArchetype,
+    rotationPeriodHours,
+    rotationState,
+  });
+
   attachAsteroidMetadata(group, {
     name,
     composition,
     diameter,
     semiMajor: orbit.semiMajor,
     orbitalSpeed: `${(14 + seededRandom(index + 90) * 7).toFixed(1)} km/s`,
+    rotationPeriodHours: spinProfile.physicalPeriodHours,
+    rotationState: spinProfile.stateLabel,
     description,
     family,
     population,
@@ -960,11 +1211,8 @@ function createAsteroidObject({
   });
 
   group.userData.orbit = orbit;
-  group.userData.spin = new THREE.Vector3(
-    (seededRandom(index + 71) - 0.5) * 0.006,
-    (seededRandom(index + 72) - 0.5) * 0.007,
-    (seededRandom(index + 73) - 0.5) * 0.005,
-  );
+  group.userData.spinProfile = spinProfile;
+  group.userData.baseQuaternion = group.quaternion.clone();
   group.userData.core = core;
   group.userData.archetype = chosenArchetype;
   return group;
@@ -1063,7 +1311,7 @@ function createInstancedBoulderField(materials, density = 1) {
         variant,
       );
       const material = materials[composition][variant].clone();
-      installInstancedAsteroidVisibilityScale(material);
+      installInstancedAsteroidVisualMotion(material);
       // Geometry and vertex colour now carry the detail; no UV colour/bump map
       // is allowed to paint ripples or repeated circular marks onto the stone.
       material.envMapIntensity = composition === "M" ? 0.12 : 0.025;
@@ -1072,6 +1320,11 @@ function createInstancedBoulderField(materials, density = 1) {
       const mesh = new THREE.InstancedMesh(geometry, material, count);
       const dummy = new THREE.Object3D();
       const instanceRecords = new Array(count);
+      const spinAxes = new Float32Array(count * 3);
+      const tumbleAxes = new Float32Array(count * 3);
+      const spinRates = new Float32Array(count);
+      const tumbleRates = new Float32Array(count);
+      const spinPhases = new Float32Array(count);
 
       let accepted = 0;
       let attempt = 0;
@@ -1146,6 +1399,17 @@ function createInstancedBoulderField(materials, density = 1) {
             : variant === 0
               ? "Elongated stony body"
               : "Angular silicate body";
+        const spinProfile = createAsteroidSpinProfile({
+          seed,
+          diameterKm: estimatedDiameter,
+          archetype,
+        });
+        const spinAttributeIndex = accepted * 3;
+        spinAxes.set(spinProfile.axis, spinAttributeIndex);
+        tumbleAxes.set(spinProfile.tumbleAxis, spinAttributeIndex);
+        spinRates[accepted] = spinProfile.radiansPerSecond;
+        tumbleRates[accepted] = spinProfile.tumbleRadiansPerSecond;
+        spinPhases[accepted] = spinProfile.phase;
         instanceRecords[accepted] = {
           name: `${composition}-class asteroid ${String(compositionIndex + 1)}-${String(variant + 1)}-${String(accepted + 1).padStart(4, "0")}`,
           composition,
@@ -1160,9 +1424,33 @@ function createInstancedBoulderField(materials, density = 1) {
           visualRadius,
           geometrySeed: seed,
           variant,
+          rotationPeriodHours: spinProfile.physicalPeriodHours,
+          rotationState: spinProfile.stateLabel,
+          spinProfile,
         };
         accepted += 1;
       }
+
+      geometry.setAttribute(
+        "aSpinAxis",
+        new THREE.InstancedBufferAttribute(spinAxes, 3),
+      );
+      geometry.setAttribute(
+        "aTumbleAxis",
+        new THREE.InstancedBufferAttribute(tumbleAxes, 3),
+      );
+      geometry.setAttribute(
+        "aSpinRate",
+        new THREE.InstancedBufferAttribute(spinRates, 1),
+      );
+      geometry.setAttribute(
+        "aTumbleRate",
+        new THREE.InstancedBufferAttribute(tumbleRates, 1),
+      );
+      geometry.setAttribute(
+        "aSpinPhase",
+        new THREE.InstancedBufferAttribute(spinPhases, 1),
+      );
 
       mesh.instanceMatrix.needsUpdate = true;
       if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
@@ -1508,6 +1796,8 @@ export function createAsteroidBelt({ world, hoverTargets = [], quality = "high" 
       archetype: body.archetype,
       surfaceBoulders: body.name === "Ceres" ? 6 : body.name === "Vesta" ? 9 : 7,
       heliocentricAU: body.heliocentricAU,
+      rotationPeriodHours: body.rotationPeriodHours,
+      rotationState: "principal-axis",
     });
     mainBelt.add(rock);
     rocks.push(rock);
@@ -1641,12 +1931,16 @@ export function createAsteroidBelt({ world, hoverTargets = [], quality = "high" 
   // screen-space helper above once they are actually large enough to see.
   hoverTargets.push(...rocks);
   const visibilityMaterials = collectAsteroidVisibilityMaterials(system);
+  const trojanRocks = rocks.filter((rock) => (
+    rock.userData?.info?.type === "Jupiter Trojan asteroid"
+  ));
 
   return {
     system,
     mainBelt,
     trojans,
     rocks,
+    trojanRocks,
     instancedBoulderField,
     instancedBoulders,
     distantDebris,
@@ -1654,6 +1948,7 @@ export function createAsteroidBelt({ world, hoverTargets = [], quality = "high" 
     capacityQualityName: initialQuality,
     encounterIntensity: 0,
     targetEncounterIntensity: 0,
+    spinElapsedSeconds: 0,
   };
 }
 
@@ -1761,18 +2056,120 @@ function applyAsteroidEncounterVisibility(asteroidBelt, intensity) {
   });
 }
 
-/** Advances the orbit and spin of every resolved asteroid. */
+/**
+ * Advances only the asteroid self-rotation clock.
+ *
+ * This lightweight function is called every rendered frame so GPU-instanced
+ * rocks rotate smoothly even when orbital calculations are throttled by the
+ * Performance Manager. Hover/focus slows spin only slightly; unlike orbiting,
+ * spinning around the object's own centre cannot make it escape the cursor.
+ */
+export function updateAsteroidSpinClock(
+  asteroidBelt,
+  deltaSeconds = 1 / 60,
+  interactionState = {},
+) {
+  if (!asteroidBelt) return;
+
+  const safeDelta = THREE.MathUtils.clamp(Number(deltaSeconds) || 0, 0, 0.05);
+  const focusedAsteroid = isAsteroidInteractionBody(interactionState.focusedBody);
+  const hoveredAsteroid = !focusedAsteroid
+    && isAsteroidInteractionBody(interactionState.hoveredBody);
+  const interactionMultiplier = focusedAsteroid
+    ? ASTEROID_ROTATION.focusedRateMultiplier
+    : hoveredAsteroid
+      ? ASTEROID_ROTATION.hoveredRateMultiplier
+      : 1;
+  const encounterMultiplier = THREE.MathUtils.lerp(
+    1,
+    ASTEROID_ROTATION.encounterRateMultiplier,
+    THREE.MathUtils.clamp(Number(asteroidBelt.encounterIntensity ?? 0), 0, 1),
+  );
+
+  asteroidBelt.spinElapsedSeconds = Number(asteroidBelt.spinElapsedSeconds ?? 0)
+    + safeDelta * interactionMultiplier * encounterMultiplier;
+  const spinTime = asteroidBelt.spinElapsedSeconds;
+
+  // Keep the asteroid currently under inspection perfectly smooth even when
+  // the rest of the resolved population is updating at a lower quality-tier
+  // frequency. Instanced inspection details are handled below.
+  const priorityResolvedBodies = new Set([
+    interactionState.focusedBody,
+    interactionState.hoveredBody,
+  ]);
+  priorityResolvedBodies.forEach((body) => {
+    if (!body?.userData?.isAsteroid || body.userData.isInstancedAsteroid) return;
+    composeAsteroidSpinQuaternion(
+      _combinedSpinQuaternion,
+      body.userData.spinProfile,
+      spinTime,
+    );
+    body.quaternion
+      .copy(body.userData.baseQuaternion ?? _instanceQuaternion.identity())
+      .multiply(_combinedSpinQuaternion);
+  });
+
+  asteroidBelt.instancedBoulders?.forEach((mesh) => {
+    const spinUniform = mesh.material?.userData?.asteroidSpinTimeUniform;
+    if (spinUniform) spinUniform.value = spinTime;
+
+    // Only cached, currently visible inspection models need a CPU quaternion.
+    // The many normal boulders continue rotating entirely in the vertex shader.
+    mesh.userData.inspectionTargets?.forEach((target) => {
+      const detailGroup = target.userData.focusDetail;
+      if (!detailGroup?.visible) return;
+      composeAsteroidSpinQuaternion(
+        detailGroup.quaternion,
+        target.userData.instanceRecord?.spinProfile,
+        spinTime,
+      );
+    });
+  });
+}
+
+/**
+ * Keeps Jupiter Trojan asteroids visually continuous between throttled belt updates.
+ *
+ * Runtime quality tiers may update the full asteroid system at 20-30 Hz. The
+ * Trojan clouds are locked to Jupiter, which itself moves every rendered frame;
+ * updating these small nearby rocks only on the slower belt clock can make their
+ * positions and lighting jump, which reads as flicker. This lightweight pass
+ * updates only the 84 Trojan bodies every frame, preserving the broader
+ * Performance Manager throttling for the dense main belt.
+ */
+export function updateJupiterTrojanFrame(asteroidBelt, jupiter = null) {
+  if (!asteroidBelt?.trojanRocks?.length || !jupiter) return;
+
+  const jupiterAngle = Number(jupiter.userData?.angle ?? 0);
+  const spinTime = Number(asteroidBelt.spinElapsedSeconds ?? 0);
+
+  asteroidBelt.trojanRocks.forEach((rock) => {
+    const orbit = rock.userData?.orbit;
+    if (!orbit || orbit.trojanOffset === undefined) return;
+
+    orbit.angle = jupiterAngle + orbit.trojanOffset + orbit.trojanSpread;
+    positionFromOrbit(rock.position, orbit, orbit.angle);
+    composeAsteroidSpinQuaternion(
+      _combinedSpinQuaternion,
+      rock.userData.spinProfile,
+      spinTime,
+    );
+    rock.quaternion
+      .copy(rock.userData.baseQuaternion ?? _instanceQuaternion.identity())
+      .multiply(_combinedSpinQuaternion);
+  });
+}
+
+/** Advances asteroid orbits and synchronizes resolved-body spin orientation. */
 export function updateAsteroidBelt(
   asteroidBelt,
   motionScale = 1,
-  jupiter = null,
   camera = null,
   sunAngularRadius = 0,
   interactionState = {},
 ) {
   if (!asteroidBelt) return;
 
-  const jupiterAngle = jupiter?.userData?.angle ?? 0;
   const interactionStrength = isAsteroidInteractionBody(interactionState.focusedBody)
     ? 1
     : isAsteroidInteractionBody(interactionState.hoveredBody)
@@ -1808,22 +2205,28 @@ export function updateAsteroidBelt(
     ASTEROID_ENCOUNTER.minimumMotionMultiplier,
     asteroidBelt.encounterIntensity,
   );
+  const spinTime = Number(asteroidBelt.spinElapsedSeconds ?? 0);
 
   asteroidBelt.rocks.forEach((rock) => {
     const orbit = rock.userData.orbit;
     if (!orbit) return;
 
-    if (orbit.trojanOffset !== undefined) {
-      orbit.angle = jupiterAngle + orbit.trojanOffset + orbit.trojanSpread;
-    } else {
-      orbit.meanAnomaly = (orbit.meanAnomaly ?? orbit.angle ?? 0) + orbit.speed * beltMotionScale;
-      orbit.angle = asteroidTrueAnomalyFromMean(orbit.meanAnomaly, orbit.eccentricity ?? 0);
-    }
+    // Trojan positions and spin are synchronized every rendered frame by
+    // updateJupiterTrojanFrame(), avoiding 20-30 Hz stepping near Jupiter.
+    if (orbit.trojanOffset !== undefined) return;
+
+    orbit.meanAnomaly = (orbit.meanAnomaly ?? orbit.angle ?? 0) + orbit.speed * beltMotionScale;
+    orbit.angle = asteroidTrueAnomalyFromMean(orbit.meanAnomaly, orbit.eccentricity ?? 0);
 
     positionFromOrbit(rock.position, orbit, orbit.angle);
-    rock.rotation.x += rock.userData.spin.x * beltMotionScale;
-    rock.rotation.y += rock.userData.spin.y * beltMotionScale;
-    rock.rotation.z += rock.userData.spin.z * beltMotionScale;
+    composeAsteroidSpinQuaternion(
+      _combinedSpinQuaternion,
+      rock.userData.spinProfile,
+      spinTime,
+    );
+    rock.quaternion
+      .copy(rock.userData.baseQuaternion ?? _instanceQuaternion.identity())
+      .multiply(_combinedSpinQuaternion);
   });
 
   // Each instanced population band advances at a slightly different rate. The
