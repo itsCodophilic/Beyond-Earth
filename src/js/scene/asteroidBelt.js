@@ -23,12 +23,17 @@ const BELT_INNER_RADIUS = 44 * SOLAR_ORBIT_SCALE;
 const BELT_OUTER_RADIUS = 52 * SOLAR_ORBIT_SCALE;
 const JUPITER_ORBIT_RADIUS = 75 * SOLAR_ORBIT_SCALE;
 
+// Neutral inspection lighting is isolated to this layer. Focused asteroid meshes
+// keep layer 0 for normal rendering and temporarily enable this extra layer,
+// preventing the inspection fill from illuminating the entire dense belt.
+export const ASTEROID_INSPECTION_LAYER = 7;
+
 // Rendering one mesh for every real asteroid would overwhelm both the CPU and
 // the browser's memory. These two layers preserve the *visual population* of
 // the million-plus-object belt while keeping the number of draw calls tiny:
 // instanced rocks are genuine 3D geometry, and point-sized pebbles fill the
 // far distance where individual geometry would occupy less than one pixel.
-const INSTANCED_BOULDER_COUNTS = { C: 7000, S: 5000, M: 2500 };
+const INSTANCED_BOULDER_COUNTS = { C: 9000, S: 4000, M: 1500 };
 const UNRESOLVED_PEBBLE_COUNT = 120000;
 
 const ASTEROID_QUALITY_PRESETS = Object.freeze({
@@ -73,9 +78,9 @@ const COMPOSITIONS = {
   S: {
     label: "S-type (silicate)",
     description: "A stony inner-belt asteroid rich in silicate minerals, magnesium, and nickel-iron.",
-    baseColors: ["#4e4842", "#807364", "#242321"],
+    baseColors: ["#5b5650", "#8b7765", "#38332d"],
     roughness: 0.88,
-    metalness: 0.035,
+    metalness: 0.03,
     bumpScale: 0.14,
     density: "Silicate and nickel-iron",
     archetypes: ["elongated", "fractured", "irregular"],
@@ -83,9 +88,9 @@ const COMPOSITIONS = {
   M: {
     label: "M-type (metallic)",
     description: "A dense metal-rich asteroid containing substantial iron and nickel with rocky inclusions.",
-    baseColors: ["#3b3d3c", "#716c62", "#1b1e1e"],
-    roughness: 0.58,
-    metalness: 0.36,
+    baseColors: ["#4b4d4b", "#7d766e", "#2b2d2d"],
+    roughness: 0.62,
+    metalness: 0.28,
     bumpScale: 0.11,
     density: "Iron-nickel metal mixed with silicate rock",
     archetypes: ["rounded", "elongated", "fractured"],
@@ -93,8 +98,8 @@ const COMPOSITIONS = {
   C: {
     label: "C-type (carbonaceous)",
     description: "A dark primitive asteroid rich in carbon compounds, hydrated minerals, and possible water-bearing material.",
-    baseColors: ["#121412", "#302d27", "#070908"],
-    roughness: 0.94,
+    baseColors: ["#1b1e1d", "#3b3832", "#0b0d0d"],
+    roughness: 0.95,
     metalness: 0.005,
     bumpScale: 0.16,
     density: "Carbon-rich hydrated rock",
@@ -114,11 +119,59 @@ const COMPOSITION_PALETTES = Object.fromEntries(
 // The Sun is intentionally extremely bright in this cinematic scene. These
 // neutral multipliers keep asteroid albedo within realistic dark-stone ranges
 // instead of letting direct solar illumination bleach every rock to white.
-const COMPOSITION_EXPOSURE = {
-  C: new THREE.Color(0x51584f),
-  S: new THREE.Color(0x786b5c),
-  M: new THREE.Color(0x696b67),
-};
+
+
+// Built-in StandardMaterial multiplies material colour, vertex colour, and
+// InstancedMesh colour together. Keep the base material neutral so the
+// composition-specific vertex and instance colours are not multiplied into
+// the same muddy brown. Emissive colours are intentionally very subtle: they
+// preserve class separation at distance without making asteroids self-lit.
+const COMPOSITION_EMISSIVE = Object.freeze({
+  C: 0x070a08,
+  S: 0x100906,
+  M: 0x0b0d0e,
+});
+
+const COMPOSITION_ENCOUNTER_EMISSIVE = Object.freeze({
+  C: new THREE.Color(0x465149),
+  S: new THREE.Color(0x886651),
+  M: new THREE.Color(0x747c7c),
+});
+
+// Focused asteroids are viewed extremely close to the camera while the Sun's
+// warm point light remains physically present in the scene. Without a neutral
+// inspection correction, that warm light overwhelms the subtle C/S/M albedo
+// differences and makes every body appear yellow-brown. These values preserve
+// normal PBR shading while restoring each composition's intended identity.
+const FOCUSED_COMPOSITION_APPEARANCE = Object.freeze({
+  C: Object.freeze({
+    neutralAlbedo: new THREE.Color(0x7a857e),
+    emissive: new THREE.Color(0x26312c),
+    emissiveIntensity: 0.44,
+    albedoMix: 0.30,
+    roughnessFloor: 0.92,
+    metalnessCeiling: 0.015,
+    environmentIntensity: 0.018,
+  }),
+  S: Object.freeze({
+    neutralAlbedo: new THREE.Color(0x8c735f),
+    emissive: new THREE.Color(0x36271f),
+    emissiveIntensity: 0.30,
+    albedoMix: 0.22,
+    roughnessFloor: 0.86,
+    metalnessCeiling: 0.035,
+    environmentIntensity: 0.025,
+  }),
+  M: Object.freeze({
+    neutralAlbedo: new THREE.Color(0x81898a),
+    emissive: new THREE.Color(0x303a3c),
+    emissiveIntensity: 0.42,
+    albedoMix: 0.34,
+    roughnessFloor: 0.70,
+    metalnessCeiling: 0.20,
+    environmentIntensity: 0.075,
+  }),
+});
 
 const MAJOR_BODIES = [
   {
@@ -211,6 +264,8 @@ const _axisB = new THREE.Vector3();
 const _instanceMatrix = new THREE.Matrix4();
 const _instanceQuaternion = new THREE.Quaternion();
 const _instanceScale = new THREE.Vector3();
+const _hoverProjectedPosition = new THREE.Vector3();
+const _hoverCameraPosition = new THREE.Vector3();
 const _spinQuaternion = new THREE.Quaternion();
 const _tumbleQuaternion = new THREE.Quaternion();
 const _combinedSpinQuaternion = new THREE.Quaternion();
@@ -219,7 +274,14 @@ const _tumbleAxis = new THREE.Vector3();
 const _perlinNoise = new ImprovedNoise();
 const _surfaceColor = new THREE.Color();
 const _rustMineralColor = new THREE.Color(0x6d4938);
-const _metalMineralColor = new THREE.Color(0x81786c);
+const _silicateOliveColor = new THREE.Color(0x6b6656);
+const _hydratedMineralColor = new THREE.Color(0x536057);
+const _carbonDustColor = new THREE.Color(0x2d2b27);
+const _metalMineralColor = new THREE.Color(0x8a8379);
+const _metalOxideColor = new THREE.Color(0x6f5746);
+const _instanceTintColor = new THREE.Color();
+const _focusedInstanceTintColor = new THREE.Color();
+const SURFACE_FRAGMENT_GEOMETRY_CACHE = new Map();
 
 /** Stable pseudo-random value from any numeric seed. */
 function seededRandom(seed) {
@@ -281,18 +343,42 @@ function writeSurfaceColor(target, composition, direction, seed, craterShade = 0
   );
 
   target.copy(palette[0]);
-  target.lerp(palette[1], THREE.MathUtils.smoothstep(broad, 0.28, 0.78) * 0.72);
-  target.lerp(palette[2], THREE.MathUtils.smoothstep(mineral, 0.48, 0.82) * 0.55);
+  target.lerp(palette[1], THREE.MathUtils.smoothstep(broad, 0.24, 0.80) * 0.74);
+  target.lerp(palette[2], THREE.MathUtils.smoothstep(mineral, 0.44, 0.84) * 0.58);
 
-  if (composition === "S" && grain > 0.72) {
-    target.lerp(_rustMineralColor, (grain - 0.72) * 0.65);
-  } else if (composition === "M" && mineral > 0.68) {
-    target.lerp(_metalMineralColor, (mineral - 0.68) * 0.52);
+  if (composition === "C") {
+    if (mineral > 0.56) {
+      target.lerp(_hydratedMineralColor, (mineral - 0.56) * 0.34);
+    }
+    if (grain > 0.70) {
+      target.lerp(_carbonDustColor, (grain - 0.70) * 0.40);
+    }
+  } else if (composition === "S") {
+    if (grain > 0.66) {
+      target.lerp(_rustMineralColor, (grain - 0.66) * 0.68);
+    }
+    if (broad < 0.36) {
+      target.lerp(_silicateOliveColor, (0.36 - broad) * 0.36);
+    }
+  } else if (composition === "M") {
+    if (mineral > 0.54) {
+      target.lerp(_metalMineralColor, (mineral - 0.54) * 0.50);
+    }
+    if (grain > 0.70) {
+      target.lerp(_metalOxideColor, (grain - 0.70) * 0.42);
+    }
   }
 
-  const brightness = 0.72 + broad * 0.42 + (grain - 0.5) * 0.13
-    - craterShade * 0.34 + rimLight * 0.14;
-  target.multiplyScalar(THREE.MathUtils.clamp(brightness, 0.38, 1.16));
+  const compositionBrightness = composition === "C"
+    ? 0.88
+    : composition === "M"
+      ? 0.98
+      : 1;
+  const brightness = (
+    0.66 + broad * 0.36 + (grain - 0.5) * 0.12
+    - craterShade * 0.34 + rimLight * 0.14
+  ) * compositionBrightness;
+  target.multiplyScalar(THREE.MathUtils.clamp(brightness, 0.30, 1.12));
   return target;
 }
 
@@ -322,9 +408,56 @@ function isInsideKirkwoodGap(radius) {
 function compositionForRadius(radius, seed) {
   const au = radiusToAU(radius);
   const random = seededRandom(seed);
-  if (au < 2.55) return random < 0.82 ? "S" : "M";
-  if (au < 2.85) return random < 0.48 ? "M" : random < 0.78 ? "S" : "C";
-  return random < 0.84 ? "C" : "M";
+
+  // Preserve the observed radial trend—warmer S-types are more common in the
+  // inner belt and dark C-types dominate farther out—without turning the belt
+  // into three monochrome rings. Every zone retains a mixed population.
+  if (au < 2.55) {
+    if (random < 0.45) return "C";
+    if (random < 0.90) return "S";
+    return "M";
+  }
+  if (au < 2.85) {
+    if (random < 0.65) return "C";
+    if (random < 0.90) return "S";
+    return "M";
+  }
+  if (random < 0.82) return "C";
+  if (random < 0.94) return "S";
+  return "M";
+}
+
+function makeAsteroidInstanceTint(composition, seed) {
+  const brightness = 0.90 + seededRandom(seed + 1) * 0.10;
+  const variation = seededRandom(seed + 2);
+
+  if (composition === "C") {
+    // Carbonaceous bodies: charcoal/ashen grey with occasional hydrated,
+    // slightly green-neutral mineral tones.
+    _instanceTintColor.setRGB(
+      brightness * (0.72 + variation * 0.08),
+      brightness * (0.79 + variation * 0.08),
+      brightness * (0.75 + variation * 0.07),
+    );
+  } else if (composition === "S") {
+    // Silicate bodies: warmer stony grey, muted iron-red and olive-brown.
+    _instanceTintColor.setRGB(
+      brightness,
+      brightness * (0.72 + variation * 0.10),
+      brightness * (0.58 + variation * 0.10),
+    );
+  } else {
+    // Metallic bodies are dull rather than chrome. Alternate between cool
+    // nickel-grey and oxidised iron-grey so the population is not uniform.
+    const oxidised = variation > 0.58;
+    _instanceTintColor.setRGB(
+      brightness * (oxidised ? 0.92 : 0.78),
+      brightness * (oxidised ? 0.72 : 0.84),
+      brightness * (oxidised ? 0.62 : 0.88),
+    );
+  }
+
+  return _instanceTintColor.clone();
 }
 
 /** Creates smooth material variants for the three composition classes. */
@@ -333,14 +466,21 @@ function createCompositionMaterials() {
     Object.entries(COMPOSITIONS).map(([key, composition]) => {
       const variants = Array.from({ length: 4 }, () =>
         new THREE.MeshStandardMaterial({
-          color: COMPOSITION_EXPOSURE[key],
+          // Vertex colours already contain the physical composition palette.
+          // White prevents a second material tint from collapsing C/S/M into
+          // one brown colour under strong solar lighting.
+          color: 0xffffff,
           vertexColors: true,
           roughness: composition.roughness,
           metalness: composition.metalness,
           envMapIntensity: key === "M" ? 0.18 : 0.045,
-          emissive: key === "C" ? 0x050605 : 0x070504,
-          emissiveIntensity: 0.16,
+          emissive: COMPOSITION_EMISSIVE[key],
+          emissiveIntensity: 0.10,
           flatShading: false,
+          userData: {
+            asteroidComposition: key,
+            asteroidEncounterEmissiveColor: COMPOSITION_ENCOUNTER_EMISSIVE[key].clone(),
+          },
         }),
       );
       return [key, variants];
@@ -420,15 +560,19 @@ function installInstancedAsteroidVisualMotion(material) {
 function createStoneMaterial(compositionKey) {
   const composition = COMPOSITIONS[compositionKey];
   return new THREE.MeshStandardMaterial({
-    color: COMPOSITION_EXPOSURE[compositionKey],
+    color: 0xffffff,
     vertexColors: true,
     roughness: composition.roughness,
     metalness: composition.metalness,
     envMapIntensity: compositionKey === "M" ? 0.18 : 0.045,
-    emissive: compositionKey === "C" ? 0x050605 : 0x070504,
-    emissiveIntensity: 0.16,
+    emissive: COMPOSITION_EMISSIVE[compositionKey],
+    emissiveIntensity: 0.10,
     flatShading: false,
     dithering: true,
+    userData: {
+      asteroidComposition: compositionKey,
+      asteroidEncounterEmissiveColor: COMPOSITION_ENCOUNTER_EMISSIVE[compositionKey].clone(),
+    },
   });
 }
 
@@ -836,6 +980,7 @@ function attachAsteroidMetadata(object, {
     minFocusDistance: Math.max(0.20, visualRadius * 3.4),
     focusEase: 0.14,
     isAsteroid: true,
+    composition,
     visualRadius,
     physicalDiameterKm,
     rotationPeriodHours: Number.isFinite(safeRotationPeriodHours)
@@ -922,8 +1067,8 @@ export function resolveAsteroidInstanceHit(hit) {
 
 /**
  * Finds the nearest visible instanced asteroid in screen space when the exact
- * mesh ray misses a tiny rock. This runs only on a deliberate click/tap, so a
- * scan of the instanced belt does not affect animation performance.
+ * mesh ray misses a tiny rock. The same visibility-aware helper is used by
+ * hover and click acquisition, with a larger assist only inside the dense belt.
  */
 export function findNearestAsteroidInstanceAtPointer({
   meshes,
@@ -933,13 +1078,16 @@ export function findNearestAsteroidInstanceAtPointer({
   viewportHeight,
   minimumVisibleRadiusPixels = 2,
   maximumPixelRadius = 11,
+  extraHitPixels = 2.5,
+  radiusMultiplier = 1.35,
+  visibleRadiusPreference = 0.12,
 }) {
   if (!Array.isArray(meshes) || !camera || !pointer) return null;
 
   let nearestHit = null;
-  let nearestDistanceSquared = Infinity;
-  const projected = new THREE.Vector3();
-  const cameraPosition = new THREE.Vector3();
+  let nearestScore = Infinity;
+  const projected = _hoverProjectedPosition;
+  const cameraPosition = _hoverCameraPosition;
   camera.getWorldPosition(cameraPosition);
   const focalPixels = viewportHeight * 0.5
     / Math.max(0.0001, Math.tan(THREE.MathUtils.degToRad(camera.fov * 0.5)));
@@ -961,6 +1109,10 @@ export function findNearestAsteroidInstanceAtPointer({
       _position.setFromMatrixPosition(_instanceMatrix).applyMatrix4(mesh.matrixWorld);
       projected.copy(_position).project(camera);
       if (projected.z < -1 || projected.z > 1) continue;
+      // Discard clearly off-screen instances before doing the more expensive
+      // projected-size and distance calculations.
+      if (projected.x < -1.08 || projected.x > 1.08
+        || projected.y < -1.08 || projected.y > 1.08) continue;
 
       const cameraDistance = Math.max(0.0001, cameraPosition.distanceTo(_position));
       const visibilityScale = Number(mesh.userData.visualScaleFactor ?? 1);
@@ -972,19 +1124,121 @@ export function findNearestAsteroidInstanceAtPointer({
       const dx = (projected.x - pointer.x) * viewportWidth * 0.5;
       const dy = (projected.y - pointer.y) * viewportHeight * 0.5;
       const clickRadius = THREE.MathUtils.clamp(
-        projectedRadiusPixels * 1.35 + 2.5,
-        minimumVisibleRadiusPixels + 2,
+        projectedRadiusPixels * radiusMultiplier + extraHitPixels,
+        minimumVisibleRadiusPixels + extraHitPixels,
         maximumPixelRadius,
       );
       const distanceSquared = dx * dx + dy * dy;
-      if (distanceSquared > clickRadius * clickRadius || distanceSquared >= nearestDistanceSquared) continue;
+      if (distanceSquared > clickRadius * clickRadius) continue;
 
-      nearestDistanceSquared = distanceSquared;
+      // Normalising by the assisted radius makes a small readable asteroid under
+      // the pointer beat a farther neighbour. A slight visible-size preference
+      // prevents a nearly invisible dot from stealing the target from a clearer
+      // rock occupying almost the same screen position.
+      const normalizedDistance = Math.sqrt(distanceSquared) / Math.max(1, clickRadius);
+      const visibilityBonus = Math.min(
+        visibleRadiusPreference,
+        projectedRadiusPixels / Math.max(1, maximumPixelRadius) * visibleRadiusPreference,
+      );
+      const score = normalizedDistance - visibilityBonus;
+      if (score >= nearestScore) continue;
+
+      nearestScore = score;
       nearestHit = { object: mesh, instanceId };
     }
   });
 
   return nearestHit ? resolveAsteroidInstanceHit(nearestHit) : null;
+}
+
+function getAsteroidCompositionKey(target) {
+  const direct = String(target?.userData?.composition ?? "").toUpperCase();
+  if (FOCUSED_COMPOSITION_APPEARANCE[direct]) return direct;
+
+  const instanceComposition = String(
+    target?.userData?.instanceRecord?.composition ?? "",
+  ).toUpperCase();
+  if (FOCUSED_COMPOSITION_APPEARANCE[instanceComposition]) {
+    return instanceComposition;
+  }
+
+  const detail = String(target?.userData?.detail ?? "").toUpperCase();
+  if (detail.includes("C-TYPE")) return "C";
+  if (detail.includes("S-TYPE")) return "S";
+  if (detail.includes("M-TYPE")) return "M";
+  return null;
+}
+
+function applyFocusedAsteroidMaterialAppearance(material, compositionKey) {
+  if (!material?.isMeshStandardMaterial) return material;
+  const appearance = FOCUSED_COMPOSITION_APPEARANCE[compositionKey];
+  if (!appearance) return material;
+
+  material.color.lerp(appearance.neutralAlbedo, appearance.albedoMix);
+  material.emissive.copy(appearance.emissive);
+  material.emissiveIntensity = appearance.emissiveIntensity;
+  material.roughness = Math.max(material.roughness, appearance.roughnessFloor);
+  material.metalness = Math.min(material.metalness, appearance.metalnessCeiling);
+  material.envMapIntensity = appearance.environmentIntensity;
+  material.dithering = true;
+  material.needsUpdate = true;
+  material.userData.asteroidFocusCalibrated = true;
+  return material;
+}
+
+/**
+ * Applies a temporary composition-neutral inspection material to any asteroid.
+ * Resolved asteroid materials are shared by many bodies, so focused meshes use
+ * private clones and restore their original materials when inspection closes.
+ */
+export function setAsteroidFocusAppearance(target, active) {
+  if (!isAsteroidInteractionBody(target)) return;
+  const compositionKey = getAsteroidCompositionKey(target);
+  if (!compositionKey) return;
+
+  target.traverse?.((object) => {
+    if (!object?.isMesh || object.material?.isMeshBasicMaterial) return;
+
+    if (active) {
+      // Layer isolation is independent of the material clone. This makes the
+      // neutral focus fill affect only the selected asteroid, not thousands of
+      // surrounding rocks whose changing facets previously appeared to flicker.
+      if (!Number.isInteger(object.userData.asteroidOriginalFocusLayerMask)) {
+        object.userData.asteroidOriginalFocusLayerMask = object.layers.mask;
+      }
+      object.layers.enable(ASTEROID_INSPECTION_LAYER);
+
+      if (object.userData.asteroidOriginalFocusMaterial) return;
+      const originalMaterial = object.material;
+      const focusedMaterial = Array.isArray(originalMaterial)
+        ? originalMaterial.map((material) => applyFocusedAsteroidMaterialAppearance(
+          material.clone(),
+          compositionKey,
+        ))
+        : applyFocusedAsteroidMaterialAppearance(
+          originalMaterial.clone(),
+          compositionKey,
+        );
+      object.userData.asteroidOriginalFocusMaterial = originalMaterial;
+      object.material = focusedMaterial;
+      return;
+    }
+
+    const originalLayerMask = object.userData.asteroidOriginalFocusLayerMask;
+    if (Number.isInteger(originalLayerMask)) {
+      object.layers.mask = originalLayerMask;
+      delete object.userData.asteroidOriginalFocusLayerMask;
+    }
+
+    const originalMaterial = object.userData.asteroidOriginalFocusMaterial;
+    if (!originalMaterial) return;
+    const focusedMaterials = Array.isArray(object.material)
+      ? object.material
+      : [object.material];
+    object.material = originalMaterial;
+    delete object.userData.asteroidOriginalFocusMaterial;
+    focusedMaterials.forEach((material) => material?.dispose?.());
+  });
 }
 
 /**
@@ -1017,6 +1271,20 @@ export function setAsteroidInspectionDetail(target, active) {
       majorBasin: false,
     });
     const material = createStoneMaterial(record.composition);
+    let instanceTint = null;
+    if (Array.isArray(record.instanceTint)) {
+      instanceTint = _focusedInstanceTintColor.fromArray(record.instanceTint);
+    } else if (mesh.instanceColor) {
+      // Backward-safe fallback for a cached/older record without stored tint.
+      mesh.getColorAt(instanceId, _focusedInstanceTintColor);
+      instanceTint = _focusedInstanceTintColor;
+    }
+    if (instanceTint) {
+      // InstancedMesh colour is multiplied with the low-detail geometry in the
+      // belt. Apply the same tint to the replacement material so a selected
+      // silver-grey, charcoal, or reddish rock keeps its identity in focus.
+      material.color.copy(instanceTint);
+    }
     const detailGroup = new THREE.Group();
     const core = new THREE.Mesh(geometry, material);
     core.name = `${record.name} high-detail surface`;
@@ -1027,6 +1295,7 @@ export function setAsteroidInspectionDetail(target, active) {
       seed: record.geometrySeed + 9103,
       count: record.composition === "C" ? 18 : 12,
       composition: record.composition,
+      baseTint: instanceTint,
     });
     detailGroup.scale.copy(target.userData.instanceScale).multiplyScalar(
       Number(mesh.userData.visualScaleFactor ?? 1),
@@ -1071,33 +1340,82 @@ export function setAsteroidInspectionDetail(target, active) {
 }
 
 
-function addSurfaceBoulders({ group, material, seed, count, composition }) {
-  const boulderGeometry = new THREE.IcosahedronGeometry(1, 2);
+function getSurfaceFragmentGeometry(composition, variant) {
+  const cacheKey = `${composition}-${variant}`;
+  const cached = SURFACE_FRAGMENT_GEOMETRY_CACHE.get(cacheKey);
+  if (cached) return cached;
+
+  const seed = composition.charCodeAt(0) * 97 + variant * 131;
+  const geometry = new THREE.IcosahedronGeometry(1, 1);
+  const position = geometry.attributes.position;
+
+  for (let vertexIndex = 0; vertexIndex < position.count; vertexIndex += 1) {
+    _position.fromBufferAttribute(position, vertexIndex);
+    _direction.copy(_position).normalize();
+    const coarse = fractalNoise(_direction, seed + 71);
+    const fine = smoothNoise3(
+      _direction.x * 5.2,
+      _direction.y * 5.2,
+      _direction.z * 5.2,
+      seed + 109,
+    );
+    let radialScale = 0.76 + coarse * 0.22 + (fine - 0.5) * 0.12;
+
+    if (_position.y < -0.18) {
+      const baseCompression = THREE.MathUtils.clamp((-0.18 - _position.y) / 0.77, 0, 1);
+      radialScale *= 1 - baseCompression * 0.18;
+      _position.y *= 0.54;
+    }
+
+    _position.multiplyScalar(radialScale);
+    _position.x *= 0.84 + seededRandom(seed + 7) * 0.32;
+    _position.y *= 0.80 + seededRandom(seed + 11) * 0.24;
+    _position.z *= 0.82 + seededRandom(seed + 13) * 0.30;
+    position.setXYZ(vertexIndex, _position.x, _position.y, _position.z);
+  }
+
+  geometry.computeVertexNormals();
+  SURFACE_FRAGMENT_GEOMETRY_CACHE.set(cacheKey, geometry);
+  return geometry;
+}
+
+function addSurfaceBoulders({
+  group,
+  material,
+  seed,
+  count,
+  composition,
+  baseTint = null,
+}) {
   const boulderMaterial = material.clone();
   boulderMaterial.vertexColors = false;
   boulderMaterial.color.copy(COMPOSITION_PALETTES[composition][0]);
+  if (baseTint?.isColor) boulderMaterial.color.multiply(baseTint);
   boulderMaterial.needsUpdate = true;
 
   for (let index = 0; index < count; index += 1) {
     const direction = randomUnitVector(seed * 13 + index * 37);
-    const boulder = new THREE.Mesh(boulderGeometry, boulderMaterial);
-    const size = 0.035 + seededRandom(seed * 19 + index * 31) * 0.085;
-    boulder.position.copy(direction).multiplyScalar(0.91 + size * 0.58);
+    const geometry = getSurfaceFragmentGeometry(composition, index % 4);
+    const boulder = new THREE.Mesh(geometry, boulderMaterial.clone());
+    const size = 0.028 + seededRandom(seed * 19 + index * 31) * 0.058;
+    boulder.position.copy(direction).multiplyScalar(0.84 + size * 0.34);
     boulder.scale.set(
-      size * (0.75 + seededRandom(seed + index * 7) * 0.7),
-      size * (0.65 + seededRandom(seed + index * 11) * 0.65),
-      size * (0.72 + seededRandom(seed + index * 17) * 0.72),
+      size * (0.74 + seededRandom(seed + index * 7) * 0.62),
+      size * (0.52 + seededRandom(seed + index * 11) * 0.52),
+      size * (0.72 + seededRandom(seed + index * 17) * 0.64),
     );
     boulder.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction);
-    boulder.rotation.z = seededRandom(seed + index * 23) * Math.PI;
+    boulder.rotateOnAxis(new THREE.Vector3(0, 1, 0), seededRandom(seed + index * 23) * Math.PI * 2);
+    boulder.rotateOnAxis(new THREE.Vector3(1, 0, 0), (seededRandom(seed + index * 29) - 0.5) * 0.55);
     boulder.castShadow = false;
     boulder.receiveShadow = false;
     boulder.userData.isSurfaceDetail = true;
 
-    if (composition === "M" && index % 3 === 0) {
-      boulder.material = boulderMaterial.clone();
-      boulder.material.metalness = Math.min(0.82, boulderMaterial.metalness + 0.12);
-      boulder.material.roughness = Math.max(0.35, boulderMaterial.roughness - 0.10);
+    const tint = makeAsteroidInstanceTint(composition, seed * 31 + index * 41);
+    boulder.material.color.multiply(tint);
+    if (composition === "M") {
+      boulder.material.metalness = Math.min(0.48, boulderMaterial.metalness + 0.06);
+      boulder.material.roughness = Math.max(0.44, boulderMaterial.roughness - 0.06);
     }
 
     group.add(boulder);
@@ -1388,7 +1706,7 @@ function createInstancedBoulderField(materials, density = 1) {
 
         // Instance colour is a neutral exposure variation. Composition colour
         // already comes from the geometry's non-repeating 3D vertex colours.
-        const color = new THREE.Color().setScalar(0.84 + seededRandom(seed + 18) * 0.20);
+        const color = makeAsteroidInstanceTint(composition, seed + 18);
         mesh.setColorAt(accepted, color);
 
         const visualRadius = Math.max(dummy.scale.x, dummy.scale.y, dummy.scale.z);
@@ -1427,6 +1745,9 @@ function createInstancedBoulderField(materials, density = 1) {
           rotationPeriodHours: spinProfile.physicalPeriodHours,
           rotationState: spinProfile.stateLabel,
           spinProfile,
+          // Preserve the exact per-instance tint when this GPU instance is
+          // replaced by its high-detail inspection model.
+          instanceTint: color.toArray(),
         };
         accepted += 1;
       }
@@ -1482,12 +1803,23 @@ function createDistantDebris(count = UNRESOLVED_PEBBLE_COUNT) {
   const positions = new Float32Array(count * 3);
   const colors = new Float32Array(count * 3);
   const sizes = new Float32Array(count);
-  const colorPalette = [
-    new THREE.Color(0x73665b),
-    new THREE.Color(0x373937),
-    new THREE.Color(0x897667),
-    new THREE.Color(0x232625),
-  ];
+  const colorPalette = {
+    C: [
+      new THREE.Color(0x59625c),
+      new THREE.Color(0x343a37),
+      new THREE.Color(0x6a6258),
+    ],
+    S: [
+      new THREE.Color(0x9a735b),
+      new THREE.Color(0x78675a),
+      new THREE.Color(0x806b4f),
+    ],
+    M: [
+      new THREE.Color(0x899191),
+      new THREE.Color(0x716e69),
+      new THREE.Color(0x8b705f),
+    ],
+  };
 
   let accepted = 0;
   let attempt = 0;
@@ -1518,8 +1850,14 @@ function createDistantDebris(count = UNRESOLVED_PEBBLE_COUNT) {
     positions[positionIndex + 1] = _position.y;
     positions[positionIndex + 2] = _position.z;
 
-    const color = colorPalette[Math.floor(seededRandom(seed + 8) * colorPalette.length)];
-    const brightness = 0.56 + seededRandom(seed + 9) * 0.58;
+    const composition = compositionForRadius(radius, seed + 8);
+    const palette = colorPalette[composition] ?? colorPalette.S;
+    const color = palette[Math.floor(seededRandom(seed + 8) * palette.length)];
+    const brightness = composition === "C"
+      ? 0.68 + seededRandom(seed + 9) * 0.28
+      : composition === "M"
+        ? 0.78 + seededRandom(seed + 9) * 0.26
+        : 0.74 + seededRandom(seed + 9) * 0.28;
     colors[positionIndex] = color.r * brightness;
     colors[positionIndex + 1] = color.g * brightness;
     colors[positionIndex + 2] = color.b * brightness;
@@ -1586,6 +1924,8 @@ function createDistantDebris(count = UNRESOLVED_PEBBLE_COUNT) {
         vec3 visibleColor = vColor * mix(1.0, 1.52, uEncounterStrength);
         float visibleOpacity = mix(uOpacity, min(1.0, uOpacity + 0.12), uEncounterStrength);
         gl_FragColor = vec4(visibleColor, edge * visibleOpacity * vSolarClearance);
+        #include <tonemapping_fragment>
+        #include <colorspace_fragment>
       }
     `,
     vertexColors: true,
@@ -1729,9 +2069,13 @@ function collectAsteroidVisibilityMaterials(root) {
       }
       if (!material.userData.baseAsteroidEmissiveColor && material.emissive) {
         material.userData.baseAsteroidEmissiveColor = material.emissive.clone();
-        material.userData.asteroidEncounterEmissiveColor = material.color
-          .clone()
-          .multiplyScalar(0.72);
+        if (!material.userData.asteroidEncounterEmissiveColor) {
+          const composition = material.userData.asteroidComposition;
+          material.userData.asteroidEncounterEmissiveColor = (
+            COMPOSITION_ENCOUNTER_EMISSIVE[composition]
+            ?? new THREE.Color(0x6d675f)
+          ).clone();
+        }
       }
       if (!Number.isFinite(material.userData.baseAsteroidEnvironmentIntensity)) {
         material.userData.baseAsteroidEnvironmentIntensity = Number(material.envMapIntensity ?? 0);

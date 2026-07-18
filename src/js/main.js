@@ -20,10 +20,12 @@ import { createMoonSystem } from './planets/earth/satellites/moon.js';
 import { createMajorSatelliteSystems, updateMajorSatelliteSystems } from './planets/satellites/satelliteSystem.js';
 import { PLANET_CONFIGS } from './planets/index.js';
 import {
+  ASTEROID_INSPECTION_LAYER,
   createAsteroidBelt,
   findNearestAsteroidInstanceAtPointer,
   resolveAsteroidInstanceHit,
   setAsteroidBeltQuality,
+  setAsteroidFocusAppearance,
   setAsteroidInspectionDetail,
   updateAsteroidBelt,
   updateAsteroidSpinClock,
@@ -659,6 +661,9 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
   // PerspectiveCamera arguments: vertical FOV, aspect ratio, near plane, far plane.
   // Objects outside near/far are clipped and never sent through the full pipeline.
   const camera = new THREE.PerspectiveCamera(56, innerWidth / innerHeight, 0.1, 7500);
+  // Keep normal scene layer 0 and also allow the isolated asteroid inspection
+  // light/object layer to participate in rendering.
+  camera.layers.enable(ASTEROID_INSPECTION_LAYER);
   // The renderer owns the WebGL context and draws into the existing HTML canvas.
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false, powerPreference: "high-performance" });
   // The performance manager owns drawing-buffer resolution, caps excessive
@@ -724,7 +729,10 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
     map: celestialLocatorTexture,
     transparent: true,
     opacity: 0,
-    depthTest: true,
+    // The locator is an interaction affordance, not a physical object. Keeping
+    // depth testing disabled prevents nearby rocks in the dense belt from
+    // hiding the green ring after an asteroid has already been acquired.
+    depthTest: false,
     depthWrite: false,
     blending: THREE.AdditiveBlending,
     toneMapped: false,
@@ -806,6 +814,7 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
   let spaceDiveModeUntil = 0;
   let hoveredCelestialBody = null;
   let celestialHoverTimer = null;
+  let celestialHoverFramePending = false;
   let focusSelectionPulseStartedAt = -Infinity;
   const celestialHoverAnchor = new THREE.Vector2(-9999, -9999);
   let lastPointerType = "mouse";
@@ -827,6 +836,16 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
   const fillLight = new THREE.DirectionalLight(0x8bdcff, 0.32);
   fillLight.position.set(-50, 40, 90);
   scene.add(fillLight);
+
+  // A neutral fill reveals C/S/M composition while inspecting an asteroid.
+  // It is restricted to the dedicated asteroid-inspection layer, so the many
+  // surrounding belt rocks do not brighten and darken as the camera moves. An
+  // ambient fill is intentionally used here: the Sun still supplies shape and
+  // shadows, while the stable fill removes rapid facet-to-facet light flicker.
+  const asteroidInspectionLight = new THREE.AmbientLight(0xe8f1ff, 0.46);
+  asteroidInspectionLight.layers.set(ASTEROID_INSPECTION_LAYER);
+  asteroidInspectionLight.visible = false;
+  scene.add(asteroidInspectionLight);
 
   // Asset loading is isolated so scene setup only consumes a ready texture dictionary.
   const preferredAnisotropy = creationQuality === "high"
@@ -1697,11 +1716,11 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
     if (isAsteroidBody(body)) {
       // Keep the selected rock stable, but do not let a large invisible cushion
       // trap the cursor on an older neighbour in a dense belt region.
-      const encounterAssist = THREE.MathUtils.lerp(4.5, 6.5, getAsteroidEncounterIntensity());
+      const encounterAssist = THREE.MathUtils.lerp(5.5, 11.5, getAsteroidEncounterIntensity());
       return distancePixels <= THREE.MathUtils.clamp(
         radiusPixels + encounterAssist,
-        6,
-        14,
+        7,
+        20,
       );
     }
 
@@ -1794,18 +1813,45 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
       camera,
       viewportWidth: innerWidth,
       viewportHeight: innerHeight,
-      minimumVisibleRadiusPixels: THREE.MathUtils.lerp(0.22, 0.14, encounterIntensity),
+      minimumVisibleRadiusPixels: THREE.MathUtils.lerp(0.20, 0.08, encounterIntensity),
       maximumPixelRadius: THREE.MathUtils.lerp(
-        innerWidth <= 760 ? 13 : 10,
-        innerWidth <= 760 ? 18 : 15,
+        innerWidth <= 760 ? 15 : 11,
+        innerWidth <= 760 ? 28 : 23,
         encounterIntensity,
       ),
+      extraHitPixels: THREE.MathUtils.lerp(
+        innerWidth <= 760 ? 5.5 : 4.0,
+        innerWidth <= 760 ? 12.0 : 9.0,
+        encounterIntensity,
+      ),
+      radiusMultiplier: THREE.MathUtils.lerp(1.42, 1.78, encounterIntensity),
+      visibleRadiusPreference: THREE.MathUtils.lerp(0.10, 0.18, encounterIntensity),
     });
     setCelestialHover(nearbyInstance);
   }
 
   function scheduleCelestialHover() {
-    if (celestialHoverTimer) clearTimeout(celestialHoverTimer);
+    if (celestialHoverTimer) {
+      clearTimeout(celestialHoverTimer);
+      celestialHoverTimer = null;
+    }
+
+    // Inside the asteroid belt the pointer may cross several tiny rocks within
+    // a few milliseconds. Coalesce those events into one scan on the next frame
+    // rather than repeatedly restarting a timeout. This feels immediate while
+    // still performing at most one dense-belt search per rendered frame.
+    if (getAsteroidEncounterIntensity() >= 0.12) {
+      if (celestialHoverFramePending) return;
+      celestialHoverFramePending = true;
+      requestAnimationFrame(() => {
+        celestialHoverFramePending = false;
+        if (!isDragging && lastPointerType !== "touch" && !hoveredCelestialBody) {
+          findCelestialForHover();
+        }
+      });
+      return;
+    }
+
     celestialHoverTimer = setTimeout(() => {
       celestialHoverTimer = null;
       findCelestialForHover();
@@ -1828,7 +1874,14 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
       * Math.tan(THREE.MathUtils.degToRad(camera.fov * 0.5))
       / Math.max(1, innerHeight);
     const bodyRadiusPixels = projectedBodyRadiusPixels(hoveredCelestialBody);
-    const baseMarkerPixels = THREE.MathUtils.clamp(bodyRadiusPixels * 2.5 + 24, 27, 58);
+    const asteroidMarkerBoost = isAsteroidBody(hoveredCelestialBody)
+      ? THREE.MathUtils.lerp(4, 11, getAsteroidEncounterIntensity())
+      : 0;
+    const baseMarkerPixels = THREE.MathUtils.clamp(
+      bodyRadiusPixels * 2.5 + 24 + asteroidMarkerBoost,
+      isAsteroidBody(hoveredCelestialBody) ? 34 : 27,
+      isAsteroidBody(hoveredCelestialBody) ? 70 : 58,
+    );
     const pulse = 1 + Math.sin(elapsedTime * 3.6) * 0.065;
     const markerSize = worldUnitsPerPixel * baseMarkerPixels * pulse;
     asteroidHoverLocator.scale.set(markerSize, markerSize, 1);
@@ -1894,15 +1947,22 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
       viewportWidth: innerWidth,
       viewportHeight: innerHeight,
       minimumVisibleRadiusPixels: THREE.MathUtils.lerp(
-        innerWidth <= 760 ? 0.95 : 0.60,
-        innerWidth <= 760 ? 0.62 : 0.36,
+        innerWidth <= 760 ? 0.90 : 0.54,
+        innerWidth <= 760 ? 0.48 : 0.26,
         encounterIntensity,
       ),
       maximumPixelRadius: THREE.MathUtils.lerp(
-        innerWidth <= 760 ? 15 : 10,
-        innerWidth <= 760 ? 20 : 16,
+        innerWidth <= 760 ? 17 : 12,
+        innerWidth <= 760 ? 28 : 22,
         encounterIntensity,
       ),
+      extraHitPixels: THREE.MathUtils.lerp(
+        innerWidth <= 760 ? 6.0 : 4.5,
+        innerWidth <= 760 ? 12.0 : 8.5,
+        encounterIntensity,
+      ),
+      radiusMultiplier: THREE.MathUtils.lerp(1.45, 1.72, encounterIntensity),
+      visibleRadiusPreference: THREE.MathUtils.lerp(0.10, 0.16, encounterIntensity),
     });
   }
 
@@ -2009,7 +2069,10 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
 
     // Restore a previous instanced rock before changing focus. Its inexpensive
     // belt representation replaces the temporary high-resolution close-up.
-    if (focusedBody) setAsteroidInspectionDetail(focusedBody, false);
+    if (focusedBody) {
+      setAsteroidFocusAppearance(focusedBody, false);
+      setAsteroidInspectionDetail(focusedBody, false);
+    }
 
     if (!nextBody) {
       focusedBody = null;
@@ -2033,6 +2096,7 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
     // Only instanced asteroids react here; planets, satellites, and individually
     // modeled major asteroids continue using their normal meshes.
     setAsteroidInspectionDetail(focusedBody, true);
+    setAsteroidFocusAppearance(focusedBody, true);
     updateDistanceReadout(smoothProgress);
   }
 
@@ -2100,7 +2164,10 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
       celestialHoverTimer = null;
     }
 
-    if (focusedBody) setAsteroidInspectionDetail(focusedBody, false);
+    if (focusedBody) {
+      setAsteroidFocusAppearance(focusedBody, false);
+      setAsteroidInspectionDetail(focusedBody, false);
+    }
     focusedBody = null;
     focusedBodyLocator.visible = false;
     focusedBodyLocator.material.opacity = 0;
@@ -2627,6 +2694,17 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
     }
     // lookAt rotates the camera so its forward direction points at the target.
     camera.lookAt(cameraFocusPoint);
+
+    const isAsteroidFocused = Boolean(
+      focusedBody
+      && (
+        focusedBody.userData?.isAsteroid
+        || focusedBody.userData?.isInstancedAsteroid
+        || String(focusedBody.userData?.info?.type ?? "").toLowerCase().includes("asteroid")
+      )
+    );
+    asteroidInspectionLight.visible = isAsteroidFocused;
+
     // Focused bodies use their authored framing. Empty-space exploration no
     // longer fakes travel with FOV zoom; physical camera movement does the work.
     const journeyFov = THREE.MathUtils.lerp(42, 72, smoothProgress);
