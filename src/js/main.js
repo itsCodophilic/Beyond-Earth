@@ -1540,13 +1540,43 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
       );
 
     const isPlanetaryInspection = Boolean(focusedBody && !isSunFocused);
+    // Solar irradiance falls rapidly with distance. A logarithmic AU mapping
+    // gives every orbit a readable cinematic step without making Mercury's
+    // glow overwhelm the scene or leaving the outer planets completely dark.
+    const observerLogAU = Math.log10(THREE.MathUtils.clamp(
+      Number.isFinite(observerAU) ? observerAU : 40,
+      0.35,
+      40,
+    ));
+    const solarProximityBlend = 1 - THREE.MathUtils.smoothstep(
+      observerLogAU,
+      Math.log10(0.35),
+      Math.log10(12),
+    );
+    // focusZoomCurrent falls from 1 toward 0.58 as the user zooms in. Turning
+    // that range into a 0–1 value lets the solar exposure grow continuously
+    // with the camera move rather than jumping at the end of the gesture.
+    const focusedZoomInBlend = isPlanetaryInspection
+      ? 1 - THREE.MathUtils.smoothstep(focusZoomCurrent, 0.58, 1)
+      : 0;
 
     // The ordinary white solar halo remains present from every viewpoint.
     // Planet inspection now receives a brighter photographic bloom so sunlight
     // still feels powerful from that world's sky. This sprite is not part of
     // hoverTargets, so the larger radiance never enlarges the Sun's hit area.
-    const steadyGlowPixels = isPlanetaryInspection ? 88 : 56;
-    const maximumGlowPixels = THREE.MathUtils.lerp(steadyGlowPixels, 148, maximumZoomBlend);
+    const inspectionGlowPixels = THREE.MathUtils.lerp(
+      76,
+      118,
+      solarProximityBlend,
+    ) * THREE.MathUtils.lerp(1, 1.28, focusedZoomInBlend);
+    const steadyGlowPixels = isPlanetaryInspection
+      ? inspectionGlowPixels
+      : THREE.MathUtils.lerp(56, 86, solarProximityBlend);
+    const maximumGlowPixels = THREE.MathUtils.lerp(
+      steadyGlowPixels,
+      Math.max(steadyGlowPixels, 156),
+      maximumZoomBlend,
+    );
     const targetGlowWorldSize = Math.max(
       apparentWorldRadius * 2.56,
       maximumGlowPixels * worldUnitsPerPixel,
@@ -1557,11 +1587,13 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
     sun.glow.scale.set(localGlowSize * glowPulse, localGlowSize * glowPulse, 1);
     sun.glow.material.opacity = THREE.MathUtils.clamp(
       0.13
-        + (isPlanetaryInspection ? 0.105 : 0)
+        + (isPlanetaryInspection ? 0.075 : 0)
+        + solarProximityBlend * 0.11
+        + focusedZoomInBlend * 0.1
         + maximumZoomBlend * 0.24
         + Math.sin(elapsedTime * 0.91) * 0.008,
       0.105,
-      0.5,
+      0.58,
     );
     sun.glow.material.depthTest = true;
     sun.glow.renderOrder = 0;
@@ -1573,34 +1605,51 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
     const unresolvedStarBlend = 1
       - THREE.MathUtils.smoothstep(projectedRadiusPixels, 0.75, 3.2);
     const planetaryRadianceBlend = isPlanetaryInspection
-      ? THREE.MathUtils.lerp(
-        0.72,
-        0.96,
-        1 - THREE.MathUtils.smoothstep(projectedRadiusPixels, 3, 28),
+      ? THREE.MathUtils.clamp(
+        0.68 + solarProximityBlend * 0.18 + focusedZoomInBlend * 0.12,
+        0,
+        1,
       )
+      : 0;
+    // During free flight the same approach behaviour remains visible until the
+    // resolved photosphere becomes large enough to carry the shot by itself.
+    const freeFlightApproachRadiance = !focusedBody
+      ? solarProximityBlend
+        * (1 - THREE.MathUtils.smoothstep(projectedRadiusPixels, 90, 420))
+        * 0.72
       : 0;
     const radianceBlend = isActiveSunInspection
       ? 0
-      : Math.max(unresolvedStarBlend, planetaryRadianceBlend);
+      : Math.max(unresolvedStarBlend, planetaryRadianceBlend, freeFlightApproachRadiance);
     if (sun.distantStar) {
       const twinkle = Math.sin(elapsedTime * 3.2) * 0.055
         + Math.sin(elapsedTime * 7.1 + 1.4) * 0.032;
       const maximumTwinkle = Math.sin(elapsedTime * 4.6) * 0.12
         + Math.sin(elapsedTime * 9.7 + 0.8) * 0.065;
       const starPulse = 1
-        + twinkle * (isPlanetaryInspection ? 0.38 : 0.22)
+        + twinkle * (
+          isPlanetaryInspection
+            ? 0.28 + solarProximityBlend * 0.2 + focusedZoomInBlend * 0.15
+            : 0.22
+        )
         + maximumTwinkle * maximumZoomBlend * 0.36;
-      // A focused planet sees an 88–118 px starburst. Larger apparent solar
-      // disks use the smaller end of that range, while distant planets receive
-      // longer rays so the unresolved Sun still reads as the system's star.
+      // The starburst now follows both orbital proximity and focused zoom. It
+      // grows from an outer-system sparkle into a broader, hotter inner-system
+      // exposure, then expands by another 32% as the viewer zooms closer.
       const planetaryStarPixels = THREE.MathUtils.lerp(
+        84,
+        142,
+        solarProximityBlend,
+      ) * THREE.MathUtils.lerp(1, 1.32, focusedZoomInBlend);
+      const freeFlightApproachPixels = THREE.MathUtils.lerp(
+        30,
         118,
-        88,
-        THREE.MathUtils.smoothstep(projectedRadiusPixels, 2, 30),
+        solarProximityBlend,
       );
       const starPixelSize = Math.max(
         THREE.MathUtils.lerp(30, 92, maximumZoomBlend),
         isPlanetaryInspection ? planetaryStarPixels : 0,
+        !focusedBody ? freeFlightApproachPixels : 0,
       ) * starPulse;
       const starWorldSize = starPixelSize * worldUnitsPerPixel;
       const localStarSize = starWorldSize / Math.max(nextScale, 0.0001);
@@ -1610,7 +1659,9 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
       sun.distantStar.material.opacity = THREE.MathUtils.clamp(
         radianceBlend * (
           0.8
-          + (isPlanetaryInspection ? 0.16 : 0)
+          + (isPlanetaryInspection ? 0.08 : 0)
+          + solarProximityBlend * 0.12
+          + focusedZoomInBlend * 0.1
           + maximumZoomBlend * 0.18
           + twinkle * 0.38
           + maximumTwinkle * maximumZoomBlend
