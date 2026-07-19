@@ -45,65 +45,83 @@ export function createJupiterVisualSystem({
   atmosphere.name = "Jupiter dedicated upper atmosphere";
   jupiter.add(atmosphere);
 
-  // Jupiter has persistent auroral ovals around both magnetic poles. The oval
-  // is narrow and intense; a softer cap layer supplies the surrounding haze.
+  // Telescope data is commonly mapped into visible electric blue, turquoise,
+  // and orange. Jupiter's polar emission also curls inward as an open spiral,
+  // so the former broad circular oval is replaced with two compact spiral
+  // layers: a crisp main arm plus a softer, slightly offset particle glow.
   const auroraOval = createPlanetAuroraLayer({
     planet: jupiter,
     radius,
     quality,
-    shellScale: 1.035,
-    latitudeCenter: 0.915,
-    latitudeWidth: 0.058,
-    mirroredStrength: 1.0,
-    longitudeCenter: 0.0,
-    longitudeWidth: Math.PI,
-    secondaryLongitudeCenter: Math.PI * 0.5,
-    secondaryLongitudeWidth: Math.PI,
-    secondaryLongitudeStrength: 0.55,
-    globalDiffuseStrength: 0.0,
-    intensity: 1.48,
-    faceOnVisibility: 0.68,
-    daysideVisibility: 0.24,
-    arcFrequency: 4.8,
-    spikeFrequency: 27.0,
-    displacementStrength: 0.014,
-    shellAlpha: 1.0,
-    animationSpeed: 1.0,
-    redFringeStrength: 0.08,
-    primaryColor: 0x70dcff,
-    secondaryColor: 0xffffff,
-    tertiaryColor: 0x8b78ff,
-  });
-  auroraOval.name = "Jupiter bright magnetic auroral ovals";
-
-  const auroraCap = createPlanetAuroraLayer({
-    planet: jupiter,
-    radius,
-    quality,
-    shellScale: 1.043,
-    latitudeCenter: 0.970,
-    latitudeWidth: 0.090,
+    shellScale: 1.026,
+    latitudeCenter: 0.982,
+    latitudeWidth: 0.022,
     mirroredStrength: 1.0,
     longitudeCenter: 0.0,
     longitudeWidth: Math.PI,
     secondaryLongitudeCenter: 0.0,
     secondaryLongitudeWidth: Math.PI,
     secondaryLongitudeStrength: 0.0,
-    globalDiffuseStrength: 0.10,
-    intensity: 0.92,
-    faceOnVisibility: 0.60,
-    daysideVisibility: 0.16,
-    arcFrequency: 3.4,
-    spikeFrequency: 18.0,
-    displacementStrength: 0.010,
-    shellAlpha: 0.84,
-    animationSpeed: 0.70,
-    redFringeStrength: 0.10,
-    primaryColor: 0x55d7ff,
-    secondaryColor: 0xcbd8ff,
-    tertiaryColor: 0x7662ff,
+    globalDiffuseStrength: 0.0,
+    intensity: 1.36,
+    faceOnVisibility: 0.72,
+    daysideVisibility: 0.20,
+    arcFrequency: 7.2,
+    spikeFrequency: 34.0,
+    displacementStrength: 0.008,
+    shellAlpha: 0.98,
+    animationSpeed: 0.92,
+    redFringeStrength: 0.84,
+    primaryColor: 0x1268ff,
+    secondaryColor: 0x2ff4dc,
+    tertiaryColor: 0xff8a24,
+    spiralStrength: 1.0,
+    spiralTurns: 1.38,
+    spiralInnerRadius: 0.058,
+    spiralRadiusSpan: 0.235,
+    spiralArmWidth: 0.017,
+    spiralPhase: -0.38,
+    spiralDirection: 1,
+    spiralTwistNoise: 0.34,
   });
-  auroraCap.name = "Jupiter polar ultraviolet haze";
+  auroraOval.name = "Jupiter compact electric-blue spiral aurora";
+
+  const auroraCap = createPlanetAuroraLayer({
+    planet: jupiter,
+    radius,
+    quality,
+    shellScale: 1.030,
+    latitudeCenter: 0.986,
+    latitudeWidth: 0.028,
+    mirroredStrength: 1.0,
+    longitudeCenter: 0.0,
+    longitudeWidth: Math.PI,
+    secondaryLongitudeCenter: 0.0,
+    secondaryLongitudeWidth: Math.PI,
+    secondaryLongitudeStrength: 0.0,
+    globalDiffuseStrength: 0.0,
+    intensity: 0.64,
+    faceOnVisibility: 0.66,
+    daysideVisibility: 0.14,
+    arcFrequency: 5.6,
+    spikeFrequency: 25.0,
+    displacementStrength: 0.005,
+    shellAlpha: 0.72,
+    animationSpeed: 0.66,
+    redFringeStrength: 0.58,
+    primaryColor: 0x087cff,
+    secondaryColor: 0x36ffe2,
+    tertiaryColor: 0xffa13a,
+    spiralStrength: 1.0,
+    spiralTurns: 1.32,
+    spiralInnerRadius: 0.072,
+    spiralRadiusSpan: 0.205,
+    spiralArmWidth: 0.031,
+    spiralPhase: -0.22,
+    spiralDirection: 1,
+    spiralTwistNoise: 0.42,
+  });
+  auroraCap.name = "Jupiter turquoise spiral aurora glow";
 
   jupiter.userData.visualLayers.jupiterAtmosphere = atmosphere;
   jupiter.userData.visualLayers.jupiterAuroraOval = auroraOval;
@@ -151,11 +169,11 @@ export function updateJupiterVisualSystem(
   updatePlanetAuroraLayer(
     auroraOval,
     frameScale,
-    { rotationSpeed: 0.00022 },
+    { rotationSpeed: 0.00012 },
   );
   updatePlanetAuroraLayer(
     auroraCap,
     frameScale,
-    { rotationSpeed: -0.00010 },
+    { rotationSpeed: 0.00008 },
   );
 }

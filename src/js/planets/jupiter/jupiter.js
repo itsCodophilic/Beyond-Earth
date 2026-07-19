@@ -1159,64 +1159,82 @@ export function createJupiter({
 
   surface.add(atmosphere);
 
-  // Jupiter's auroras encircle both magnetic poles as persistent bright ovals.
+  // Compact telescope-mapped spiral aurora. The two layers share the same
+  // direction and remain close to the magnetic poles, avoiding the previous
+  // oversized circular cap.
   const auroraOval = createPlanetAuroraLayer({
     planet: surface,
     radius: jupiter.radius,
     quality: "high",
-    shellScale: 1.034,
-    latitudeCenter: 0.915,
-    latitudeWidth: 0.055,
+    shellScale: 1.026,
+    latitudeCenter: 0.982,
+    latitudeWidth: 0.022,
     mirroredStrength: 1.0,
     longitudeCenter: 0.0,
-    longitudeWidth: 3.1416,
-    secondaryLongitudeCenter: 1.5708,
-    secondaryLongitudeWidth: 3.1416,
-    secondaryLongitudeStrength: 0.60,
+    longitudeWidth: Math.PI,
+    secondaryLongitudeCenter: 0.0,
+    secondaryLongitudeWidth: Math.PI,
+    secondaryLongitudeStrength: 0.0,
     globalDiffuseStrength: 0.0,
-    intensity: 1.42,
-    faceOnVisibility: 0.62,
-    daysideVisibility: 0.18,
-    arcFrequency: 4.8,
-    spikeFrequency: 26.0,
-    displacementStrength: 0.014,
-    shellAlpha: 1.00,
-    animationSpeed: 1.00,
-    redFringeStrength: 0.10,
-    primaryColor: 0x7ee3ff,
-    secondaryColor: 0xffffff,
-    tertiaryColor: 0x8d79ff,
+    intensity: 1.36,
+    faceOnVisibility: 0.72,
+    daysideVisibility: 0.20,
+    arcFrequency: 7.2,
+    spikeFrequency: 34.0,
+    displacementStrength: 0.008,
+    shellAlpha: 0.98,
+    animationSpeed: 0.92,
+    redFringeStrength: 0.84,
+    primaryColor: 0x1268ff,
+    secondaryColor: 0x2ff4dc,
+    tertiaryColor: 0xff8a24,
+    spiralStrength: 1.0,
+    spiralTurns: 1.38,
+    spiralInnerRadius: 0.058,
+    spiralRadiusSpan: 0.235,
+    spiralArmWidth: 0.017,
+    spiralPhase: -0.38,
+    spiralDirection: 1,
+    spiralTwistNoise: 0.34,
   });
-  auroraOval.name = "Jupiter auroral ovals";
+  auroraOval.name = "Jupiter compact electric-blue spiral aurora";
 
   const auroraCap = createPlanetAuroraLayer({
     planet: surface,
     radius: jupiter.radius,
     quality: "high",
-    shellScale: 1.042,
-    latitudeCenter: 0.972,
-    latitudeWidth: 0.090,
+    shellScale: 1.030,
+    latitudeCenter: 0.986,
+    latitudeWidth: 0.028,
     mirroredStrength: 1.0,
     longitudeCenter: 0.0,
-    longitudeWidth: 3.1416,
+    longitudeWidth: Math.PI,
     secondaryLongitudeCenter: 0.0,
-    secondaryLongitudeWidth: 3.1416,
+    secondaryLongitudeWidth: Math.PI,
     secondaryLongitudeStrength: 0.0,
-    globalDiffuseStrength: 0.14,
-    intensity: 0.98,
-    faceOnVisibility: 0.56,
-    daysideVisibility: 0.12,
-    arcFrequency: 3.4,
-    spikeFrequency: 18.0,
-    displacementStrength: 0.010,
-    shellAlpha: 0.86,
-    animationSpeed: 0.70,
-    redFringeStrength: 0.12,
-    primaryColor: 0x55d7ff,
-    secondaryColor: 0xcbd8ff,
-    tertiaryColor: 0x7b62ff,
+    globalDiffuseStrength: 0.0,
+    intensity: 0.64,
+    faceOnVisibility: 0.66,
+    daysideVisibility: 0.14,
+    arcFrequency: 5.6,
+    spikeFrequency: 25.0,
+    displacementStrength: 0.005,
+    shellAlpha: 0.72,
+    animationSpeed: 0.66,
+    redFringeStrength: 0.58,
+    primaryColor: 0x087cff,
+    secondaryColor: 0x36ffe2,
+    tertiaryColor: 0xffa13a,
+    spiralStrength: 1.0,
+    spiralTurns: 1.32,
+    spiralInnerRadius: 0.072,
+    spiralRadiusSpan: 0.205,
+    spiralArmWidth: 0.031,
+    spiralPhase: -0.22,
+    spiralDirection: 1,
+    spiralTwistNoise: 0.42,
   });
-  auroraCap.name = "Jupiter polar aurora haze";
+  auroraCap.name = "Jupiter turquoise spiral aurora glow";
 
   /*
    * Optional orbit-line callback keeps Jupiter compatible with your existing
@@ -1299,13 +1317,13 @@ export function updateJupiter({
   updatePlanetAuroraLayer(
     auroraOval,
     motionScale,
-    { rotationSpeed: 0.00022 }
+    { rotationSpeed: 0.00012 }
   );
 
   updatePlanetAuroraLayer(
     auroraCap,
     motionScale,
-    { rotationSpeed: -0.00010 }
+    { rotationSpeed: 0.00008 }
   );
 
   /*

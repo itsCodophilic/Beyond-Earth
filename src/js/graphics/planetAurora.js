@@ -28,6 +28,14 @@ function buildShaderMaterial(config) {
     shellAlpha,
     animationSpeed,
     redFringeStrength,
+    spiralStrength,
+    spiralTurns,
+    spiralInnerRadius,
+    spiralRadiusSpan,
+    spiralArmWidth,
+    spiralPhase,
+    spiralDirection,
+    spiralTwistNoise,
   } = config;
 
   const primary = jsonColourHex(primaryColor);
@@ -51,6 +59,14 @@ function buildShaderMaterial(config) {
   const alphaMax = Number(shellAlpha).toFixed(4);
   const speed = Number(animationSpeed).toFixed(4);
   const fringe = Number(redFringeStrength).toFixed(4);
+  const spiralMix = Number(spiralStrength).toFixed(4);
+  const turns = Math.max(Number(spiralTurns), 0.1).toFixed(4);
+  const innerRadius = Math.max(Number(spiralInnerRadius), 0).toFixed(4);
+  const radiusSpan = Math.max(Number(spiralRadiusSpan), 0).toFixed(4);
+  const armWidth = Math.max(Number(spiralArmWidth), 0.001).toFixed(4);
+  const phase = Number(spiralPhase).toFixed(4);
+  const direction = Number(spiralDirection) < 0 ? "-1.0000" : "1.0000";
+  const twistNoise = Math.max(Number(spiralTwistNoise), 0).toFixed(4);
 
   return new THREE.ShaderMaterial({
     uniforms: {
@@ -66,16 +82,58 @@ function buildShaderMaterial(config) {
       varying float vBandMask;
       varying float vSpikeField;
       varying float vLongitudeMask;
+      varying float vSpiralProgress;
+
+      const float TAU = 6.28318530718;
 
       float angleDistance(float a, float b) {
         float delta = abs(a - b);
-        return min(delta, 6.28318530718 - delta);
+        return min(delta, TAU - delta);
       }
 
-      float bandMask(float latitude) {
+      float ovalBandMask(float latitude) {
         float primaryBand = exp(-pow((latitude - ${center}) / ${width}, 2.0));
         float mirroredBand = exp(-pow((latitude + ${center}) / (${width} * 1.15), 2.0)) * ${mirrored};
         return clamp(primaryBand + mirroredBand, 0.0, 1.0);
+      }
+
+      float spiralProgress(float latitude, float longitude) {
+        float hemisphereDirection = latitude >= 0.0 ? 1.0 : -1.0;
+        float directedLongitude = longitude * ${direction} * hemisphereDirection + ${phase};
+        return fract(directedLongitude / TAU + 1.0);
+      }
+
+      float spiralBandMask(float latitude, float longitude, float progress) {
+        float poleRadius = acos(clamp(abs(latitude), 0.0, 1.0));
+        float animatedRipple = sin(
+          longitude * 5.0
+          + latitude * 11.0
+          + uTime * (${speed} * 0.18)
+        ) * (${armWidth} * ${twistNoise});
+
+        float firstProgress = progress;
+        float firstTarget = ${innerRadius}
+          + ${radiusSpan} * (firstProgress / ${turns})
+          + animatedRipple;
+        float firstWidth = ${armWidth}
+          * (0.86 + 0.14 * sin(longitude * 7.0 + uTime * (${speed} * 0.22)));
+        float firstArm = exp(-pow((poleRadius - firstTarget) / firstWidth, 2.0));
+        float firstStartFade = smoothstep(0.015, 0.090, firstProgress);
+        float firstEndFade = 1.0 - smoothstep(${turns} - 0.080, ${turns}, firstProgress);
+        firstArm *= firstStartFade * firstEndFade;
+
+        // A second branch continues the same line beyond one revolution. This
+        // is what turns the former closed oval into an open 1–2 turn spiral.
+        float secondProgress = progress + 1.0;
+        float secondTarget = ${innerRadius}
+          + ${radiusSpan} * (secondProgress / ${turns})
+          + animatedRipple;
+        float secondArm = exp(-pow((poleRadius - secondTarget) / (firstWidth * 1.05), 2.0));
+        float secondEndFade = 1.0 - smoothstep(${turns} - 0.080, ${turns}, secondProgress);
+        secondArm *= secondEndFade;
+
+        float hemisphereStrength = latitude >= 0.0 ? 1.0 : ${mirrored};
+        return clamp(max(firstArm, secondArm) * hemisphereStrength, 0.0, 1.0);
       }
 
       float longitudeMask(float longitude) {
@@ -88,7 +146,10 @@ function buildShaderMaterial(config) {
         vec3 localNormal = normalize(position);
         float latitude = localNormal.y;
         float longitude = atan(localNormal.z, localNormal.x);
-        float latMask = bandMask(latitude);
+        float progress = spiralProgress(latitude, longitude);
+        float ovalMask = ovalBandMask(latitude);
+        float spiralMask = spiralBandMask(latitude, longitude, progress);
+        float latMask = mix(ovalMask, spiralMask, ${spiralMix});
         float lonMask = longitudeMask(longitude);
         float mask = latMask * lonMask;
 
@@ -101,6 +162,7 @@ function buildShaderMaterial(config) {
         vBandMask = mask;
         vSpikeField = spikes;
         vLongitudeMask = lonMask;
+        vSpiralProgress = progress;
         vec4 worldPosition = modelMatrix * vec4(displaced, 1.0);
         vWorldPosition = worldPosition.xyz;
         vWorldNormal = normalize(mat3(modelMatrix) * localNormal);
@@ -116,6 +178,7 @@ function buildShaderMaterial(config) {
       varying float vBandMask;
       varying float vSpikeField;
       varying float vLongitudeMask;
+      varying float vSpiralProgress;
 
       float hash(vec2 p) {
         return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);
@@ -185,9 +248,20 @@ function buildShaderMaterial(config) {
           * ${brightness}
           * uAuroraStrength;
 
-        vec3 color = mix(${primary}, ${secondary}, smoothstep(0.42, 0.86, fineBands));
+        // Blue and turquoise form the main emission. In spiral mode, sparse
+        // hot knots receive the telescope-mapped orange accent instead of
+        // tinting the whole polar region.
+        vec3 color = mix(${primary}, ${secondary}, smoothstep(0.34, 0.88, fineBands));
         float upperFringe = smoothstep(0.82, 1.0, clamp(abs(latitude), 0.0, 1.0)) * smoothstep(0.18, 0.82, spikeColumns);
-        color = mix(color, ${tertiary}, upperFringe * ${fringe});
+        float hotNoise = fbm(vec2(
+          longitude * 11.0 - uTime * (${speed} * 0.24),
+          vSpiralProgress * 38.0 + latitude * 21.0
+        ));
+        float warmKnots = smoothstep(0.69, 0.93, hotNoise)
+          * (0.32 + spikeColumns * 0.68)
+          * smoothstep(0.16, 0.84, mainArc);
+        float tertiaryField = mix(upperFringe, warmKnots, ${spiralMix});
+        color = mix(color, ${tertiary}, clamp(tertiaryField * ${fringe}, 0.0, 0.92));
         color *= 0.76 + limb * 1.14;
         color *= 0.92 + spikeColumns * 0.38 + vSpikeField * 0.22;
         color *= 0.80 + vLongitudeMask * 0.24;
@@ -235,6 +309,16 @@ export function createPlanetAuroraLayer({
   primaryColor = 0x1fff70,
   secondaryColor = 0x49d9ff,
   tertiaryColor = 0xff3d20,
+  // Optional polar spiral mode. The default remains the original oval so
+  // Earth and Mars keep their existing appearance.
+  spiralStrength = 0,
+  spiralTurns = 1.35,
+  spiralInnerRadius = 0.07,
+  spiralRadiusSpan = 0.24,
+  spiralArmWidth = 0.018,
+  spiralPhase = 0,
+  spiralDirection = 1,
+  spiralTwistNoise = 0.28,
 }) {
   const aurora = new THREE.Mesh(
     new THREE.SphereGeometry(radius * shellScale, segmentsForQuality(quality), segmentsForQuality(quality)),
@@ -260,6 +344,14 @@ export function createPlanetAuroraLayer({
       shellAlpha,
       animationSpeed,
       redFringeStrength,
+      spiralStrength,
+      spiralTurns,
+      spiralInnerRadius,
+      spiralRadiusSpan,
+      spiralArmWidth,
+      spiralPhase,
+      spiralDirection,
+      spiralTwistNoise,
     }),
   );
   aurora.renderOrder = 6;
