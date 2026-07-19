@@ -20,7 +20,7 @@ export function makeNoiseTexture(kind, size = 1024) {
   const gradient = ctx.createLinearGradient(0, 0, size, size / 2);
   // Each body gets a recognisable three-color base even without downloaded images.
   const palettes = {
-    mercury: ["#82776c", "#c0b4a0", "#4a4642"],
+    mercury: ["#5f5a55", "#aaa092", "#373534"],
     venus: ["#9b6b3c", "#e2b36c", "#5f422e"],
     earth: ["#053f92", "#1784ca", "#041d50"],
     moon: ["#d8d3c8", "#7a7770", "#353331"],
@@ -56,6 +56,33 @@ export function makeNoiseTexture(kind, size = 1024) {
       ctx.arc(Math.random() * size, Math.random() * size * 0.5, 4 + Math.random() * 25, 0, Math.PI * 2);
       ctx.fillStyle = `rgba(20,20,20,${0.08 + Math.random() * 0.2})`;
       ctx.fill();
+    }
+  }
+
+  if (kind === "mercury") {
+    // MESSENGER revealed bright, shallow, irregular hollows that are distinct
+    // from ordinary impact craters. These clustered pale pits preserve that
+    // character when the local 2K map is unavailable.
+    for (let cluster = 0; cluster < 12; cluster += 1) {
+      const cx = Math.random() * size;
+      const cy = Math.random() * size * 0.5;
+      const clusterRadius = 18 + Math.random() * 34;
+      const pitCount = 5 + Math.floor(Math.random() * 10);
+      for (let pit = 0; pit < pitCount; pit += 1) {
+        const angle = Math.random() * Math.PI * 2;
+        const distance = Math.sqrt(Math.random()) * clusterRadius;
+        const x = cx + Math.cos(angle) * distance;
+        const y = cy + Math.sin(angle) * distance * 0.58;
+        const radius = 1.4 + Math.random() * 4.6;
+        ctx.beginPath();
+        ctx.arc(x, y, radius * 1.7, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(220,232,229,${0.14 + Math.random() * 0.16})`;
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(x, y, radius, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(38,40,40,${0.10 + Math.random() * 0.16})`;
+        ctx.fill();
+      }
     }
   }
 

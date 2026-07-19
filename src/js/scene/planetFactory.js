@@ -71,13 +71,159 @@ const GAS_PROFILES = {
 
 
 function createMercuryMaterial(texture) {
-  return new THREE.MeshStandardMaterial({
-    map: texture,
-    // White preserves the calibrated local texture instead of multiplying a tint.
-    color: 0xffffff,
-    roughness: 1,
-    metalness: 0.01,
-    envMapIntensity: 0.06,
+  return new THREE.ShaderMaterial({
+    uniforms: {
+      uMap: { value: texture },
+    },
+    vertexShader: `
+      varying vec2 vUv;
+      varying vec3 vObjectDirection;
+      varying vec3 vWorldNormal;
+      varying vec3 vWorldPosition;
+
+      void main() {
+        vUv = uv;
+        vObjectDirection = normalize(position);
+        vec4 worldPosition = modelMatrix * vec4(position, 1.0);
+        vWorldPosition = worldPosition.xyz;
+        vWorldNormal = normalize(mat3(modelMatrix) * normal);
+        gl_Position = projectionMatrix * viewMatrix * worldPosition;
+      }
+    `,
+    fragmentShader: `
+      uniform sampler2D uMap;
+      varying vec2 vUv;
+      varying vec3 vObjectDirection;
+      varying vec3 vWorldNormal;
+      varying vec3 vWorldPosition;
+
+      float hash31(vec3 p) {
+        p = fract(p * 0.1031);
+        p += dot(p, p.yzx + 33.33);
+        return fract((p.x + p.y) * p.z);
+      }
+
+      float noise3D(vec3 p) {
+        vec3 i = floor(p);
+        vec3 f = fract(p);
+        f = f * f * (3.0 - 2.0 * f);
+        float n000 = hash31(i + vec3(0.0, 0.0, 0.0));
+        float n100 = hash31(i + vec3(1.0, 0.0, 0.0));
+        float n010 = hash31(i + vec3(0.0, 1.0, 0.0));
+        float n110 = hash31(i + vec3(1.0, 1.0, 0.0));
+        float n001 = hash31(i + vec3(0.0, 0.0, 1.0));
+        float n101 = hash31(i + vec3(1.0, 0.0, 1.0));
+        float n011 = hash31(i + vec3(0.0, 1.0, 1.0));
+        float n111 = hash31(i + vec3(1.0, 1.0, 1.0));
+        float nx00 = mix(n000, n100, f.x);
+        float nx10 = mix(n010, n110, f.x);
+        float nx01 = mix(n001, n101, f.x);
+        float nx11 = mix(n011, n111, f.x);
+        return mix(mix(nx00, nx10, f.y), mix(nx01, nx11, f.y), f.z);
+      }
+
+      float fbm3D(vec3 p) {
+        float value = 0.0;
+        float amplitude = 0.5;
+        for (int octave = 0; octave < 5; octave++) {
+          value += noise3D(p) * amplitude;
+          p = p * 2.03 + vec3(7.2, 11.8, 5.4);
+          amplitude *= 0.5;
+        }
+        return value;
+      }
+
+      float sphericalMask(vec3 direction, vec3 centre, float innerRadius, float outerRadius) {
+        float angularDistance = acos(clamp(dot(direction, normalize(centre)), -1.0, 1.0));
+        return 1.0 - smoothstep(innerRadius, outerRadius, angularDistance);
+      }
+
+      float hollowCluster(vec3 direction, vec3 centre, float radius, float seed) {
+        float area = sphericalMask(direction, centre, radius * 0.56, radius);
+        float cellular = fbm3D(direction * 175.0 + vec3(seed, seed * 1.73, seed * 0.41));
+        float etched = smoothstep(0.60, 0.78, cellular);
+        float brokenEdges = 0.56 + fbm3D(direction * 48.0 + vec3(seed * 2.1)) * 0.68;
+        return area * etched * brokenEdges;
+      }
+
+      void main() {
+        vec3 direction = normalize(vObjectDirection);
+        vec3 normal = normalize(vWorldNormal);
+        vec3 lightDirection = normalize(-vWorldPosition);
+        vec3 viewDirection = normalize(cameraPosition - vWorldPosition);
+
+        vec3 observed = texture2D(uMap, vUv).rgb;
+        float observedLuma = dot(observed, vec3(0.2126, 0.7152, 0.0722));
+        float broadRock = fbm3D(direction * 5.4);
+        float mediumRock = fbm3D(direction * 21.0 + vec3(3.1, 9.7, 5.2));
+        float fineRock = fbm3D(direction * 88.0 + vec3(11.4, 2.8, 17.3));
+
+        // MESSENGER true-colour views show a subdued grey-brown world. Preserve
+        // that neutral visible-light character while increasing local contrast
+        // so the terrain remains readable under the Sun's white light.
+        vec3 charcoalRock = vec3(0.205, 0.198, 0.190);
+        vec3 middleRock = vec3(0.455, 0.430, 0.398);
+        vec3 sunlitRock = vec3(0.715, 0.675, 0.610);
+        float terrainValue = clamp(
+          observedLuma * 0.64
+          + broadRock * 0.22
+          + mediumRock * 0.11
+          + fineRock * 0.03,
+          0.0,
+          1.0
+        );
+        vec3 colour = mix(charcoalRock, middleRock, smoothstep(0.16, 0.52, terrainValue));
+        colour = mix(colour, sunlitRock, smoothstep(0.48, 0.88, terrainValue));
+
+        // Retain restrained mineral colour variations from the observed map,
+        // avoiding the saturated false-colour appearance of scientific maps.
+        vec3 observedChroma = observed / max(observedLuma, 0.08);
+        colour *= mix(vec3(1.0), clamp(observedChroma, 0.78, 1.20), 0.24);
+
+        // Caloris-like smooth volcanic plains receive a subtle warm tint, while
+        // low-reflectance material remains dark brown-charcoal around basins.
+        float caloris = sphericalMask(direction, vec3(-0.78, 0.22, 0.58), 0.18, 0.34);
+        float calorisInterior = sphericalMask(direction, vec3(-0.78, 0.22, 0.58), 0.0, 0.22);
+        colour = mix(colour, vec3(0.61, 0.535, 0.435), calorisInterior * 0.34);
+        float lowReflectance = smoothstep(0.63, 0.82, fbm3D(direction * 9.0 + vec3(21.0)))
+          * (0.42 + caloris * 0.35);
+        colour = mix(colour, vec3(0.155, 0.145, 0.140), lowReflectance * 0.54);
+
+        // Mercury's hollows are shallow, irregular and unusually reflective.
+        // Several deterministic clusters create blue-white pitted material on
+        // crater floors, walls and central peaks without turning them emissive.
+        float hollows = 0.0;
+        hollows += hollowCluster(direction, vec3(0.34, 0.60, 0.72), 0.145, 2.4);
+        hollows += hollowCluster(direction, vec3(-0.24, 0.18, 0.95), 0.118, 5.8);
+        hollows += hollowCluster(direction, vec3(0.72, -0.28, 0.63), 0.126, 8.1);
+        hollows += hollowCluster(direction, vec3(-0.66, -0.12, 0.74), 0.134, 11.7);
+        hollows += hollowCluster(direction, vec3(0.15, -0.78, -0.60), 0.105, 14.2);
+        hollows += hollowCluster(direction, vec3(-0.84, 0.41, -0.35), 0.114, 17.6);
+        hollows = clamp(hollows, 0.0, 1.0);
+        vec3 hollowMaterial = vec3(0.80, 0.845, 0.835);
+        colour = mix(colour, hollowMaterial, hollows * 0.82);
+
+        // Fresh ejecta and crater rims catch white sunlight with higher albedo.
+        float freshMaterial = smoothstep(0.72, 0.90, fineRock)
+          * smoothstep(0.48, 0.82, mediumRock);
+        colour = mix(colour, vec3(0.77, 0.735, 0.675), freshMaterial * 0.24);
+
+        float ndl = dot(normal, lightDirection);
+        float dayBlend = smoothstep(-0.16, 0.24, ndl);
+        float diffuse = 0.14 + max(ndl, 0.0) * 1.12;
+        float microShadow = mix(0.87, 1.08, fineRock);
+        colour *= mix(0.035, diffuse * microShadow, dayBlend);
+
+        // A very restrained opposition lift helps crater relief remain readable
+        // without adding an atmosphere or artificial rim glow.
+        float opposition = pow(max(dot(viewDirection, lightDirection), 0.0), 18.0);
+        colour += vec3(0.055, 0.052, 0.048) * opposition * dayBlend;
+
+        gl_FragColor = vec4(max(colour, vec3(0.0)), 1.0);
+      }
+    `,
+    depthWrite: true,
+    depthTest: true,
   });
 }
 
@@ -191,12 +337,39 @@ function seededCraterField(count, seed, minimumRadius, maximumRadius, depthScale
 }
 
 const MERCURY_CRATERS = [
-  ...seededCraterField(76, 481516, 0.022, 0.15, 0.055),
+  ...seededCraterField(118, 481516, 0.019, 0.15, 0.057),
+  // Caloris Basin: broad and comparatively shallow, with a raised multi-ring edge.
   {
     direction: new THREE.Vector3(-0.78, 0.22, 0.58).normalize(),
     angularRadius: 0.29,
     depth: 0.014,
     rim: 0.0045,
+  },
+  // A handful of larger complex craters keep the silhouette from reading as a
+  // uniformly noisy sphere when Mercury is inspected at close range.
+  {
+    direction: new THREE.Vector3(0.34, 0.60, 0.72).normalize(),
+    angularRadius: 0.118,
+    depth: 0.0080,
+    rim: 0.0030,
+  },
+  {
+    direction: new THREE.Vector3(-0.24, 0.18, 0.95).normalize(),
+    angularRadius: 0.096,
+    depth: 0.0068,
+    rim: 0.0026,
+  },
+  {
+    direction: new THREE.Vector3(0.72, -0.28, 0.63).normalize(),
+    angularRadius: 0.104,
+    depth: 0.0072,
+    rim: 0.0028,
+  },
+  {
+    direction: new THREE.Vector3(-0.66, -0.12, 0.74).normalize(),
+    angularRadius: 0.112,
+    depth: 0.0075,
+    rim: 0.0029,
   },
 ];
 
