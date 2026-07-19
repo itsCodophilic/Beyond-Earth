@@ -817,6 +817,13 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
   let focusExitTransition = null;
   let suppressJourneyScrollSync = false;
 
+  // The first few scroll frames deliberately introduce the experience from
+  // Earth's neighbourhood. Once the viewer has left that opening shot, inward
+  // travel must continue toward the Sun instead of silently snapping back to
+  // Earth. The explicit "Travel back to Earth" action rearms this opening view.
+  const EARTH_OPENING_RELEASE_DISTANCE = 18;
+  let hasLeftOpeningEarthView = false;
+
   // Reaching the outermost Solar-System view performs a bounded soft reset.
   // It clears every temporary inspection/input/render state without reloading
   // the document or moving the camera. Hysteresis ensures it runs only once per
@@ -849,6 +856,7 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
   // Reused projection vectors prevent short-lived garbage-collection spikes in
   // the animation loop and pointer hover path.
   const heliocentricWorldPosition = new THREE.Vector3();
+  const solarWorldPosition = new THREE.Vector3();
   const connectorProjectedPosition = new THREE.Vector3();
   const focusedLocatorWorldPosition = new THREE.Vector3();
   const focusedLocatorProjectedPosition = new THREE.Vector3();
@@ -1263,15 +1271,23 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
 
   /*
     getFocusPoint
-    - Chooses the camera target based on the selected body or nearby Earth when zoomed in.
-    - Keeps the camera on the Sun at long range when no body is focused.
+    - Introduces the journey beside Earth, then keeps free flight centred on the Sun.
+    - The opening Earth target is a one-way hand-off until the explicit return action.
   */
   function getFocusPoint(distance, target) {
     // getWorldPosition is important for nested bodies such as the Moon because
     // their local `.position` is relative to a moving parent.
     if (focusedBody) return focusedBody.getWorldPosition(target);
-    if (distance < 18) return earth.getWorldPosition(target);
-    return target.set(0, 0, 0);
+
+    if (!hasLeftOpeningEarthView && distance >= EARTH_OPENING_RELEASE_DISTANCE) {
+      hasLeftOpeningEarthView = true;
+    }
+    if (!hasLeftOpeningEarthView) return earth.getWorldPosition(target);
+
+    // Read the Sun's actual world transform instead of assuming it will always
+    // remain at (0, 0, 0). This keeps the camera rule correct if the scene root
+    // is repositioned later.
+    return sun.system.getWorldPosition(target);
   }
 
   function solveEccentricAnomaly(meanAnomaly, eccentricity) {
@@ -1323,7 +1339,7 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
   const MAX_CINEMATIC_CAMERA_DISTANCE = 2550;
   let currentSunAngularRadius = 0;
   let currentSunProjectedRadiusPixels = Infinity;
-  let snapSunApparentScaleOnNextFrame = false;
+  let snapSunApparentScaleOnNextFrame = true;
 
   // Apply the single cinematic profile once. No runtime tier, DPR, or update
   // cadence changes are allowed after initialisation.
@@ -1381,124 +1397,208 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
     // position. A moon therefore sees the same solar disk as its planet.
     const sceneSemiMajor = Number(orbitalBody.userData?.orbitRadius);
     if (Number.isFinite(sceneSemiMajor) && sceneSemiMajor > 0) {
-      const currentSceneRadius = orbitalBody.getWorldPosition(heliocentricWorldPosition).length();
+      orbitalBody.getWorldPosition(heliocentricWorldPosition);
+      sun.system.getWorldPosition(solarWorldPosition);
+      const currentSceneRadius = heliocentricWorldPosition.distanceTo(solarWorldPosition);
       return semiMajorAU * currentSceneRadius / sceneSemiMajor;
     }
 
     return semiMajorAU;
   }
 
+  const SUN_OBSERVER_DISTANCE_ANCHORS = Object.freeze([
+    { sceneRadius: PLANET_SCALE_PROFILES.Mercury.orbitRadius, au: HELIOCENTRIC_ORBIT_AU.Mercury },
+    { sceneRadius: PLANET_SCALE_PROFILES.Venus.orbitRadius, au: HELIOCENTRIC_ORBIT_AU.Venus },
+    { sceneRadius: PLANET_SCALE_PROFILES.Earth.orbitRadius, au: HELIOCENTRIC_ORBIT_AU.Earth },
+    { sceneRadius: PLANET_SCALE_PROFILES.Mars.orbitRadius, au: HELIOCENTRIC_ORBIT_AU.Mars },
+    { sceneRadius: PLANET_SCALE_PROFILES.Jupiter.orbitRadius, au: HELIOCENTRIC_ORBIT_AU.Jupiter },
+    { sceneRadius: PLANET_SCALE_PROFILES.Saturn.orbitRadius, au: HELIOCENTRIC_ORBIT_AU.Saturn },
+    { sceneRadius: PLANET_SCALE_PROFILES.Uranus.orbitRadius, au: HELIOCENTRIC_ORBIT_AU.Uranus },
+    { sceneRadius: PLANET_SCALE_PROFILES.Neptune.orbitRadius, au: HELIOCENTRIC_ORBIT_AU.Neptune },
+    { sceneRadius: PLANET_SCALE_PROFILES.Pluto.orbitRadius, au: HELIOCENTRIC_ORBIT_AU.Pluto },
+  ]);
+
   function frameAdjustedEase(baseFactor, deltaSeconds) {
     const clampedFactor = THREE.MathUtils.clamp(baseFactor, 0, 1);
     return 1 - Math.pow(1 - clampedFactor, Math.max(0, deltaSeconds) * 60);
   }
 
-  function updateSunApparentScale(deltaSeconds = 1 / 60) {
-    let targetScale = 1;
-    let focusedHeliocentricAU = null;
-    const focusedName = String(focusedBody?.userData?.name ?? focusedBody?.name ?? '').toLowerCase();
+  /**
+   * Converts the cinematic scene radius into an observer distance in AU.
+   *
+   * The scene compresses the real Solar System, so a simple linear conversion
+   * would make the Sun jump in size between regions. Piecewise interpolation
+   * through the authored orbit radii preserves the correct order and gives a
+   * gentle, continuous increase in apparent solar size while travelling inward.
+   * Distances beyond Pluto intentionally remain at Pluto's 39.482 AU view so
+   * Pluto and the maximum zoom-out boundary show the same tiny solar star.
+   */
+  function getFreeFlightObserverAU() {
+    sun.system.getWorldPosition(solarWorldPosition);
+    const sceneRadius = camera.position.distanceTo(solarWorldPosition);
+    const first = SUN_OBSERVER_DISTANCE_ANCHORS[0];
+    const last = SUN_OBSERVER_DISTANCE_ANCHORS[SUN_OBSERVER_DISTANCE_ANCHORS.length - 1];
 
-    if (focusedBody && !focusedName.includes('sun')) {
-      focusedHeliocentricAU = getBodyHeliocentricAU(focusedBody);
-      if (focusedHeliocentricAU) {
-        // Reproduce the real apparent solar angle from the selected body.
-        const realDistanceKm = focusedHeliocentricAU * ASTRONOMICAL_UNIT_KM;
-        const angularRadius = Math.atan(SUN_RADIUS_KM / realDistanceKm);
-        const cameraToSun = Math.max(1, camera.position.distanceTo(sun.system.position));
-        const apparentRadius = Math.tan(angularRadius) * cameraToSun;
-        targetScale = THREE.MathUtils.clamp(apparentRadius / SUN_BASE_VISUAL_RADIUS, 0.006, 0.24);
+    if (sceneRadius <= first.sceneRadius) {
+      const inwardRatio = THREE.MathUtils.clamp(sceneRadius / first.sceneRadius, 0.16, 1);
+      return Math.max(0.062, first.au * inwardRatio);
+    }
+
+    for (let index = 1; index < SUN_OBSERVER_DISTANCE_ANCHORS.length; index += 1) {
+      const lower = SUN_OBSERVER_DISTANCE_ANCHORS[index - 1];
+      const upper = SUN_OBSERVER_DISTANCE_ANCHORS[index];
+      if (sceneRadius <= upper.sceneRadius) {
+        const ratio = THREE.MathUtils.clamp(
+          (sceneRadius - lower.sceneRadius) / Math.max(0.0001, upper.sceneRadius - lower.sceneRadius),
+          0,
+          1,
+        );
+        // Logarithmic interpolation better matches the gradual angular-size
+        // change across the very wide AU range than a straight numeric lerp.
+        return Math.exp(THREE.MathUtils.lerp(Math.log(lower.au), Math.log(upper.au), ratio));
       }
     }
 
+    return last.au;
+  }
+
+  function getCurrentObserverHeliocentricAU() {
+    if (focusedBody) {
+      const focusedName = String(focusedBody.userData?.name ?? focusedBody.name ?? '').toLowerCase();
+      if (focusedName.includes('sun')) return null;
+      return getBodyHeliocentricAU(focusedBody) ?? getFreeFlightObserverAU();
+    }
+    return getFreeFlightObserverAU();
+  }
+
+  function updateSunApparentScale(deltaSeconds = 1 / 60) {
+    const focusedName = String(focusedBody?.userData?.name ?? focusedBody?.name ?? '').toLowerCase();
+    const isSunFocused = focusedName.includes('sun');
+    // Escape keeps the selected object alive while the camera glides back to its
+    // saved journey pose. The Sun should nevertheless begin shrinking during
+    // that glide instead of remaining at inspection size until the last frame.
+    const isActiveSunInspection = isSunFocused && !focusExitTransition;
+    const observerAU = isSunFocused && focusExitTransition
+      ? getFreeFlightObserverAU()
+      : getCurrentObserverHeliocentricAU();
+    sun.system.getWorldPosition(solarWorldPosition);
+    const cameraToSun = Math.max(1, camera.position.distanceTo(solarWorldPosition));
+    const halfFov = THREE.MathUtils.degToRad(camera.fov * 0.5);
+
+    let targetScale = 1;
+    if (!isActiveSunInspection && Number.isFinite(observerAU) && observerAU > 0) {
+      const realDistanceKm = observerAU * ASTRONOMICAL_UNIT_KM;
+      const angularRadius = Math.atan(SUN_RADIUS_KM / realDistanceKm);
+      // Resize the world-space model so its projected disk keeps the real solar
+      // angle from the selected planet. This also remains valid when the viewer
+      // pulls far back while keeping that planet selected; the Sun never falls
+      // back into an invisible sub-pixel point at the wide-focus boundary.
+      const apparentRadius = Math.tan(angularRadius) * cameraToSun;
+      targetScale = THREE.MathUtils.clamp(
+        apparentRadius / SUN_BASE_VISUAL_RADIUS,
+        0.0011,
+        1,
+      );
+    }
+
     const currentScale = sun.system.scale.x;
-    // Broad view is an invariant, not an animation target. Once no body owns
-    // the inspection camera, the Sun must be exactly at its authored scale on
-    // every frame. This removes the stale reduced-Sun state visible beside
-    // Jupiter after leaving a Jovian inspection.
-    const nextScale = !focusedBody
-      ? 1
-      : snapSunApparentScaleOnNextFrame
-        ? targetScale
-        : THREE.MathUtils.lerp(
-          currentScale,
-          targetScale,
-          frameAdjustedEase(0.095, deltaSeconds),
-        );
+    const scaleEase = isActiveSunInspection ? 0.22 : focusExitTransition ? 0.16 : 0.085;
+    const nextScale = snapSunApparentScaleOnNextFrame
+      ? targetScale
+      : THREE.MathUtils.lerp(
+        currentScale,
+        targetScale,
+        frameAdjustedEase(scaleEase, deltaSeconds),
+      );
     snapSunApparentScaleOnNextFrame = false;
     sun.system.scale.setScalar(nextScale);
 
-    const cameraToSun = Math.max(1, camera.position.distanceTo(sun.system.position));
-    const halfFov = THREE.MathUtils.degToRad(camera.fov * 0.5);
     const apparentWorldRadius = SUN_BASE_VISUAL_RADIUS * nextScale;
-    currentSunAngularRadius = Math.asin(THREE.MathUtils.clamp(apparentWorldRadius / cameraToSun, 0, 0.999));
+    currentSunAngularRadius = Math.asin(
+      THREE.MathUtils.clamp(apparentWorldRadius / cameraToSun, 0, 0.999),
+    );
     spaceEnvironment.setSunAngularRadius(currentSunAngularRadius);
+
     const projectedRadiusPixels = (apparentWorldRadius / cameraToSun)
       / Math.max(0.0001, Math.tan(halfFov))
       * innerHeight * 0.5;
     currentSunProjectedRadiusPixels = projectedRadiusPixels;
 
-    // When the physical disk becomes only a few pixels wide, blend it into a
-    // brilliant point-star flare. The flare still depth-tests, so a planet can
-    // naturally eclipse it instead of the light appearing through solid rock.
-    const apparentPointBlend = 1 - THREE.MathUtils.smoothstep(projectedRadiusPixels, 5, 42);
-    const journeyStarBlend = THREE.MathUtils.smoothstep(smoothProgress, 0.38, 0.96);
-    const distantBodyBlend = focusedHeliocentricAU
-      ? THREE.MathUtils.smoothstep(focusedHeliocentricAU, 1.0, 30.0)
-      : 0;
-    const starBlend = focusedName.includes('sun')
-      ? 0
-      : THREE.MathUtils.clamp(Math.max(apparentPointBlend, journeyStarBlend * 0.92, distantBodyBlend), 0, 1);
-
     const worldUnitsPerPixel = 2 * cameraToSun * Math.tan(halfFov) / Math.max(1, innerHeight);
-    const deepJourneyGlow = THREE.MathUtils.smoothstep(smoothProgress, 0.46, 1.0);
-    const remoteBodyGlow = focusedHeliocentricAU
-      ? THREE.MathUtils.smoothstep(focusedHeliocentricAU, 3.0, 30.0)
+    const focusCameraDistance = camera.position.distanceTo(cameraFocusPoint);
+    const freeFlightZoomRatio = smoothProgress;
+    const focusedZoomRatio = focusedBody
+      ? focusCameraDistance / MAX_CINEMATIC_CAMERA_DISTANCE
       : 0;
-    const distanceGlow = Math.max(deepJourneyGlow, remoteBodyGlow);
+    const activeZoomRatio = focusedBody ? focusedZoomRatio : freeFlightZoomRatio;
+    const maximumZoomBlend = isActiveSunInspection
+      ? 0
+      : THREE.MathUtils.smoothstep(
+        activeZoomRatio,
+        0.91,
+        0.995,
+      );
 
-    // The physical disk becomes smaller with distance, while diffraction,
-    // corona and sensor-like glare make the unresolved point appear more radiant.
-    const haloPixelSize = THREE.MathUtils.lerp(24, 164, starBlend)
-      + distanceGlow * 76;
+    // The ordinary white solar halo remains present from every viewpoint.
+    // Only at the authored maximum zoom-out does it expand and brighten into a
+    // more cinematic distant-star bloom.
+    const steadyGlowPixels = 56;
+    const maximumGlowPixels = THREE.MathUtils.lerp(steadyGlowPixels, 132, maximumZoomBlend);
     const targetGlowWorldSize = Math.max(
-      apparentWorldRadius * THREE.MathUtils.lerp(2.1, 5.8, starBlend),
-      haloPixelSize * worldUnitsPerPixel,
+      apparentWorldRadius * 2.56,
+      maximumGlowPixels * worldUnitsPerPixel,
     );
     const localGlowSize = targetGlowWorldSize / Math.max(nextScale, 0.0001);
-    sun.glow.scale.set(localGlowSize, localGlowSize, 1);
+    const glowPulse = 1 + Math.sin(elapsedTime * 0.72) * 0.018;
+    sun.glow.visible = true;
+    sun.glow.scale.set(localGlowSize * glowPulse, localGlowSize * glowPulse, 1);
     sun.glow.material.opacity = THREE.MathUtils.clamp(
-      (THREE.MathUtils.lerp(0.03, 0.54, starBlend) + distanceGlow * 0.20)
-        * (1 + Math.sin(elapsedTime * 1.7) * (0.06 + distanceGlow * 0.07)),
-      0,
-      0.82,
+      0.13 + maximumZoomBlend * 0.24 + Math.sin(elapsedTime * 0.91) * 0.008,
+      0.105,
+      0.42,
     );
-
-    // Keep solar glare depth-tested. Disabling depth testing made foreground
-    // planets appear translucent against the Sun and could look like a detached
-    // brown shadow. Broad-view transit size is corrected separately below.
     sun.glow.material.depthTest = true;
     sun.glow.renderOrder = 0;
 
+    // The diffraction sprite adds emitted radiance around the physical disk; it
+    // never replaces or enlarges the clickable photosphere. An unresolved Sun
+    // receives the full effect, while planetary inspection keeps a restrained
+    // version visible even when the disk itself is several pixels wide.
+    const unresolvedStarBlend = 1
+      - THREE.MathUtils.smoothstep(projectedRadiusPixels, 0.75, 3.2);
+    const planetaryRadianceBlend = focusedBody && !isSunFocused
+      ? (1 - THREE.MathUtils.smoothstep(projectedRadiusPixels, 10, 34)) * 0.84
+      : 0;
+    const radianceBlend = isActiveSunInspection
+      ? 0
+      : Math.max(unresolvedStarBlend, planetaryRadianceBlend);
     if (sun.distantStar) {
-      sun.distantStar.material.depthTest = true;
-      sun.distantStar.renderOrder = 8;
-      const starPixelSize = THREE.MathUtils.lerp(16, 108, starBlend)
-        + distanceGlow * 52;
+      const twinkle = Math.sin(elapsedTime * 3.2) * 0.055
+        + Math.sin(elapsedTime * 7.1 + 1.4) * 0.032;
+      const maximumTwinkle = Math.sin(elapsedTime * 4.6) * 0.12
+        + Math.sin(elapsedTime * 9.7 + 0.8) * 0.065;
+      const starPulse = 1 + twinkle * 0.22 + maximumTwinkle * maximumZoomBlend * 0.36;
+      const starPixelSize = THREE.MathUtils.lerp(24, 82, maximumZoomBlend) * starPulse;
       const starWorldSize = starPixelSize * worldUnitsPerPixel;
       const localStarSize = starWorldSize / Math.max(nextScale, 0.0001);
-      sun.distantStar.visible = starBlend > 0.015;
+
+      sun.distantStar.visible = radianceBlend > 0.012;
       sun.distantStar.scale.set(localStarSize, localStarSize, 1);
       sun.distantStar.material.opacity = THREE.MathUtils.clamp(
-        starBlend * (0.82 + distanceGlow * 0.32 + Math.sin(elapsedTime * 2.25) * (0.08 + distanceGlow * 0.07)),
+        radianceBlend * (0.76 + maximumZoomBlend * 0.18 + twinkle * 0.38 + maximumTwinkle * maximumZoomBlend),
         0,
         1,
       );
-      sun.distantStar.material.rotation = elapsedTime * (0.035 + distanceGlow * 0.018);
+      // Fixed diffraction orientation prevents the distant Sun from appearing
+      // to revolve around a focused planet. Brightness and size create twinkle.
+      sun.distantStar.material.rotation = 0;
+      sun.distantStar.material.depthTest = true;
+      sun.distantStar.renderOrder = 8;
     }
 
     setSunPerformanceProfile(sun, "high", {
       projectedRadiusPixels,
-      focused: focusedName.includes("sun"),
+      focused: isSunFocused,
     });
   }
 
@@ -1512,8 +1612,10 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
    * from leaving a shrunken Sun beside a normal-sized gas giant.
    */
   function restoreBroadSolarSystemScale() {
-    sun.system.scale.setScalar(1);
-    sun.system.updateMatrixWorld(true);
+    // Planet inspection may temporarily modify visual transforms, but the Sun
+    // now derives its apparent size continuously from the observer's AU. Do not
+    // force it to the authored close-up scale when leaving focus.
+    snapSunApparentScaleOnNextFrame = true;
 
     planets.forEach((planet) => {
       planet.scale.setScalar(1);
@@ -1630,7 +1732,6 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
 
     // Restore authored broad-view transforms and flush cached WebGL state.
     restoreBroadSolarSystemScale();
-    snapSunApparentScaleOnNextFrame = false;
     updateMajorSatelliteVisibility({
       systems: majorSatelliteSystems,
       camera,
@@ -1886,9 +1987,18 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
     if (!body) return 0;
     const worldPosition = body.getWorldPosition(radiusWorldPosition);
     const cameraDistance = Math.max(0.0001, camera.position.distanceTo(worldPosition));
+
+    // The Sun changes scale with observer distance. Its current projected disk
+    // is already calculated by the solar renderer, so use that exact radius for
+    // hover and click testing instead of its large authored close-up radius.
+    if (getInteractiveType(body) === "star"
+      && Number.isFinite(currentSunProjectedRadiusPixels)) {
+      return Math.max(0, currentSunProjectedRadiusPixels);
+    }
+
     const visualRadius = Number(
-      body.userData?.focusVisualRadius
-      ?? body.userData?.visualRadius
+      body.userData?.visualRadius
+      ?? body.userData?.focusVisualRadius
       ?? body.userData?.instanceRecord?.visualRadius
       ?? 0,
     );
@@ -2173,6 +2283,15 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
 
   function updateCelestialHoverVisual() {
     if (!hoveredCelestialBody || !asteroidHoverLocator.visible) return;
+
+    // Bodies continue moving and the Sun can shrink even while the pointer is
+    // stationary. Release a stale selection as soon as its live silhouette no
+    // longer contains the cursor instead of waiting for another pointer event.
+    if (!isPointerStillOnHoveredBody(hoveredCelestialBody)) {
+      clearCelestialHover();
+      if (lastPointerType !== "touch" && !isDragging) scheduleCelestialHover();
+      return;
+    }
 
     const worldPosition = hoveredCelestialBody.getWorldPosition(hoverWorldPosition);
     const projected = hoverProjectedPosition.copy(worldPosition).project(camera);
@@ -2505,7 +2624,6 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
         focusNavigationHistory.length = 0;
         restoreJourneyCameraSnapshot(snapshot);
         restoreBroadSolarSystemScale();
-        snapSunApparentScaleOnNextFrame = false;
         updateBodyCard(null);
 
         // Release position:fixed under a hard `scroll-behavior:auto` guard.
@@ -2696,7 +2814,6 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
       cameraOffset: camera.position.clone().sub(focusHistoryWorldPosition),
       focusOffset: cameraFocusPoint.clone().sub(focusHistoryWorldPosition),
       isBodyCardCollapsed,
-      displayedBody,
       focusSelectionPulseStartedAt,
     };
   }
@@ -2752,7 +2869,10 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
     focusSelectionPulseStartedAt = Number.isFinite(state.focusSelectionPulseStartedAt)
       ? state.focusSelectionPulseStartedAt
       : elapsedTime;
-    displayedBody = state.displayedBody ?? focusedBody;
+    // The DOM currently contains the body we are leaving, not the body stored
+    // in this history entry. Clear the render cache so updateBodyCard rewrites
+    // every fact instead of incorrectly preserving the newer body's details.
+    displayedBody = null;
     setAsteroidInspectionDetail(focusedBody, true);
     setAsteroidFocusAppearance(focusedBody, true);
     updateDistanceReadout(smoothProgress);
@@ -2965,6 +3085,7 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
 
     scrollProgress = 0;
     smoothProgress = 0;
+    hasLeftOpeningEarthView = false;
     previousDistanceProgress = 0;
     targetYaw = -0.55;
     targetPitch = 0.22;
@@ -3370,7 +3491,7 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
       : hoveredCelestialBody
         ? 0.018
         : focusedBody
-          ? 0.12
+          ? 0.026
           : 1;
     const frameMotionScale = motionScale * deltaTime * 60;
     simulationTime += deltaTime * motionScale;
@@ -3536,10 +3657,11 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
 
     updateSun(sun, simulationTime, motionScale * deltaTime * 60);
     updateSunApparentScale(deltaTime);
-    // Last-line safety invariant: temporary inspection code must not be
-    // allowed to leave temporary inspection transforms in the broad view.
-    if (!focusedBody && Math.abs(sun.system.scale.x - 1) > 1e-6) {
-      restoreBroadSolarSystemScale();
+    // Numerical safety only. The normal Sun scale is intentionally dynamic and
+    // follows observer distance even while no celestial body is focused.
+    if (!Number.isFinite(sun.system.scale.x) || sun.system.scale.x <= 0) {
+      sun.system.scale.setScalar(1);
+      snapSunApparentScaleOnNextFrame = true;
     }
 
     updateCelestialHoverVisual();

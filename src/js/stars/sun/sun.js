@@ -1086,6 +1086,11 @@ export function createSun({ world, hoverTargets, texture, quality = "high" }) {
       depthWrite: false,
 
       depthTest: true,
+
+      // Solar radiance is already authored in display-space colours. Keeping
+      // it outside scene tone mapping prevents a distant halo from dimming when
+      // focus changes the camera exposure and surrounding scene brightness.
+      toneMapped: false,
     }),
   );
 
@@ -1107,6 +1112,7 @@ export function createSun({ world, hoverTargets, texture, quality = "high" }) {
       blending: THREE.AdditiveBlending,
       depthWrite: false,
       depthTest: true,
+      toneMapped: false,
     }),
   );
   distantStar.name = "Distant solar star flare";
