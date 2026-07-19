@@ -8,12 +8,12 @@ export const mars = {
   orbitSpeed: 0.25, spinSpeed: 0.01, axialTilt: 0.44, angle: 5.3,
   orbitEccentricity: 0.0934, orbitRotation: 2.78, orbitInclination: 0.032,
   bump: 0.065, orbitColor: 0xd06a37,
-  detail: "Red planet | about half Earth diameter", focusScale: 2.1,
+  detail: "Red planet | volcanoes, canyons, polar caps, and patchy aurora", focusScale: 2.1,
   minFocusDistance: scale.focusDistance * 0.88, focusDistance: scale.focusDistance, focusEase: 0.10, focusFov: 36,
   info: {
     type: "Planet", diameter: "6,779 km", orbitalSpeed: "24.07 km/s",
     distanceFromEarth: "≈ 54.6 million km at closest approach",
     sizeComparison: getPlanetSizeComparison("Mars"),
-    description: "A cold desert of rust-red dunes, immense volcanoes, ancient river valleys, and two tiny moons.",
+    description: "A cold desert world of iron-oxide plains, bright polar frosts, Olympus Mons, Valles Marineris, dust haze, and two tiny irregular moons.",
   },
 };

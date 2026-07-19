@@ -18,6 +18,7 @@ import { HELIOCENTRIC_ORBIT_AU, PLANET_SCALE_PROFILES } from './config/celestial
 import { loadUniverseTextures } from './graphics/loadTextures.js';
 import { createMoonSystem } from './planets/earth/satellites/moon.js';
 import { createEarthVisualSystem, updateEarthVisualSystem } from './planets/earth/earthVisuals.js';
+import { createMarsVisualSystem, updateMarsVisualSystem } from './planets/mars/marsVisuals.js';
 import { PLANET_CONFIGS } from './planets/index.js';
 import {
   createMajorSatelliteSystems,
@@ -939,6 +940,8 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
 
   const earth = planets.find((planet) => planet.name === "Earth");
   const earthRadius = earth.userData.visualRadius ?? 1.25;
+  const mars = planets.find((planet) => planet.name === "Mars");
+  const marsRadius = mars.userData.visualRadius ?? 0.98;
 
   // Earth uses NASA Blue Marble visible-light imagery, a filtered MODIS cloud
   // shell, a sunlight-aware atmospheric limb, and nightside-only city lights.
@@ -946,6 +949,12 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
     earth,
     textures,
     radius: earthRadius,
+    quality: creationQuality,
+  });
+
+  const marsVisualSystem = createMarsVisualSystem({
+    mars,
+    radius: marsRadius,
     quality: creationQuality,
   });
 
@@ -3711,6 +3720,7 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
     // ----- Animate special meshes and scene effects -----
     const frameScale = deltaTime * 60;
     updateEarthVisualSystem(earthVisualSystem, frameScale);
+    updateMarsVisualSystem(marsVisualSystem, frameScale);
     moonPivot.rotation.y += 0.011 * frameMotionScale;
     // A small oscillation suggests lunar libration while the pivot maintains tidal lock.
     moon.rotation.y = Math.sin(simulationTime * 0.35) * 0.04;

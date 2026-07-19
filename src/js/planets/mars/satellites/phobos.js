@@ -22,15 +22,15 @@ export const PHOBOS_PROFILE = Object.freeze({
     // Both Martian moons reflect only a small fraction of incoming sunlight.
     // These intentionally subdued sRGB colours preserve that very low-albedo,
     // carbon-rich appearance instead of turning Phobos into a tan space rock.
-    baseColour: 0x282d31,
-    dustColour: 0x596064,
-    darkColour: 0x0d1012,
-    freshColour: 0x77838a,
-    freshMaterialStrength: 0.52,
-    roughness: 1,
-    broadRelief: 0.075,
-    rockRelief: 0.032,
-    fineRelief: 0.011,
+    baseColour: 0x765548,
+    dustColour: 0xa07764,
+    darkColour: 0x2a1b18,
+    freshColour: 0x8fa6b0,
+    freshMaterialStrength: 0.70,
+    roughness: 0.98,
+    broadRelief: 0.080,
+    rockRelief: 0.036,
+    fineRelief: 0.013,
     minimumRadius: 0.62,
     craters: [
       // Stickney is nearly half as wide as Phobos and therefore dominates the
@@ -42,6 +42,8 @@ export const PHOBOS_PROFILE = Object.freeze({
       { center: [-0.28, 0.68, -0.68], radius: 0.11, depth: 0.047, rim: 0.014, darkness: 0.48 },
       { center: [0.84, 0.20, -0.50], radius: 0.095, depth: 0.038, rim: 0.012, darkness: 0.46 },
       { center: [-0.50, -0.64, 0.58], radius: 0.085, depth: 0.034, rim: 0.010, darkness: 0.42 },
+      { center: [0.30, 0.22, 0.92], radius: 0.072, depth: 0.028, rim: 0.010, darkness: 0.40 },
+      { center: [-0.14, 0.28, -0.94], radius: 0.062, depth: 0.026, rim: 0.009, darkness: 0.38 },
     ],
     grooves: [
       { planeNormal: [0.18, 0.97, 0.15], regionDirection: [0.30, -0.10, 0.95], width: 0.030, depth: 0.018, seed: 7 },
@@ -50,6 +52,7 @@ export const PHOBOS_PROFILE = Object.freeze({
       { planeNormal: [-0.04, 0.98, 0.20], regionDirection: [0.18, 0.06, 0.98], width: 0.021, depth: 0.013, seed: 27 },
       { planeNormal: [-0.22, 0.95, 0.23], regionDirection: [0.12, -0.02, 0.99], width: 0.020, depth: 0.012, seed: 33 },
       { planeNormal: [0.55, 0.80, 0.24], regionDirection: [0.46, 0.10, 0.88], width: 0.019, depth: 0.011, seed: 42 },
+      { planeNormal: [-0.34, 0.91, 0.23], regionDirection: [-0.02, 0.12, 0.99], width: 0.018, depth: 0.010, seed: 51 },
     ],
   },
 });
