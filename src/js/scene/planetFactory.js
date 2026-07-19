@@ -240,13 +240,15 @@ function createMarsMaterial(texture) {
 function createVenusSurfaceMaterial(texture) {
   return new THREE.MeshStandardMaterial({
     map: texture,
-    color: 0x8c5227,
+    // The rocky surface is hidden beneath an optically thick cloud deck in
+    // visible light. Keep it dark and restrained so it never bleeds through the
+    // atmosphere as an artificial orange globe.
+    color: 0x5a3828,
     roughness: 1,
     metalness: 0,
-    // Venus's solid terrain is intentionally quiet because opaque clouds dominate.
     bumpMap: texture,
-    bumpScale: 0.008,
-    envMapIntensity: 0.02,
+    bumpScale: 0.006,
+    envMapIntensity: 0.01,
   });
 }
 
@@ -671,7 +673,7 @@ function addRealisticAtmosphere(planet, config, segmentScale = 1) {
   let color;
   let opacity;
   let scale;
-  if (config.name === "Venus") { color = 0xffd792; opacity = 0.32; scale = 1.045; }
+  if (config.name === "Venus") { color = 0xffe4b0; opacity = 0.255; scale = 1.048; }
   else if (GAS_PROFILES[config.name]) {
     const profile = GAS_PROFILES[config.name];
     color = profile.atmosphereColor;
@@ -694,13 +696,27 @@ function addRealisticAtmosphere(planet, config, segmentScale = 1) {
   return shell;
 }
 
-function createVenusCloudShader(baseColor, opacity, cloudTexture) {
+function createVenusCloudShader({
+  baseColor,
+  highlightColor,
+  shadowColor,
+  opacity,
+  cloudTexture,
+  layer = 0,
+  flowSpeed = 1,
+  opaque = false,
+}) {
   return new THREE.ShaderMaterial({
     uniforms: {
       uTime: { value: 0 },
       uBase: { value: new THREE.Color(baseColor) },
+      uHighlight: { value: new THREE.Color(highlightColor) },
+      uShadow: { value: new THREE.Color(shadowColor) },
       uOpacity: { value: opacity },
       uCloudMap: { value: cloudTexture },
+      uLayer: { value: layer },
+      uFlowSpeed: { value: flowSpeed },
+      uOpaque: { value: opaque ? 1 : 0 },
     },
     vertexShader: `
       varying vec2 vUv;
@@ -709,6 +725,7 @@ function createVenusCloudShader(baseColor, opacity, cloudTexture) {
       varying vec3 vViewDirection;
       varying vec3 vWorldNormal;
       varying vec3 vWorldPosition;
+
       void main() {
         vUv = uv;
         vObjectDirection = normalize(position);
@@ -724,8 +741,14 @@ function createVenusCloudShader(baseColor, opacity, cloudTexture) {
     fragmentShader: `
       uniform float uTime;
       uniform vec3 uBase;
+      uniform vec3 uHighlight;
+      uniform vec3 uShadow;
       uniform float uOpacity;
       uniform sampler2D uCloudMap;
+      uniform float uLayer;
+      uniform float uFlowSpeed;
+      uniform float uOpaque;
+
       varying vec2 vUv;
       varying vec3 vObjectDirection;
       varying vec3 vNormalView;
@@ -738,6 +761,7 @@ function createVenusCloudShader(baseColor, opacity, cloudTexture) {
         p += dot(p, p.yzx + 33.33);
         return fract((p.x + p.y) * p.z);
       }
+
       float noise3D(vec3 p) {
         vec3 i = floor(p);
         vec3 f = fract(p);
@@ -756,41 +780,125 @@ function createVenusCloudShader(baseColor, opacity, cloudTexture) {
         float nx11 = mix(n011, n111, f.x);
         return mix(mix(nx00, nx10, f.y), mix(nx01, nx11, f.y), f.z);
       }
+
       float fbm3D(vec3 p) {
         float value = 0.0;
         float amplitude = 0.5;
-        for (int i = 0; i < 5; i++) {
+        for (int octave = 0; octave < 5; octave++) {
           value += noise3D(p) * amplitude;
-          p = p * 2.0 + vec3(8.2, 5.1, 11.4);
+          p = p * 2.02 + vec3(8.2, 5.1, 11.4);
           amplitude *= 0.5;
         }
         return value;
       }
+
+      mat2 rotate2D(float angle) {
+        float c = cos(angle);
+        float s = sin(angle);
+        return mat2(c, -s, s, c);
+      }
+
       void main() {
         vec3 direction = normalize(vObjectDirection);
-        vec3 flow = normalize(direction + vec3(0.18, 0.0, 0.05));
-        float cloudA = fbm3D(flow * 6.0 + vec3(uTime * 0.030, -uTime * 0.018, uTime * 0.014));
-        float cloudB = fbm3D(flow * 16.0 + vec3(-uTime * 0.015, uTime * 0.022, -uTime * 0.011));
-        float bands = sin(asin(clamp(direction.y, -1.0, 1.0)) * 18.0 + cloudA * 3.4);
-        vec3 warm = mix(vec3(1.0, 0.82, 0.56), vec3(0.82, 0.60, 0.34), smoothstep(0.26, 0.92, cloudA));
-        vec3 cream = mix(vec3(0.98, 0.91, 0.72), warm, smoothstep(0.34, 0.92, cloudB));
-        vec3 observedClouds = texture2D(uCloudMap, vec2(fract(vUv.x + uTime * 0.0012), vUv.y)).rgb;
-        vec3 color = mix(cream, vec3(0.62, 0.35, 0.16), smoothstep(0.54, 0.96, -bands) * 0.38);
-        color = mix(color, observedClouds, 0.46);
-        color = mix(color, uBase, 0.12);
-        float fresnel = pow(1.0 - max(dot(normalize(vNormalView), normalize(vViewDirection)), 0.0), 2.8);
-        float density = 0.48 + cloudA * 0.36 + cloudB * 0.22;
-        // Solar illumination produces a clear terminator across the cloud deck.
+        float longitude = atan(direction.z, direction.x);
+        float latitude = asin(clamp(direction.y, -1.0, 1.0));
+        float flowTime = uTime * uFlowSpeed;
+
+        // Venus's cloud tops super-rotate around the planet. Advect the sampled
+        // direction rather than merely sliding a flat map, so the flow remains
+        // coherent at the poles and across the texture seam.
+        vec2 advectedXZ = rotate2D(flowTime * 0.020) * direction.xz;
+        vec3 advectedDirection = normalize(vec3(advectedXZ.x, direction.y, advectedXZ.y));
+        float broad = fbm3D(advectedDirection * (4.8 + uLayer * 1.7)
+          + vec3(flowTime * 0.018, -flowTime * 0.010, flowTime * 0.007));
+        float medium = fbm3D(advectedDirection * (13.0 + uLayer * 4.5)
+          + vec3(-flowTime * 0.009, flowTime * 0.014, -flowTime * 0.011));
+        float fine = fbm3D(advectedDirection * (34.0 + uLayer * 7.0)
+          + vec3(flowTime * 0.004, -flowTime * 0.006, flowTime * 0.005));
+
+        // East-west bands, equatorial convection and filamentary streaks are
+        // visible in processed spacecraft imagery. Their contrast is deliberately
+        // restrained here because human-visible Venus is mostly creamy and bright.
+        float zonal = 0.5 + 0.5 * sin(
+          latitude * (23.0 + uLayer * 5.0)
+          + broad * 4.2
+          + sin(longitude * 2.0 + flowTime * 0.012) * 0.75
+        );
+        float equatorialWeight = 1.0 - smoothstep(0.18, 0.62, abs(direction.y));
+        float convection = smoothstep(0.57, 0.81, medium + fine * 0.18)
+          * equatorialWeight;
+        float filaments = smoothstep(0.48, 0.74,
+          0.58 * medium + 0.42 * zonal
+        );
+
+        // A subtle Y-shaped planetary wave references the famous ultraviolet
+        // pattern without turning the visible-light rendering into false colour.
+        float wavePhase = longitude + flowTime * 0.010;
+        float yStem = exp(-pow(sin(wavePhase), 2.0) * 22.0)
+          * exp(-pow(latitude * 4.6, 2.0));
+        float yBranchLatitude = 0.12 + abs(sin(wavePhase * 0.5)) * 0.31;
+        float yBranches = exp(-pow((abs(latitude) - yBranchLatitude) * 7.2, 2.0))
+          * smoothstep(-0.35, 0.85, cos(wavePhase));
+        float yWave = clamp(yStem * 0.42 + yBranches * 0.72, 0.0, 1.0);
+
+        // Polar hoods are brighter and smoother than the turbulent equatorial
+        // deck. Fine latitude-aligned structure keeps them from looking painted on.
+        float polarHood = smoothstep(0.58, 0.91, abs(direction.y));
+        float polarBands = (0.5 + 0.5 * sin(latitude * 56.0 + broad * 3.0))
+          * polarHood;
+
+        vec2 mapUv = vec2(
+          fract(vUv.x - flowTime * (0.0010 + uLayer * 0.00032)),
+          vUv.y
+        );
+        vec3 observedClouds = texture2D(uCloudMap, mapUv).rgb;
+        float observedLuma = dot(observedClouds, vec3(0.2126, 0.7152, 0.0722));
+
+        float structure = clamp(
+          observedLuma * 0.32
+          + broad * 0.32
+          + medium * 0.22
+          + fine * 0.06
+          + zonal * 0.08,
+          0.0,
+          1.0
+        );
+
+        // In white sunlight Venus is a pearl-to-pale-gold cloud world. Use the
+        // source texture only for structure so an orange fallback map cannot tint
+        // the whole planet unnaturally.
+        vec3 color = mix(uShadow, uBase, smoothstep(0.19, 0.68, structure));
+        color = mix(color, uHighlight, smoothstep(0.58, 0.94, structure));
+        color = mix(color, uHighlight, convection * 0.18);
+        color = mix(color, uShadow * vec3(0.88, 0.92, 1.02), filaments * 0.14);
+        color = mix(color, vec3(0.58, 0.45, 0.29), yWave * 0.11);
+        color = mix(color, uHighlight, polarHood * (0.16 + polarBands * 0.10));
+
+        vec3 normal = normalize(vWorldNormal);
         vec3 lightDirection = normalize(-vWorldPosition);
-        float ndl = dot(normalize(vWorldNormal), lightDirection);
-        float illumination = mix(0.16, 1.08, smoothstep(-0.22, 0.34, ndl));
+        vec3 viewDirectionWorld = normalize(cameraPosition - vWorldPosition);
+        float ndl = dot(normal, lightDirection);
+        float dayBlend = smoothstep(-0.18, 0.30, ndl);
+        float diffuse = 0.18 + max(ndl, 0.0) * 0.98;
+        float limb = pow(1.0 - max(dot(normal, viewDirectionWorld), 0.0), 2.7);
+        float backscatter = pow(max(dot(viewDirectionWorld, lightDirection), 0.0), 10.0);
+
+        // The nightside remains mostly dark in visible light, while the thick
+        // atmosphere produces a warm, soft terminator and a luminous sun-facing limb.
+        float illumination = mix(0.026 + limb * 0.018, diffuse, dayBlend);
         color *= illumination;
-        float alpha = clamp(uOpacity * density + fresnel * 0.18, 0.0, 0.92);
-        gl_FragColor = vec4(color * (0.86 + fresnel * 0.32), alpha);
+        color += uHighlight * backscatter * dayBlend * 0.075;
+        color += vec3(1.0, 0.78, 0.48) * limb * (0.025 + dayBlend * 0.075);
+
+        float density = 0.56 + broad * 0.24 + medium * 0.14 + polarHood * 0.08;
+        float alpha = clamp(uOpacity * density + limb * uOpacity * 0.34, 0.0, 0.96);
+        alpha = mix(alpha, 1.0, uOpaque);
+        gl_FragColor = vec4(max(color, vec3(0.0)), alpha);
       }
     `,
-    transparent: true,
-    depthWrite: false,
+    transparent: !opaque,
+    depthWrite: opaque,
+    depthTest: true,
   });
 }
 
@@ -798,41 +906,81 @@ function addVenusClouds(planet, config, textures, segmentScale = 1) {
   const cloudGroup = new THREE.Group();
   cloudGroup.name = "Venus cloud deck";
 
+  // The lower visible cloud top is deliberately opaque: ordinary visible light
+  // cannot see Venus's volcanic surface through the sulfuric-acid cloud deck.
   const lowerClouds = new THREE.Mesh(
-    new THREE.SphereGeometry(config.radius * 1.012, getSegmentCount(192, segmentScale, 96), getSegmentCount(152, segmentScale, 72)),
-    new THREE.MeshStandardMaterial({
-      map: textures.venusAtmosphere,
-      color: 0xffffff,
-      roughness: 1,
-      metalness: 0,
-      envMapIntensity: 0.03,
+    new THREE.SphereGeometry(
+      config.radius * 1.011,
+      getSegmentCount(208, segmentScale, 104),
+      getSegmentCount(168, segmentScale, 80),
+    ),
+    createVenusCloudShader({
+      baseColor: 0xe3c894,
+      highlightColor: 0xfff1cf,
+      shadowColor: 0x9d7548,
+      opacity: 1,
+      cloudTexture: textures.venusAtmosphere,
+      layer: 0,
+      flowSpeed: 1.0,
+      opaque: true,
     }),
   );
-  lowerClouds.name = "Venus lower cloud layer";
+  lowerClouds.name = "Venus opaque visible cloud tops";
+  lowerClouds.rotation.y = 0.28;
+  lowerClouds.rotation.z = 0.012;
   cloudGroup.add(lowerClouds);
 
   const middleClouds = new THREE.Mesh(
-    new THREE.SphereGeometry(config.radius * 1.018, getSegmentCount(160, segmentScale, 80), getSegmentCount(128, segmentScale, 64)),
-    createVenusCloudShader(0xf2b66d, 0.22, textures.venusAtmosphere),
+    new THREE.SphereGeometry(
+      config.radius * 1.019,
+      getSegmentCount(176, segmentScale, 88),
+      getSegmentCount(144, segmentScale, 72),
+    ),
+    createVenusCloudShader({
+      baseColor: 0xe9cf9c,
+      highlightColor: 0xffedc6,
+      shadowColor: 0xae8350,
+      opacity: 0.28,
+      cloudTexture: textures.venusAtmosphere,
+      layer: 1,
+      flowSpeed: 1.24,
+    }),
   );
-  middleClouds.name = "Venus middle cloud layer";
-  middleClouds.rotation.y = 0.72;
-  middleClouds.rotation.z = 0.025;
+  middleClouds.name = "Venus super-rotating middle cloud layer";
+  middleClouds.rotation.y = 0.86;
+  middleClouds.rotation.z = 0.022;
   cloudGroup.add(middleClouds);
 
   const upperClouds = new THREE.Mesh(
-    new THREE.SphereGeometry(config.radius * 1.028, getSegmentCount(160, segmentScale, 80), getSegmentCount(128, segmentScale, 64)),
-    createVenusCloudShader(0xffdeb0, 0.12, textures.venusAtmosphere),
+    new THREE.SphereGeometry(
+      config.radius * 1.029,
+      getSegmentCount(168, segmentScale, 84),
+      getSegmentCount(136, segmentScale, 68),
+    ),
+    createVenusCloudShader({
+      baseColor: 0xf0d9aa,
+      highlightColor: 0xfff5d9,
+      shadowColor: 0xc49a68,
+      opacity: 0.155,
+      cloudTexture: textures.venusAtmosphere,
+      layer: 2,
+      flowSpeed: 1.52,
+    }),
   );
-  upperClouds.name = "Venus upper haze layer";
-  upperClouds.rotation.y = 1.2;
+  upperClouds.name = "Venus high haze and polar hood layer";
+  upperClouds.rotation.y = 1.37;
+  upperClouds.rotation.z = -0.018;
   cloudGroup.add(upperClouds);
 
   const softGlow = new THREE.Mesh(
-    new THREE.SphereGeometry(config.radius * 1.052, getSegmentCount(128, segmentScale, 64), getSegmentCount(96, segmentScale, 48)),
-    createAtmosphereMaterial(0xffca78, 0.22),
+    new THREE.SphereGeometry(
+      config.radius * 1.055,
+      getSegmentCount(136, segmentScale, 68),
+      getSegmentCount(104, segmentScale, 52),
+    ),
+    createAtmosphereMaterial(0xffdda2, 0.18),
   );
-  softGlow.name = "Venus soft glow";
+  softGlow.name = "Venus sunlit atmospheric limb";
   cloudGroup.add(softGlow);
 
   planet.add(cloudGroup);
@@ -1222,12 +1370,14 @@ export function updatePlanetVisuals(planet, time, motionScale = 1) {
   if (planet.material?.uniforms?.uTime) planet.material.uniforms.uTime.value = time;
   const layers = planet.userData.visualLayers ?? {};
   if (layers.clouds) {
-    layers.clouds.rotation.y += 0.00035 * motionScale;
+    // Venus's atmosphere super-rotates westward. Every cloud altitude moves in
+    // the same broad direction, with small differential speeds between layers.
+    layers.clouds.rotation.y -= 0.00024 * motionScale;
     layers.clouds.children.forEach((child, index) => {
       if (child.material?.uniforms?.uTime) child.material.uniforms.uTime.value = time + index * 11.0;
-      if (index === 0) child.rotation.y += 0.00125 * motionScale;
-      if (index === 1) child.rotation.y -= 0.00072 * motionScale;
-      if (index === 2) child.rotation.y += 0.00043 * motionScale;
+      if (index === 0) child.rotation.y -= 0.00082 * motionScale;
+      if (index === 1) child.rotation.y -= 0.00106 * motionScale;
+      if (index === 2) child.rotation.y -= 0.00134 * motionScale;
     });
   }
   if (layers.atmosphere) layers.atmosphere.rotation.y -= 0.00018 * motionScale;

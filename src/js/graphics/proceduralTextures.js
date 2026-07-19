@@ -21,7 +21,7 @@ export function makeNoiseTexture(kind, size = 1024) {
   // Each body gets a recognisable three-color base even without downloaded images.
   const palettes = {
     mercury: ["#5f5a55", "#aaa092", "#373534"],
-    venus: ["#9b6b3c", "#e2b36c", "#5f422e"],
+    venus: ["#b58a57", "#f1d6a1", "#8a643f"],
     earth: ["#053f92", "#1784ca", "#041d50"],
     moon: ["#d8d3c8", "#7a7770", "#353331"],
     mars: ["#8c321e", "#d06a37", "#4d1d17"],
@@ -110,19 +110,66 @@ export function makeNoiseTexture(kind, size = 1024) {
   }
 
   if (kind === "venus") {
-    // Wavy strokes imitate Venus's opaque, flowing cloud deck.
-    ctx.globalAlpha = 0.32;
-    ctx.strokeStyle = "#fff0c9";
-    for (let i = 0; i < 46; i += 1) {
-      ctx.beginPath();
+    // Venus is almost featureless in natural visible light, but spacecraft
+    // filters reveal low-contrast east-west filaments, equatorial convection,
+    // bright polar hoods and the planet-scale Y wave. Keep these details subtle.
+    ctx.globalAlpha = 0.23;
+    for (let i = 0; i < 54; i += 1) {
       const y = Math.random() * size * 0.5;
+      const latitudeWeight = Math.abs(y / (size * 0.5) - 0.5);
+      ctx.beginPath();
       ctx.moveTo(0, y);
-      for (let x = 0; x < size; x += 28) {
-        ctx.lineTo(x, y + Math.sin(x * 0.018 + i) * 18);
+      for (let x = 0; x <= size; x += 24) {
+        const wave = Math.sin(x * 0.016 + i * 0.74) * (9 + latitudeWeight * 13);
+        const fine = Math.sin(x * 0.045 + i * 1.31) * 3;
+        ctx.lineTo(x, y + wave + fine);
       }
-      ctx.lineWidth = 5 + Math.random() * 12;
+      ctx.strokeStyle = i % 4 === 0 ? "#9b7248" : "#fff1cd";
+      ctx.lineWidth = 4 + Math.random() * 9;
       ctx.stroke();
     }
+
+    // Blockier equatorial cloud cells.
+    ctx.globalAlpha = 0.14;
+    for (let i = 0; i < 42; i += 1) {
+      ctx.beginPath();
+      ctx.ellipse(
+        Math.random() * size,
+        size * (0.19 + Math.random() * 0.12),
+        18 + Math.random() * 58,
+        5 + Math.random() * 15,
+        Math.random() * 0.25 - 0.125,
+        0,
+        Math.PI * 2,
+      );
+      ctx.fillStyle = i % 3 === 0 ? "#9b7148" : "#fff5d8";
+      ctx.fill();
+    }
+
+    // High, bright polar haze caps.
+    const polarGradient = ctx.createLinearGradient(0, 0, 0, size * 0.5);
+    polarGradient.addColorStop(0, "rgba(255,248,221,0.44)");
+    polarGradient.addColorStop(0.18, "rgba(255,245,215,0.08)");
+    polarGradient.addColorStop(0.82, "rgba(255,245,215,0.08)");
+    polarGradient.addColorStop(1, "rgba(255,248,221,0.44)");
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = polarGradient;
+    ctx.fillRect(0, 0, size, size * 0.5);
+
+    // A very restrained Y-shaped ultraviolet absorber pattern contributes
+    // structure without converting the fallback into false-colour imagery.
+    ctx.globalAlpha = 0.085;
+    ctx.strokeStyle = "#765235";
+    ctx.lineCap = "round";
+    ctx.lineWidth = 17;
+    ctx.beginPath();
+    ctx.moveTo(size * 0.50, size * 0.28);
+    ctx.lineTo(size * 0.50, size * 0.18);
+    ctx.moveTo(size * 0.50, size * 0.20);
+    ctx.bezierCurveTo(size * 0.43, size * 0.16, size * 0.36, size * 0.10, size * 0.28, size * 0.08);
+    ctx.moveTo(size * 0.50, size * 0.20);
+    ctx.bezierCurveTo(size * 0.57, size * 0.16, size * 0.64, size * 0.10, size * 0.72, size * 0.08);
+    ctx.stroke();
     ctx.globalAlpha = 1;
   }
 

@@ -8,12 +8,12 @@ export const venus = {
   orbitSpeed: 0.46, spinSpeed: -0.0015, axialTilt: 3.1, angle: 2.2,
   orbitEccentricity: 0.0068, orbitRotation: 1.15, orbitInclination: 0.059,
   bump: 0.01, orbitColor: 0xe0b36a,
-  detail: "Earth-size world | retrograde spin", focusScale: 1.55,
+  detail: "Sulfuric-acid cloud world | retrograde spin", focusScale: 1.55,
   minFocusDistance: scale.focusDistance * 0.88, focusDistance: scale.focusDistance, focusEase: 0.09, focusFov: 36,
   info: {
     type: "Planet", diameter: "12,104 km", orbitalSpeed: "35.02 km/s",
     distanceFromEarth: "≈ 38 million km at closest approach",
     sizeComparison: getPlanetSizeComparison("Venus"),
-    description: "A luminous cloud-covered world with volcanic plains, crushing pressure, and a day longer than its year.",
+    description: "A brilliant pearl-gold world whose opaque sulfuric-acid clouds hide volcanic plains beneath crushing pressure and extreme heat.",
   },
 };
