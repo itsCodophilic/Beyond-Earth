@@ -17,6 +17,7 @@ import './brand.js';
 import { HELIOCENTRIC_ORBIT_AU, PLANET_SCALE_PROFILES } from './config/celestialScale.js';
 import { loadUniverseTextures } from './graphics/loadTextures.js';
 import { createMoonSystem } from './planets/earth/satellites/moon.js';
+import { createEarthVisualSystem, updateEarthVisualSystem } from './planets/earth/earthVisuals.js';
 import { PLANET_CONFIGS } from './planets/index.js';
 import {
   createMajorSatelliteSystems,
@@ -939,48 +940,14 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
   const earth = planets.find((planet) => planet.name === "Earth");
   const earthRadius = earth.userData.visualRadius ?? 1.25;
 
-  // Earth is layered like an onion: solid globe, cloud shell, atmospheric glow,
-  // and optional light shell. Small radius differences avoid z-fighting.
-  const earthLayerSegments = creationQuality === "low"
-    ? 64
-    : creationQuality === "medium"
-      ? 80
-      : 96;
-  const earthClouds = new THREE.Mesh(
-    new THREE.SphereGeometry(earthRadius * 1.028, earthLayerSegments, earthLayerSegments),
-    new THREE.MeshStandardMaterial({
-      color: 0xffffff,
-      // alphaMap controls which cloud pixels are opaque or transparent.
-      alphaMap: textures.earthClouds ?? null,
-      transparent: true,
-      opacity: textures.earthClouds ? 0.44 : 0,
-      depthWrite: false,
-      roughness: 1,
-    }),
-  );
-  earth.add(earthClouds);
-
-  const earthAtmosphere = new THREE.Mesh(
-    new THREE.SphereGeometry(earthRadius * 1.044, earthLayerSegments, earthLayerSegments),
-    new THREE.MeshBasicMaterial({ color: 0x5bdcff, transparent: true, opacity: 0.18, side: THREE.BackSide, blending: THREE.AdditiveBlending }),
-  );
-  earth.add(earthAtmosphere);
-
-  if (textures.earthLights) {
-    // Additive blending makes bright city pixels glow over the globe underneath.
-    const earthLights = new THREE.Mesh(
-      new THREE.SphereGeometry(earthRadius * 1.012, earthLayerSegments, earthLayerSegments),
-      new THREE.MeshBasicMaterial({
-        color: 0xffd37a,
-        map: textures.earthLights,
-        transparent: true,
-        opacity: 0.52,
-        blending: THREE.AdditiveBlending,
-        depthWrite: false,
-      }),
-    );
-    earth.add(earthLights);
-  }
+  // Earth uses NASA Blue Marble visible-light imagery, a filtered MODIS cloud
+  // shell, a sunlight-aware atmospheric limb, and nightside-only city lights.
+  const earthVisualSystem = createEarthVisualSystem({
+    earth,
+    textures,
+    radius: earthRadius,
+    quality: creationQuality,
+  });
 
   // Earth owns its satellite builder; main.js only keeps references needed for animation.
   const { moon, moonPivot } = createMoonSystem({
@@ -3743,8 +3710,7 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
 
     // ----- Animate special meshes and scene effects -----
     const frameScale = deltaTime * 60;
-    earthClouds.rotation.y += 0.0032 * frameScale;
-    earthAtmosphere.rotation.y -= 0.0014 * frameScale;
+    updateEarthVisualSystem(earthVisualSystem, frameScale);
     moonPivot.rotation.y += 0.011 * frameMotionScale;
     // A small oscillation suggests lunar libration while the pivot maintains tidal lock.
     moon.rotation.y = Math.sin(simulationTime * 0.35) * 0.04;

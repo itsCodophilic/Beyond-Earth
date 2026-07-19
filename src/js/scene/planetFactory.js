@@ -259,7 +259,8 @@ function createRockyMaterial(config, textures) {
   if (config.name === "Venus") return createVenusSurfaceMaterial(map);
   return new THREE.MeshStandardMaterial({
     map,
-    roughness: 0.96,
+    color: config.name === "Earth" ? 0xf4f8ff : 0xffffff,
+    roughness: config.name === "Earth" ? 0.82 : 0.96,
     metalness: 0,
     bumpMap: config.bump ? map : null,
     bumpScale: config.bump ?? 0,
@@ -1270,7 +1271,9 @@ export function createPlanet({
         ? [200, 168]
         : config.name === "Venus"
           ? [184, 152]
-          : [144, 112];
+          : config.name === "Earth"
+            ? [192, 160]
+            : [144, 112];
   const segments = [
     getSegmentCount(baseSegments[0], segmentScale, 80),
     getSegmentCount(baseSegments[1], segmentScale, 64),

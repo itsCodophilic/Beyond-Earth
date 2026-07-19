@@ -6,42 +6,55 @@
  * understand callbacks, color spaces, wrapping, or fallback behavior.
  */
 import * as THREE from "three";
-import { OPTIONAL_TEXTURES, TEXTURE_FALLBACKS, TEXTURE_URLS } from "../config/textures.js";
+import { OPTIONAL_TEXTURES, TEXTURE_BACKUP_URLS, TEXTURE_FALLBACKS, TEXTURE_URLS } from "../config/textures.js";
 import { makeNoiseTexture } from "./proceduralTextures.js";
 
-/** Loads one image and supplies a procedural surface when a required asset fails. */
+/** Loads one image, tries a backup URL, then supplies a procedural fallback. */
 function loadTexture(loader, url, fallbackKind, options = {}) {
-  // TextureLoader uses callbacks, so a Promise lets the caller use async/await.
+  const candidates = [url, ...(options.backupUrls ?? [])].filter(Boolean);
+
   return new Promise((resolve) => {
-    loader.load(
-      url,
-      (texture) => {
-        // Most color images must be decoded as sRGB. Normal maps store numbers,
-        // not colors, so the caller deliberately sets `color: false` for them.
-        if (options.color !== false) texture.colorSpace = THREE.SRGBColorSpace;
-        // Anisotropy keeps a texture sharper when its surface is viewed at an angle.
-        texture.anisotropy = options.anisotropy ?? 4;
-        texture.wrapS = THREE.RepeatWrapping;
-        texture.wrapT = THREE.ClampToEdgeWrapping;
-        texture.userData.sourceUrl = url;
-        texture.userData.isFallback = false;
-        resolve(texture);
-      },
-      undefined,
-      // Optional detail layers may safely be null. Required planet surfaces get
-      // a generated canvas texture so one failed URL cannot break the whole scene.
-      () => {
-        console.warn(`[Beyond Earth] Texture failed to load: ${url}`);
-        if (options.optional) {
-          resolve(null);
-          return;
-        }
-        const fallback = makeNoiseTexture(fallbackKind);
-        fallback.userData.isFallback = true;
-        fallback.userData.failedUrl = url;
-        resolve(fallback);
-      },
-    );
+    const attempt = (candidateIndex) => {
+      const candidateUrl = candidates[candidateIndex];
+      loader.load(
+        candidateUrl,
+        (texture) => {
+          // Colour maps are decoded as sRGB. Height, normal and cloud-mask data
+          // remain linear so their numeric values are not gamma transformed.
+          if (options.color !== false) texture.colorSpace = THREE.SRGBColorSpace;
+          texture.anisotropy = options.anisotropy ?? 4;
+          texture.wrapS = THREE.RepeatWrapping;
+          texture.wrapT = THREE.ClampToEdgeWrapping;
+          texture.minFilter = THREE.LinearMipmapLinearFilter;
+          texture.magFilter = THREE.LinearFilter;
+          texture.generateMipmaps = true;
+          texture.userData.sourceUrl = candidateUrl;
+          texture.userData.isFallback = candidateIndex > 0;
+          resolve(texture);
+        },
+        undefined,
+        () => {
+          if (candidateIndex + 1 < candidates.length) {
+            console.warn(`[Beyond Earth] Texture failed; trying backup: ${candidateUrl}`);
+            attempt(candidateIndex + 1);
+            return;
+          }
+
+          console.warn(`[Beyond Earth] Texture failed to load: ${candidateUrl}`);
+          if (options.optional) {
+            resolve(null);
+            return;
+          }
+
+          const fallback = makeNoiseTexture(fallbackKind);
+          fallback.userData.isFallback = true;
+          fallback.userData.failedUrl = candidateUrl;
+          resolve(fallback);
+        },
+      );
+    };
+
+    attempt(0);
   });
 }
 
@@ -55,7 +68,8 @@ export async function loadUniverseTextures({ anisotropy = 4 } = {}) {
   await Promise.all(Object.entries(TEXTURE_URLS).map(async ([name, url]) => {
     textures[name] = await loadTexture(loader, url, TEXTURE_FALLBACKS[name] ?? name, {
       optional: OPTIONAL_TEXTURES.has(name),
-      color: name !== "earthNormal",
+      backupUrls: TEXTURE_BACKUP_URLS[name] ? [TEXTURE_BACKUP_URLS[name]] : [],
+      color: !["earthNormal", "earthClouds", "moonDisplacement"].includes(name),
       anisotropy,
     });
   }));

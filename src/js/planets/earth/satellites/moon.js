@@ -19,90 +19,31 @@ const MOON_DIAMETER_KM = 3_474.8;
 const MOON_RADIUS = getMoonVisualRadius(MOON_DIAMETER_KM);
 const ORBIT_RADIUS = EARTH_VISUAL_RADIUS * 3.15;
 
-/** Fixed crater positions keep the Moon visually stable between page reloads. */
-const CRATERS = [
-  { latitude: 18, longitude: -28, radius: 0.055 },
-  { latitude: -12, longitude: 12, radius: 0.038 },
-  { latitude: 42, longitude: 36, radius: 0.03 },
-  { latitude: -34, longitude: -48, radius: 0.045 },
-  { latitude: 8, longitude: 58, radius: 0.026 },
-  { latitude: 52, longitude: -62, radius: 0.022 },
-  { latitude: -48, longitude: 24, radius: 0.028 },
-  { latitude: 27, longitude: 82, radius: 0.02 },
-];
-
-/** Converts latitude/longitude into a unit direction on a sphere. */
-function sphericalDirection(latitude, longitude) {
-  const phi = THREE.MathUtils.degToRad(90 - latitude);
-  const theta = THREE.MathUtils.degToRad(longitude);
-  return new THREE.Vector3(
-    Math.sin(phi) * Math.cos(theta),
-    Math.cos(phi),
-    Math.sin(phi) * Math.sin(theta),
-  );
-}
-
-/**
- * Adds subtle recessed discs and raised rims above the displacement-mapped terrain.
- * These are intentionally small; the texture remains responsible for fine craters.
- */
-function addCraterDetails(moon, quality = "high") {
-  const floorMaterial = new THREE.MeshStandardMaterial({
-    color: 0x393836,
-    roughness: 1,
-    transparent: true,
-    opacity: 0.32,
-    depthWrite: false,
-    polygonOffset: true,
-    polygonOffsetFactor: -2,
-  });
-  const rimMaterial = new THREE.MeshStandardMaterial({
-    color: 0x918d84,
-    roughness: 1,
-    transparent: true,
-    opacity: 0.38,
-    depthWrite: false,
-  });
-  const forward = new THREE.Vector3(0, 0, 1);
-
-  const circleSegments = quality === "low" ? 16 : quality === "medium" ? 22 : 28;
-  const torusSegments = quality === "low" ? 20 : quality === "medium" ? 26 : 32;
-
-  CRATERS.forEach(({ latitude, longitude, radius }) => {
-    const direction = sphericalDirection(latitude, longitude);
-    const orientation = new THREE.Quaternion().setFromUnitVectors(forward, direction);
-
-    // A dark disc suggests the crater floor. It sits almost flush with the sphere.
-    const floor = new THREE.Mesh(new THREE.CircleGeometry(radius * 0.72, circleSegments), floorMaterial);
-    floor.position.copy(direction).multiplyScalar(MOON_RADIUS * 1.004);
-    floor.quaternion.copy(orientation);
-    moon.add(floor);
-
-    // A very thin torus catches light along the raised crater rim.
-    const rim = new THREE.Mesh(new THREE.TorusGeometry(radius * 0.74, 0.006, 8, torusSegments), rimMaterial);
-    rim.position.copy(direction).multiplyScalar(MOON_RADIUS * 1.009);
-    rim.quaternion.copy(orientation);
-    moon.add(rim);
-  });
-}
-
 /** Creates the complete Earth–Moon satellite system and attaches it to Earth. */
 export function createMoonSystem({ earth, textures, hoverTargets, quality = "high" }) {
   const moonTexture = textures.moon ?? makeNoiseTexture("moon");
+  const moonTopography = textures.moonDisplacement ?? moonTexture;
 
-  // More segments are required because displacementMap physically moves vertices.
-  const moonSegments = quality === "low" ? 96 : quality === "medium" ? 128 : 160;
+  // LOLA topography now moves the sphere vertices directly. Crater bowls,
+  // terraced walls, rims, maria boundaries and large impact basins therefore
+  // react to light as true geometry instead of floating circular decals.
+  const moonSegments = quality === "low" ? 128 : quality === "medium" ? 176 : 240;
+  const moonGeometry = new THREE.SphereGeometry(MOON_RADIUS, moonSegments, moonSegments);
   const moon = new THREE.Mesh(
-    new THREE.SphereGeometry(MOON_RADIUS, moonSegments, moonSegments),
+    moonGeometry,
     new THREE.MeshStandardMaterial({
       map: moonTexture,
+      color: 0xffffff,
       roughness: 1,
       metalness: 0,
-      bumpMap: moonTexture,
-      bumpScale: 0.055,
-      displacementMap: moonTexture,
-      displacementScale: 0.018,
-      displacementBias: -0.009,
+      bumpMap: moonTopography,
+      bumpScale: 0.032,
+      displacementMap: moonTopography,
+      // The real lunar relief is subtle at globe scale, so it is modestly
+      // exaggerated for cinematic readability while preserving its shape.
+      displacementScale: MOON_RADIUS * 0.050,
+      displacementBias: -MOON_RADIUS * 0.025,
+      envMapIntensity: 0.025,
     }),
   );
   moon.name = "Moon";
@@ -132,7 +73,6 @@ export function createMoonSystem({ earth, textures, hoverTargets, quality = "hig
       description: "A silent companion shaped by ancient impacts, with bright highlands, dark volcanic maria, and no air to soften its horizon.",
     },
   };
-  addCraterDetails(moon, quality);
 
   // The real Moon is tiny on screen, so its exact geometry can be difficult to
   // click. This invisible sphere enlarges only the raycast target—not the visual.
