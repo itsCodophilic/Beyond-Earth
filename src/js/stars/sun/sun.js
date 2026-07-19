@@ -83,38 +83,94 @@ function createDistantStarTexture(size = 512) {
 
   context.clearRect(0, 0, size, size);
 
+  /*
+   * A broad, cool-white bloom represents light scattering around an
+   * overexposed solar disk. It is deliberately faint at the edge so the sprite
+   * never looks like a flat circular badge against the star field.
+   */
   const halo = context.createRadialGradient(centre, centre, 0, centre, centre, centre);
   halo.addColorStop(0, "rgba(255,255,255,1)");
-  halo.addColorStop(0.035, "rgba(255,255,250,1)");
-  halo.addColorStop(0.12, "rgba(255,248,226,0.72)");
-  halo.addColorStop(0.34, "rgba(236,244,255,0.20)");
+  halo.addColorStop(0.022, "rgba(255,255,252,1)");
+  halo.addColorStop(0.07, "rgba(255,250,226,0.94)");
+  halo.addColorStop(0.16, "rgba(238,244,255,0.54)");
+  halo.addColorStop(0.38, "rgba(198,215,255,0.13)");
+  halo.addColorStop(0.68, "rgba(177,199,255,0.035)");
   halo.addColorStop(1, "rgba(220,235,255,0)");
   context.fillStyle = halo;
   context.fillRect(0, 0, size, size);
 
-  context.save();
-  context.translate(centre, centre);
-  context.globalCompositeOperation = "lighter";
-  [0, Math.PI * 0.5, Math.PI * 0.25, -Math.PI * 0.25].forEach((angle, index) => {
+  /*
+   * Paint a tapered ray in one direction. Every ray combines a translucent
+   * triangular beam with a hairline centre, giving the Sun long photographic
+   * diffraction spikes without drawing an opaque cross through the scene.
+   */
+  function paintRay(angle, length, width, opacity) {
     context.save();
+    context.translate(centre, centre);
     context.rotate(angle);
-    const length = index < 2 ? centre * 0.94 : centre * 0.60;
-    const ray = context.createLinearGradient(-length, 0, length, 0);
-    ray.addColorStop(0, "rgba(235,245,255,0)");
-    ray.addColorStop(0.44, "rgba(248,252,255,0.025)");
-    ray.addColorStop(0.495, "rgba(255,255,250,0.62)");
-    ray.addColorStop(0.5, "rgba(255,255,255,0.95)");
-    ray.addColorStop(0.505, "rgba(255,255,250,0.62)");
-    ray.addColorStop(0.56, "rgba(248,252,255,0.025)");
-    ray.addColorStop(1, "rgba(235,245,255,0)");
-    context.fillStyle = ray;
-    context.fillRect(-length, index < 2 ? -1.5 : -0.8, length * 2, index < 2 ? 3 : 1.6);
+
+    const beam = context.createLinearGradient(0, 0, length, 0);
+    beam.addColorStop(0, `rgba(255,255,255,${opacity})`);
+    beam.addColorStop(0.08, `rgba(252,253,255,${opacity * 0.62})`);
+    beam.addColorStop(0.42, `rgba(222,233,255,${opacity * 0.16})`);
+    beam.addColorStop(1, "rgba(196,216,255,0)");
+    context.fillStyle = beam;
+    context.beginPath();
+    context.moveTo(0, -width);
+    context.quadraticCurveTo(length * 0.2, -width * 0.28, length, 0);
+    context.quadraticCurveTo(length * 0.2, width * 0.28, 0, width);
+    context.closePath();
+    context.fill();
+
+    const needle = context.createLinearGradient(0, 0, length, 0);
+    needle.addColorStop(0, `rgba(255,255,255,${Math.min(1, opacity * 1.35)})`);
+    needle.addColorStop(0.18, `rgba(247,250,255,${opacity * 0.58})`);
+    needle.addColorStop(0.62, `rgba(218,232,255,${opacity * 0.12})`);
+    needle.addColorStop(1, "rgba(205,225,255,0)");
+    context.fillStyle = needle;
+    context.fillRect(0, -0.55, length, 1.1);
     context.restore();
+  }
+
+  context.save();
+  context.globalCompositeOperation = "lighter";
+  [
+    { angle: 0, length: 0.97, width: 5.8, opacity: 0.88 },
+    { angle: Math.PI * 0.5, length: 0.97, width: 5.8, opacity: 0.88 },
+    { angle: Math.PI * 0.25, length: 0.78, width: 4.2, opacity: 0.62 },
+    { angle: -Math.PI * 0.25, length: 0.78, width: 4.2, opacity: 0.62 },
+    { angle: Math.PI * 0.125, length: 0.52, width: 2.4, opacity: 0.24 },
+    { angle: -Math.PI * 0.125, length: 0.52, width: 2.4, opacity: 0.24 },
+  ].forEach(({ angle, length, width, opacity }) => {
+    paintRay(angle, centre * length, width, opacity);
+    paintRay(angle + Math.PI, centre * length, width, opacity);
   });
   context.restore();
 
+  /*
+   * Repaint the white-hot centre last. This keeps the physical Sun hidden
+   * inside an overexposed core when it is too small to resolve from a planet.
+   */
+  const core = context.createRadialGradient(
+    centre,
+    centre,
+    0,
+    centre,
+    centre,
+    centre * 0.19,
+  );
+  core.addColorStop(0, "rgba(255,255,255,1)");
+  core.addColorStop(0.2, "rgba(255,255,255,1)");
+  core.addColorStop(0.48, "rgba(255,248,214,0.96)");
+  core.addColorStop(0.76, "rgba(225,235,255,0.32)");
+  core.addColorStop(1, "rgba(210,228,255,0)");
+  context.fillStyle = core;
+  context.fillRect(centre * 0.81, centre * 0.81, centre * 0.38, centre * 0.38);
+
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
+  texture.minFilter = THREE.LinearMipmapLinearFilter;
+  texture.magFilter = THREE.LinearFilter;
   texture.needsUpdate = true;
   return texture;
 }

@@ -1539,11 +1539,14 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
         0.995,
       );
 
+    const isPlanetaryInspection = Boolean(focusedBody && !isSunFocused);
+
     // The ordinary white solar halo remains present from every viewpoint.
-    // Only at the authored maximum zoom-out does it expand and brighten into a
-    // more cinematic distant-star bloom.
-    const steadyGlowPixels = 56;
-    const maximumGlowPixels = THREE.MathUtils.lerp(steadyGlowPixels, 132, maximumZoomBlend);
+    // Planet inspection now receives a brighter photographic bloom so sunlight
+    // still feels powerful from that world's sky. This sprite is not part of
+    // hoverTargets, so the larger radiance never enlarges the Sun's hit area.
+    const steadyGlowPixels = isPlanetaryInspection ? 88 : 56;
+    const maximumGlowPixels = THREE.MathUtils.lerp(steadyGlowPixels, 148, maximumZoomBlend);
     const targetGlowWorldSize = Math.max(
       apparentWorldRadius * 2.56,
       maximumGlowPixels * worldUnitsPerPixel,
@@ -1553,9 +1556,12 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
     sun.glow.visible = true;
     sun.glow.scale.set(localGlowSize * glowPulse, localGlowSize * glowPulse, 1);
     sun.glow.material.opacity = THREE.MathUtils.clamp(
-      0.13 + maximumZoomBlend * 0.24 + Math.sin(elapsedTime * 0.91) * 0.008,
+      0.13
+        + (isPlanetaryInspection ? 0.105 : 0)
+        + maximumZoomBlend * 0.24
+        + Math.sin(elapsedTime * 0.91) * 0.008,
       0.105,
-      0.42,
+      0.5,
     );
     sun.glow.material.depthTest = true;
     sun.glow.renderOrder = 0;
@@ -1566,8 +1572,12 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
     // version visible even when the disk itself is several pixels wide.
     const unresolvedStarBlend = 1
       - THREE.MathUtils.smoothstep(projectedRadiusPixels, 0.75, 3.2);
-    const planetaryRadianceBlend = focusedBody && !isSunFocused
-      ? (1 - THREE.MathUtils.smoothstep(projectedRadiusPixels, 10, 34)) * 0.84
+    const planetaryRadianceBlend = isPlanetaryInspection
+      ? THREE.MathUtils.lerp(
+        0.72,
+        0.96,
+        1 - THREE.MathUtils.smoothstep(projectedRadiusPixels, 3, 28),
+      )
       : 0;
     const radianceBlend = isActiveSunInspection
       ? 0
@@ -1577,15 +1587,34 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
         + Math.sin(elapsedTime * 7.1 + 1.4) * 0.032;
       const maximumTwinkle = Math.sin(elapsedTime * 4.6) * 0.12
         + Math.sin(elapsedTime * 9.7 + 0.8) * 0.065;
-      const starPulse = 1 + twinkle * 0.22 + maximumTwinkle * maximumZoomBlend * 0.36;
-      const starPixelSize = THREE.MathUtils.lerp(24, 82, maximumZoomBlend) * starPulse;
+      const starPulse = 1
+        + twinkle * (isPlanetaryInspection ? 0.38 : 0.22)
+        + maximumTwinkle * maximumZoomBlend * 0.36;
+      // A focused planet sees an 88–118 px starburst. Larger apparent solar
+      // disks use the smaller end of that range, while distant planets receive
+      // longer rays so the unresolved Sun still reads as the system's star.
+      const planetaryStarPixels = THREE.MathUtils.lerp(
+        118,
+        88,
+        THREE.MathUtils.smoothstep(projectedRadiusPixels, 2, 30),
+      );
+      const starPixelSize = Math.max(
+        THREE.MathUtils.lerp(30, 92, maximumZoomBlend),
+        isPlanetaryInspection ? planetaryStarPixels : 0,
+      ) * starPulse;
       const starWorldSize = starPixelSize * worldUnitsPerPixel;
       const localStarSize = starWorldSize / Math.max(nextScale, 0.0001);
 
       sun.distantStar.visible = radianceBlend > 0.012;
       sun.distantStar.scale.set(localStarSize, localStarSize, 1);
       sun.distantStar.material.opacity = THREE.MathUtils.clamp(
-        radianceBlend * (0.76 + maximumZoomBlend * 0.18 + twinkle * 0.38 + maximumTwinkle * maximumZoomBlend),
+        radianceBlend * (
+          0.8
+          + (isPlanetaryInspection ? 0.16 : 0)
+          + maximumZoomBlend * 0.18
+          + twinkle * 0.38
+          + maximumTwinkle * maximumZoomBlend
+        ),
         0,
         1,
       );
