@@ -1013,42 +1013,305 @@ function getHeroGalileanSurfaceMaps(profile) {
   };
 }
 
+
+const PROCEDURAL_REALISM_MOON_TEXTURES = new Set([
+  "Metis",
+  "Adrastea",
+  "Amalthea",
+  "Thebe",
+  "Himalia",
+  "Elara",
+  "Pasiphae",
+  "Sinope",
+  "Lysithea",
+  "Carme",
+  "Ananke",
+  "Leda",
+  "Themisto",
+  "Carpo",
+  "Valetudo",
+]);
+
+const proceduralMoonSurfaceCache = new Map();
+
+function createConfiguredDataTexture(pixels, width, height, name, { color = false } = {}) {
+  const texture = new THREE.DataTexture(pixels, width, height, THREE.RGBAFormat);
+  texture.name = name;
+  texture.wrapS = THREE.RepeatWrapping;
+  texture.wrapT = THREE.ClampToEdgeWrapping;
+  texture.colorSpace = color ? THREE.SRGBColorSpace : THREE.NoColorSpace;
+  texture.minFilter = THREE.LinearMipmapLinearFilter;
+  texture.magFilter = THREE.LinearFilter;
+  texture.generateMipmaps = true;
+  texture.anisotropy = 4;
+  texture.needsUpdate = true;
+  texture.userData.persistentJovianTexture = true;
+  return texture;
+}
+
+function nonGalileanTextureWidth(profile, quality = "high") {
+  if (profile.family === "Inner regular moon") {
+    return quality === "low" ? 160 : quality === "medium" ? 224 : 320;
+  }
+  if (["Himalia", "Elara", "Pasiphae", "Sinope", "Carme", "Ananke"].includes(profile.catalogueName)) {
+    return quality === "low" ? 128 : quality === "medium" ? 192 : 256;
+  }
+  return quality === "low" ? 96 : quality === "medium" ? 128 : 160;
+}
+
+function craterTextureLight(sample) {
+  const floor = sample.floor * 0.95;
+  const rim = sample.rim * 0.80;
+  const ejecta = sample.ejecta * 0.55;
+  return { floor, rim, ejecta };
+}
+
+function getProceduralRealismSurfaceMaps(profile, settings, quality = "high") {
+  if (HERO_GALILEAN_TEXTURES.has(profile.catalogueName)) return null;
+  const prioritizeNamedRealism = PROCEDURAL_REALISM_MOON_TEXTURES.has(profile.catalogueName);
+
+  const cacheKey = `${profile.catalogueName}:${quality}`;
+  if (proceduralMoonSurfaceCache.has(cacheKey)) return proceduralMoonSurfaceCache.get(cacheKey);
+
+  const width = prioritizeNamedRealism
+    ? Math.max(nonGalileanTextureWidth(profile, quality), profile.family === "Inner regular moon" ? 256 : 192)
+    : nonGalileanTextureWidth(profile, quality);
+  const height = Math.max(32, Math.floor(width / 2));
+  const colorPixels = new Uint8Array(width * height * 4);
+  const heightPixels = new Uint8Array(width * height * 4);
+  const roughPixels = new Uint8Array(width * height * 4);
+
+  const palette = SURFACE_PALETTES[profile.appearance] ?? SURFACE_PALETTES["mixed-dark"];
+  const baseColour = new THREE.Color(palette.base);
+  const lightColour = new THREE.Color(palette.light);
+  const darkColour = new THREE.Color(palette.dark);
+  const accentColour = new THREE.Color(palette.accent);
+  const sulfurDust = new THREE.Color(0xcfb698);
+  const ironGrey = new THREE.Color(0x74726f);
+  const rustyGrey = new THREE.Color(0x70625a);
+  const dustyIvory = new THREE.Color(0xcfc4b4);
+  const innerRed = new THREE.Color(0x9f5a47);
+  const colour = new THREE.Color();
+  const direction = new THREE.Vector3();
+
+  const craterField = makeCraterField(profile, settings);
+  const mountains = makeMountainField(profile, settings);
+  const patches = makePatchField(profile, settings);
+  const ioLikePatches = profile.catalogueName === "Amalthea" ? [
+    CALLOUT_DIRECTIONS.amaltheaPatchA,
+    CALLOUT_DIRECTIONS.amaltheaPatchB,
+  ] : [];
+
+  for (let y = 0; y < height; y += 1) {
+    const v = (y + 0.5) / height;
+    const theta = v * Math.PI;
+    const sinTheta = Math.sin(theta);
+    const cosTheta = Math.cos(theta);
+
+    for (let x = 0; x < width; x += 1) {
+      const u = (x + 0.5) / width;
+      const phi = u * Math.PI * 2 - Math.PI;
+      direction.set(
+        Math.cos(phi) * sinTheta,
+        cosTheta,
+        Math.sin(phi) * sinTheta,
+      );
+
+      const broad = fbm3(direction, 1.7, 4, profile.seed + 11) * settings.broadRelief;
+      const rocky = fbm3(direction, 6.9, 4, profile.seed + 59) * settings.rockRelief;
+      const fine = fbm3(direction, 23.0, 3, profile.seed + 131) * settings.fineRelief;
+      const colourNoise = fbm3(direction, 8.0, 4, profile.seed + 173) * 0.5 + 0.5;
+      const macroMottle = fbm3(direction, 2.9, 3, profile.seed + 239) * 0.5 + 0.5;
+      const secondaryMottle = fbm3(direction, 12.4, 3, profile.seed + 1309) * 0.5 + 0.5;
+      const facetMottle = fbm3(direction, 17.0, 2, profile.seed + 739) * 0.5 + 0.5;
+      const morphology = morphologyWarp(direction, profile, settings);
+
+      let craterFloor = 0;
+      let craterRim = 0;
+      let craterEjecta = 0;
+      let craterHeight = 0;
+      craterField.forEach((crater) => {
+        const sample = sampleCrater(direction, crater);
+        const lit = craterTextureLight(sample);
+        craterFloor = Math.max(craterFloor, lit.floor);
+        craterRim = Math.max(craterRim, lit.rim);
+        craterEjecta = Math.max(craterEjecta, lit.ejecta);
+        craterHeight += sample.height * 0.82;
+      });
+
+      let mountainMask = 0;
+      mountains.forEach((mountain) => {
+        mountainMask += sampleMountain(direction, mountain) * 0.82;
+      });
+
+      const patchMask = samplePatchField(direction, patches);
+      let brightPatch = 0;
+      ioLikePatches.forEach((patchDirection) => {
+        brightPatch = Math.max(brightPatch, sampleSpot(direction, patchDirection, 0.16));
+      });
+
+      let relief = 0.50
+        + broad * 10.5
+        + rocky * 14.0
+        + fine * 6.4
+        + craterHeight * 10.0
+        + mountainMask * 10.0
+        + patchMask * 0.055
+        + morphology * 0.80;
+
+      colour.copy(baseColour)
+        .lerp(lightColour, THREE.MathUtils.clamp(colourNoise * settings.colourContrast * 0.82, 0, 0.72))
+        .lerp(darkColour, THREE.MathUtils.clamp((1 - macroMottle) * 0.24 + craterFloor * 0.18, 0, 0.48));
+      colour.lerp(lightColour, craterRim * 0.26 + craterEjecta * 0.12);
+
+      if (profile.catalogueName === "Amalthea") {
+        colour.copy(new THREE.Color(0x7c4639))
+          .lerp(innerRed, smoothstep(0.18, 0.72, macroMottle) * 0.34)
+          .lerp(sulfurDust, brightPatch * 0.54)
+          .lerp(lightColour, craterRim * 0.20)
+          .lerp(darkColour, craterFloor * 0.18 + patchMask * 0.08);
+        relief += brightPatch * 0.035;
+      } else if (profile.catalogueName === "Thebe") {
+        colour.copy(new THREE.Color(0x653931))
+          .lerp(innerRed, smoothstep(0.24, 0.76, colourNoise) * 0.24)
+          .lerp(lightColour, craterRim * 0.18)
+          .lerp(darkColour, craterFloor * 0.22 + secondaryMottle * 0.08);
+      } else if (["Metis", "Adrastea"].includes(profile.catalogueName)) {
+        const shardField = smoothstep(0.54, 0.92, facetMottle);
+        colour.copy(new THREE.Color(0x40302b))
+          .lerp(rustyGrey, smoothstep(0.28, 0.72, colourNoise) * 0.22)
+          .lerp(lightColour, shardField * 0.08)
+          .lerp(darkColour, smoothstep(0.62, 0.95, 1 - facetMottle) * 0.18);
+        relief += shardField * 0.018;
+      } else if (profile.family === "Himalia family") {
+        const dustyPatch = smoothstep(0.52, 0.92, secondaryMottle) * 0.18;
+        colour.copy(ironGrey)
+          .lerp(baseColour, 0.54)
+          .lerp(dustyIvory, craterEjecta * 0.14 + dustyPatch)
+          .lerp(darkColour, craterFloor * 0.24 + patchMask * 0.10);
+      } else if (profile.family === "Carme family") {
+        colour.copy(baseColour)
+          .lerp(accentColour, smoothstep(0.34, 0.80, colourNoise) * 0.24)
+          .lerp(lightColour, craterRim * 0.12)
+          .lerp(darkColour, craterFloor * 0.18);
+      } else if (profile.family === "Ananke family") {
+        colour.copy(rustyGrey)
+          .lerp(baseColour, 0.46)
+          .lerp(lightColour, craterEjecta * 0.12)
+          .lerp(darkColour, craterFloor * 0.20 + smoothstep(0.65, 0.92, 1 - macroMottle) * 0.12);
+      } else if (profile.family === "Pasiphae family") {
+        colour.copy(baseColour)
+          .lerp(ironGrey, smoothstep(0.20, 0.62, colourNoise) * 0.18)
+          .lerp(accentColour, smoothstep(0.60, 0.96, secondaryMottle) * 0.10)
+          .lerp(darkColour, craterFloor * 0.20);
+      } else if (profile.family === "Themisto group" || profile.family === "Carpo group" || profile.family === "Valetudo group") {
+        colour.copy(baseColour)
+          .lerp(lightColour, smoothstep(0.46, 0.90, colourNoise) * 0.16 + craterEjecta * 0.08)
+          .lerp(darkColour, craterFloor * 0.18 + smoothstep(0.72, 0.96, 1 - macroMottle) * 0.14);
+      }
+
+      // Preserve a natural small-body look by favouring irregular mottling over
+      // clean circular rings. Crater rims remain subtle and ejecta is dusty.
+      colour.lerp(lightColour, smoothstep(0.82, 0.98, facetMottle) * 0.08);
+      colour.lerp(darkColour, smoothstep(0.84, 0.99, 1 - facetMottle) * 0.10);
+
+      let roughness = THREE.MathUtils.clamp(settings.roughness, 0.70, 1.0);
+      roughness += craterFloor * 0.06;
+      roughness -= craterEjecta * 0.03;
+      roughness -= brightPatch * 0.05;
+      if (profile.catalogueName === "Europa") roughness = 0.7; // never reached, just guard
+      const rough = Math.round(THREE.MathUtils.clamp(roughness, 0, 1) * 255);
+      const h = Math.round(THREE.MathUtils.clamp(relief, 0, 1) * 255);
+      const offset = (y * width + x) * 4;
+
+      colorPixels[offset] = Math.round(THREE.MathUtils.clamp(colour.r, 0, 1) * 255);
+      colorPixels[offset + 1] = Math.round(THREE.MathUtils.clamp(colour.g, 0, 1) * 255);
+      colorPixels[offset + 2] = Math.round(THREE.MathUtils.clamp(colour.b, 0, 1) * 255);
+      colorPixels[offset + 3] = 255;
+      heightPixels[offset] = h;
+      heightPixels[offset + 1] = h;
+      heightPixels[offset + 2] = h;
+      heightPixels[offset + 3] = 255;
+      roughPixels[offset] = rough;
+      roughPixels[offset + 1] = rough;
+      roughPixels[offset + 2] = rough;
+      roughPixels[offset + 3] = 255;
+    }
+  }
+
+  const maps = {
+    albedoMap: createConfiguredDataTexture(
+      colorPixels,
+      width,
+      height,
+      `${profile.name} procedural realism albedo`,
+      { color: true },
+    ),
+    heightMap: createConfiguredDataTexture(
+      heightPixels,
+      width,
+      height,
+      `${profile.name} procedural realism height`,
+    ),
+    roughnessMap: createConfiguredDataTexture(
+      roughPixels,
+      width,
+      height,
+      `${profile.name} procedural realism roughness`,
+    ),
+  };
+  proceduralMoonSurfaceCache.set(cacheKey, maps);
+  return maps;
+}
+
 function createJovianMaterial(profile, settings, palette, quality = "high", mode = "preview") {
   const inspection = mode === "inspection";
   const heroMaps = getHeroGalileanSurfaceMaps(profile);
+  const proceduralMaps = heroMaps ? null : getProceduralRealismSurfaceMaps(profile, settings, quality);
+  const activeMaps = heroMaps ?? proceduralMaps;
   const heroSettings = HERO_GALILEAN_MATERIAL[profile.catalogueName] ?? null;
-  const reliefMap = heroMaps?.heightMap
+  const reliefMap = activeMaps?.heightMap
     ?? (inspection ? createInspectionBumpTexture(profile, settings, quality) : null);
 
+  const usesMappedSurface = Boolean(activeMaps);
   const common = {
     color: 0xffffff,
-    map: heroMaps?.albedoMap ?? null,
-    vertexColors: !heroMaps,
+    map: activeMaps?.albedoMap ?? null,
+    vertexColors: !usesMappedSurface,
     roughness: heroSettings?.roughness
       ?? THREE.MathUtils.clamp(settings.roughness, 0.45, 1),
-    roughnessMap: heroMaps?.roughnessMap ?? null,
+    roughnessMap: activeMaps?.roughnessMap ?? null,
     metalness: 0,
-    envMapIntensity: heroSettings?.envMapIntensity ?? settings.envMapIntensity,
-    flatShading: heroMaps ? false : settings.flatShading,
+    envMapIntensity: heroSettings?.envMapIntensity
+      ?? (proceduralMaps ? Math.max(settings.envMapIntensity, 0.010) : settings.envMapIntensity),
+    flatShading: usesMappedSurface ? false : settings.flatShading,
     dithering: true,
-    emissive: heroMaps
+    emissive: usesMappedSurface
       ? new THREE.Color(0x000000)
       : new THREE.Color(palette.dark).multiplyScalar(0.12),
-    emissiveIntensity: heroMaps ? 0 : settings.emissiveIntensity,
+    emissiveIntensity: usesMappedSurface ? 0 : settings.emissiveIntensity,
     bumpMap: reliefMap,
     bumpScale: heroSettings
       ? (inspection ? heroSettings.inspectionBumpScale : heroSettings.previewBumpScale)
-      : inspection
-        ? (profile.family === "Galilean moon" ? 0.052 : profile.family === "Inner regular moon" ? 0.095 : 0.120)
-        : 0,
+      : proceduralMaps
+        ? (inspection
+          ? (profile.family === "Inner regular moon" ? 0.060 : 0.038)
+          : (profile.family === "Inner regular moon" ? 0.020 : 0.012))
+        : inspection
+          ? (profile.family === "Galilean moon" ? 0.052 : profile.family === "Inner regular moon" ? 0.095 : 0.120)
+          : 0,
     displacementMap: inspection ? reliefMap : null,
     displacementScale: inspection
       ? (heroSettings?.displacementScale
-        ?? (profile.family === "Galilean moon" ? 0.010 : profile.family === "Inner regular moon" ? 0.045 : 0.056))
+        ?? (proceduralMaps
+          ? (profile.family === "Inner regular moon" ? 0.020 : 0.010)
+          : (profile.family === "Galilean moon" ? 0.010 : profile.family === "Inner regular moon" ? 0.045 : 0.056)))
       : 0,
     displacementBias: inspection
       ? (heroSettings?.displacementBias
-        ?? (profile.family === "Galilean moon" ? -0.005 : profile.family === "Inner regular moon" ? -0.0225 : -0.028))
+        ?? (proceduralMaps
+          ? (profile.family === "Inner regular moon" ? -0.010 : -0.005)
+          : (profile.family === "Galilean moon" ? -0.005 : profile.family === "Inner regular moon" ? -0.0225 : -0.028)))
       : 0,
   };
 
@@ -1066,12 +1329,15 @@ function createJovianMaterial(profile, settings, palette, quality = "high", mode
 
   material.name = heroMaps
     ? `${profile.name} spacecraft mosaic material`
-    : `${profile.name} evidence-tiered moon material`;
+    : proceduralMaps
+      ? `${profile.name} realism surface material`
+      : `${profile.name} evidence-tiered moon material`;
   material.userData = {
     surfaceEvidence: profile.surfaceEvidence,
     albedo: profile.albedo ?? null,
     roughness: common.roughness,
     usesSpacecraftMosaic: Boolean(heroMaps),
+    usesProceduralRealismMaps: Boolean(proceduralMaps),
   };
   return material;
 }
