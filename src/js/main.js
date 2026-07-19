@@ -1573,16 +1573,16 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
     // still feels powerful from that world's sky. This sprite is not part of
     // hoverTargets, so the larger radiance never enlarges the Sun's hit area.
     const inspectionGlowPixels = THREE.MathUtils.lerp(
-      76,
-      118,
+      90,
+      132,
       solarProximityBlend,
-    ) * THREE.MathUtils.lerp(1, 1.28, focusedZoomInBlend);
+    ) * THREE.MathUtils.lerp(1, 1.24, focusedZoomInBlend);
     const steadyGlowPixels = isPlanetaryInspection
       ? inspectionGlowPixels
-      : THREE.MathUtils.lerp(56, 86, solarProximityBlend);
+      : THREE.MathUtils.lerp(72, 102, solarProximityBlend);
     const maximumGlowPixels = THREE.MathUtils.lerp(
       steadyGlowPixels,
-      Math.max(steadyGlowPixels, 156),
+      Math.max(steadyGlowPixels, 172),
       maximumZoomBlend,
     );
     const targetGlowWorldSize = Math.max(
@@ -1594,97 +1594,95 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
     sun.glow.visible = true;
     sun.glow.scale.set(localGlowSize * glowPulse, localGlowSize * glowPulse, 1);
     sun.glow.material.opacity = THREE.MathUtils.clamp(
-      0.13
+      0.18
         + (isPlanetaryInspection ? 0.075 : 0)
-        + solarProximityBlend * 0.11
-        + focusedZoomInBlend * 0.1
-        + maximumZoomBlend * 0.24
-        + Math.sin(elapsedTime * 0.91) * 0.008,
-      0.105,
-      0.58,
+        + solarProximityBlend * 0.10
+        + focusedZoomInBlend * 0.08
+        + maximumZoomBlend * 0.20
+        + Math.sin(elapsedTime * 0.91) * 0.009,
+      0.16,
+      0.62,
     );
     sun.glow.material.depthTest = true;
     sun.glow.renderOrder = 0;
 
-    // The diffraction sprite adds emitted radiance around the physical disk; it
-    // never replaces or enlarges the clickable photosphere. An unresolved Sun
-    // receives the full effect, while planetary inspection keeps a restrained
-    // version visible even when the disk itself is several pixels wide.
-    const unresolvedStarBlend = 1
-      - THREE.MathUtils.smoothstep(projectedRadiusPixels, 0.75, 3.2);
-    const planetaryRadianceBlend = isPlanetaryInspection
-      ? THREE.MathUtils.clamp(
-        0.68 + solarProximityBlend * 0.18 + focusedZoomInBlend * 0.12,
-        0,
-        1,
-      )
+    // Keep the Sun strongly radiant throughout the authored Solar-System
+    // journey. The diffraction sparkle grows as the observer travels inward,
+    // then fades only when the photosphere becomes genuinely large enough to
+    // read as a nearby star. The ordinary white halo above remains visible at
+    // every distance, including after the sparkle has disappeared.
+    const nearSunSparkleFade = THREE.MathUtils.smoothstep(
+      projectedRadiusPixels,
+      170,
+      520,
+    );
+    const resolvedSparkleVisibility = 1 - nearSunSparkleFade;
+
+    // A direct Sun inspection begins close enough that the granular photosphere
+    // should be clear. Pulling back from it restores the same distant radiance
+    // used by the rest of the journey.
+    const sunFocusSparkleVisibility = isActiveSunInspection
+      ? THREE.MathUtils.smoothstep(sunFocusPullbackBlend, 0.10, 0.68)
       : 0;
-    // During free flight the same approach behaviour remains visible until the
-    // resolved photosphere becomes large enough to carry the shot by itself.
-    const freeFlightApproachRadiance = !focusedBody
-      ? solarProximityBlend
-        * (1 - THREE.MathUtils.smoothstep(projectedRadiusPixels, 90, 420))
-        * 0.72
-      : 0;
-    // A focused Sun starts with no overexposed sprite so its granular surface is
-    // fully readable. As the camera pulls back, the sparkle fades in and takes
-    // over from the shrinking disk—matching the appearance of a distant star.
-    const sunFocusRadianceBlend = isActiveSunInspection
-      ? THREE.MathUtils.smoothstep(sunFocusPullbackBlend, 0.08, 0.78)
-      : 0;
-    const radianceBlend = isActiveSunInspection
-      ? sunFocusRadianceBlend
-      : Math.max(unresolvedStarBlend, planetaryRadianceBlend, freeFlightApproachRadiance);
+    const sparkleVisibility = isActiveSunInspection
+      ? sunFocusSparkleVisibility
+      : resolvedSparkleVisibility;
+
     if (sun.distantStar) {
-      const twinkle = Math.sin(elapsedTime * 3.2) * 0.055
-        + Math.sin(elapsedTime * 7.1 + 1.4) * 0.032;
-      const maximumTwinkle = Math.sin(elapsedTime * 4.6) * 0.12
-        + Math.sin(elapsedTime * 9.7 + 0.8) * 0.065;
-      const starPulse = 1
-        + twinkle * (
-          isPlanetaryInspection
-            ? 0.28 + solarProximityBlend * 0.2 + focusedZoomInBlend * 0.15
-            : 0.22
-        )
-        + maximumTwinkle * maximumZoomBlend * 0.36;
-      // The starburst now follows both orbital proximity and focused zoom. It
-      // grows from an outer-system sparkle into a broader, hotter inner-system
-      // exposure, then expands by another 32% as the viewer zooms closer.
-      const planetaryStarPixels = THREE.MathUtils.lerp(
-        84,
-        142,
-        solarProximityBlend,
-      ) * THREE.MathUtils.lerp(1, 1.32, focusedZoomInBlend);
-      const freeFlightApproachPixels = THREE.MathUtils.lerp(
-        30,
-        118,
-        solarProximityBlend,
+      const primaryTwinkle = Math.sin(elapsedTime * 3.35) * 0.095
+        + Math.sin(elapsedTime * 7.55 + 1.4) * 0.060;
+      const fineTwinkle = Math.sin(elapsedTime * 11.2 + 0.45) * 0.028
+        + Math.sin(elapsedTime * 15.7 + 2.1) * 0.018;
+
+      // The stellar sparkle becomes broader and more energetic while moving
+      // inward. It remains vivid through Pluto, Neptune, Uranus, Saturn,
+      // Jupiter, Mars and Earth perspectives, instead of dimming immediately
+      // after leaving the maximum zoom-out boundary.
+      const inwardSparkleGrowth = isActiveSunInspection
+        ? sunFocusPullbackBlend
+        : solarProximityBlend;
+      const twinkleStrength = THREE.MathUtils.lerp(
+        0.70,
+        1.18,
+        inwardSparkleGrowth,
       );
-      const starPixelSize = Math.max(
-        THREE.MathUtils.lerp(30, 92, maximumZoomBlend),
-        isPlanetaryInspection ? planetaryStarPixels : 0,
-        !focusedBody ? freeFlightApproachPixels : 0,
-      ) * starPulse;
+      const starPulse = 1
+        + (primaryTwinkle + fineTwinkle) * twinkleStrength
+        + maximumZoomBlend * Math.sin(elapsedTime * 4.9 + 0.7) * 0.055;
+
+      const journeyStarPixels = THREE.MathUtils.lerp(
+        96,
+        188,
+        inwardSparkleGrowth,
+      );
+      const planetaryZoomBoost = isPlanetaryInspection
+        ? THREE.MathUtils.lerp(1, 1.18, focusedZoomInBlend)
+        : 1;
+      const outerBoundaryBoost = THREE.MathUtils.lerp(1, 1.14, maximumZoomBlend);
+      const starPixelSize = journeyStarPixels
+        * planetaryZoomBoost
+        * outerBoundaryBoost
+        * starPulse;
+
       const starWorldSize = starPixelSize * worldUnitsPerPixel;
       const localStarSize = starWorldSize / Math.max(nextScale, 0.0001);
+      const opacityPulse = primaryTwinkle * 0.34 + fineTwinkle * 0.22;
 
-      sun.distantStar.visible = radianceBlend > 0.012;
+      sun.distantStar.visible = sparkleVisibility > 0.01;
       sun.distantStar.scale.set(localStarSize, localStarSize, 1);
       sun.distantStar.material.opacity = THREE.MathUtils.clamp(
-        radianceBlend * (
-          0.8
-          + (isPlanetaryInspection ? 0.08 : 0)
-          + solarProximityBlend * 0.12
-          + focusedZoomInBlend * 0.1
-          + maximumZoomBlend * 0.18
-          + twinkle * 0.38
-          + maximumTwinkle * maximumZoomBlend
+        sparkleVisibility * (
+          0.88
+          + inwardSparkleGrowth * 0.12
+          + maximumZoomBlend * 0.08
+          + opacityPulse
         ),
         0,
         1,
       );
-      // Fixed diffraction orientation prevents the distant Sun from appearing
-      // to revolve around a focused planet. Brightness and size create twinkle.
+
+      // Keep the diffraction orientation fixed. Only scale and brightness pulse,
+      // so the effect reads as stellar scintillation rather than rotation.
       sun.distantStar.material.rotation = 0;
       sun.distantStar.material.depthTest = true;
       sun.distantStar.renderOrder = 8;
