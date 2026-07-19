@@ -16,6 +16,7 @@
  */
 import * as THREE from "three";
 import { PLANET_SCALE_PROFILES, getPlanetSizeComparison } from "../../config/celestialScale.js";
+import { createPlanetAuroraLayer, updatePlanetAuroraLayer } from "../../graphics/planetAurora.js";
 
 const scale = PLANET_SCALE_PROFILES.Jupiter;
 
@@ -66,7 +67,7 @@ export const jupiter = {
  * Procedural object-space noise then adds moving cloud turbulence without
  * creating the stretched polar artefacts seen in ordinary UV-only effects.
  */
-function createJupiterSurfaceMaterial(texture) {
+export function createJupiterSurfaceMaterial(texture) {
   return new THREE.ShaderMaterial({
     uniforms: {
       uTime: {
@@ -90,11 +91,11 @@ function createJupiterSurfaceMaterial(texture) {
       },
 
       uTextureStrength: {
-        value: 0.72,
+        value: 0.58,
       },
 
       uDetailStrength: {
-        value: 0.66,
+        value: 0.92,
       },
     },
 
@@ -457,92 +458,103 @@ function createJupiterSurfaceMaterial(texture) {
             broadTurbulence -
             0.5
           ) *
-          0.115 +
+          0.135 +
           (
             stormTurbulence -
             0.5
           ) *
-          0.026;
+          0.040;
 
         float broadBands =
           sin(
             warpedLatitude *
-            21.0
+            22.0
           );
 
         float fineBands =
           sin(
             warpedLatitude *
-            48.0 +
+            52.0 +
             stormTurbulence *
-            3.2
+            3.8
           );
 
         float microBands =
           sin(
             warpedLatitude *
-            96.0 +
+            104.0 +
             fineClouds *
-            5.0
+            5.8
+          );
+
+        float beltShear =
+          fbm3D(
+            flowingDirection *
+            13.0 +
+            vec3(
+              cloudTime * 0.012,
+              cloudTime * 0.004,
+              -cloudTime * 0.008
+            )
           );
 
         /*
-         * Jupiter palette.
+         * Jupiter palette in reflected sunlight.
          */
         vec3 cream =
           vec3(
-            0.88,
-            0.79,
-            0.64
+            0.89,
+            0.82,
+            0.70
           );
 
         vec3 paleCloud =
           vec3(
             0.98,
-            0.92,
-            0.79
+            0.95,
+            0.86
           );
 
         vec3 beige =
           vec3(
-            0.68,
-            0.49,
-            0.31
+            0.73,
+            0.58,
+            0.42
           );
 
         vec3 brown =
           vec3(
-            0.37,
-            0.20,
-            0.12
+            0.42,
+            0.27,
+            0.17
           );
 
         vec3 rust =
           vec3(
-            0.63,
-            0.28,
-            0.13
+            0.73,
+            0.38,
+            0.19
           );
 
         vec3 blueGrey =
           vec3(
-            0.22,
-            0.33,
-            0.36
+            0.32,
+            0.42,
+            0.52
           );
 
         vec3 stormWhite =
           vec3(
-            0.96,
-            0.95,
-            0.89
+            0.97,
+            0.97,
+            0.94
           );
 
         float warmZone =
           smoothstep(
-            -0.35,
-            0.52,
-            broadBands
+            -0.28,
+            0.56,
+            broadBands + (beltShear - 0.5) * 0.12
           );
 
         vec3 proceduralColor =
@@ -561,7 +573,7 @@ function createJupiterSurfaceMaterial(texture) {
               0.92,
               -fineBands
             ) *
-            0.62
+            0.70
           );
 
         proceduralColor =
@@ -573,7 +585,7 @@ function createJupiterSurfaceMaterial(texture) {
               0.94,
               fineBands
             ) *
-            0.64
+            0.70
           );
 
         proceduralColor +=
@@ -583,7 +595,7 @@ function createJupiterSurfaceMaterial(texture) {
             0.96,
             microBands
           ) *
-          0.16;
+          0.22;
 
         /*
          * Juno-inspired polar colouring.
@@ -593,8 +605,8 @@ function createJupiterSurfaceMaterial(texture) {
          */
         float polarAmount =
           smoothstep(
-            0.50,
-            0.94,
+            0.34,
+            0.96,
             abs(direction.y)
           );
 
@@ -608,14 +620,39 @@ function createJupiterSurfaceMaterial(texture) {
             )
           );
 
+        float polarFine =
+          fbm3D(
+            direction * 66.0 +
+            vec3(
+              -cloudTime * 0.016,
+              cloudTime * 0.010,
+              cloudTime * 0.008
+            )
+          );
+
+        vec3 polarBlue = vec3(0.39, 0.52, 0.74);
+        vec3 polarViolet = vec3(0.44, 0.41, 0.70);
+        vec3 polarWhite = vec3(0.98, 0.98, 0.96);
+
         vec3 polarColor =
           mix(
-            blueGrey * 0.62,
-            stormWhite,
+            polarBlue,
+            polarViolet,
             smoothstep(
-              0.38,
-              0.78,
+              0.26,
+              0.84,
               polarStorms
+            )
+          );
+
+        polarColor =
+          mix(
+            polarColor,
+            polarWhite,
+            smoothstep(
+              0.58,
+              0.94,
+              polarFine
             )
           );
 
@@ -623,7 +660,7 @@ function createJupiterSurfaceMaterial(texture) {
           mix(
             proceduralColor,
             polarColor,
-            polarAmount * 0.76
+            polarAmount * 0.96
           );
 
         /*
@@ -637,13 +674,13 @@ function createJupiterSurfaceMaterial(texture) {
 
             -0.72,
 
-            -0.34,
+            -0.31,
 
-            0.28,
+            0.31,
 
-            0.115,
+            0.122,
 
-            0.14
+            0.19
           );
 
         float redSpotCore =
@@ -652,13 +689,13 @@ function createJupiterSurfaceMaterial(texture) {
 
             -0.72,
 
-            -0.34,
+            -0.31,
 
-            0.17,
+            0.19,
 
-            0.062,
+            0.070,
 
-            0.18
+            0.22
           );
 
         float redSpotFlow =
@@ -671,15 +708,15 @@ function createJupiterSurfaceMaterial(texture) {
         vec3 redSpotOuter =
           mix(
             vec3(
-              0.66,
-              0.23,
-              0.09
+              0.70,
+              0.27,
+              0.10
             ),
 
             vec3(
-              0.93,
-              0.55,
-              0.27
+              0.96,
+              0.63,
+              0.32
             ),
 
             redSpotFlow *
@@ -690,15 +727,15 @@ function createJupiterSurfaceMaterial(texture) {
         vec3 redSpotInner =
           mix(
             vec3(
-              0.75,
-              0.31,
-              0.12
+              0.82,
+              0.39,
+              0.15
             ),
 
             vec3(
-              0.96,
-              0.73,
-              0.43
+              0.98,
+              0.79,
+              0.49
             ),
 
             stormTurbulence
@@ -708,14 +745,38 @@ function createJupiterSurfaceMaterial(texture) {
           mix(
             proceduralColor,
             redSpotOuter,
-            greatRedSpot * 0.92
+            greatRedSpot * 0.96
           );
 
         proceduralColor =
           mix(
             proceduralColor,
             redSpotInner,
-            redSpotCore * 0.88
+            redSpotCore * 0.94
+          );
+
+        float redSpotWake =
+          stormMask(
+            direction,
+            -0.42,
+            -0.30,
+            0.42,
+            0.082,
+            0.22
+          );
+
+        vec3 wakeColor =
+          mix(
+            vec3(0.84, 0.73, 0.61),
+            vec3(0.58, 0.41, 0.31),
+            smoothstep(0.28, 0.92, stormTurbulence)
+          );
+
+        proceduralColor =
+          mix(
+            proceduralColor,
+            wakeColor,
+            redSpotWake * 0.34
           );
 
         /*
@@ -748,7 +809,7 @@ function createJupiterSurfaceMaterial(texture) {
             0.45,
             0.068,
             0.034,
-            0.14
+            0.19
           );
 
         float whiteOvals =
@@ -764,7 +825,7 @@ function createJupiterSurfaceMaterial(texture) {
           mix(
             proceduralColor,
             stormWhite,
-            whiteOvals * 0.82
+            whiteOvals * 0.96
           );
 
         /*
@@ -778,7 +839,7 @@ function createJupiterSurfaceMaterial(texture) {
               fract(
                 vUv.x +
                 cloudTime *
-                0.0018
+                0.0015
               ),
               vUv.y
             )
@@ -798,13 +859,37 @@ function createJupiterSurfaceMaterial(texture) {
           mix(
             surfaceColor,
             proceduralColor,
-            uDetailStrength * 0.52
+            uDetailStrength * 0.74
           );
 
         surfaceColor *=
           0.88 +
-          broadTurbulence * 0.17 +
-          fineClouds * 0.08;
+          broadTurbulence * 0.24 +
+          fineClouds * 0.14;
+
+        // Preserve Juno-inspired blue/violet/white polar cyclones after the
+        // broad texture blend. Previously this treatment existed only inside
+        // proceduralColor and was diluted before reaching the final fragment.
+        float polarFilament =
+          smoothstep(
+            0.34,
+            0.92,
+            polarFine
+          );
+
+        vec3 finalPolarColor =
+          mix(
+            polarColor,
+            vec3(0.90, 0.94, 1.0),
+            polarFilament * 0.58
+          );
+
+        surfaceColor =
+          mix(
+            surfaceColor,
+            finalPolarColor,
+            polarAmount * (0.58 + polarFilament * 0.24)
+          );
 
         /*
          * Lighting.
@@ -857,12 +942,12 @@ function createJupiterSurfaceMaterial(texture) {
 
         surfaceColor +=
           vec3(
-            0.56,
-            0.72,
-            0.78
+            0.62,
+            0.76,
+            0.82
           ) *
           atmosphereScatter *
-          0.075;
+          0.12;
 
         gl_FragColor =
           vec4(
@@ -884,7 +969,7 @@ function createJupiterSurfaceMaterial(texture) {
 /**
  * Creates Jupiter's thin upper-atmosphere shell.
  */
-function createJupiterAtmosphereMaterial() {
+export function createJupiterAtmosphereMaterial() {
   return new THREE.ShaderMaterial({
     uniforms: {
       uTime: {
@@ -959,16 +1044,16 @@ function createJupiterAtmosphereMaterial() {
         vec3 atmosphereColor =
           mix(
             vec3(
-              0.83,
-              0.65,
-              0.43
+              0.86,
+              0.70,
+              0.49
             ),
 
             uColor,
 
             smoothstep(
-              0.45,
-              0.92,
+              0.42,
+              0.94,
               latitude
             )
           );
@@ -982,7 +1067,7 @@ function createJupiterAtmosphereMaterial() {
 
         float alpha =
           fresnel *
-          0.16 *
+          0.24 *
           pulse;
 
         if (alpha < 0.004) {
@@ -1074,6 +1159,65 @@ export function createJupiter({
 
   surface.add(atmosphere);
 
+  // Jupiter's auroras encircle both magnetic poles as persistent bright ovals.
+  const auroraOval = createPlanetAuroraLayer({
+    planet: surface,
+    radius: jupiter.radius,
+    quality: "high",
+    shellScale: 1.034,
+    latitudeCenter: 0.915,
+    latitudeWidth: 0.055,
+    mirroredStrength: 1.0,
+    longitudeCenter: 0.0,
+    longitudeWidth: 3.1416,
+    secondaryLongitudeCenter: 1.5708,
+    secondaryLongitudeWidth: 3.1416,
+    secondaryLongitudeStrength: 0.60,
+    globalDiffuseStrength: 0.0,
+    intensity: 1.42,
+    faceOnVisibility: 0.62,
+    daysideVisibility: 0.18,
+    arcFrequency: 4.8,
+    spikeFrequency: 26.0,
+    displacementStrength: 0.014,
+    shellAlpha: 1.00,
+    animationSpeed: 1.00,
+    redFringeStrength: 0.10,
+    primaryColor: 0x7ee3ff,
+    secondaryColor: 0xffffff,
+    tertiaryColor: 0x8d79ff,
+  });
+  auroraOval.name = "Jupiter auroral ovals";
+
+  const auroraCap = createPlanetAuroraLayer({
+    planet: surface,
+    radius: jupiter.radius,
+    quality: "high",
+    shellScale: 1.042,
+    latitudeCenter: 0.972,
+    latitudeWidth: 0.090,
+    mirroredStrength: 1.0,
+    longitudeCenter: 0.0,
+    longitudeWidth: 3.1416,
+    secondaryLongitudeCenter: 0.0,
+    secondaryLongitudeWidth: 3.1416,
+    secondaryLongitudeStrength: 0.0,
+    globalDiffuseStrength: 0.14,
+    intensity: 0.98,
+    faceOnVisibility: 0.56,
+    daysideVisibility: 0.12,
+    arcFrequency: 3.4,
+    spikeFrequency: 18.0,
+    displacementStrength: 0.010,
+    shellAlpha: 0.86,
+    animationSpeed: 0.70,
+    redFringeStrength: 0.12,
+    primaryColor: 0x55d7ff,
+    secondaryColor: 0xcbd8ff,
+    tertiaryColor: 0x7b62ff,
+  });
+  auroraCap.name = "Jupiter polar aurora haze";
+
   /*
    * Optional orbit-line callback keeps Jupiter compatible with your existing
    * orbitRoot architecture.
@@ -1097,6 +1241,8 @@ export function createJupiter({
     system,
     surface,
     atmosphere,
+    auroraOval,
+    auroraCap,
   };
 }
 
@@ -1117,6 +1263,8 @@ export function updateJupiter({
     system,
     surface,
     atmosphere,
+    auroraOval,
+    auroraCap,
   } =
     jupiterSystem;
 
@@ -1147,6 +1295,18 @@ export function updateJupiter({
     atmosphere.material.uniforms.uTime.value =
       time;
   }
+
+  updatePlanetAuroraLayer(
+    auroraOval,
+    motionScale,
+    { rotationSpeed: 0.00022 }
+  );
+
+  updatePlanetAuroraLayer(
+    auroraCap,
+    motionScale,
+    { rotationSpeed: -0.00010 }
+  );
 
   /*
    * Jupiter needs a correct Sun direction because its material is custom and

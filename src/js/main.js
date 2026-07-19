@@ -19,6 +19,7 @@ import { loadUniverseTextures } from './graphics/loadTextures.js';
 import { createMoonSystem } from './planets/earth/satellites/moon.js';
 import { createEarthVisualSystem, updateEarthVisualSystem } from './planets/earth/earthVisuals.js';
 import { createMarsVisualSystem, updateMarsVisualSystem } from './planets/mars/marsVisuals.js';
+import { createJupiterVisualSystem, updateJupiterVisualSystem } from './planets/jupiter/jupiterVisuals.js';
 import { PLANET_CONFIGS } from './planets/index.js';
 import {
   createMajorSatelliteSystems,
@@ -942,6 +943,8 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
   const earthRadius = earth.userData.visualRadius ?? 1.25;
   const mars = planets.find((planet) => planet.name === "Mars");
   const marsRadius = mars.userData.visualRadius ?? 0.98;
+  const jupiter = planets.find((planet) => planet.name === "Jupiter");
+  const jupiterRadius = jupiter.userData.visualRadius ?? 5.2;
 
   // Earth uses NASA Blue Marble visible-light imagery, a filtered MODIS cloud
   // shell, a sunlight-aware atmospheric limb, and nightside-only city lights.
@@ -955,6 +958,13 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
   const marsVisualSystem = createMarsVisualSystem({
     mars,
     radius: marsRadius,
+    quality: creationQuality,
+  });
+
+  const jupiterVisualSystem = createJupiterVisualSystem({
+    jupiter,
+    textures,
+    radius: jupiterRadius,
     quality: creationQuality,
   });
 
@@ -1011,8 +1021,6 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
     hoverTargets,
     quality: creationQuality,
   });
-  const jupiter = planets.find((planet) => planet.name === "Jupiter");
-
   const earthDistanceTracker = createEarthDistanceTracker({ earth });
   let previousDistanceProgress = smoothProgress;
 
@@ -3721,6 +3729,11 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
     const frameScale = deltaTime * 60;
     updateEarthVisualSystem(earthVisualSystem, frameScale);
     updateMarsVisualSystem(marsVisualSystem, frameScale);
+    updateJupiterVisualSystem(
+      jupiterVisualSystem,
+      simulationTime,
+      frameScale,
+    );
     moonPivot.rotation.y += 0.011 * frameMotionScale;
     // A small oscillation suggests lunar libration while the pivot maintains tidal lock.
     moon.rotation.y = Math.sin(simulationTime * 0.35) * 0.04;
