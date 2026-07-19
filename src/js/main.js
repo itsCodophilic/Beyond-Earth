@@ -1230,24 +1230,35 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
     const bodyName = String(focusedBody.userData?.name ?? focusedBody.name ?? "").toLowerCase();
     const bodyType = String(focusedBody.userData?.info?.type ?? "").toLowerCase();
     const parentPlanet = String(focusedBody.userData?.parentPlanet ?? "").toLowerCase();
+    let regionalProgress = smoothProgress;
 
-    if (parentPlanet && JOURNEY_MAP[parentPlanet] != null) return JOURNEY_MAP[parentPlanet];
-    if (bodyName.includes("sun")) return JOURNEY_MAP.sun;
-    if (bodyName.includes("mercury")) return JOURNEY_MAP.mercury;
-    if (bodyName.includes("venus")) return JOURNEY_MAP.venus;
-    if (bodyName.includes("earth")) return JOURNEY_MAP.earth;
-    if (bodyName.includes("moon")) return JOURNEY_MAP.moon;
-    if (bodyName.includes("mars")) return JOURNEY_MAP.mars;
-    if (bodyName.includes("jupiter")) return JOURNEY_MAP.jupiter;
-    if (bodyName.includes("saturn")) return JOURNEY_MAP.saturn;
-    if (bodyName.includes("uranus")) return JOURNEY_MAP.uranus;
-    if (bodyName.includes("neptune")) return JOURNEY_MAP.neptune;
-    if (bodyName.includes("pluto")) return JOURNEY_MAP.pluto;
-    if (bodyType.includes("asteroid") || bodyName.includes("asteroid") || bodyName.includes("family")) {
-      return JOURNEY_MAP.asteroidBelt;
+    if (parentPlanet && JOURNEY_MAP[parentPlanet] != null) regionalProgress = JOURNEY_MAP[parentPlanet];
+    else if (bodyName.includes("sun")) regionalProgress = JOURNEY_MAP.sun;
+    else if (bodyName.includes("mercury")) regionalProgress = JOURNEY_MAP.mercury;
+    else if (bodyName.includes("venus")) regionalProgress = JOURNEY_MAP.venus;
+    else if (bodyName.includes("earth")) regionalProgress = JOURNEY_MAP.earth;
+    else if (bodyName.includes("moon")) regionalProgress = JOURNEY_MAP.moon;
+    else if (bodyName.includes("mars")) regionalProgress = JOURNEY_MAP.mars;
+    else if (bodyName.includes("jupiter")) regionalProgress = JOURNEY_MAP.jupiter;
+    else if (bodyName.includes("saturn")) regionalProgress = JOURNEY_MAP.saturn;
+    else if (bodyName.includes("uranus")) regionalProgress = JOURNEY_MAP.uranus;
+    else if (bodyName.includes("neptune")) regionalProgress = JOURNEY_MAP.neptune;
+    else if (bodyName.includes("pluto")) regionalProgress = JOURNEY_MAP.pluto;
+    else if (
+      bodyType.includes("asteroid")
+      || bodyName.includes("asteroid")
+      || bodyName.includes("family")
+    ) {
+      regionalProgress = JOURNEY_MAP.asteroidBelt;
     }
 
-    return smoothProgress;
+    const focusedDistance = getFocusedBaseDistance(focusedBody) * focusZoomCurrent;
+    const wideBlend = THREE.MathUtils.smoothstep(
+      focusedDistance / MAX_CINEMATIC_CAMERA_DISTANCE,
+      0.22,
+      0.82,
+    );
+    return THREE.MathUtils.lerp(regionalProgress, 1, wideBlend);
   }
 
   /*
@@ -1309,6 +1320,7 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
 
   const SUN_RADIUS_KM = PLANET_SCALE_PROFILES.Sun.diameterKm * 0.5;
   const SUN_BASE_VISUAL_RADIUS = PLANET_SCALE_PROFILES.Sun.visualRadius;
+  const MAX_CINEMATIC_CAMERA_DISTANCE = 2550;
   let currentSunAngularRadius = 0;
   let currentSunProjectedRadiusPixels = Infinity;
   let snapSunApparentScaleOnNextFrame = false;
@@ -1713,7 +1725,7 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
         ?? "Scale comparison unavailable";
     }
     cardMode.textContent = "Slow motion · Focused";
-    cardHint.textContent = "Journey paused · Drag to orbit · Scroll or pinch to zoom · Close to return";
+    cardHint.textContent = "Journey paused · Drag to orbit · Pull back to the outer boundary · Click another body or space to leave";
   }
 
   /** Projects a 3D world position into 2D pixels and points the line at the body. */
@@ -2579,6 +2591,94 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
     updateDistanceReadout(smoothProgress);
   }
 
+  function releaseWideFocusToFreeFlight() {
+    if (!focusedBody) return false;
+
+    const liveCameraPosition = camera.position.clone();
+    const liveCameraFocus = cameraFocusPoint.clone();
+    const liveFov = camera.fov;
+    const snapshot = journeyScrollSnapshot;
+
+    setAsteroidFocusAppearance(focusedBody, false);
+    setAsteroidInspectionDetail(focusedBody, false);
+    focusedBody = null;
+    displayedBody = null;
+    focusNavigationHistory.length = 0;
+    focusExitTransition = null;
+    focusedBodyLocator.visible = false;
+    focusedBodyLocator.material.opacity = 0;
+    focusZoomTarget = 1;
+    focusZoomCurrent = 1;
+    focusPinchDistance = null;
+    setBodyCardCollapsed(false);
+    updateBodyCard(null);
+    restoreBroadSolarSystemScale();
+
+    if (snapshot) {
+      suppressJourneyScrollSync = true;
+      document.documentElement.style.scrollBehavior = "auto";
+      document.documentElement.classList.remove(
+        "is-celestial-focus",
+        "is-focus-exit-restoring",
+      );
+      document.body.classList.remove("is-celestial-focus");
+      document.documentElement.style.overflow = snapshot.htmlOverflow;
+      document.body.style.position = snapshot.bodyPosition;
+      document.body.style.top = snapshot.bodyTop;
+      document.body.style.left = snapshot.bodyLeft;
+      document.body.style.right = snapshot.bodyRight;
+      document.body.style.width = snapshot.bodyWidth;
+      document.body.style.overflow = snapshot.bodyOverflow;
+      document.body.style.paddingRight = snapshot.bodyPaddingRight;
+    }
+
+    isJourneyScrollLocked = false;
+    journeyScrollSnapshot = null;
+    scrollProgress = 1;
+    smoothProgress = 1;
+    previousDistanceProgress = 1;
+
+    const maximumScroll = Math.max(
+      0,
+      document.documentElement.scrollHeight - innerHeight,
+    );
+    forceJourneyScrollPosition(maximumScroll);
+
+    const outerDistance = getCameraDistance(1);
+    getFocusPoint(outerDistance, exploreBaseFocus);
+    setSphericalCameraOffset(sphericalCameraOffset, outerDistance);
+    exploreBaseCamera.copy(exploreBaseFocus).add(sphericalCameraOffset);
+
+    freeExploreCameraOffsetCurrent.copy(liveCameraPosition).sub(exploreBaseCamera);
+    freeExploreCameraOffsetTarget.copy(freeExploreCameraOffsetCurrent);
+    freeExploreFocusOffsetCurrent.copy(liveCameraFocus).sub(exploreBaseFocus);
+    freeExploreFocusOffsetTarget.copy(freeExploreFocusOffsetCurrent);
+
+    camera.position.copy(liveCameraPosition);
+    cameraFocusPoint.copy(liveCameraFocus);
+    targetFocusPoint.copy(liveCameraFocus);
+    camera.fov = liveFov;
+    camera.updateProjectionMatrix();
+    camera.lookAt(cameraFocusPoint);
+    camera.updateMatrixWorld(true);
+    hasCameraFocusPoint = true;
+    hasExploredFreeSpace = true;
+    spaceExploreHint?.classList.add("is-hidden");
+
+    requestAnimationFrame(() => {
+      forceJourneyScrollPosition(maximumScroll);
+      requestAnimationFrame(() => {
+        forceJourneyScrollPosition(maximumScroll);
+        document.documentElement.style.scrollBehavior = snapshot?.htmlScrollBehavior ?? "";
+        suppressJourneyScrollSync = false;
+        updateScrollProgress();
+      });
+    });
+
+    updateDistanceReadout(1);
+    return true;
+  }
+
   /** Captures a focused body's complete inspection state for Back/Escape. */
   function captureFocusedNavigationState(body) {
     if (!body) return null;
@@ -2730,7 +2830,13 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
     }
 
     if (focusedBody) {
-      pushFocusedNavigationState(focusedBody);
+      if (isFocusedWideView()) {
+        // At the outer boundary, selecting another object starts a fresh
+        // inspection rather than keeping the previous body trapped in history.
+        focusNavigationHistory.length = 0;
+      } else {
+        pushFocusedNavigationState(focusedBody);
+      }
       setAsteroidFocusAppearance(focusedBody, false);
       setAsteroidInspectionDetail(focusedBody, false);
     }
@@ -2758,14 +2864,41 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
   addEventListener("scroll", () => {
     updateScrollProgress();
   }, { passive: true });
+  function getFocusedBaseDistance(body = focusedBody) {
+    if (!body) return 1;
+    const focusScale = body.userData?.focusScale ?? 1;
+    const minimumFocusDistance = body.userData?.minFocusDistance ?? 4.5;
+    const explicitFocusDistance = body.userData?.focusDistance;
+    return explicitFocusDistance
+      ?? Math.max(
+        minimumFocusDistance,
+        Math.min(getCameraDistance(smoothProgress), 30 / focusScale),
+      );
+  }
+
+  function getFocusedMaximumZoom(body = focusedBody) {
+    const baseDistance = Math.max(0.001, getFocusedBaseDistance(body));
+    return Math.max(2.45, MAX_CINEMATIC_CAMERA_DISTANCE / baseDistance);
+  }
+
+  function isFocusedWideView() {
+    if (!focusedBody) return false;
+    const focusedDistance = getFocusedBaseDistance(focusedBody) * focusZoomCurrent;
+    return focusedDistance >= MAX_CINEMATIC_CAMERA_DISTANCE * 0.72;
+  }
+
   function adjustFocusedZoom(delta) {
-    // A wheel outside an open distance card starts closing that card in the
-    // capture phase, then continues here as a focused-body zoom gesture.
+    // Focused inspection can now pull all the way back to the authored outer
+    // Solar-System boundary. The body remains selected until the viewer clicks
+    // another body/region or presses Escape.
     if (!focusedBody) return;
+    const zoomSensitivity = delta > 0 && focusZoomTarget > 2.45
+      ? 0.0021
+      : 0.00125;
     focusZoomTarget = THREE.MathUtils.clamp(
-      focusZoomTarget * Math.exp(delta * 0.00125),
+      focusZoomTarget * Math.exp(delta * zoomSensitivity),
       0.58,
-      2.45,
+      getFocusedMaximumZoom(),
     );
   }
 
@@ -3017,7 +3150,7 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
     focusZoomTarget = THREE.MathUtils.clamp(
       focusZoomTarget * (focusPinchDistance / nextDistance),
       0.58,
-      2.45,
+      getFocusedMaximumZoom(),
     );
     focusPinchDistance = nextDistance;
   }, { passive: false });
@@ -3107,7 +3240,15 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
     }
 
     if (focusedBody) {
-      focusBody(null);
+      if (isFocusedWideView()) {
+        // A click into empty space from the maximum focused zoom exits the
+        // previous inspection and continues into the selected region in the
+        // same gesture, with no intermediate camera jump.
+        releaseWideFocusToFreeFlight();
+        exploreSpaceAtPointer();
+      } else {
+        focusBody(null);
+      }
       return;
     }
 
@@ -3324,14 +3465,10 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
         baseFocusDistance * 0.58,
         focusVisualRadius * (focusedBody.userData?.info?.type === "Star" ? 1.72 : 1.38),
       );
-      const surroundingsMaximum = Math.max(
-        baseFocusDistance * 2.45,
-        focusVisualRadius * 7.5,
-      );
       cameraDistance = THREE.MathUtils.clamp(
         baseFocusDistance * focusZoomCurrent,
         safeMinimum,
-        surroundingsMaximum,
+        MAX_CINEMATIC_CAMERA_DISTANCE,
       );
     }
 
