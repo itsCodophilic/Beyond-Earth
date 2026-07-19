@@ -17,6 +17,7 @@ import './brand.js';
 import { HELIOCENTRIC_ORBIT_AU, PLANET_SCALE_PROFILES } from './config/celestialScale.js';
 import { loadUniverseTextures } from './graphics/loadTextures.js';
 import { createMoonSystem } from './planets/earth/satellites/moon.js';
+import { PLANET_CONFIGS } from './planets/index.js';
 import {
   createMajorSatelliteSystems,
   findNearestJovianSatelliteAtPointer,
@@ -24,7 +25,6 @@ import {
   updateMajorSatelliteSystems,
   updateMajorSatelliteVisibility,
 } from './planets/satellites/satelliteSystem.js';
-import { PLANET_CONFIGS } from './planets/index.js';
 import {
   ASTEROID_INSPECTION_LAYER,
   createAsteroidBelt,
@@ -37,7 +37,6 @@ import {
   updateAsteroidSpinClock,
   updateJupiterTrojanFrame,
 } from './scene/asteroidBelt.js';
-import { createPlanet, updatePlanetVisuals } from './scene/planetFactory.js';
 import {
   ASTRONOMICAL_UNIT_KM,
   createEarthDistanceTracker,
@@ -46,6 +45,7 @@ import {
   getEarthDistanceRegion,
   interpolateCameraDistanceFromEarth,
 } from './scene/distanceFromEarth.js';
+import { createPlanet, updatePlanetVisuals } from './scene/planetFactory.js';
 import { SpaceEnvironment } from './scene/space/spaceEnvironment.js';
 import { JOURNEY_MAP } from './scene/space/spaceEnvironmentConfig.js';
 import { createSun, setSunPerformanceProfile, updateSun } from './stars/sun/sun.js';
