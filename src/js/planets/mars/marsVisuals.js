@@ -49,38 +49,78 @@ export function createMarsVisualSystem({ mars, radius, quality = "high" }) {
   atmosphere.name = "Mars thin atmosphere";
   mars.add(atmosphere);
 
-  // Calm state: localized southern-hemisphere discrete aurora associated with
-  // crustal magnetic anomalies such as Terra Sirenum / Terra Cimmeria.
+  // Root-cause fix:
+  // The earlier calm aurora used only two narrow longitude masks. When those
+  // patches rotated onto Mars's far side or sunlit hemisphere, the shader was
+  // working correctly but every visible fragment was either occluded or almost
+  // fully suppressed by the nightside mask. The storm layer remained visible
+  // because it covered a much broader longitude range.
+  //
+  // Keep the calm state scientifically localized by using two small auroral
+  // groups at separated southern crustal-anomaly longitudes. Their combined
+  // area remains restrained, but at least one group can normally reach the
+  // visible nightside or limb during inspection.
   const aurora = createPlanetAuroraLayer({
     planet: mars,
     radius,
     quality,
-    shellScale: 1.022,
-    latitudeCenter: -0.56,
-    latitudeWidth: 0.105,
+    shellScale: 1.023,
+    latitudeCenter: -0.58,
+    latitudeWidth: 0.145,
     mirroredStrength: 0.0,
     longitudeCenter: 2.05,
-    longitudeWidth: 0.52,
+    longitudeWidth: 0.62,
     secondaryLongitudeCenter: 1.22,
-    secondaryLongitudeWidth: 0.42,
-    secondaryLongitudeStrength: 0.72,
+    secondaryLongitudeWidth: 0.48,
+    secondaryLongitudeStrength: 0.80,
     globalDiffuseStrength: 0.0,
-    intensity: 0.86,
-    faceOnVisibility: 0.36,
-    daysideVisibility: 0.01,
+    intensity: 1.08,
+    faceOnVisibility: 0.54,
+    daysideVisibility: 0.025,
     arcFrequency: 6.2,
     spikeFrequency: 26.0,
-    displacementStrength: 0.010,
-    shellAlpha: 0.88,
+    displacementStrength: 0.011,
+    shellAlpha: 0.94,
     animationSpeed: 0.58,
+    redFringeStrength: 0.12,
+    primaryColor: 0x84C385,
+    secondaryColor: 0x1D3557,
+    tertiaryColor: 0x4A3B6B,
+  });
+  aurora.name = "Mars discrete southern aurora — Terra Sirenum group";
+  aurora.rotation.z = -0.12;
+  aurora.rotation.x = 0.04;
+
+  const auroraCompanion = createPlanetAuroraLayer({
+    planet: mars,
+    radius,
+    quality,
+    shellScale: 1.024,
+    latitudeCenter: -0.54,
+    latitudeWidth: 0.125,
+    mirroredStrength: 0.0,
+    longitudeCenter: -0.62,
+    longitudeWidth: 0.54,
+    secondaryLongitudeCenter: -1.48,
+    secondaryLongitudeWidth: 0.42,
+    secondaryLongitudeStrength: 0.66,
+    globalDiffuseStrength: 0.0,
+    intensity: 0.94,
+    faceOnVisibility: 0.52,
+    daysideVisibility: 0.025,
+    arcFrequency: 6.7,
+    spikeFrequency: 28.0,
+    displacementStrength: 0.010,
+    shellAlpha: 0.92,
+    animationSpeed: 0.54,
     redFringeStrength: 0.10,
     primaryColor: 0x84C385,
     secondaryColor: 0x1D3557,
     tertiaryColor: 0x4A3B6B,
   });
-  aurora.name = "Mars discrete southern aurora";
-  aurora.rotation.z = -0.16;
-  aurora.rotation.x = 0.05;
+  auroraCompanion.name = "Mars discrete southern aurora — Terra Cimmeria group";
+  auroraCompanion.rotation.z = 0.10;
+  auroraCompanion.rotation.x = -0.03;
 
   // Solar-storm surge: expands coverage noticeably across a much larger part
   // of the southern nightside, then collapses back to the discrete baseline.
@@ -100,7 +140,7 @@ export function createMarsVisualSystem({ mars, radius, quality = "high" }) {
     globalDiffuseStrength: 0.18,
     intensity: 0.98,
     faceOnVisibility: 0.34,
-    daysideVisibility: 0.01,
+    daysideVisibility: 0.02,
     arcFrequency: 5.1,
     spikeFrequency: 21.0,
     displacementStrength: 0.009,
@@ -119,6 +159,7 @@ export function createMarsVisualSystem({ mars, radius, quality = "high" }) {
   return {
     atmosphere,
     aurora,
+    auroraCompanion,
     stormAurora,
     stormElapsed: 0,
   };
@@ -127,8 +168,13 @@ export function createMarsVisualSystem({ mars, radius, quality = "high" }) {
 export function updateMarsVisualSystem(system, frameScale = 1) {
   if (!system) return;
   system.atmosphere.rotation.y -= 0.00012 * frameScale;
-  updatePlanetAuroraLayer(system.aurora, frameScale, { rotationSpeed: 0.00008 });
+  updatePlanetAuroraLayer(system.aurora, frameScale, { rotationSpeed: 0.000035 });
+  updatePlanetAuroraLayer(system.auroraCompanion, frameScale, { rotationSpeed: -0.000028 });
   updatePlanetAuroraLayer(system.stormAurora, frameScale, { rotationSpeed: 0.00005 });
+
+  // Calm-mode layers are always active; only the storm overlay is time-gated.
+  setPlanetAuroraStrength(system.aurora, 1.0);
+  setPlanetAuroraStrength(system.auroraCompanion, 1.0);
 
   // After ~5 seconds, let a stronger solar-wave event expand the aurora across
   // a much larger southern region, then settle it back to the normal localized patch.
