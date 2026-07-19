@@ -169,15 +169,41 @@ function createAuroraMaterial() {
       uTime: { value: 0 },
     },
     vertexShader: `
+      uniform float uTime;
       varying vec3 vWorldNormal;
       varying vec3 vWorldPosition;
       varying vec3 vLocalPosition;
+      varying float vAuroraBand;
+      varying float vSpikeField;
 
       void main() {
-        vLocalPosition = position;
-        vec4 worldPosition = modelMatrix * vec4(position, 1.0);
+        vec3 localNormal = normalize(position);
+        float absY = abs(localNormal.y);
+        float longitude = atan(localNormal.z, localNormal.x);
+
+        // A narrow auroral oval near the polar regions, with local vertical
+        // protrusions so the sheet does not feel completely flat.
+        float coreBand = exp(-pow((absY - 0.922) / 0.028, 2.0));
+        float outerBand = exp(-pow((absY - 0.902) / 0.048, 2.0)) * 0.40;
+        float auroraBand = clamp(coreBand + outerBand, 0.0, 1.0);
+
+        float broadArc = sin(longitude * 3.4 + uTime * 0.18 + sin(longitude * 6.2) * 0.35) * 0.5 + 0.5;
+        float spikeField = pow(
+          sin(longitude * 18.0 + uTime * 0.42 + absY * 14.0) * 0.5 + 0.5,
+          3.0
+        );
+        float displacement = length(position)
+          * auroraBand
+          * (0.003 + 0.013 * broadArc + 0.016 * spikeField);
+
+        vec3 displacedPosition = position + localNormal * displacement;
+        vLocalPosition = displacedPosition;
+        vAuroraBand = auroraBand;
+        vSpikeField = spikeField;
+
+        vec4 worldPosition = modelMatrix * vec4(displacedPosition, 1.0);
         vWorldPosition = worldPosition.xyz;
-        vWorldNormal = normalize(mat3(modelMatrix) * normal);
+        vWorldNormal = normalize(mat3(modelMatrix) * localNormal);
         gl_Position = projectionMatrix * viewMatrix * worldPosition;
       }
     `,
@@ -186,6 +212,8 @@ function createAuroraMaterial() {
       varying vec3 vWorldNormal;
       varying vec3 vWorldPosition;
       varying vec3 vLocalPosition;
+      varying float vAuroraBand;
+      varying float vSpikeField;
 
       float hash(vec2 p) {
         return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);
@@ -222,80 +250,61 @@ function createAuroraMaterial() {
         vec3 lightDirection = normalize(-vWorldPosition);
 
         float absY = abs(localNormal.y);
-
-        // A realistic auroral oval concentrates around high geomagnetic latitudes
-        // instead of covering most of the polar hemisphere.
-        float ovalCore = exp(-pow((absY - 0.925) / 0.028, 2.0));
-        float ovalOuter = exp(-pow((absY - 0.905) / 0.048, 2.0)) * 0.42;
-        float polarOval = clamp(ovalCore + ovalOuter, 0.0, 1.0);
+        float longitude = atan(localNormal.z, localNormal.x);
 
         float nightside = 1.0 - smoothstep(-0.16, 0.22, dot(normal, lightDirection));
-        float limb = pow(1.0 - max(dot(normal, viewDirection), 0.0), 1.15);
+        float limb = pow(1.0 - max(dot(normal, viewDirection), 0.0), 1.10);
 
-        // Real aurora is strongest against the nightside, but a focused globe
-        // should still reveal the oval from a more face-on angle. These floors
-        // keep it inspectable without making the daylight side equally bright.
+        // Keep the visibility you approved while allowing a face-on focused
+        // Earth to still reveal the oval.
         float darknessVisibility = mix(0.20, 1.0, nightside);
-        float viewingVisibility = 0.34 + smoothstep(0.05, 0.72, limb) * 0.66;
+        float viewingVisibility = 0.36 + smoothstep(0.04, 0.74, limb) * 0.64;
 
-        // Longitude-aligned curtains with narrow bright ribs create the spiky,
-        // folded structure visible in orbital aurora photography.
-        float longitude = atan(localNormal.z, localNormal.x);
-        float latCoord = asin(clamp(localNormal.y, -1.0, 1.0));
+        // Build structured auroral arcs rather than a broad polar wash.
+        float arcNoise = fbm(vec2(longitude * 2.2 + uTime * 0.05, absY * 18.0));
+        float mainArc = sin(longitude * 2.8 + arcNoise * 2.4 + uTime * 0.10) * 0.5 + 0.5;
+        float secondaryArc = sin(longitude * 5.8 - arcNoise * 3.2 - uTime * 0.08) * 0.5 + 0.5;
+        float arcMask = smoothstep(0.18, 0.82, mainArc) * 0.72 + smoothstep(0.42, 0.90, secondaryArc) * 0.28;
 
-        float flow = longitude * 9.5 + uTime * 0.48;
-        float broadBands = fbm(vec2(flow, latCoord * 24.0 - uTime * 0.15));
-        float fineBands = fbm(vec2(longitude * 22.0 - uTime * 0.92, latCoord * 58.0 + uTime * 0.22));
+        float broadBands = fbm(vec2(longitude * 8.0 + uTime * 0.22, absY * 28.0 - uTime * 0.12));
+        float fineBands = fbm(vec2(longitude * 22.0 - uTime * 0.70, absY * 58.0 + uTime * 0.20));
+        float ribs = pow(smoothstep(0.36, 0.92, 0.58 * broadBands + 0.42 * fineBands), 1.65);
 
-        float ribs = pow(
+        float spikeColumns = pow(
           smoothstep(
-            0.40,
-            0.92,
-            0.58 * broadBands + 0.42 * fineBands
+            0.68,
+            0.992,
+            sin(longitude * 20.0 + fineBands * 8.0 + uTime * 0.35) * 0.5 + 0.5
           ),
-          1.75
+          2.5
         );
 
-        float spikes = pow(
-          smoothstep(
-            0.72,
-            0.985,
-            sin(longitude * 18.0 + fineBands * 8.0 + uTime * 0.35) * 0.5 + 0.5
-          ),
-          2.2
-        );
-
-        float curtain = ribs * (0.72 + spikes * 0.58);
-        float diffuseCurtain = 0.24 + curtain * 0.76;
-
-        // Keep the scientifically narrow auroral oval, but raise its exposure so
-        // it remains clearly visible during focused inspection and broad views.
-        float latTaper = smoothstep(0.0, 0.72, polarOval);
+        float curtain = arcMask * (0.30 + ribs * 0.70) * (0.62 + spikeColumns * 0.50);
+        float diffuseCurtain = 0.26 + curtain * 0.74;
         float breathing = 0.92 + sin(uTime * 0.82 + longitude * 2.0) * 0.08;
-        float alpha = polarOval
-          * latTaper
+
+        float alpha = vAuroraBand
           * diffuseCurtain
           * darknessVisibility
           * viewingVisibility
           * breathing
-          * 1.08;
+          * 1.06;
 
-        // Green dominates, with cyan structure and a faint higher red fringe.
         vec3 green = vec3(0.12, 1.0, 0.42);
         vec3 cyan = vec3(0.16, 0.92, 1.0);
         vec3 red = vec3(1.0, 0.18, 0.08);
-
         vec3 color = mix(green, cyan, smoothstep(0.42, 0.86, fineBands));
-        float redFringe = smoothstep(0.90, 0.985, absY) * smoothstep(0.20, 0.85, spikes);
-        color = mix(color, red, redFringe * 0.28);
 
-        // Edge-brightening makes the curtains look elevated above the clouds,
-        // while the higher base exposure keeps the oval readable face-on.
-        color *= 0.72 + limb * 1.18;
-        color *= 0.92 + spikes * 0.34;
+        float redFringe = smoothstep(0.91, 0.985, absY) * smoothstep(0.18, 0.82, spikeColumns);
+        color = mix(color, red, redFringe * 0.30);
+
+        // Strong base visibility stays, but the brighter columns and arcs now
+        // shape the aurora into recognisable ribbons and spiky curtains.
+        color *= 0.76 + limb * 1.16;
+        color *= 0.92 + spikeColumns * 0.38 + vSpikeField * 0.24;
 
         if (alpha < 0.008) discard;
-        gl_FragColor = vec4(color, clamp(alpha, 0.0, 0.94));
+        gl_FragColor = vec4(color, clamp(alpha, 0.0, 0.95));
       }
     `,
     transparent: true,
