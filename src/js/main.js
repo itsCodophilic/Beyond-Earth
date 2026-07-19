@@ -1478,6 +1478,12 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
     // saved journey pose. The Sun should nevertheless begin shrinking during
     // that glide instead of remaining at inspection size until the last frame.
     const isActiveSunInspection = isSunFocused && !focusExitTransition;
+    // Sun focus begins at focusZoomCurrent === 1. Pulling back increases that
+    // value, so this normalized blend can hand the detailed photosphere over to
+    // the distant-star treatment gradually instead of keeping one giant disk.
+    const sunFocusPullbackBlend = isActiveSunInspection
+      ? THREE.MathUtils.smoothstep(focusZoomCurrent, 1.18, 5.5)
+      : 0;
     const observerAU = isSunFocused && focusExitTransition
       ? getFreeFlightObserverAU()
       : getCurrentObserverHeliocentricAU();
@@ -1485,7 +1491,9 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
     const cameraToSun = Math.max(1, camera.position.distanceTo(solarWorldPosition));
     const halfFov = THREE.MathUtils.degToRad(camera.fov * 0.5);
 
-    let targetScale = 1;
+    let targetScale = isActiveSunInspection
+      ? THREE.MathUtils.lerp(1, 0.18, sunFocusPullbackBlend)
+      : 1;
     if (!isActiveSunInspection && Number.isFinite(observerAU) && observerAU > 0) {
       const realDistanceKm = observerAU * ASTRONOMICAL_UNIT_KM;
       const angularRadius = Math.atan(SUN_RADIUS_KM / realDistanceKm);
@@ -1532,7 +1540,7 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
       : 0;
     const activeZoomRatio = focusedBody ? focusedZoomRatio : freeFlightZoomRatio;
     const maximumZoomBlend = isActiveSunInspection
-      ? 0
+      ? sunFocusPullbackBlend
       : THREE.MathUtils.smoothstep(
         activeZoomRatio,
         0.91,
@@ -1618,8 +1626,14 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
         * (1 - THREE.MathUtils.smoothstep(projectedRadiusPixels, 90, 420))
         * 0.72
       : 0;
+    // A focused Sun starts with no overexposed sprite so its granular surface is
+    // fully readable. As the camera pulls back, the sparkle fades in and takes
+    // over from the shrinking disk—matching the appearance of a distant star.
+    const sunFocusRadianceBlend = isActiveSunInspection
+      ? THREE.MathUtils.smoothstep(sunFocusPullbackBlend, 0.08, 0.78)
+      : 0;
     const radianceBlend = isActiveSunInspection
-      ? 0
+      ? sunFocusRadianceBlend
       : Math.max(unresolvedStarBlend, planetaryRadianceBlend, freeFlightApproachRadiance);
     if (sun.distantStar) {
       const twinkle = Math.sin(elapsedTime * 3.2) * 0.055
@@ -1678,7 +1692,9 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
 
     setSunPerformanceProfile(sun, "high", {
       projectedRadiusPixels,
-      focused: isSunFocused,
+      // Once the focused Sun becomes a distant sparkle, invisible surface jets
+      // no longer need the forced close-up budget.
+      focused: isSunFocused && sunFocusPullbackBlend < 0.48,
     });
   }
 
