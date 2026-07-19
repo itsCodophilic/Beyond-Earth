@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { createPlanetAuroraLayer, updatePlanetAuroraLayer } from "../../graphics/planetAurora.js";
+import { createPlanetAuroraLayer, updatePlanetAuroraLayer, setPlanetAuroraStrength } from "../../graphics/planetAurora.js";
 
 function createMarsAtmosphereMaterial() {
   return new THREE.ShaderMaterial({
@@ -49,44 +49,105 @@ export function createMarsVisualSystem({ mars, radius, quality = "high" }) {
   atmosphere.name = "Mars thin atmosphere";
   mars.add(atmosphere);
 
-  // For the current visual direction, keep the aurora constrained to the
-  // polar regions instead of spreading across the entire nightside hemisphere.
+  // Calm state: localized southern-hemisphere discrete aurora associated with
+  // crustal magnetic anomalies such as Terra Sirenum / Terra Cimmeria.
   const aurora = createPlanetAuroraLayer({
     planet: mars,
     radius,
     quality,
-    shellScale: 1.024,
-    latitudeCenter: 0.82,
-    latitudeWidth: 0.15,
-    mirroredStrength: 0.96,
-    longitudeCenter: 0.0,
-    longitudeWidth: 3.1416,
-    secondaryLongitudeCenter: 0.0,
-    secondaryLongitudeWidth: 3.1416,
-    secondaryLongitudeStrength: 0.0,
+    shellScale: 1.022,
+    latitudeCenter: -0.56,
+    latitudeWidth: 0.105,
+    mirroredStrength: 0.0,
+    longitudeCenter: 2.05,
+    longitudeWidth: 0.52,
+    secondaryLongitudeCenter: 1.22,
+    secondaryLongitudeWidth: 0.42,
+    secondaryLongitudeStrength: 0.72,
     globalDiffuseStrength: 0.0,
-    intensity: 0.94,
-    faceOnVisibility: 0.34,
-    daysideVisibility: 0.012,
-    arcFrequency: 5.4,
-    spikeFrequency: 24.0,
+    intensity: 0.86,
+    faceOnVisibility: 0.36,
+    daysideVisibility: 0.01,
+    arcFrequency: 6.2,
+    spikeFrequency: 26.0,
     displacementStrength: 0.010,
-    shellAlpha: 0.90,
+    shellAlpha: 0.88,
     animationSpeed: 0.58,
-    redFringeStrength: 0.06,
-    primaryColor: 0x6f86ff,
-    secondaryColor: 0xf2f6ff,
-    tertiaryColor: 0xa06cff,
+    redFringeStrength: 0.10,
+    primaryColor: 0x84C385,
+    secondaryColor: 0x1D3557,
+    tertiaryColor: 0x4A3B6B,
   });
-  aurora.name = "Mars polar ultraviolet aurora";
-  aurora.rotation.z = 0.0;
-  aurora.rotation.x = 0.0;
+  aurora.name = "Mars discrete southern aurora";
+  aurora.rotation.z = -0.16;
+  aurora.rotation.x = 0.05;
 
-  return { atmosphere, aurora };
+  // Solar-storm surge: expands coverage noticeably across a much larger part
+  // of the southern nightside, then collapses back to the discrete baseline.
+  const stormAurora = createPlanetAuroraLayer({
+    planet: mars,
+    radius,
+    quality,
+    shellScale: 1.029,
+    latitudeCenter: -0.44,
+    latitudeWidth: 0.30,
+    mirroredStrength: 0.0,
+    longitudeCenter: 2.05,
+    longitudeWidth: 1.85,
+    secondaryLongitudeCenter: 0.80,
+    secondaryLongitudeWidth: 1.45,
+    secondaryLongitudeStrength: 0.86,
+    globalDiffuseStrength: 0.18,
+    intensity: 0.98,
+    faceOnVisibility: 0.34,
+    daysideVisibility: 0.01,
+    arcFrequency: 5.1,
+    spikeFrequency: 21.0,
+    displacementStrength: 0.009,
+    shellAlpha: 0.84,
+    animationSpeed: 0.52,
+    redFringeStrength: 0.08,
+    primaryColor: 0xA1D49B,
+    secondaryColor: 0x3A506B,
+    tertiaryColor: 0x4A3B6B,
+  });
+  stormAurora.name = "Mars storm aurora surge";
+  stormAurora.rotation.z = -0.08;
+  stormAurora.rotation.x = 0.03;
+  setPlanetAuroraStrength(stormAurora, 0.0);
+
+  return {
+    atmosphere,
+    aurora,
+    stormAurora,
+    stormElapsed: 0,
+  };
 }
 
 export function updateMarsVisualSystem(system, frameScale = 1) {
   if (!system) return;
   system.atmosphere.rotation.y -= 0.00012 * frameScale;
-  updatePlanetAuroraLayer(system.aurora, frameScale, { rotationSpeed: 0.00012 });
+  updatePlanetAuroraLayer(system.aurora, frameScale, { rotationSpeed: 0.00008 });
+  updatePlanetAuroraLayer(system.stormAurora, frameScale, { rotationSpeed: 0.00005 });
+
+  // After ~5 seconds, let a stronger solar-wave event expand the aurora across
+  // a much larger southern region, then settle it back to the normal localized patch.
+  system.stormElapsed += 0.0166667 * frameScale;
+  const cycleDuration = 7.8;
+  const calmDuration = 5.0;
+  const stormTime = system.stormElapsed % cycleDuration;
+  let stormStrength = 0;
+
+  if (stormTime > calmDuration) {
+    const phase = stormTime - calmDuration;
+    if (phase < 0.85) {
+      stormStrength = THREE.MathUtils.smoothstep(phase / 0.85, 0, 1);
+    } else if (phase < 1.75) {
+      stormStrength = 1.0;
+    } else if (phase < 2.8) {
+      stormStrength = 1.0 - THREE.MathUtils.smoothstep((phase - 1.75) / 1.05, 0, 1);
+    }
+  }
+
+  setPlanetAuroraStrength(system.stormAurora, stormStrength);
 }

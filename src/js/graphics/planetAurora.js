@@ -55,9 +55,11 @@ function buildShaderMaterial(config) {
   return new THREE.ShaderMaterial({
     uniforms: {
       uTime: { value: 0 },
+      uAuroraStrength: { value: 1 },
     },
     vertexShader: `
       uniform float uTime;
+      uniform float uAuroraStrength;
       varying vec3 vWorldNormal;
       varying vec3 vWorldPosition;
       varying vec3 vLocalPosition;
@@ -107,6 +109,7 @@ function buildShaderMaterial(config) {
     `,
     fragmentShader: `
       uniform float uTime;
+      uniform float uAuroraStrength;
       varying vec3 vWorldNormal;
       varying vec3 vWorldPosition;
       varying vec3 vLocalPosition;
@@ -179,7 +182,8 @@ function buildShaderMaterial(config) {
           * darknessVisibility
           * viewingVisibility
           * breathing
-          * ${brightness};
+          * ${brightness}
+          * uAuroraStrength;
 
         vec3 color = mix(${primary}, ${secondary}, smoothstep(0.42, 0.86, fineBands));
         float upperFringe = smoothstep(0.82, 1.0, clamp(abs(latitude), 0.0, 1.0)) * smoothstep(0.18, 0.82, spikeColumns);
@@ -268,4 +272,9 @@ export function updatePlanetAuroraLayer(aurora, frameScale = 1, { rotationSpeed 
   if (!aurora?.material?.uniforms?.uTime) return;
   aurora.material.uniforms.uTime.value += 0.018 * frameScale;
   aurora.rotation.y += rotationSpeed * frameScale;
+}
+
+export function setPlanetAuroraStrength(aurora, strength = 1) {
+  if (!aurora?.material?.uniforms?.uAuroraStrength) return;
+  aurora.material.uniforms.uAuroraStrength.value = THREE.MathUtils.clamp(strength, 0, 1.25);
 }
