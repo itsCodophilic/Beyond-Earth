@@ -10,10 +10,17 @@ import {
   createDeimosSurface,
 } from "../mars/satellites/deimos.js";
 import {
+  JUPITER_IAU_RECOGNIZED_COUNT,
   JUPITER_MOON_COUNT,
   JUPITER_MOON_PROFILES,
 } from "../jupiter/satellites/jovianMoonCatalog.js";
-import { createJovianMoonSurface } from "../jupiter/satellites/jovianMoonFactory.js";
+import {
+  createJovianMoonSurface,
+  JOVIAN_MOON_INSPECTION_LAYER,
+  setJovianMoonInspectionDetail,
+} from "../jupiter/satellites/jovianMoonFactory.js";
+
+export { JOVIAN_MOON_INSPECTION_LAYER };
 import { SATURN_MOON_COUNT, SATURN_MOON_PROFILES } from "../saturn/satellites/saturnianMoonCatalog.js";
 import { createSaturnianMoonSurface } from "../saturn/satellites/saturnianMoonFactory.js";
 import { NEPTUNE_MOON_COUNT, NEPTUNE_MOON_PROFILES } from "../neptune/satellites/neptunianMoonCatalog.js";
@@ -181,19 +188,41 @@ function createSatelliteMesh(
   const jovian = isJovianProfile(profile, parentName);
   const interactionTier = jovian ? getJovianInteractionTier(profile) : "direct";
   const diameterPrefix = profile.diameterEstimated ? "≈ " : "";
-  const scientificDescription = [profile.description, profile.orbitSummary, profile.dataNote]
+  const scientificDescription = [
+    profile.description,
+    profile.surfaceStructure ? `Surface structure: ${profile.surfaceStructure}` : null,
+    profile.orbitSummary,
+    profile.dataNote,
+  ]
     .filter(Boolean)
     .join(" ");
+  const jovianIrregular = jovian
+    && profile.family !== "Galilean moon"
+    && profile.family !== "Inner regular moon";
+  const focusDistance = jovianIrregular
+    ? Math.max(0.44, visualRadius * 6.4)
+    : Math.max(0.90, visualRadius * (jovian ? 5.2 : 4.6));
+  const minFocusDistance = jovianIrregular
+    ? Math.max(0.32, visualRadius * 4.8)
+    : Math.max(0.72, visualRadius * (jovian ? 4.15 : 3.7));
 
+  // Preserve the specialised surface state created by the planet-specific
+  // factory. v4 replaced moon.userData wholesale here, which would erase any
+  // lazy-detail resources and made later inspection upgrades impossible.
   moon.userData = {
+    ...moon.userData,
     name: profile.name,
     detail: jovian
-      ? `${profile.family} | Jupiter satellite ${profile.jplCode}`
+      ? `${profile.family} | ${profile.surfaceEvidence ?? "evidence-tiered 3D"} | Jupiter satellite ${profile.jplCode}`
       : `${parentName} satellite | Earth-relative size preserved`,
     parentPlanet: parentName,
     isSatellite: true,
     isJovianSatellite: jovian,
     satelliteFamily: profile.family ?? null,
+    surfaceEvidence: profile.surfaceEvidence ?? null,
+    surfaceStructure: profile.surfaceStructure ?? null,
+    surfaceRoughness: profile.surfaceRoughness ?? null,
+    estimatedAlbedo: profile.albedo ?? null,
     interactionTier,
     heliocentricAU: orbitalScale.heliocentricAU,
     orbitalEccentricity: orbitalScale.eccentricity,
@@ -203,7 +232,9 @@ function createSatelliteMesh(
     surfaceModel: parentName === "Mars"
       ? "terrain-first-3d"
       : jovian
-        ? "jovian-individual-3d"
+        ? (profile.surfaceEvidence === "spacecraft-resolved"
+          ? "jovian-spacecraft-informed-3d"
+          : "jovian-evidence-tiered-individual-3d")
         : parentName === "Saturn"
           ? "saturnian-individual-3d"
           : parentName === "Neptune"
@@ -218,10 +249,10 @@ function createSatelliteMesh(
     diameterEarths: profile.diameterKm / 12_756,
     volumeEarths: Math.pow(profile.diameterKm / 12_756, 3),
     sizeComparison,
-    focusDistance: Math.max(0.90, visualRadius * (jovian ? 5.2 : 4.6)),
-    minFocusDistance: Math.max(0.72, visualRadius * (jovian ? 4.15 : 3.7)),
-    focusEase: 0.11,
-    focusFov: parentName === "Mars" ? 36 : 34,
+    focusDistance,
+    minFocusDistance,
+    focusEase: jovianIrregular ? 0.10 : 0.11,
+    focusFov: jovianIrregular ? 30 : parentName === "Mars" ? 36 : 34,
     info: {
       type: "Natural satellite",
       diameter: profile.dimensions
@@ -230,6 +261,10 @@ function createSatelliteMesh(
       orbitalSpeed: profile.orbitalSpeed,
       distanceFromEarth: `Varies with ${parentName}'s orbit`,
       sizeComparison,
+      surfaceEvidence: profile.surfaceEvidence ?? "Not specified",
+      roughness: Number.isFinite(profile.surfaceRoughness)
+        ? profile.surfaceRoughness.toFixed(2)
+        : "Model-derived",
       description: scientificDescription || profile.description,
     },
   };
@@ -379,6 +414,9 @@ export function createMajorSatelliteSystems({ world, planets, hoverTargets, qual
               : parentName === "Pluto"
                 ? PLUTO_MOON_COUNT
                 : moonProfiles.length,
+      officiallyRecognizedCount: parentName === "Jupiter"
+        ? JUPITER_IAU_RECOGNIZED_COUNT
+        : moonProfiles.length,
     };
     root.add(createOrbitLines(moonProfiles, parentRadius, quality));
 
@@ -453,6 +491,7 @@ export function createMajorSatelliteSystems({ world, planets, hoverTargets, qual
       moons,
       denseFields,
       maximumOrbitRadius,
+      quality,
     });
   });
 
@@ -639,22 +678,28 @@ export function updateMajorSatelliteVisibility({
         return;
       }
       const held = moon === focusedBody || moon === hoveredBody;
+      const focusedOnParent = focusedBody === system.parent;
+      const focusedOnSatellite = focusedBody?.userData?.parentPlanet === system.parentName;
+      const tier = moon.userData?.interactionTier ?? "background";
       let visible = held;
 
       if (!visible) {
-        // Entering Jupiter or any Jovian moon reveals the complete 115-body
-        // catalogue. This is deliberately independent of sub-pixel radius so
-        // the system feels populated even when the outer irregular moons are
-        // only tiny moving points. Broad Solar-System views still use the
-        // progressive visibility budget below.
-        if (focusedInSystem) {
+        if (focusedOnSatellite) {
+          // Once one moon is being inspected, the selected high-detail surface
+          // owns the frame. Keeping 114 unrelated bodies fully visible was the
+          // main source of the second lag spike after clicking a satellite.
+          visible = tier === "direct";
+        } else if (focusedOnParent) {
+          // Jupiter inspection still reveals the complete catalogue, but every
+          // moon is now a lightweight preview mesh rather than a maximum-detail
+          // sculpt. This preserves the populated-system effect without the v4
+          // million-triangle cost.
           visible = true;
         } else {
           moon.getWorldPosition(moonWorldPosition);
           const moonDistance = Math.max(0.0001, camera.position.distanceTo(moonWorldPosition));
           const visualRadius = Number(moon.userData?.visualRadius ?? 0);
           const radiusPixels = visualRadius / moonDistance * focalPixels;
-          const tier = moon.userData?.interactionTier ?? "background";
 
           if (tier === "direct") {
             visible = parentRadiusPixels >= 0.55 || radiusPixels >= 0.16;
@@ -679,7 +724,6 @@ export function updateMajorSatelliteSystems(
 ) {
   systems.forEach((system) => {
     system.root.position.copy(system.parent.position);
-    system.root.updateMatrixWorld(true);
     (system.denseFields ?? []).forEach((field) => updateDenseSatelliteField(field, motionScale));
 
     system.moons.forEach(({
@@ -690,7 +734,15 @@ export function updateMajorSatelliteSystems(
       profile,
       semiMajorVisualRadius,
     }, index) => {
-      const isHeld = moon === hoveredBody || moon === focusedBody;
+      const isFocused = moon === focusedBody;
+      const isHeld = moon === hoveredBody || isFocused;
+
+      if (system.parentName === "Jupiter") {
+        // Only the selected moon owns the dense geometry, procedural bump map,
+        // and inspection-light layer. The other 114 remain cheap previews.
+        setJovianMoonInspectionDetail(moon, isFocused);
+      }
+
       if (!isHeld) {
         pivot.rotation.y += speed * motionScale;
         if (!moon.userData.tidallyLocked) {
@@ -699,12 +751,16 @@ export function updateMajorSatelliteSystems(
         }
       }
 
-      moon.position.x = orbitRadiusAtAngle(
-        semiMajorVisualRadius,
-        profile.eccentricity,
-        pivot.rotation.y,
-      );
-      if (hitTarget) hitTarget.position.copy(moon.position);
+      // Hidden sub-pixel moons still advance their analytical orbit angle, but
+      // do not rewrite object matrices until they are needed again.
+      if (moon.visible || isHeld) {
+        moon.position.x = orbitRadiusAtAngle(
+          semiMajorVisualRadius,
+          profile.eccentricity,
+          pivot.rotation.y,
+        );
+        if (hitTarget) hitTarget.position.copy(moon.position);
+      }
     });
   });
 }

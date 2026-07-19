@@ -24,6 +24,7 @@ import { PLANET_CONFIGS } from './planets/index.js';
 import {
   createMajorSatelliteSystems,
   findNearestJovianSatelliteAtPointer,
+  JOVIAN_MOON_INSPECTION_LAYER,
   getJovianSatelliteEncounterIntensity,
   updateMajorSatelliteSystems,
   updateMajorSatelliteVisibility,
@@ -669,9 +670,11 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
   // PerspectiveCamera arguments: vertical FOV, aspect ratio, near plane, far plane.
   // Objects outside near/far are clipped and never sent through the full pipeline.
   const camera = new THREE.PerspectiveCamera(56, innerWidth / innerHeight, 0.1, 7500);
-  // Keep normal scene layer 0 and also allow the isolated asteroid inspection
-  // light/object layer to participate in rendering.
+  // Keep normal scene layer 0 and also allow the isolated close-inspection
+  // layers to participate. Without the Jovian layer the detailed moon geometry
+  // existed, but its dedicated sculpting lights never reached the camera.
   camera.layers.enable(ASTEROID_INSPECTION_LAYER);
+  camera.layers.enable(JOVIAN_MOON_INSPECTION_LAYER);
   // The renderer owns the WebGL context and draws into the existing HTML canvas.
   // Rendering now stays on one deterministic cinematic profile: High geometry,
   // High environment detail, and a stable high-resolution drawing buffer.
@@ -906,6 +909,27 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
   asteroidInspectionLight.layers.set(ASTEROID_INSPECTION_LAYER);
   asteroidInspectionLight.visible = false;
   scene.add(asteroidInspectionLight);
+
+  // Jupiter's moons previously relied only on the distant Sun and a weak scene
+  // fill. Their relief existed, but close views still read like painted discs.
+  // A dedicated inspection layer now adds a camera-side key light plus a soft
+  // neutral fill only to the currently selected Jovian satellite.
+  const jovianMoonInspectionFill = new THREE.AmbientLight(0xc8dcff, 0.16);
+  jovianMoonInspectionFill.layers.set(JOVIAN_MOON_INSPECTION_LAYER);
+  jovianMoonInspectionFill.visible = false;
+  scene.add(jovianMoonInspectionFill);
+
+  const jovianMoonInspectionKey = new THREE.PointLight(0xffe4bc, 4.8, 14, 1.55);
+  jovianMoonInspectionKey.layers.set(JOVIAN_MOON_INSPECTION_LAYER);
+  jovianMoonInspectionKey.visible = false;
+  scene.add(jovianMoonInspectionKey);
+  const jovianMoonInspectionRim = new THREE.PointLight(0x79bfff, 1.25, 12, 1.7);
+  jovianMoonInspectionRim.layers.set(JOVIAN_MOON_INSPECTION_LAYER);
+  jovianMoonInspectionRim.visible = false;
+  scene.add(jovianMoonInspectionRim);
+  const jovianMoonInspectionPosition = new THREE.Vector3();
+  const jovianMoonInspectionView = new THREE.Vector3();
+  const jovianMoonInspectionSide = new THREE.Vector3();
 
   // Asset loading is isolated so scene setup only consumes a ready texture dictionary.
   const preferredAnisotropy = creationQuality === "high"
@@ -3705,6 +3729,46 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
       )
     );
     asteroidInspectionLight.visible = isAsteroidFocused;
+
+    const isJovianMoonFocused = Boolean(
+      focusedBody?.userData?.isJovianSatellite,
+    );
+    jovianMoonInspectionFill.visible = isJovianMoonFocused;
+    jovianMoonInspectionKey.visible = isJovianMoonFocused;
+    jovianMoonInspectionRim.visible = isJovianMoonFocused;
+    if (isJovianMoonFocused) {
+      focusedBody.getWorldPosition(jovianMoonInspectionPosition);
+      const moonRadius = Number(focusedBody.userData?.visualRadius ?? 0.1);
+      const focusDistance = Number(focusedBody.userData?.focusDistance ?? 1);
+      jovianMoonInspectionView
+        .subVectors(camera.position, jovianMoonInspectionPosition)
+        .normalize();
+      jovianMoonInspectionSide
+        .crossVectors(jovianMoonInspectionView, camera.up)
+        .normalize();
+
+      // Offset the key sideways rather than placing it directly behind the
+      // camera. The grazing angle creates the shadows that make crater bowls,
+      // icy grooves, mountains and irregular rock edges read as true depth.
+      jovianMoonInspectionKey.position
+        .copy(jovianMoonInspectionPosition)
+        .addScaledVector(jovianMoonInspectionView, Math.max(moonRadius * 4.0, focusDistance * 0.52))
+        .addScaledVector(jovianMoonInspectionSide, moonRadius * 3.1);
+      jovianMoonInspectionKey.position.y += Math.max(0.16, moonRadius * 1.9);
+      jovianMoonInspectionKey.distance = Math.max(
+        4,
+        focusDistance * 7.5,
+      );
+
+      // A faint cool rim on the opposite side separates the silhouette from
+      // black space without washing out the warm, crater-revealing key light.
+      jovianMoonInspectionRim.position
+        .copy(jovianMoonInspectionPosition)
+        .addScaledVector(jovianMoonInspectionView, moonRadius * 1.2)
+        .addScaledVector(jovianMoonInspectionSide, moonRadius * -3.8);
+      jovianMoonInspectionRim.position.y += moonRadius * 0.6;
+      jovianMoonInspectionRim.distance = Math.max(3.5, focusDistance * 6.0);
+    }
 
     // Focused bodies use their authored framing. Empty-space exploration no
     // longer fakes travel with FOV zoom; physical camera movement does the work.

@@ -1,15 +1,18 @@
 import * as THREE from "three";
 
 /**
- * Current Jovian satellite catalogue from NASA/JPL's Planetary Satellite Mean
- * Elements table (JUP365, JUP347, JUP348 and JUP349 solutions, accessed 2026).
+ * Jovian orbital catalogue assembled from JPL's Planetary Satellite Mean
+ * Elements tables (JUP365, JUP347, JUP348 and JUP349 solutions, accessed 2026).
  *
  * Tuple columns:
  * [name, JPL code, semi-major axis km, eccentricity, inclination degrees,
  *  ascending node degrees, mean anomaly degrees, orbital period days]
  *
- * The table currently contains 115 satellites. Mean elements describe the
- * overall orbit; they are not intended to replace a high-precision ephemeris.
+ * The project intentionally retains all 115 JPL orbital entries represented by
+ * the supplied catalogue. NASA listed 101 IAU-recognized Jovian moons in March
+ * 2026, so provisional/unresolved entries are labelled as reconstructions and
+ * are never presented as spacecraft-resolved surfaces. Mean elements describe
+ * general orbit shape and orientation; they are not precision ephemerides.
  */
 const JPL_JOVIAN_ORBITS = Object.freeze([
   ["Io", 501, 421800, 0.004, 0, 0, 330.9, 1.762732],
@@ -146,6 +149,120 @@ const INNER_MOON_DATA = Object.freeze({
 // Photometric diameter estimates are provided only where widely established.
 // All other tiny moons receive an explicit approximate value and an unresolved
 // status in their information card rather than a fabricated precise dimension.
+
+const OUTER_SURFACE_DATA = Object.freeze({
+  Himalia: {
+    appearance: "c-type",
+    colour: 0x666864,
+    albedo: 0.04,
+    roughness: 1.0,
+    shape: [1.24, 0.92, 0.84],
+    surfaceEvidence: "photometrically constrained",
+    structure: "A large, very dark irregular fragment of the Himalia family, represented as a battered C/D-type asteroid-like body.",
+    description: "The largest member of Jupiter's Himalia family, a low-albedo irregular moon thought to be a surviving fragment of a captured asteroid disrupted by collisions.",
+  },
+  Elara: {
+    appearance: "c-type",
+    colour: 0x646560,
+    albedo: 0.04,
+    roughness: 1.0,
+    shape: [1.19, 0.91, 0.83],
+    surfaceEvidence: "photometrically constrained",
+    structure: "A dark, angular Himalia-family fragment with a strongly cratered asteroid-like surface.",
+    description: "The second-largest known member of the Himalia family, modelled as a dark collision fragment sharing the family's neutral-grey appearance.",
+  },
+  Lysithea: {
+    appearance: "c-type",
+    colour: 0x62635f,
+    albedo: 0.04,
+    roughness: 1.0,
+    shape: [1.16, 0.90, 0.82],
+    surfaceEvidence: "family photometry",
+    structure: "A small, dark and irregular Himalia-family shard with subdued grey terrain.",
+  },
+  Leda: {
+    appearance: "c-type",
+    colour: 0x60615d,
+    albedo: 0.04,
+    roughness: 1.0,
+    shape: [1.18, 0.88, 0.80],
+    surfaceEvidence: "family photometry",
+    structure: "A tiny low-albedo fragment from the Himalia collision family.",
+  },
+  Dia: {
+    appearance: "c-type",
+    colour: 0x62635f,
+    albedo: 0.04,
+    roughness: 1.0,
+    shape: [1.22, 0.86, 0.78],
+    surfaceEvidence: "family photometry",
+    structure: "A very small irregular Himalia-family fragment with an angular, impact-chipped silhouette.",
+  },
+  Pasiphae: {
+    appearance: "mixed-dark",
+    colour: 0x58514d,
+    albedo: 0.04,
+    roughness: 1.0,
+    shape: [1.27, 0.89, 0.77],
+    surfaceEvidence: "family photometry",
+    structure: "A large, dark retrograde irregular with a compositionally mixed grey-to-muted-red surface.",
+  },
+  Sinope: {
+    appearance: "d-type",
+    colour: 0x70483f,
+    albedo: 0.04,
+    roughness: 1.0,
+    shape: [1.23, 0.88, 0.79],
+    surfaceEvidence: "family photometry",
+    structure: "A dark red-sloped retrograde fragment with a rough D-type asteroid-like exterior.",
+  },
+  Carme: {
+    appearance: "d-type",
+    colour: 0x71443b,
+    albedo: 0.04,
+    roughness: 1.0,
+    shape: [1.25, 0.90, 0.80],
+    surfaceEvidence: "family photometry",
+    structure: "The dominant red-sloped fragment of the compact Carme collision family.",
+  },
+  Ananke: {
+    appearance: "p-type",
+    colour: 0x554c46,
+    albedo: 0.04,
+    roughness: 1.0,
+    shape: [1.24, 0.88, 0.78],
+    surfaceEvidence: "family photometry",
+    structure: "A dark grey-brown retrograde irregular associated with hydrated carbonaceous material.",
+  },
+  Themisto: {
+    appearance: "p-type",
+    colour: 0x5b5048,
+    albedo: 0.04,
+    roughness: 1.0,
+    shape: [1.20, 0.87, 0.76],
+    surfaceEvidence: "dynamical and photometric constraints",
+    structure: "An isolated, steeply inclined prograde irregular represented as a compact dark fragment.",
+  },
+  Carpo: {
+    appearance: "p-type",
+    colour: 0x5b5047,
+    albedo: 0.04,
+    roughness: 1.0,
+    shape: [1.28, 0.84, 0.73],
+    surfaceEvidence: "dynamical-family reconstruction",
+    structure: "A tiny prograde irregular on a steep orbit, rendered as an angular captured fragment.",
+  },
+  Valetudo: {
+    appearance: "mixed-dark",
+    colour: 0x635149,
+    albedo: 0.04,
+    roughness: 1.0,
+    shape: [1.31, 0.82, 0.70],
+    surfaceEvidence: "dynamical-family reconstruction",
+    structure: "A very small prograde irregular crossing the retrograde population, shown as a sharply fractured dark shard.",
+  },
+});
+
 const ESTIMATED_DIAMETERS_KM = Object.freeze({
   Himalia: 170, Elara: 80, Pasiphae: 58, Sinope: 35, Lysithea: 42, Carme: 46,
   Ananke: 29, Leda: 22, Callirrhoe: 10, Themisto: 9, Magaclite: 5, Taygete: 5,
@@ -241,10 +358,21 @@ export const JUPITER_MOON_PROFILES = Object.freeze(JPL_JOVIAN_ORBITS.map((row) =
   const [catalogueName, jplCode, semiMajorAxisKm, eccentricity, inclinationDeg, nodeDeg, meanAnomalyDeg, periodDays] = row;
   const displayName = displayMoonName(catalogueName);
   const resolvedData = RESOLVED_GALILEAN_DATA[catalogueName] ?? INNER_MOON_DATA[catalogueName] ?? null;
+  const outerSurfaceData = OUTER_SURFACE_DATA[catalogueName] ?? null;
   const family = classifyFamily(catalogueName, semiMajorAxisKm, inclinationDeg);
-  const appearance = resolvedData ?? FAMILY_APPEARANCE[family] ?? FAMILY_APPEARANCE["Pasiphae family"];
+  const appearance = resolvedData
+    ?? outerSurfaceData
+    ?? FAMILY_APPEARANCE[family]
+    ?? FAMILY_APPEARANCE["Pasiphae family"];
   const diameterKm = resolvedData?.diameterKm ?? ESTIMATED_DIAMETERS_KM[catalogueName] ?? 2;
   const diameterEstimated = !resolvedData;
+  const surfaceEvidence = resolvedData
+    ? "spacecraft-resolved"
+    : outerSurfaceData?.surfaceEvidence ?? "dynamical-family reconstruction";
+  const surfaceStructure = outerSurfaceData?.structure
+    ?? (resolvedData
+      ? "Shape and characteristic terrain are constrained by spacecraft observations."
+      : `A unique procedural 3D fragment reconstructed from the ${family} colour and dynamical family.`);
   const seed = stableSeed(catalogueName);
   const retrograde = inclinationDeg > 90;
   const direction = retrograde ? "retrograde" : "prograde";
@@ -258,6 +386,10 @@ export const JUPITER_MOON_PROFILES = Object.freeze(JPL_JOVIAN_ORBITS.map((row) =
     family,
     appearance: appearance.appearance,
     colour: appearance.colour,
+    albedo: appearance.albedo ?? (resolvedData ? null : 0.04),
+    surfaceRoughness: appearance.roughness ?? (resolvedData ? 0.92 : 1.0),
+    surfaceEvidence,
+    surfaceStructure,
     diameterKm,
     diameterEstimated,
     dimensions: resolvedData?.dimensions ?? null,
@@ -278,7 +410,8 @@ export const JUPITER_MOON_PROFILES = Object.freeze(JPL_JOVIAN_ORBITS.map((row) =
       ? (INNER_MOON_DATA[catalogueName]
         ? INNER_MOON_DATA[catalogueName].shape
         : [1.002, 1, 0.999])
-      : [1.08 + seed * 0.45, 0.78 + seed * 0.20, 0.70 + seed * 0.22],
+      : (outerSurfaceData?.shape
+        ?? [1.08 + seed * 0.45, 0.78 + seed * 0.20, 0.70 + seed * 0.22]),
     visualRadius,
     tidallyLocked: isRegular,
     showOrbitGuide: ORBIT_GUIDE_LEADERS.has(catalogueName),
@@ -292,11 +425,13 @@ export const JUPITER_MOON_PROFILES = Object.freeze(JPL_JOVIAN_ORBITS.map((row) =
       retrograde,
     ),
     description: resolvedData?.description
+      ?? outerSurfaceData?.description
       ?? createIrregularDescription(displayName, family, appearance, direction, diameterEstimated),
-    dataNote: diameterEstimated
-      ? "Diameter and visible surface are estimates; orbit uses JPL mean elements."
-      : "Dimensions and appearance are constrained by spacecraft observations.",
+    dataNote: surfaceEvidence === "spacecraft-resolved"
+      ? "Dimensions and characteristic terrain are constrained by spacecraft observations; orbit uses JPL mean elements."
+      : `Diameter and exact terrain are uncertain. The displayed 3D surface is a ${surfaceEvidence} model; orbit uses JPL mean elements.`,
   });
 }));
 
 export const JUPITER_MOON_COUNT = JUPITER_MOON_PROFILES.length;
+export const JUPITER_IAU_RECOGNIZED_COUNT = 101;
