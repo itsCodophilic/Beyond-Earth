@@ -162,6 +162,149 @@ function createAtmosphereMaterial() {
   });
 }
 
+
+function createAuroraMaterial() {
+  return new THREE.ShaderMaterial({
+    uniforms: {
+      uTime: { value: 0 },
+    },
+    vertexShader: `
+      varying vec3 vWorldNormal;
+      varying vec3 vWorldPosition;
+      varying vec3 vLocalPosition;
+
+      void main() {
+        vLocalPosition = position;
+        vec4 worldPosition = modelMatrix * vec4(position, 1.0);
+        vWorldPosition = worldPosition.xyz;
+        vWorldNormal = normalize(mat3(modelMatrix) * normal);
+        gl_Position = projectionMatrix * viewMatrix * worldPosition;
+      }
+    `,
+    fragmentShader: `
+      uniform float uTime;
+      varying vec3 vWorldNormal;
+      varying vec3 vWorldPosition;
+      varying vec3 vLocalPosition;
+
+      float hash(vec2 p) {
+        return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);
+      }
+
+      float noise(vec2 p) {
+        vec2 i = floor(p);
+        vec2 f = fract(p);
+        float a = hash(i);
+        float b = hash(i + vec2(1.0, 0.0));
+        float c = hash(i + vec2(0.0, 1.0));
+        float d = hash(i + vec2(1.0, 1.0));
+        vec2 u = f * f * (3.0 - 2.0 * f);
+        return mix(a, b, u.x)
+          + (c - a) * u.y * (1.0 - u.x)
+          + (d - b) * u.x * u.y;
+      }
+
+      float fbm(vec2 p) {
+        float value = 0.0;
+        float amplitude = 0.5;
+        for (int i = 0; i < 4; i++) {
+          value += noise(p) * amplitude;
+          p = p * 2.07 + vec2(31.1, 17.7);
+          amplitude *= 0.5;
+        }
+        return value;
+      }
+
+      void main() {
+        vec3 normal = normalize(vWorldNormal);
+        vec3 localNormal = normalize(vLocalPosition);
+        vec3 viewDirection = normalize(cameraPosition - vWorldPosition);
+        vec3 lightDirection = normalize(-vWorldPosition);
+
+        float absY = abs(localNormal.y);
+
+        // A realistic auroral oval concentrates around high geomagnetic latitudes
+        // instead of covering most of the polar hemisphere.
+        float ovalCore = exp(-pow((absY - 0.925) / 0.028, 2.0));
+        float ovalOuter = exp(-pow((absY - 0.905) / 0.048, 2.0)) * 0.42;
+        float polarOval = clamp(ovalCore + ovalOuter, 0.0, 1.0);
+
+        float nightside = 1.0 - smoothstep(-0.16, 0.22, dot(normal, lightDirection));
+        float limb = pow(1.0 - max(dot(normal, viewDirection), 0.0), 1.15);
+
+        // Real aurora is strongest against the nightside, but a focused globe
+        // should still reveal the oval from a more face-on angle. These floors
+        // keep it inspectable without making the daylight side equally bright.
+        float darknessVisibility = mix(0.20, 1.0, nightside);
+        float viewingVisibility = 0.34 + smoothstep(0.05, 0.72, limb) * 0.66;
+
+        // Longitude-aligned curtains with narrow bright ribs create the spiky,
+        // folded structure visible in orbital aurora photography.
+        float longitude = atan(localNormal.z, localNormal.x);
+        float latCoord = asin(clamp(localNormal.y, -1.0, 1.0));
+
+        float flow = longitude * 9.5 + uTime * 0.48;
+        float broadBands = fbm(vec2(flow, latCoord * 24.0 - uTime * 0.15));
+        float fineBands = fbm(vec2(longitude * 22.0 - uTime * 0.92, latCoord * 58.0 + uTime * 0.22));
+
+        float ribs = pow(
+          smoothstep(
+            0.40,
+            0.92,
+            0.58 * broadBands + 0.42 * fineBands
+          ),
+          1.75
+        );
+
+        float spikes = pow(
+          smoothstep(
+            0.72,
+            0.985,
+            sin(longitude * 18.0 + fineBands * 8.0 + uTime * 0.35) * 0.5 + 0.5
+          ),
+          2.2
+        );
+
+        float curtain = ribs * (0.72 + spikes * 0.58);
+        float diffuseCurtain = 0.24 + curtain * 0.76;
+
+        // Keep the scientifically narrow auroral oval, but raise its exposure so
+        // it remains clearly visible during focused inspection and broad views.
+        float latTaper = smoothstep(0.0, 0.72, polarOval);
+        float breathing = 0.92 + sin(uTime * 0.82 + longitude * 2.0) * 0.08;
+        float alpha = polarOval
+          * latTaper
+          * diffuseCurtain
+          * darknessVisibility
+          * viewingVisibility
+          * breathing
+          * 1.08;
+
+        // Green dominates, with cyan structure and a faint higher red fringe.
+        vec3 green = vec3(0.12, 1.0, 0.42);
+        vec3 cyan = vec3(0.16, 0.92, 1.0);
+        vec3 red = vec3(1.0, 0.18, 0.08);
+
+        vec3 color = mix(green, cyan, smoothstep(0.42, 0.86, fineBands));
+        float redFringe = smoothstep(0.90, 0.985, absY) * smoothstep(0.20, 0.85, spikes);
+        color = mix(color, red, redFringe * 0.28);
+
+        // Edge-brightening makes the curtains look elevated above the clouds,
+        // while the higher base exposure keeps the oval readable face-on.
+        color *= 0.72 + limb * 1.18;
+        color *= 0.92 + spikes * 0.34;
+
+        if (alpha < 0.008) discard;
+        gl_FragColor = vec4(color, clamp(alpha, 0.0, 0.94));
+      }
+    `,
+    transparent: true,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+    side: THREE.DoubleSide,
+  });
+}
+
 function createNightLightsMaterial(lightMap) {
   return new THREE.ShaderMaterial({
     uniforms: {
@@ -223,8 +366,8 @@ export function createEarthVisualSystem({
     const primaryClouds = new THREE.Mesh(
       cloudGeometry,
       createCloudMaterial(textures.earthClouds, {
-        opacity: 0.62,
-        threshold: 0.20,
+        opacity: 0.68,
+        threshold: 0.19,
         softness: 0.46,
       }),
     );
@@ -234,9 +377,9 @@ export function createEarthVisualSystem({
     const highClouds = new THREE.Mesh(
       new THREE.SphereGeometry(radius * 1.026, segments, segments),
       createCloudMaterial(textures.earthClouds, {
-        opacity: 0.10,
-        threshold: 0.46,
-        softness: 0.38,
+        opacity: 0.14,
+        threshold: 0.44,
+        softness: 0.40,
         uvOffset: new THREE.Vector2(0.0022, -0.0011),
       }),
     );
@@ -263,10 +406,19 @@ export function createEarthVisualSystem({
     earth.add(lights);
   }
 
+  const aurora = new THREE.Mesh(
+    new THREE.SphereGeometry(radius * 1.032, segments, segments),
+    createAuroraMaterial(),
+  );
+  aurora.name = "Earth polar aurora";
+  aurora.renderOrder = 6;
+  earth.add(aurora);
+
   return {
     clouds,
     atmosphere,
     lights,
+    aurora,
   };
 }
 
@@ -277,4 +429,9 @@ export function updateEarthVisualSystem(system, frameScale = 1) {
     if (index === 1) layer.rotation.y += 0.00034 * frameScale;
   });
   system.atmosphere.rotation.y -= 0.00018 * frameScale;
+
+  if (system.aurora?.material?.uniforms?.uTime) {
+    system.aurora.material.uniforms.uTime.value += 0.018 * frameScale;
+    system.aurora.rotation.y += 0.00042 * frameScale;
+  }
 }
