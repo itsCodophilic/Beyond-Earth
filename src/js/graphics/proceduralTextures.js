@@ -26,7 +26,7 @@ export function makeNoiseTexture(kind, size = 1024) {
     moon: ["#d8d3c8", "#7a7770", "#353331"],
     mars: ["#8c321e", "#d06a37", "#4d1d17"],
     jupiter: ["#6d442a", "#d8b58b", "#f1dfc8"],
-    saturn: ["#a98758", "#e8d09a", "#6b5030"],
+    saturn: ["#8ea0a2", "#f2e4ca", "#b7a38f"],
     uranus: ["#78d6df", "#c0f4f6", "#4f93a6"],
     neptune: ["#183f9a", "#4a7dff", "#091f56"],
     pluto: ["#8d766d", "#d7cec0", "#4c3b39"],
@@ -103,10 +103,56 @@ export function makeNoiseTexture(kind, size = 1024) {
   }
 
   if (kind === "saturn") {
-    for (let y = 0; y < size / 2; y += 13) {
-      ctx.fillStyle = y % 39 === 0 ? "rgba(106,78,45,0.2)" : "rgba(255,232,181,0.12)";
-      ctx.fillRect(0, y, size, 6);
+    // Fine, complete latitude bands echo Saturn's circular cloud zones. The
+    // dedicated 3D shader supplies the polar hexagon; this fallback only needs
+    // the reference's ivory, sand and pearl-grey global colour structure.
+    const saturnBands = [
+      ["rgba(255,246,235,0.20)", 3],
+      ["rgba(164,167,168,0.11)", 2],
+      ["rgba(205,189,175,0.13)", 4],
+      ["rgba(254,238,221,0.16)", 2],
+    ];
+    for (let y = 0; y < size / 2; y += 7) {
+      const [color, height] = saturnBands[Math.floor(y / 7) % saturnBands.length];
+      ctx.fillStyle = color;
+      ctx.fillRect(0, y, size, height);
     }
+
+    // Keep blue confined to the compact north-polar cap. The latitude band
+    // immediately below it is neutral pearl-grey and taupe, not cyan.
+    const northFade = ctx.createLinearGradient(0, 0, 0, size * 0.16);
+    northFade.addColorStop(0, "rgba(15,47,102,0.82)");
+    northFade.addColorStop(0.16, "rgba(61,138,152,0.50)");
+    northFade.addColorStop(0.31, "rgba(145,157,158,0.30)");
+    northFade.addColorStop(0.58, "rgba(184,164,143,0.20)");
+    northFade.addColorStop(1, "rgba(215,203,185,0.0)");
+    ctx.fillStyle = northFade;
+    ctx.fillRect(0, 0, size, size * 0.16);
+
+    // The reference also shows additional cool blue circular decks below the
+    // main polar eye, so the offline fallback includes a few soft concentric
+    // rings near the north pole instead of only a simple top fade.
+    ctx.save();
+    ctx.translate(size * 0.5, size * 0.06);
+    const polarRings = [
+      // Blue and lavender remain concentrated at the vortex and hexagonal cap.
+      [size * 0.07, size * 0.042, "rgba(112,100,173,0.42)", 5],
+      [size * 0.13, size * 0.070, "rgba(61,138,152,0.32)", 6],
+      // Immediately below the cap: whitish scattered deck.
+      [size * 0.23, size * 0.118, "rgba(230,227,220,0.26)", 8],
+      // Then one subdued blue circular ring.
+      [size * 0.32, size * 0.156, "rgba(88,128,145,0.18)", 8],
+      // Beyond that, return to normal Saturn colours.
+      [size * 0.41, size * 0.205, "rgba(199,188,172,0.16)", 10],
+    ];
+    polarRings.forEach(([rx, ry, color, width]) => {
+      ctx.beginPath();
+      ctx.ellipse(0, 0, rx, ry, 0, 0, Math.PI * 2);
+      ctx.strokeStyle = color;
+      ctx.lineWidth = width;
+      ctx.stroke();
+    });
+    ctx.restore();
   }
 
   if (kind === "venus") {

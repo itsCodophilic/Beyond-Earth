@@ -9,6 +9,7 @@
 import * as THREE from "three";
 import { makeNoiseTexture } from "../graphics/proceduralTextures.js";
 import { createOrbitLine } from "./orbits.js";
+import { createSaturnSurfaceMaterial } from "../planets/saturn/saturn.js";
 
 const GAS_PROFILES = {
   Jupiter: {
@@ -26,18 +27,18 @@ const GAS_PROFILES = {
     atmosphereOpacity: 0.15,
   },
   Saturn: {
-    cream: new THREE.Color(0xe8d6ad),
-    lightBand: new THREE.Color(0xffedc7),
-    darkBand: new THREE.Color(0x8e6a43),
-    accent: new THREE.Color(0xb88d55),
-    polar: new THREE.Color(0xb6c3b7),
-    polarLight: new THREE.Color(0xe7eee3),
+    cream: new THREE.Color(0xd7c4a7),
+    lightBand: new THREE.Color(0xf3e5cb),
+    darkBand: new THREE.Color(0x91a2a3),
+    accent: new THREE.Color(0xb8a48f),
+    polar: new THREE.Color(0x3d8a98),
+    polarLight: new THREE.Color(0x91a2a3),
     bandFrequency: 31,
     fineFrequency: 92,
-    turbulence: 0.045,
-    textureStrength: 0.65,
-    atmosphereColor: 0xf1d9a7,
-    atmosphereOpacity: 0.085,
+    turbulence: 0.018,
+    textureStrength: 0.08,
+    atmosphereColor: 0xd9d5cb,
+    atmosphereOpacity: 0.042,
   },
   Uranus: {
     cream: new THREE.Color(0x8fdde4),
@@ -1248,6 +1249,7 @@ function addNeptuneDustArcs(planet, config) {
 
 function createPlanetMaterial(config, textures) {
   const texture = textures[config.texture] ?? makeNoiseTexture(config.texture);
+  if (config.name === "Saturn") return createSaturnSurfaceMaterial(texture);
   if (GAS_PROFILES[config.name]) return createGasMaterial(config, texture);
   return createRockyMaterial(config, textures);
 }
