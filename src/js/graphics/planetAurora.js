@@ -36,6 +36,7 @@ function buildShaderMaterial(config) {
     spiralPhase,
     spiralDirection,
     spiralTwistNoise,
+    spiralHemisphere,
   } = config;
 
   const primary = jsonColourHex(primaryColor);
@@ -67,6 +68,7 @@ function buildShaderMaterial(config) {
   const phase = Number(spiralPhase).toFixed(4);
   const direction = Number(spiralDirection) < 0 ? "-1.0000" : "1.0000";
   const twistNoise = Math.max(Number(spiralTwistNoise), 0).toFixed(4);
+  const hemisphere = Number(spiralHemisphere) < 0 ? "-1.0000" : "1.0000";
 
   return new THREE.ShaderMaterial({
     uniforms: {
@@ -132,7 +134,9 @@ function buildShaderMaterial(config) {
         float secondEndFade = 1.0 - smoothstep(${turns} - 0.080, ${turns}, secondProgress);
         secondArm *= secondEndFade;
 
-        float hemisphereStrength = latitude >= 0.0 ? 1.0 : ${mirrored};
+        float hemisphereStrength = ${hemisphere} > 0.0
+          ? (latitude >= 0.0 ? 1.0 : ${mirrored})
+          : (latitude <= 0.0 ? 1.0 : ${mirrored});
         return clamp(max(firstArm, secondArm) * hemisphereStrength, 0.0, 1.0);
       }
 
@@ -319,10 +323,10 @@ export function createPlanetAuroraLayer({
   spiralPhase = 0,
   spiralDirection = 1,
   spiralTwistNoise = 0.28,
+  spiralHemisphere = 1,
+  side = THREE.DoubleSide,
 }) {
-  const aurora = new THREE.Mesh(
-    new THREE.SphereGeometry(radius * shellScale, segmentsForQuality(quality), segmentsForQuality(quality)),
-    buildShaderMaterial({
+  const material = buildShaderMaterial({
       primaryColor,
       secondaryColor,
       tertiaryColor,
@@ -352,7 +356,13 @@ export function createPlanetAuroraLayer({
       spiralPhase,
       spiralDirection,
       spiralTwistNoise,
-    }),
+      spiralHemisphere,
+    });
+  material.side = side;
+
+  const aurora = new THREE.Mesh(
+    new THREE.SphereGeometry(radius * shellScale, segmentsForQuality(quality), segmentsForQuality(quality)),
+    material,
   );
   aurora.renderOrder = 6;
   aurora.name = `${planet.name} aurora`;

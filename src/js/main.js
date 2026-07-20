@@ -20,6 +20,7 @@ import { createMoonSystem } from './planets/earth/satellites/moon.js';
 import { createEarthVisualSystem, updateEarthVisualSystem } from './planets/earth/earthVisuals.js';
 import { createMarsVisualSystem, updateMarsVisualSystem } from './planets/mars/marsVisuals.js';
 import { createJupiterVisualSystem, updateJupiterVisualSystem } from './planets/jupiter/jupiterVisuals.js';
+import { createSaturnVisualSystem, updateSaturnVisualSystem } from './planets/saturn/saturnVisuals.js';
 import { PLANET_CONFIGS } from './planets/index.js';
 import {
   createMajorSatelliteSystems,
@@ -969,6 +970,8 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
   const marsRadius = mars.userData.visualRadius ?? 0.98;
   const jupiter = planets.find((planet) => planet.name === "Jupiter");
   const jupiterRadius = jupiter.userData.visualRadius ?? 5.2;
+  const saturn = planets.find((planet) => planet.name === "Saturn");
+  const saturnRadius = saturn.userData.visualRadius ?? 4.7;
 
   // Earth uses NASA Blue Marble visible-light imagery, a filtered MODIS cloud
   // shell, a sunlight-aware atmospheric limb, and nightside-only city lights.
@@ -989,6 +992,12 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
     jupiter,
     textures,
     radius: jupiterRadius,
+    quality: creationQuality,
+  });
+
+  const saturnVisualSystem = createSaturnVisualSystem({
+    saturn,
+    radius: saturnRadius,
     quality: creationQuality,
   });
 
@@ -3798,6 +3807,7 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
       simulationTime,
       frameScale,
     );
+    updateSaturnVisualSystem(saturnVisualSystem, frameScale);
     moonPivot.rotation.y += 0.011 * frameMotionScale;
     // A small oscillation suggests lunar libration while the pivot maintains tidal lock.
     moon.rotation.y = Math.sin(simulationTime * 0.35) * 0.04;
