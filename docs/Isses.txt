@@ -1,0 +1,4 @@
+1. Dione and Tethys line issue
+2. Satellite or celestial body overlaps over larger celestial then focus only comes over larger celestial
+3. Sometimes page load is blank sometimes it is proper
+4. Post page load it seems many focus and hovering issue flickering

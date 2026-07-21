@@ -172,20 +172,100 @@ function createResolvedProfile(name) {
     instanced: false,
     interactionTier: "direct",
     atmosphere: data.atmosphere,
+    initialRotation: name === "Titan"
+      ? [0.04, -0.72, -0.02]
+      : name === "Mimas"
+        ? [-0.14, 0.94, -0.02]
+        : name === "Iapetus"
+          ? [0.02, -1.34, -0.01]
+          : name === "Enceladus"
+            ? [0.10, -0.22, 0.03]
+            : name === "Tethys"
+              ? [-0.05, 0.52, 0.02]
+              : name === "Dione"
+                ? [0.02, -1.05, -0.01]
+                : name === "Rhea"
+                  ? [-0.04, 0.36, 0.01]
+                  : undefined,
+    surfaceEvidence: name === "Titan"
+      ? "Cassini/VIMS-inspired false-colour surface reconstruction"
+      : name === "Mimas"
+        ? "NASA Cassini global map PIA17214"
+        : name === "Iapetus"
+          ? "NASA Cassini global hemispheres PIA11690"
+          : name === "Enceladus"
+            ? "NASA Cassini global map PIA14937 and south-polar plume observations"
+            : name === "Tethys"
+              ? "NASA Cassini global map PIA14931"
+              : name === "Dione"
+                ? "NASA Cassini global maps PIA12814 and PIA18434"
+                : name === "Rhea"
+                  ? "NASA Cassini global map PIA14928"
+                  : undefined,
+    surfaceStructure: name === "Titan"
+      ? "Broad icy-organic terrain units beneath dense nitrogen-methane haze"
+      : name === "Mimas"
+        ? "Heavily cratered water-ice crust with the giant Herschel basin, raised walls, and central peak"
+        : name === "Iapetus"
+          ? "Dark Cassini Regio, bright icy terrain, large basins, and a broken equatorial mountain ridge"
+          : name === "Enceladus"
+            ? "Reflective water-ice crust, sparse craters, tectonic grooves, four south-polar tiger stripes, and water-ice jets"
+            : name === "Tethys"
+              ? "Cratered ice with the giant relaxed Odysseus basin and the long Ithaca Chasma canyon system"
+              : name === "Dione"
+                ? "Cratered ice with braided bright cliffs and tectonic fractures across the trailing hemisphere"
+                : name === "Rhea"
+                  ? "Ancient densely cratered ice with large overlapping basins and restrained fractures"
+                  : undefined,
+    surfaceRoughness: name === "Titan"
+      ? 0.86
+      : name === "Mimas"
+        ? 0.94
+        : name === "Iapetus"
+          ? 0.91
+          : name === "Enceladus"
+            ? 0.76
+            : name === "Tethys"
+              ? 0.92
+              : name === "Dione"
+                ? 0.88
+                : name === "Rhea"
+                  ? 0.94
+                  : undefined,
     orbitalSpeed: `${((Math.PI * 2 * data.aKm) / (data.periodDays * 86400)).toFixed(2)} km/s around Saturn`,
     orbitSummary: `Mean orbit approximately ${(data.aKm / 1000).toLocaleString("en-US", { maximumFractionDigits: 0 })} thousand km from Saturn; period ${data.periodDays.toFixed(data.periodDays < 10 ? 3 : 1)} days.`,
     description: name === "Titan"
       ? "Saturn's largest moon, wrapped in a dense nitrogen atmosphere with methane lakes, rain, dunes, and a subsurface ocean."
       : name === "Enceladus"
-        ? "A bright ocean moon with active south-polar fractures that vent water-rich plumes into space."
-        : name === "Iapetus"
+        ? "A highly reflective ocean moon with active south-polar tiger stripes that vent water-rich plumes into space."
+        : name === "Tethys"
+          ? "A bright icy moon marked by the enormous Odysseus impact basin and the planet-scale Ithaca Chasma canyon system."
+          : name === "Dione"
+            ? "A cratered icy moon whose trailing hemisphere is crossed by bright braided cliffs and fractures."
+            : name === "Rhea"
+              ? "Saturn's second-largest moon, an old crater-saturated ice world with large overlapping basins."
+              : name === "Iapetus"
           ? "A striking two-tone moon with a dark leading hemisphere and a prominent equatorial ridge."
           : name === "Hyperion"
             ? "A porous, chaotic tumbler with a sponge-like cratered surface."
             : name === "Mimas"
               ? "A small icy moon dominated by the enormous Herschel impact crater."
               : `${name} is one of Saturn's resolved regular or ring-associated satellites.`,
-    dataNote: "Resolved or constrained by spacecraft observations and established orbital measurements.",
+    dataNote: name === "Titan"
+      ? "Surface colours use a Cassini/VIMS-style false-colour reconstruction so terrain remains visible beneath a separately rendered atmospheric haze."
+      : name === "Mimas"
+        ? "Surface detail uses NASA's Cassini global map; Herschel relief is rebuilt in geometry from NASA's stated crater, wall, and central-peak structure."
+        : name === "Iapetus"
+          ? "The albedo map follows the supplied Cassini leading/trailing hemispheres; geometry preserves the dark-bright dichotomy, large basins, polar flattening, and equatorial ridge."
+          : name === "Enceladus"
+            ? "The surface uses NASA's Cassini global map; geometry rebuilds the south-polar tiger stripes, while animated particles represent sunlight-scattering water-ice jets without adding a light source."
+            : name === "Tethys"
+              ? "The surface uses NASA's Cassini map; Odysseus and the long, approximately concentric Ithaca Chasma system are rebuilt in geometry."
+              : name === "Dione"
+                ? "The surface uses NASA Cassini global mosaics; the bright wispy terrain is reconstructed as braided chasmata with raised icy walls."
+                : name === "Rhea"
+                  ? "The surface uses NASA's Cassini global map with deterministic crater, basin, and restrained fracture relief."
+                  : "Resolved or constrained by spacecraft observations and established orbital measurements.",
   });
 }
 

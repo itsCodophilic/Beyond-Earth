@@ -269,7 +269,7 @@ function createSatelliteMesh(
     },
   };
 
-  if (profile.atmosphere) {
+  if (profile.atmosphere && !moon.userData.hasCustomAtmosphere) {
     const atmosphere = new THREE.Mesh(
       new THREE.SphereGeometry(1, 32, 24),
       new THREE.MeshBasicMaterial({
