@@ -1353,6 +1353,1065 @@ function createRheaSurface(profile, quality) {
   return moon;
 }
 
+
+const REFERENCE_MINOR_MOON_MODELS = Object.freeze({
+  Pan: Object.freeze({
+    kind: "pan-reference",
+    shape: [1.30, 0.70, 1.03],
+    roughness: 0.025,
+    craterCount: 34,
+    craterDepth: 0.024,
+    ridgeHeight: 0.56,
+    ridgeWidth: 0.255,
+    palette: [0x85858a, 0xe7e4df, 0x34343a],
+    structure: "Irregular icy core wrapped by a broad equatorial skirt of accreted ring material",
+    evidence: "Cassini close-flyby imagery of Pan and NASA's ring-moon morphology summary",
+  }),
+  Daphnis: Object.freeze({
+    kind: "daphnis-reference",
+    shape: [1.18, 0.82, 0.84],
+    roughness: 0.028,
+    craterCount: 27,
+    craterDepth: 0.030,
+    ridgeHeight: 0.16,
+    ridgeWidth: 0.105,
+    palette: [0xa7a7a4, 0xf1efea, 0x555553],
+    structure: "Small irregular ring moon with a restrained equatorial ridge and dusty icy coating",
+    evidence: "Cassini close-flyby imagery of Daphnis and NASA's ring-moon montage",
+  }),
+  Atlas: Object.freeze({
+    kind: "atlas-reference",
+    shape: [1.22, 0.72, 1.00],
+    roughness: 0.017,
+    craterCount: 18,
+    craterDepth: 0.024,
+    ridgeHeight: 0.18,
+    ridgeWidth: 0.34,
+    palette: [0xc5c1b7, 0xf5f0e6, 0x4b4843],
+    structure: "Pointed flying-saucer body with a thick, smooth equatorial ridge of ring debris",
+    evidence: "Cassini close-flyby imagery and NASA Atlas overview",
+  }),
+  Prometheus: Object.freeze({
+    kind: "prometheus-reference",
+    shape: [1.42, 0.78, 0.70],
+    roughness: 0.052,
+    craterCount: 54,
+    craterDepth: 0.050,
+    palette: [0x9b9487, 0xd9cfb9, 0x514b43],
+    structure: "Sweet-potato-shaped porous ice body with pockmarked terrain and several large craters",
+    evidence: "NASA Prometheus overview and Cassini 2015 close-flyby imagery",
+  }),
+  Pandora: Object.freeze({
+    kind: "pandora-reference",
+    shape: [1.34, 0.80, 0.74],
+    roughness: 0.040,
+    craterCount: 48,
+    craterDepth: 0.043,
+    grooveStrength: 0.012,
+    palette: [0x8d8d8b, 0xd5d4d0, 0x252526],
+    structure: "Potato-shaped moon blanketed in fine icy dust, with softened craters, grooves, and low ridges",
+    evidence: "NASA Pandora overview and Cassini close-up imagery",
+  }),
+  Janus: Object.freeze({
+    kind: "janus-reference",
+    shape: [1.18, 0.96, 0.92],
+    roughness: 0.036,
+    craterCount: 64,
+    craterDepth: 0.070,
+    palette: [0xa6a39b, 0xe4e0d7, 0x4f4c47],
+    structure: "Blocky, battered co-orbital moon with a broad prominent basin, many smaller craters, and rough icy highlands",
+    evidence: "Cassini Janus close imagery and the user-supplied reference frame",
+  }),
+  Epimetheus: Object.freeze({
+    kind: "epimetheus-reference",
+    shape: [1.16, 0.98, 0.92],
+    roughness: 0.046,
+    craterCount: 72,
+    craterDepth: 0.082,
+    palette: [0x9a978f, 0xd8d3c8, 0x48443f],
+    structure: "Lumpy dirty-ice body with a large steep-walled crater, a battered left edge, and densely cratered broken terrain",
+    evidence: "Cassini Epimetheus close imagery and the user-supplied reference frame",
+  }),
+  Aegaeon: Object.freeze({
+    kind: "smooth-ellipsoid",
+    shape: [1.27, 0.83, 0.74],
+    roughness: 0.018,
+    craterCount: 2,
+    craterDepth: 0.012,
+    palette: [0xaaa79f, 0xd5d1c8, 0x6b6761],
+    structure: "Tiny elongated ring-arc moon represented conservatively from its resolved Cassini silhouette",
+    evidence: "Cassini small-satellite photomontage; only limited resolved surface information exists",
+  }),
+  Methone: Object.freeze({
+    kind: "methone-reference",
+    shape: [1.18, 0.95, 0.92],
+    roughness: 0.0025,
+    craterCount: 0,
+    craterDepth: 0,
+    palette: [0xc7c5bf, 0xf1eee7, 0x8a877f],
+    structure: "Very smooth, pale egg-shaped moon with an almost pristine surface and a muted darker cap region",
+    evidence: "Cassini Methone imagery and the user-supplied smooth-ellipsoid reference",
+  }),
+  Anthe: Object.freeze({
+    kind: "anthe-reference",
+    shape: [1.08, 0.96, 0.90],
+    roughness: 0.072,
+    craterCount: 12,
+    craterDepth: 0.060,
+    palette: [0x64615d, 0x8f8a84, 0x2e2c2a],
+    structure: "Tiny rugged irregular moon with a dark coarse surface, angular facets, and a couple of shallow basins",
+    evidence: "Conservative reconstruction from the user-supplied Anthe image and small ring-moon morphology",
+  }),
+  Pallene: Object.freeze({
+    kind: "smooth-ellipsoid",
+    shape: [1.12, 0.96, 0.91],
+    roughness: 0.007,
+    craterCount: 3,
+    craterDepth: 0.008,
+    palette: [0xb2b0aa, 0xdbd7cf, 0x74716b],
+    structure: "Small smooth icy ellipsoid with subtle albedo mottling and only subdued impact relief",
+    evidence: "Cassini small-satellite photomontage and limited resolved imagery",
+  }),
+  Telesto: Object.freeze({
+    kind: "telesto-reference",
+    shape: [1.16, 0.98, 0.92],
+    roughness: 0.011,
+    craterCount: 8,
+    craterDepth: 0.014,
+    palette: [0xd6d6d0, 0xf7f5ed, 0x8e8b84],
+    structure: "Very bright smooth teardrop-like Trojan moon with a swollen right lobe and a ragged broken left margin",
+    evidence: "Cassini Telesto imagery and the user-supplied reference frame",
+  }),
+  Calypso: Object.freeze({
+    kind: "calypso-reference",
+    shape: [1.48, 0.60, 0.76],
+    roughness: 0.014,
+    craterCount: 7,
+    craterDepth: 0.016,
+    palette: [0xcecdc7, 0xf2f0e8, 0x807b74],
+    structure: "Long flattened Trojan moon with a smooth bright upper face, blunt ends, and a darker scuffed lower-right underside",
+    evidence: "Cassini Calypso imagery and the user-supplied reference frame",
+  }),
+  Helene: Object.freeze({
+    kind: "helene-reference",
+    shape: [1.00, 1.00, 0.96],
+    roughness: 0.022,
+    craterCount: 6,
+    craterDepth: 0.013,
+    palette: [0xd1d0ca, 0xf5f2ea, 0x8f8b83],
+    structure: "Bright rounded moon with dramatic fan-like flow streaks across the right half and a smaller lower lobe",
+    evidence: "Cassini Helene close imagery and the user-supplied reference frame",
+  }),
+  Polydeuces: Object.freeze({
+    kind: "polydeuces-reference",
+    shape: [0.96, 1.20, 0.88],
+    roughness: 0.030,
+    craterCount: 7,
+    craterDepth: 0.024,
+    palette: [0x98968f, 0xcfc9bf, 0x595650],
+    structure: "Small upright potato-shaped Trojan moon with subdued basins, a rough pebbled surface, and a broader left shoulder",
+    evidence: "Conservative reconstruction from the user-supplied Polydeuces image",
+  }),
+  Hyperion: Object.freeze({
+    kind: "hyperion-reference",
+    shape: [0.96, 1.26, 0.90],
+    roughness: 0.078,
+    craterCount: 132,
+    craterDepth: 0.112,
+    palette: [0x95836f, 0xcab79d, 0x2f2924],
+    structure: "Tall sponge-like moon covered in dense pitting, with large deep-walled basins and a gnawed-away right edge",
+    evidence: "Cassini Hyperion close imagery and the user-supplied reference frame",
+  }),
+  Phoebe: Object.freeze({
+    kind: "phoebe-reference",
+    shape: [0.98, 1.18, 0.90],
+    roughness: 0.056,
+    craterCount: 102,
+    craterDepth: 0.084,
+    palette: [0x585652, 0x9a9489, 0x252422],
+    structure: "Dark captured irregular moon with two giant shadowed craters near the crown, many smaller pits, and a brighter sunlit right flank",
+    evidence: "Cassini Phoebe flyby imagery and the user-supplied reference frame",
+  }),
+});
+
+function resolvedMinorDetail(config, quality) {
+  const hero = config.kind === "hyperion" || config.kind === "phoebe";
+  if (quality === "low") return hero ? 5 : 4;
+  if (quality === "medium") return hero ? 7 : 6;
+  return hero ? 9 : 7;
+}
+
+function createReferenceCraterField(profile, config) {
+  if (!config.craterCount) return [];
+  const hyperionLike = config.kind === "hyperion" || config.kind === "hyperion-reference";
+  const phoebeLike = config.kind === "phoebe" || config.kind === "phoebe-reference";
+  const minRadius = hyperionLike ? 0.026 : phoebeLike ? 0.024 : 0.035;
+  const maxRadius = hyperionLike ? 0.245 : phoebeLike ? 0.205 : 0.22;
+  const craters = createMappedCraterField(profile, config.craterCount, {
+    minRadius,
+    maxRadius,
+    minDepth: Math.max(0.0015, config.craterDepth * 0.16),
+    maxDepth: Math.max(0.004, config.craterDepth),
+    seedOffset: 81.7,
+  });
+
+  if (config.kind === "hyperion" || config.kind === "hyperion-reference") {
+    craters.push(
+      { center: directionFromLatLon(18, -24), radius: 0.36, depth: 0.120, rim: 0.015 },
+      { center: directionFromLatLon(-22, 71), radius: 0.29, depth: 0.095, rim: 0.012 },
+      { center: directionFromLatLon(44, 142), radius: 0.25, depth: 0.078, rim: 0.010 },
+    );
+  } else if (config.kind === "phoebe" || config.kind === "phoebe-reference") {
+    craters.push(
+      { center: directionFromLatLon(-8, 32), radius: 0.40, depth: 0.095, rim: 0.018 },
+      { center: directionFromLatLon(41, -108), radius: 0.28, depth: 0.060, rim: 0.012 },
+    );
+  } else if (["coorbital-cratered", "coorbital-gnarled"].includes(config.kind)) {
+    craters.push({
+      center: directionFromLatLon(16, -42),
+      radius: config.kind === "coorbital-gnarled" ? 0.31 : 0.27,
+      depth: config.craterDepth * 1.15,
+      rim: config.craterDepth * 0.22,
+    });
+  }
+  return craters;
+}
+
+
+const UPLOADED_REFERENCE_KINDS = new Set([
+  "pan-reference",
+  "atlas-reference",
+  "daphnis-reference",
+  "prometheus-reference",
+  "pandora-reference",
+]);
+
+const ADDITIONAL_REFERENCE_KINDS = new Set([
+  "janus-reference",
+  "epimetheus-reference",
+  "methone-reference",
+  "anthe-reference",
+]);
+
+const ADVANCED_REFERENCE_KINDS = new Set([
+  "telesto-reference",
+  "calypso-reference",
+  "helene-reference",
+  "polydeuces-reference",
+  "hyperion-reference",
+  "phoebe-reference",
+]);
+
+function uploadedReferenceDetail(quality) {
+  if (quality === "low") return 7;
+  if (quality === "medium") return 12;
+  return 18;
+}
+
+function signedPower(value, exponent) {
+  return Math.sign(value) * Math.pow(Math.abs(value), exponent);
+}
+
+function superellipsoidDirection(direction, exponent, target) {
+  target.set(
+    signedPower(direction.x, exponent),
+    signedPower(direction.y, exponent),
+    signedPower(direction.z, exponent),
+  );
+  return target.normalize();
+}
+
+function gaussianSurfaceMask(direction, center, angularRadius) {
+  const angularDistance = Math.acos(THREE.MathUtils.clamp(direction.dot(center), -1, 1));
+  return Math.exp(-Math.pow(angularDistance / Math.max(1e-5, angularRadius), 2));
+}
+
+function createReferenceFeatureFrame(center) {
+  const tangentA = new THREE.Vector3(0, 1, 0).cross(center);
+  if (tangentA.lengthSq() < 1e-5) tangentA.set(1, 0, 0);
+  tangentA.normalize();
+  const tangentB = center.clone().cross(tangentA).normalize();
+  return { tangentA, tangentB };
+}
+
+function elongatedSurfaceMask(direction, center, frame, widthA, widthB) {
+  const facing = smoothstepValue(direction.dot(center), 0.45, 0.98);
+  const a = direction.dot(frame.tangentA);
+  const b = direction.dot(frame.tangentB);
+  return facing * Math.exp(-Math.pow(a / widthA, 2) - Math.pow(b / widthB, 2));
+}
+
+function normaliseReferenceGeometry(geometry) {
+  geometry.computeBoundingBox();
+  const center = geometry.boundingBox.getCenter(new THREE.Vector3());
+  geometry.translate(-center.x, -center.y, -center.z);
+  geometry.computeBoundingSphere();
+  const radius = Math.max(1e-6, geometry.boundingSphere.radius);
+  geometry.scale(1 / radius, 1 / radius, 1 / radius);
+  geometry.computeVertexNormals();
+  geometry.computeBoundingBox();
+  geometry.computeBoundingSphere();
+}
+
+/**
+ * Reconstructs the five supplied Cassini-reference silhouettes as true 3D
+ * bodies rather than image billboards.  Each moon gets its own outline,
+ * large-scale relief, crater placement, and albedo response.  The geometry is
+ * normalised after sculpting so satelliteSystem can apply one physical visual
+ * radius without re-applying the catalogue shape a second time.
+ */
+function createUploadedReferenceMoonSurface(profile, quality, config) {
+  const source = new THREE.IcosahedronGeometry(1, uploadedReferenceDetail(quality));
+  const positions = source.getAttribute("position");
+  const colours = new Float32Array(positions.count * 3);
+  const direction = new THREE.Vector3();
+  const shapedDirection = new THREE.Vector3();
+  const base = new THREE.Color(config.palette[0]);
+  const light = new THREE.Color(config.palette[1]);
+  const dark = new THREE.Color(config.palette[2]);
+  const colour = new THREE.Color();
+  const craters = createReferenceCraterField(profile, config);
+
+  const atlasCleft = directionFromLatLon(34, -68);
+  const atlasCleftFrame = createReferenceFeatureFrame(atlasCleft);
+  const atlasBrightPatch = directionFromLatLon(3, -118);
+  const daphnisHeroCrater = directionFromLatLon(31, -112);
+  const prometheusHeroCraters = [
+    { center: directionFromLatLon(-24, -116), radius: 0.29, depth: 0.072, rim: 0.014 },
+    { center: directionFromLatLon(6, -92), radius: 0.22, depth: 0.052, rim: 0.011 },
+    { center: directionFromLatLon(27, -63), radius: 0.17, depth: 0.038, rim: 0.008 },
+  ];
+  const pandoraMainBasin = directionFromLatLon(10, -132);
+  const pandoraChasm = directionFromLatLon(-8, -80);
+  const pandoraChasmFrame = createReferenceFeatureFrame(pandoraChasm);
+  const pandoraChasmBranch = directionFromLatLon(18, -73);
+  const pandoraChasmBranchFrame = createReferenceFeatureFrame(pandoraChasmBranch);
+  const pandoraLowerPit = directionFromLatLon(-48, -70);
+  const pandoraTopBreak = directionFromLatLon(62, -52);
+
+  for (let index = 0; index < positions.count; index += 1) {
+    direction.fromBufferAttribute(positions, index).normalize();
+    const broad = fbm(direction, 2.05, profile.seed + 4.1);
+    const medium = fbm(direction, 7.2, profile.seed + 19.7);
+    const fine = fbm(direction, 25.0, profile.seed + 37.2);
+    let height = broad * config.roughness
+      + medium * config.roughness * 0.34
+      + fine * config.roughness * 0.12;
+    let craterFloor = 0;
+    let craterRim = 0;
+    let ridgeMask = 0;
+    let cavityMask = 0;
+    let specialBright = 0;
+
+    craters.forEach((crater) => {
+      const sample = craterSample(direction, crater.center, crater.radius, crater.depth, crater.rim);
+      height += sample.height;
+      craterFloor = Math.max(craterFloor, sample.floor);
+      craterRim = Math.max(craterRim, sample.rimMask);
+    });
+
+    let px;
+    let py;
+    let pz;
+
+    if (config.kind === "pan-reference") {
+      const equator = 1 - smoothstepValue(Math.abs(direction.y), 0.10, 0.44);
+      const skirtGrain = 0.94 + 0.06 * fbm(direction, 11.0, profile.seed + 91.2);
+      ridgeMask = equator;
+      height *= 1 - equator * 0.70;
+      const bodyRadius = Math.max(0.70, 1 + height);
+      const leftRightAsymmetry = 1 + direction.x * 0.045
+        + Math.sin(Math.atan2(direction.z, direction.x) * 3.0 + 0.55) * 0.025;
+      const skirt = config.ridgeHeight * equator * skirtGrain;
+      px = direction.x * bodyRadius * (0.91 + skirt) * leftRightAsymmetry;
+      py = direction.y * bodyRadius * 0.93 * (1 - equator * 0.055);
+      pz = direction.z * bodyRadius * (0.82 + skirt * 0.76);
+      const beltTrench = Math.exp(-Math.pow((direction.y + 0.050) / 0.062, 2));
+      cavityMask = beltTrench * (0.60 + 0.40 * Math.max(0, medium));
+      specialBright = equator * (0.72 + 0.28 * Math.max(0, fine));
+    } else if (config.kind === "atlas-reference") {
+      superellipsoidDirection(direction, 0.86, shapedDirection);
+      const equator = Math.exp(-Math.pow(direction.y / config.ridgeWidth, 2));
+      const cleft = elongatedSurfaceMask(direction, atlasCleft, atlasCleftFrame, 0.22, 0.105);
+      ridgeMask = equator;
+      height *= 1 - equator * 0.62;
+      height -= cleft * 0.105;
+      cavityMask = cleft;
+      const bodyRadius = Math.max(0.70, 1 + height);
+      const lopsided = 1 + direction.x * 0.055 - direction.z * 0.018;
+      px = shapedDirection.x * bodyRadius * (0.98 + equator * config.ridgeHeight) * lopsided;
+      py = shapedDirection.y * bodyRadius * 0.88 * (1 - equator * 0.025);
+      pz = shapedDirection.z * bodyRadius * (0.92 + equator * config.ridgeHeight * 0.58);
+      specialBright = equator * 0.52 + gaussianSurfaceMask(direction, atlasBrightPatch, 0.44) * 0.12;
+    } else if (config.kind === "daphnis-reference") {
+      const equator = Math.exp(-Math.pow(direction.y / config.ridgeWidth, 2));
+      const heroSample = craterSample(direction, daphnisHeroCrater, 0.29, 0.057, 0.014);
+      height += heroSample.height;
+      craterFloor = Math.max(craterFloor, heroSample.floor);
+      craterRim = Math.max(craterRim, heroSample.rimMask);
+      ridgeMask = equator;
+      const bodyRadius = Math.max(0.68, 1 + height);
+      px = direction.x * bodyRadius * (1.22 + equator * config.ridgeHeight);
+      py = direction.y * bodyRadius * 0.63 * (1 - equator * 0.045);
+      pz = direction.z * bodyRadius * (0.82 + equator * config.ridgeHeight * 0.58);
+      specialBright = equator * 0.40 + craterRim * 0.34;
+    } else if (config.kind === "prometheus-reference") {
+      prometheusHeroCraters.forEach((crater) => {
+        const sample = craterSample(direction, crater.center, crater.radius, crater.depth, crater.rim);
+        height += sample.height;
+        craterFloor = Math.max(craterFloor, sample.floor);
+        craterRim = Math.max(craterRim, sample.rimMask);
+      });
+      const longitudinalT = direction.x * 0.5 + 0.5;
+      const crossSection = 0.72 + longitudinalT * 0.18
+        + medium * 0.055
+        - Math.pow(Math.max(0, -direction.x), 3) * 0.11;
+      const endRoughness = smoothstepValue(-direction.x, 0.38, 0.98);
+      height += endRoughness * fine * 0.025;
+      const bodyRadius = Math.max(0.61, 1 + height);
+      px = direction.x * bodyRadius * 1.50
+        - (1 - direction.x * direction.x) * 0.085
+        + direction.y * 0.025;
+      py = direction.y * bodyRadius * crossSection;
+      pz = direction.z * bodyRadius * crossSection * 0.91;
+      cavityMask = craterFloor;
+      specialBright = craterRim * 0.26 + smoothstepValue(direction.x, 0.30, 0.95) * 0.10;
+    } else {
+      superellipsoidDirection(direction, 0.80, shapedDirection);
+      const mainBasinSample = craterSample(direction, pandoraMainBasin, 0.43, 0.175, 0.025);
+      const lowerPitSample = craterSample(direction, pandoraLowerPit, 0.23, 0.095, 0.014);
+      const chasm = elongatedSurfaceMask(direction, pandoraChasm, pandoraChasmFrame, 0.16, 0.38);
+      const chasmBranch = elongatedSurfaceMask(
+        direction,
+        pandoraChasmBranch,
+        pandoraChasmBranchFrame,
+        0.115,
+        0.26,
+      );
+      height += mainBasinSample.height + lowerPitSample.height;
+      height -= chasm * 0.145 + chasmBranch * 0.075;
+      craterFloor = Math.max(craterFloor, mainBasinSample.floor, lowerPitSample.floor);
+      craterRim = Math.max(craterRim, mainBasinSample.rimMask, lowerPitSample.rimMask);
+      cavityMask = Math.max(craterFloor * 0.82, chasm, chasmBranch * 0.78);
+      const bodyRadius = Math.max(0.52, 1 + height);
+      const topBreak = 1 - gaussianSurfaceMask(direction, pandoraTopBreak, 0.32) * 0.08;
+      px = shapedDirection.x * bodyRadius * 1.05 * topBreak;
+      py = shapedDirection.y * bodyRadius * 0.91 * topBreak;
+      pz = shapedDirection.z * bodyRadius * 0.84;
+      specialBright = craterRim * 0.30 + mainBasinSample.rimMask * 0.25;
+    }
+
+    positions.setXYZ(index, px, py, pz);
+
+    const brightness = THREE.MathUtils.clamp(
+      0.38 + broad * 0.15 + medium * 0.09 + fine * 0.035,
+      0.10,
+      0.72,
+    );
+    colour.copy(base).lerp(light, brightness);
+    colour.lerp(dark, THREE.MathUtils.clamp(craterFloor * 0.48 + cavityMask * 0.72, 0, 0.94));
+    colour.lerp(light, THREE.MathUtils.clamp(craterRim * 0.22 + specialBright * 0.34, 0, 0.58));
+
+    if (config.kind === "pan-reference") {
+      colour.lerp(light, ridgeMask * 0.36);
+      colour.lerp(dark, cavityMask * 0.16);
+    } else if (config.kind === "atlas-reference") {
+      colour.lerp(light, ridgeMask * 0.30);
+      colour.lerp(dark, cavityMask * 0.72);
+    } else if (config.kind === "daphnis-reference") {
+      colour.lerp(light, ridgeMask * 0.18);
+    } else if (config.kind === "prometheus-reference") {
+      colour.multiplyScalar(0.94 + Math.max(0, fine) * 0.10);
+    } else {
+      colour.lerp(dark, cavityMask * 0.38);
+    }
+
+    colours[index * 3] = colour.r;
+    colours[index * 3 + 1] = colour.g;
+    colours[index * 3 + 2] = colour.b;
+  }
+
+  source.setAttribute("color", new THREE.BufferAttribute(colours, 3));
+  source.deleteAttribute("normal");
+  const geometry = mergeVertices(source, 1e-5);
+  normaliseReferenceGeometry(geometry);
+  source.dispose();
+
+  const material = new THREE.MeshStandardMaterial({
+    vertexColors: true,
+    roughness: config.kind === "atlas-reference" ? 0.90 : 0.97,
+    metalness: 0,
+    envMapIntensity: config.kind === "atlas-reference" ? 0.028 : 0.014,
+    dithering: true,
+  });
+  material.name = `${profile.name} uploaded-reference 3D surface`;
+
+  const moon = new THREE.Mesh(geometry, material);
+  moon.castShadow = false;
+  moon.receiveShadow = false;
+  moon.userData.geometryIncludesShape = true;
+  moon.userData.referenceImageSequence = ["Pan", "Atlas", "Daphnis", "Prometheus", "Pandora"];
+  moon.userData.surfaceEvidence = `${config.evidence}; silhouette and major relief matched to the user-supplied reference image`;
+  moon.userData.surfaceStructure = config.structure;
+  moon.userData.surfaceRoughness = material.roughness;
+  moon.userData.surfaceDetailMode = `uploaded-reference-${config.kind}`;
+  moon.userData.referenceMinorMoonState = { profile, quality, config };
+  return moon;
+}
+
+function createAdditionalReferenceMoonSurface(profile, quality, config) {
+  const source = new THREE.IcosahedronGeometry(1, uploadedReferenceDetail(quality));
+  const positions = source.getAttribute("position");
+  const colours = new Float32Array(positions.count * 3);
+  const direction = new THREE.Vector3();
+  const shapedDirection = new THREE.Vector3();
+  const base = new THREE.Color(config.palette[0]);
+  const light = new THREE.Color(config.palette[1]);
+  const dark = new THREE.Color(config.palette[2]);
+  const colour = new THREE.Color();
+  const craters = createReferenceCraterField(profile, config);
+
+  const janusMainCrater = directionFromLatLon(8, -22);
+  const janusSecondaryCrater = directionFromLatLon(23, 42);
+  const janusShoulderCut = directionFromLatLon(49, 134);
+  const janusShoulderFrame = createReferenceFeatureFrame(janusShoulderCut);
+  const janusLowerScarp = directionFromLatLon(-38, 146);
+  const janusLowerScarpFrame = createReferenceFeatureFrame(janusLowerScarp);
+
+  const epimetheusMainCrater = directionFromLatLon(6, -14);
+  const epimetheusSecondaryCrater = directionFromLatLon(17, 54);
+  const epimetheusGouge = directionFromLatLon(-3, 150);
+  const epimetheusGougeFrame = createReferenceFeatureFrame(epimetheusGouge);
+
+  const methoneCap = directionFromLatLon(54, -18);
+  const methoneDimple = directionFromLatLon(39, -8);
+  const methoneBulge = directionFromLatLon(-8, 92);
+
+  const antheMainBasin = directionFromLatLon(8, -16);
+  const antheSecondaryBasin = directionFromLatLon(-22, 52);
+  const antheFacet = directionFromLatLon(44, -84);
+  const antheFacetFrame = createReferenceFeatureFrame(antheFacet);
+  const antheEdgeDamage = directionFromLatLon(-26, 150);
+  const antheEdgeDamageFrame = createReferenceFeatureFrame(antheEdgeDamage);
+
+  for (let index = 0; index < positions.count; index += 1) {
+    direction.fromBufferAttribute(positions, index).normalize();
+    const broad = fbm(direction, 2.0, profile.seed + 4.1);
+    const medium = fbm(direction, 7.0, profile.seed + 19.7);
+    const fine = fbm(direction, 25.0, profile.seed + 37.2);
+    let height = broad * config.roughness
+      + medium * config.roughness * 0.34
+      + fine * config.roughness * 0.12;
+    let craterFloor = 0;
+    let craterRim = 0;
+    let cavityMask = 0;
+    let specialBright = 0;
+
+    craters.forEach((crater) => {
+      const sample = craterSample(direction, crater.center, crater.radius, crater.depth, crater.rim);
+      height += sample.height;
+      craterFloor = Math.max(craterFloor, sample.floor);
+      craterRim = Math.max(craterRim, sample.rimMask);
+    });
+
+    let px;
+    let py;
+    let pz;
+
+    if (config.kind === "janus-reference") {
+      superellipsoidDirection(direction, 0.72, shapedDirection);
+      const main = craterSample(direction, janusMainCrater, 0.28, 0.120, 0.018);
+      const secondary = craterSample(direction, janusSecondaryCrater, 0.13, 0.038, 0.008);
+      const shoulder = elongatedSurfaceMask(direction, janusShoulderCut, janusShoulderFrame, 0.18, 0.32);
+      const lowerScarp = elongatedSurfaceMask(direction, janusLowerScarp, janusLowerScarpFrame, 0.16, 0.24);
+      height += main.height + secondary.height - shoulder * 0.030 - lowerScarp * 0.018;
+      craterFloor = Math.max(craterFloor, main.floor, secondary.floor);
+      craterRim = Math.max(craterRim, main.rimMask, secondary.rimMask);
+      cavityMask = Math.max(main.floor, shoulder * 0.62, lowerScarp * 0.42);
+      const flankDamage = smoothstepValue(-direction.x, 0.14, 0.96) * (0.35 + 0.65 * Math.max(0, medium));
+      const topPlaning = 1 - smoothstepValue(direction.y, 0.48, 0.98) * 0.06;
+      const bodyRadius = Math.max(0.60, 1 + height);
+      px = shapedDirection.x * bodyRadius * 1.07 * (1 - flankDamage * 0.08) + direction.z * 0.018;
+      py = shapedDirection.y * bodyRadius * 0.98 * topPlaning;
+      pz = shapedDirection.z * bodyRadius * 0.97 * (1 + smoothstepValue(direction.x, -0.25, 0.95) * 0.05);
+      specialBright = main.rimMask * 0.42 + secondary.rimMask * 0.18;
+    } else if (config.kind === "epimetheus-reference") {
+      superellipsoidDirection(direction, 0.76, shapedDirection);
+      const main = craterSample(direction, epimetheusMainCrater, 0.25, 0.122, 0.018);
+      const secondary = craterSample(direction, epimetheusSecondaryCrater, 0.16, 0.050, 0.010);
+      const gouge = elongatedSurfaceMask(direction, epimetheusGouge, epimetheusGougeFrame, 0.18, 0.36);
+      height += main.height + secondary.height - gouge * 0.055;
+      craterFloor = Math.max(craterFloor, main.floor, secondary.floor);
+      craterRim = Math.max(craterRim, main.rimMask, secondary.rimMask);
+      cavityMask = Math.max(main.floor, secondary.floor * 0.82, gouge * 0.76);
+      const gnarl = smoothstepValue(-direction.x, 0.18, 0.96) * (0.32 + 0.68 * Math.max(0, fine));
+      const bodyRadius = Math.max(0.58, 1 + height);
+      px = shapedDirection.x * bodyRadius * 1.04 * (1 - gnarl * 0.10) + direction.y * 0.015;
+      py = shapedDirection.y * bodyRadius * 1.00 * (1 - gouge * 0.04);
+      pz = shapedDirection.z * bodyRadius * 0.93;
+      specialBright = main.rimMask * 0.40 + secondary.rimMask * 0.24;
+    } else if (config.kind === "methone-reference") {
+      superellipsoidDirection(direction, 1.28, shapedDirection);
+      const dimple = craterSample(direction, methoneDimple, 0.16, 0.011, 0.004);
+      const capMask = gaussianSurfaceMask(direction, methoneCap, 0.34);
+      const bulge = gaussianSurfaceMask(direction, methoneBulge, 0.56);
+      height = broad * config.roughness * 0.42 + medium * config.roughness * 0.18 + fine * config.roughness * 0.06;
+      height += dimple.height + bulge * 0.016 - capMask * 0.008;
+      craterFloor = dimple.floor * 0.42;
+      craterRim = dimple.rimMask * 0.30;
+      cavityMask = capMask * 0.40;
+      const bodyRadius = Math.max(0.88, 1 + height);
+      const egg = 1 + smoothstepValue(direction.x, -0.20, 0.95) * 0.06 - smoothstepValue(-direction.x, 0.18, 0.95) * 0.02;
+      px = shapedDirection.x * bodyRadius * 1.02 * egg;
+      py = shapedDirection.y * bodyRadius * 0.90 * (1 - capMask * 0.02);
+      pz = shapedDirection.z * bodyRadius * 0.96;
+      specialBright = bulge * 0.18 + craterRim * 0.12;
+    } else {
+      superellipsoidDirection(direction, 0.82, shapedDirection);
+      const main = craterSample(direction, antheMainBasin, 0.28, 0.110, 0.014);
+      const secondary = craterSample(direction, antheSecondaryBasin, 0.16, 0.050, 0.010);
+      const facet = elongatedSurfaceMask(direction, antheFacet, antheFacetFrame, 0.15, 0.24);
+      const edgeDamage = elongatedSurfaceMask(direction, antheEdgeDamage, antheEdgeDamageFrame, 0.12, 0.21);
+      height += main.height + secondary.height - facet * 0.030 - edgeDamage * 0.045 + Math.max(0, fine) * 0.018;
+      craterFloor = Math.max(craterFloor, main.floor, secondary.floor);
+      craterRim = Math.max(craterRim, main.rimMask, secondary.rimMask);
+      cavityMask = Math.max(main.floor, secondary.floor * 0.82, edgeDamage * 0.95);
+      const bodyRadius = Math.max(0.56, 1 + height);
+      const topBlock = 1 - smoothstepValue(direction.y, 0.55, 0.98) * 0.07;
+      px = shapedDirection.x * bodyRadius * 1.02 * (1 - edgeDamage * 0.08);
+      py = shapedDirection.y * bodyRadius * 0.95 * topBlock;
+      pz = shapedDirection.z * bodyRadius * 0.88;
+      specialBright = main.rimMask * 0.18 + secondary.rimMask * 0.12;
+    }
+
+    positions.setXYZ(index, px, py, pz);
+
+    const brightness = THREE.MathUtils.clamp(
+      config.kind === "methone-reference"
+        ? 0.52 + broad * 0.06 + medium * 0.04
+        : 0.36 + broad * 0.14 + medium * 0.08 + fine * 0.03,
+      0.08,
+      config.kind === "methone-reference" ? 0.84 : 0.70,
+    );
+    colour.copy(base).lerp(light, brightness);
+
+    if (config.kind === "methone-reference") {
+      colour.lerp(light, 0.28 + specialBright * 0.16);
+      colour.lerp(dark, cavityMask * 0.34);
+    } else if (config.kind === "anthe-reference") {
+      colour.multiplyScalar(0.82 + Math.max(0, medium) * 0.08);
+      colour.lerp(dark, THREE.MathUtils.clamp(craterFloor * 0.36 + cavityMask * 0.74, 0, 0.96));
+      colour.lerp(light, THREE.MathUtils.clamp(craterRim * 0.14 + specialBright * 0.10, 0, 0.24));
+    } else {
+      colour.lerp(dark, THREE.MathUtils.clamp(craterFloor * 0.50 + cavityMask * 0.52, 0, 0.92));
+      colour.lerp(light, THREE.MathUtils.clamp(craterRim * 0.24 + specialBright * 0.26, 0, 0.48));
+      if (config.kind === "epimetheus-reference") {
+        colour.lerp(dark, smoothstepValue(-direction.x, 0.16, 0.96) * 0.12);
+      }
+    }
+
+    colours[index * 3] = colour.r;
+    colours[index * 3 + 1] = colour.g;
+    colours[index * 3 + 2] = colour.b;
+  }
+
+  source.setAttribute("color", new THREE.BufferAttribute(colours, 3));
+  source.deleteAttribute("normal");
+  const geometry = mergeVertices(source, 1e-5);
+  normaliseReferenceGeometry(geometry);
+  source.dispose();
+
+  const material = new THREE.MeshStandardMaterial({
+    vertexColors: true,
+    roughness: config.kind === "methone-reference" ? 0.84 : config.kind === "anthe-reference" ? 0.98 : 0.96,
+    metalness: 0,
+    envMapIntensity: config.kind === "methone-reference" ? 0.030 : 0.015,
+    dithering: true,
+  });
+  material.name = `${profile.name} uploaded-reference 3D surface`;
+
+  const moon = new THREE.Mesh(geometry, material);
+  moon.castShadow = false;
+  moon.receiveShadow = false;
+  moon.userData.geometryIncludesShape = true;
+  moon.userData.referenceImageSequence = ["Janus", "Epimetheus", "Methone", "Anthe"];
+  moon.userData.surfaceEvidence = `${config.evidence}; silhouette and major relief matched to the user-supplied reference image`;
+  moon.userData.surfaceStructure = config.structure;
+  moon.userData.surfaceRoughness = material.roughness;
+  moon.userData.surfaceDetailMode = `uploaded-reference-${config.kind}`;
+  moon.userData.referenceMinorMoonState = { profile, quality, config };
+  return moon;
+}
+
+function createAdvancedReferenceMoonSurface(profile, quality, config) {
+  const source = new THREE.IcosahedronGeometry(1, uploadedReferenceDetail(quality));
+  const positions = source.getAttribute("position");
+  const colours = new Float32Array(positions.count * 3);
+  const direction = new THREE.Vector3();
+  const shapedDirection = new THREE.Vector3();
+  const base = new THREE.Color(config.palette[0]);
+  const light = new THREE.Color(config.palette[1]);
+  const dark = new THREE.Color(config.palette[2]);
+  const colour = new THREE.Color();
+  const craters = createReferenceCraterField(profile, config);
+
+  const telestoCentral = directionFromLatLon(-8, -8);
+  const telestoLeftDamage = directionFromLatLon(-5, -165);
+  const telestoLeftFrame = createReferenceFeatureFrame(telestoLeftDamage);
+  const telestoLowerPit = directionFromLatLon(-37, -138);
+
+  const calypsoTopPatch = directionFromLatLon(23, -28);
+  const calypsoBottomScuff = directionFromLatLon(-26, 54);
+  const calypsoBottomFrame = createReferenceFeatureFrame(calypsoBottomScuff);
+  const calypsoCentralCrater = directionFromLatLon(4, 16);
+
+  const heleneFanSource = directionFromLatLon(2, -10);
+  const heleneFanFrame = createReferenceFeatureFrame(heleneFanSource);
+  const heleneBottomLobe = directionFromLatLon(-48, -4);
+  const heleneUpperPit = directionFromLatLon(32, 16);
+
+  const polydeucesUpperFacet = directionFromLatLon(42, -14);
+  const polydeucesShoulder = directionFromLatLon(-4, -48);
+  const polydeucesBasin = directionFromLatLon(-18, 26);
+
+  const hyperionMainBasin = directionFromLatLon(-30, 42);
+  const hyperionCentralBasin = directionFromLatLon(6, -12);
+  const hyperionUpperRim = directionFromLatLon(56, -18);
+  const hyperionRightChew = directionFromLatLon(12, 116);
+  const hyperionRightFrame = createReferenceFeatureFrame(hyperionRightChew);
+
+  const phoebeTopLeft = directionFromLatLon(42, -136);
+  const phoebeTopRight = directionFromLatLon(38, -22);
+  const phoebeMidBasin = directionFromLatLon(-4, -32);
+  const phoebeLowerCraters = directionFromLatLon(-28, -72);
+
+  for (let index = 0; index < positions.count; index += 1) {
+    direction.fromBufferAttribute(positions, index).normalize();
+    const broad = fbm(direction, 2.0, profile.seed + 5.3);
+    const medium = fbm(direction, 7.4, profile.seed + 19.1);
+    const fine = fbm(direction, 26.0, profile.seed + 37.8);
+    let height = broad * config.roughness + medium * config.roughness * 0.34 + fine * config.roughness * 0.12;
+    let craterFloor = 0;
+    let craterRim = 0;
+    let cavityMask = 0;
+    let specialBright = 0;
+
+    craters.forEach((crater) => {
+      const sample = craterSample(direction, crater.center, crater.radius, crater.depth, crater.rim);
+      height += sample.height;
+      craterFloor = Math.max(craterFloor, sample.floor);
+      craterRim = Math.max(craterRim, sample.rimMask);
+    });
+
+    let px;
+    let py;
+    let pz;
+
+    if (config.kind === "telesto-reference") {
+      superellipsoidDirection(direction, 1.12, shapedDirection);
+      const central = craterSample(direction, telestoCentral, 0.14, 0.014, 0.004);
+      const leftDamage = elongatedSurfaceMask(direction, telestoLeftDamage, telestoLeftFrame, 0.18, 0.38);
+      const lowerPit = craterSample(direction, telestoLowerPit, 0.11, 0.022, 0.005);
+      const leftTuftUpper = gaussianSurfaceMask(direction, directionFromLatLon(14, -156), 0.12);
+      const leftTuftLower = gaussianSurfaceMask(direction, directionFromLatLon(-28, -148), 0.15);
+      height += central.height + lowerPit.height - leftDamage * 0.028 + leftTuftUpper * 0.030 + leftTuftLower * 0.024;
+      craterFloor = Math.max(craterFloor, central.floor, lowerPit.floor);
+      craterRim = Math.max(craterRim, central.rimMask, lowerPit.rimMask);
+      cavityMask = Math.max(leftDamage * 0.96, lowerPit.floor * 0.80);
+      const bodyRadius = Math.max(0.88, 1 + height);
+      const rightBulge = smoothstepValue(direction.x, 0.02, 0.98) * 0.13;
+      const leftTrim = smoothstepValue(-direction.x, 0.12, 0.98) * 0.08;
+      px = shapedDirection.x * bodyRadius * (0.97 + rightBulge) - leftDamage * 0.13 - leftTrim * 0.02;
+      py = shapedDirection.y * bodyRadius * 0.99 - leftTuftLower * 0.02;
+      pz = shapedDirection.z * bodyRadius * 0.97;
+      specialBright = rightBulge * 0.34 + central.rimMask * 0.08 + leftTuftUpper * 0.06;
+    } else if (config.kind === "calypso-reference") {
+      superellipsoidDirection(direction, 1.26, shapedDirection);
+      const central = craterSample(direction, calypsoCentralCrater, 0.10, 0.012, 0.003);
+      const topPatch = gaussianSurfaceMask(direction, calypsoTopPatch, 0.30);
+      const bottomScuff = elongatedSurfaceMask(direction, calypsoBottomScuff, calypsoBottomFrame, 0.15, 0.34);
+      const rightShadowCap = gaussianSurfaceMask(direction, directionFromLatLon(-6, 84), 0.34);
+      height += central.height - bottomScuff * 0.035 + topPatch * 0.004 - rightShadowCap * 0.008;
+      craterFloor = Math.max(craterFloor, central.floor);
+      craterRim = Math.max(craterRim, central.rimMask);
+      cavityMask = Math.max(bottomScuff * 0.90, craterFloor, rightShadowCap * 0.55);
+      const bodyRadius = Math.max(0.86, 1 + height);
+      const leftTaper = smoothstepValue(-direction.x, 0.10, 0.98) * 0.06;
+      const rightBlunt = smoothstepValue(direction.x, 0.20, 0.98) * 0.03;
+      px = shapedDirection.x * bodyRadius * (1.42 - leftTaper + rightBlunt);
+      py = shapedDirection.y * bodyRadius * 0.60 * (1 - topPatch * 0.018);
+      pz = shapedDirection.z * bodyRadius * 0.77;
+      specialBright = topPatch * 0.16 + central.rimMask * 0.04;
+    } else if (config.kind === "helene-reference") {
+      superellipsoidDirection(direction, 0.98, shapedDirection);
+      const fanMask = gaussianSurfaceMask(direction, heleneFanSource, 0.58);
+      const fa = direction.dot(heleneFanFrame.tangentA);
+      const fb = direction.dot(heleneFanFrame.tangentB);
+      const fanPhase = Math.atan2(fb, fa) * 20.0 + direction.dot(heleneFanSource) * 5.5;
+      const fanLines = Math.pow(Math.max(0, Math.cos(fanPhase)), 26) * fanMask;
+      const upperPit = craterSample(direction, heleneUpperPit, 0.10, 0.012, 0.004);
+      const lowerPitA = craterSample(direction, directionFromLatLon(-42, -20), 0.16, 0.030, 0.006);
+      const lowerPitB = craterSample(direction, directionFromLatLon(-52, 18), 0.12, 0.022, 0.005);
+      const bottomLobe = gaussianSurfaceMask(direction, heleneBottomLobe, 0.30);
+      const rightRagged = elongatedSurfaceMask(direction, directionFromLatLon(0, 96), createReferenceFeatureFrame(directionFromLatLon(0, 96)), 0.15, 0.44);
+      height += upperPit.height + lowerPitA.height + lowerPitB.height + fanLines * 0.028 + bottomLobe * 0.072 - rightRagged * 0.018;
+      craterFloor = Math.max(craterFloor, upperPit.floor, lowerPitA.floor, lowerPitB.floor);
+      craterRim = Math.max(craterRim, upperPit.rimMask, lowerPitA.rimMask, lowerPitB.rimMask);
+      cavityMask = Math.max(fanMask * 0.20, lowerPitA.floor * 0.76, rightRagged * 0.72);
+      const bodyRadius = Math.max(0.84, 1 + height);
+      px = shapedDirection.x * bodyRadius * 1.00;
+      py = shapedDirection.y * bodyRadius * (0.98 + bottomLobe * 0.16);
+      pz = shapedDirection.z * bodyRadius * 0.98 * (1 - rightRagged * 0.05);
+      specialBright = fanMask * 0.26 + fanLines * 0.18 + upperPit.rimMask * 0.06;
+    } else if (config.kind === "polydeuces-reference") {
+      superellipsoidDirection(direction, 0.86, shapedDirection);
+      const basin = craterSample(direction, polydeucesBasin, 0.16, 0.022, 0.006);
+      const upperFacet = gaussianSurfaceMask(direction, polydeucesUpperFacet, 0.28);
+      const shoulder = gaussianSurfaceMask(direction, polydeucesShoulder, 0.40);
+      height += basin.height + upperFacet * 0.010 + shoulder * 0.020;
+      craterFloor = Math.max(craterFloor, basin.floor);
+      craterRim = Math.max(craterRim, basin.rimMask);
+      const bodyRadius = Math.max(0.78, 1 + height);
+      px = shapedDirection.x * bodyRadius * (0.92 + shoulder * 0.10);
+      py = shapedDirection.y * bodyRadius * 1.18;
+      pz = shapedDirection.z * bodyRadius * 0.86;
+      cavityMask = basin.floor * 0.72;
+      specialBright = upperFacet * 0.06 + basin.rimMask * 0.08;
+    } else if (config.kind === "hyperion-reference") {
+      superellipsoidDirection(direction, 0.72, shapedDirection);
+      const main = craterSample(direction, hyperionMainBasin, 0.26, 0.130, 0.018);
+      const central = craterSample(direction, hyperionCentralBasin, 0.18, 0.082, 0.012);
+      const upperRim = craterSample(direction, hyperionUpperRim, 0.12, 0.030, 0.006);
+      const rightChew = elongatedSurfaceMask(direction, hyperionRightChew, hyperionRightFrame, 0.22, 0.52);
+      height += main.height + central.height + upperRim.height - rightChew * 0.085 + Math.max(0, fine) * 0.018;
+      craterFloor = Math.max(craterFloor, main.floor, central.floor, upperRim.floor);
+      craterRim = Math.max(craterRim, main.rimMask, central.rimMask, upperRim.rimMask);
+      cavityMask = Math.max(main.floor, central.floor * 0.72, rightChew * 0.94);
+      const bodyRadius = Math.max(0.54, 1 + height);
+      px = shapedDirection.x * bodyRadius * 0.98 * (1 - rightChew * 0.10);
+      py = shapedDirection.y * bodyRadius * 1.24;
+      pz = shapedDirection.z * bodyRadius * 0.90;
+      specialBright = main.rimMask * 0.12 + upperRim.rimMask * 0.08;
+    } else {
+      superellipsoidDirection(direction, 0.80, shapedDirection);
+      const topLeft = craterSample(direction, phoebeTopLeft, 0.18, 0.090, 0.012);
+      const topRight = craterSample(direction, phoebeTopRight, 0.26, 0.130, 0.018);
+      const mid = craterSample(direction, phoebeMidBasin, 0.12, 0.040, 0.008);
+      const lower = craterSample(direction, phoebeLowerCraters, 0.15, 0.032, 0.008);
+      height += topLeft.height + topRight.height + mid.height + lower.height;
+      craterFloor = Math.max(craterFloor, topLeft.floor, topRight.floor, mid.floor, lower.floor);
+      craterRim = Math.max(craterRim, topLeft.rimMask, topRight.rimMask, mid.rimMask, lower.rimMask);
+      cavityMask = Math.max(topRight.floor, topLeft.floor * 0.92, lower.floor * 0.60);
+      const bodyRadius = Math.max(0.58, 1 + height);
+      px = shapedDirection.x * bodyRadius * 0.98;
+      py = shapedDirection.y * bodyRadius * 1.18;
+      pz = shapedDirection.z * bodyRadius * 0.90;
+      specialBright = smoothstepValue(direction.x, 0.16, 0.96) * 0.14 + craterRim * 0.08;
+    }
+
+    positions.setXYZ(index, px, py, pz);
+
+    const brightness = THREE.MathUtils.clamp(
+      (config.kind === "hyperion-reference" || config.kind === "phoebe-reference")
+        ? 0.28 + broad * 0.16 + medium * 0.07
+        : 0.46 + broad * 0.08 + medium * 0.05,
+      0.08,
+      (config.kind === "hyperion-reference" || config.kind === "phoebe-reference") ? 0.68 : 0.86,
+    );
+    colour.copy(base).lerp(light, brightness);
+
+    if (config.kind === "telesto-reference" || config.kind === "calypso-reference" || config.kind === "helene-reference") {
+      colour.lerp(light, 0.18 + specialBright * 0.20);
+      colour.lerp(dark, cavityMask * 0.34);
+    } else if (config.kind === "polydeuces-reference") {
+      colour.lerp(light, 0.10 + specialBright * 0.12);
+      colour.lerp(dark, craterFloor * 0.28 + cavityMask * 0.24);
+    } else if (config.kind === "hyperion-reference") {
+      colour.multiplyScalar(0.94 + Math.max(0, medium) * 0.10);
+      colour.lerp(dark, THREE.MathUtils.clamp(craterFloor * 0.92 + cavityMask * 0.54, 0, 0.96));
+      colour.lerp(light, THREE.MathUtils.clamp(craterRim * 0.14 + specialBright * 0.12, 0, 0.24));
+    } else {
+      colour.lerp(dark, THREE.MathUtils.clamp(craterFloor * 0.58 + cavityMask * 0.40, 0, 0.96));
+      colour.lerp(light, THREE.MathUtils.clamp(craterRim * 0.18 + specialBright * 0.18, 0, 0.34));
+    }
+
+    colours[index * 3] = colour.r;
+    colours[index * 3 + 1] = colour.g;
+    colours[index * 3 + 2] = colour.b;
+  }
+
+  source.setAttribute("color", new THREE.BufferAttribute(colours, 3));
+  source.deleteAttribute("normal");
+  const geometry = mergeVertices(source, 1e-5);
+  normaliseReferenceGeometry(geometry);
+  source.dispose();
+
+  const material = new THREE.MeshStandardMaterial({
+    vertexColors: true,
+    roughness: (config.kind === "hyperion-reference" || config.kind === "phoebe-reference") ? 0.98 : 0.90,
+    metalness: 0,
+    envMapIntensity: 0.016,
+    dithering: true,
+  });
+  material.name = `${profile.name} uploaded-reference 3D surface`;
+
+  const moon = new THREE.Mesh(geometry, material);
+  moon.castShadow = false;
+  moon.receiveShadow = false;
+  moon.userData.geometryIncludesShape = true;
+  moon.userData.referenceImageSequence = ["Telesto", "Calypso", "Helene", "Polydeuces", "Hyperion", "Phoebe"];
+  moon.userData.surfaceEvidence = `${config.evidence}; silhouette and major relief matched to the user-supplied reference image`;
+  moon.userData.surfaceStructure = config.structure;
+  moon.userData.surfaceRoughness = material.roughness;
+  moon.userData.surfaceDetailMode = `uploaded-reference-${config.kind}`;
+  moon.userData.referenceMinorMoonState = { profile, quality, config };
+  return moon;
+}
+
+function createResolvedMinorMoonSurface(profile, quality, config) {
+  if (UPLOADED_REFERENCE_KINDS.has(config.kind)) {
+    return createUploadedReferenceMoonSurface(profile, quality, config);
+  }
+  if (ADDITIONAL_REFERENCE_KINDS.has(config.kind)) {
+    return createAdditionalReferenceMoonSurface(profile, quality, config);
+  }
+  if (ADVANCED_REFERENCE_KINDS.has(config.kind)) {
+    return createAdvancedReferenceMoonSurface(profile, quality, config);
+  }
+
+  const detail = resolvedMinorDetail(config, quality);
+  const source = new THREE.IcosahedronGeometry(1, detail);
+  const positions = source.getAttribute("position");
+  const colours = new Float32Array(positions.count * 3);
+  const direction = new THREE.Vector3();
+  const base = new THREE.Color(config.palette[0]);
+  const light = new THREE.Color(config.palette[1]);
+  const dark = new THREE.Color(config.palette[2]);
+  const colour = new THREE.Color();
+  const shape = config.shape ?? profile.shape ?? [1, 1, 1];
+  const craters = createReferenceCraterField(profile, config);
+
+  for (let index = 0; index < positions.count; index += 1) {
+    direction.fromBufferAttribute(positions, index).normalize();
+    const broad = fbm(direction, 2.0, profile.seed + 4.1);
+    const medium = fbm(direction, 6.5, profile.seed + 19.7);
+    const fine = fbm(direction, 19.0, profile.seed + 37.2);
+    let height = broad * config.roughness + medium * config.roughness * 0.34
+      + fine * config.roughness * 0.12;
+    let craterFloor = 0;
+    let craterRim = 0;
+
+    craters.forEach((crater) => {
+      const sample = craterSample(direction, crater.center, crater.radius, crater.depth, crater.rim);
+      height += sample.height;
+      craterFloor = Math.max(craterFloor, sample.floor);
+      craterRim = Math.max(craterRim, sample.rimMask);
+    });
+
+    if (config.kind === "dust-coated" || config.kind === "trojan-dust") {
+      height *= 0.70;
+    }
+
+    if (config.kind === "ring-ridge") {
+      const equator = Math.exp(-Math.pow(direction.y / config.ridgeWidth, 2));
+      const ridgeTexture = 0.82 + 0.18 * fbm(direction, 8.0, profile.seed + 91.2);
+      const ridge = config.ridgeHeight * equator * ridgeTexture;
+      const radial = 1 + ridge;
+      const bodyRadius = Math.max(0.58, 1 + height * 0.70);
+      positions.setXYZ(
+        index,
+        direction.x * bodyRadius * shape[0] * radial,
+        direction.y * bodyRadius * shape[1] * (1 - equator * 0.12),
+        direction.z * bodyRadius * shape[2] * radial,
+      );
+    } else {
+      if (config.kind === "trojan-flow") {
+        const flowHemisphere = smoothstepValue(direction.x, -0.12, 0.82);
+        const flowPhase = Math.atan2(direction.z, direction.y) * 14.0
+          + direction.x * 8.0 + Math.sin(direction.y * 10.0) * 1.3;
+        const gullies = Math.pow(Math.max(0, Math.cos(flowPhase)), 26);
+        height += flowHemisphere * gullies * config.grooveStrength;
+      } else if (config.grooveStrength) {
+        const groovePhase = Math.atan2(direction.z, direction.x) * 10.0
+          + direction.y * 12.0 + broad * 2.2;
+        const groove = Math.pow(Math.max(0, Math.cos(groovePhase)), 22);
+        height += groove * config.grooveStrength * (config.kind === "coorbital-gnarled" ? -1 : 1);
+      }
+
+      if (config.kind === "hyperion" || config.kind === "hyperion-reference") {
+        const porosity = Math.pow(Math.max(0, fine * 0.5 + 0.5), 5.0);
+        height -= porosity * 0.020;
+      }
+
+      const radius = Math.max(config.kind === "hyperion" ? 0.50 : 0.60, 1 + height);
+      positions.setXYZ(
+        index,
+        direction.x * radius * shape[0],
+        direction.y * radius * shape[1],
+        direction.z * radius * shape[2],
+      );
+    }
+
+    const brightness = THREE.MathUtils.clamp(0.34 + broad * 0.18 + medium * 0.08, 0.08, 0.66);
+    colour.copy(base).lerp(light, brightness);
+
+    if (config.kind === "smooth-ellipsoid") {
+      colour.lerp(light, 0.22 + Math.max(0, medium) * 0.08);
+    }
+    if (config.kind === "dust-coated" || config.kind === "trojan-dust" || config.kind === "trojan-flow") {
+      colour.lerp(light, 0.14);
+      colour.lerp(dark, craterFloor * 0.18);
+    } else {
+      const floorDarkening = config.kind === "hyperion" ? 0.88 : config.kind === "phoebe" ? 0.52 : 0.44;
+      colour.lerp(dark, THREE.MathUtils.clamp(craterFloor * floorDarkening, 0, 0.90));
+    }
+
+    if (config.kind === "phoebe") {
+      colour.lerp(light, THREE.MathUtils.clamp(craterRim * 0.34 + craterFloor * 0.08, 0, 0.42));
+    } else if (config.kind === "hyperion") {
+      colour.lerp(light, THREE.MathUtils.clamp(craterRim * 0.18, 0, 0.25));
+    } else {
+      colour.lerp(light, THREE.MathUtils.clamp(craterRim * 0.18, 0, 0.22));
+    }
+
+    if (config.kind === "ring-ridge") {
+      const ridgeColour = Math.exp(-Math.pow(direction.y / (config.ridgeWidth * 1.28), 2));
+      colour.lerp(light, ridgeColour * 0.24);
+    }
+
+    colours[index * 3] = colour.r;
+    colours[index * 3 + 1] = colour.g;
+    colours[index * 3 + 2] = colour.b;
+  }
+
+  source.setAttribute("color", new THREE.BufferAttribute(colours, 3));
+  source.deleteAttribute("normal");
+  const geometry = mergeVertices(source, 1e-5);
+  geometry.computeVertexNormals();
+  geometry.computeBoundingSphere();
+  source.dispose();
+
+  const moon = new THREE.Mesh(
+    geometry,
+    new THREE.MeshStandardMaterial({
+      vertexColors: true,
+      roughness: config.kind === "smooth-ellipsoid" ? 0.82 : 0.96,
+      metalness: 0,
+      envMapIntensity: config.kind === "smooth-ellipsoid" ? 0.030 : 0.016,
+      dithering: true,
+    }),
+  );
+  moon.material.name = `${profile.name} Cassini-reference procedural surface`;
+  moon.castShadow = false;
+  moon.receiveShadow = false;
+  moon.userData.surfaceEvidence = config.evidence;
+  moon.userData.surfaceStructure = config.structure;
+  moon.userData.surfaceRoughness = moon.material.roughness;
+  moon.userData.surfaceDetailMode = `reference-driven-${config.kind}`;
+  moon.userData.referenceMinorMoonState = { profile, quality, config };
+  return moon;
+}
+
 export function createSaturnianMoonSurface(profile, quality = "high") {
   if (profile.name === "Titan") return createTitanSurface(profile, quality);
   if (profile.name === "Iapetus") return createIapetusSurface(profile, quality);
@@ -1361,6 +2420,9 @@ export function createSaturnianMoonSurface(profile, quality = "high") {
   if (profile.name === "Tethys") return createTethysSurface(profile, quality);
   if (profile.name === "Dione") return createDioneSurface(profile, quality);
   if (profile.name === "Rhea") return createRheaSurface(profile, quality);
+
+  const referenceModel = REFERENCE_MINOR_MOON_MODELS[profile.name];
+  if (referenceModel) return createResolvedMinorMoonSurface(profile, quality, referenceModel);
 
   const config = settings(profile);
   const detail = quality === "low" ? Math.max(2, config.detail - 2) : quality === "medium" ? Math.max(3, config.detail - 1) : config.detail;
@@ -1403,7 +2465,13 @@ export function createSaturnianMoonSurface(profile, quality = "high") {
     }
 
     const radius = Math.max(0.62, 1 + height);
-    positions.setXYZ(index, direction.x * radius, direction.y * radius, direction.z * radius);
+    const unresolvedShape = profile.shape ?? [1, 1, 1];
+    positions.setXYZ(
+      index,
+      direction.x * radius * unresolvedShape[0],
+      direction.y * radius * unresolvedShape[1],
+      direction.z * radius * unresolvedShape[2],
+    );
 
     colour.copy(base).lerp(light, THREE.MathUtils.clamp(0.30 + broad * 0.22 + fine * 0.10, 0, 0.58));
     colour.lerp(dark, THREE.MathUtils.clamp(floor * 0.45, 0, 0.58));

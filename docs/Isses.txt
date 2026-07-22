@@ -2,3 +2,10 @@
 2. Satellite or celestial body overlaps over larger celestial then focus only comes over larger celestial
 3. Sometimes page load is blank sometimes it is proper
 4. Post page load it seems many focus and hovering issue flickering
+
+
+Janus and Epimetheus — irregular, rugged co-orbitals with dense cratering and rough dirty-ice terrain.
+Methone, Pallene, Anthe and Aegaeon — smoother ring-arc ellipsoids; Methone now has its recognizable crater-free gray egg appearance.
+Telesto, Calypso, Helene and Polydeuces — individual Trojan-moon shapes, regolith smoothing, buried craters and Helene’s flow-like gullies.
+Hyperion — irregular sponge-like silhouette, deep sharp pits, highly porous terrain and dark crater floors.
+Phoebe — dark irregular captured body with dense cratering, large basins and brighter excavated icy material.

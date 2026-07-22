@@ -169,7 +169,12 @@ function createSatelliteMesh(
   }
 
   moon.name = profile.name;
-  const shape = profile.shape ?? [1, 1, 1];
+  // Some spacecraft-reference factories sculpt the complete silhouette directly
+  // into geometry. Re-applying profile.shape here would stretch those moons a
+  // second time and destroy the intended Pan/Atlas/Daphnis/shepherd outlines.
+  const shape = moon.userData?.geometryIncludesShape
+    ? [1, 1, 1]
+    : (profile.shape ?? [1, 1, 1]);
   moon.scale.set(
     visualRadius * shape[0],
     visualRadius * shape[1],

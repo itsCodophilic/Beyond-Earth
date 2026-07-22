@@ -64,6 +64,46 @@ const RESOLVED = Object.freeze({
   Phoebe: { diameterKm: 213.0, aKm: 12952000, periodDays: 550.31, shape: [1.16, 1.02, 0.92], appearance: "phoebe", family: "Norse irregular moon", retrograde: true },
 });
 
+const RESOLVED_MINOR_SURFACE_EVIDENCE = Object.freeze({
+  Pan: "Cassini close-flyby imagery and NASA ring-moon morphology",
+  Daphnis: "Cassini close-flyby imagery and NASA ring-moon montage",
+  Atlas: "Cassini close-flyby imagery and NASA Atlas overview",
+  Prometheus: "NASA Prometheus overview and Cassini 2015 close-flyby imagery",
+  Pandora: "NASA Pandora overview and Cassini close-up imagery",
+  Janus: "Cassini Janus close imagery and the user-supplied reference frame",
+  Epimetheus: "Cassini Epimetheus close imagery and the user-supplied reference frame",
+  Aegaeon: "Limited Cassini resolved silhouette and ring-arc observations",
+  Methone: "Cassini Methone imagery and the user-supplied smooth-ellipsoid reference",
+  Anthe: "Conservative reconstruction from the user-supplied Anthe image and small ring-moon morphology",
+  Pallene: "Cassini small-satellite photomontage and limited resolved imagery",
+  Telesto: "Cassini Telesto imagery and the user-supplied reference frame",
+  Calypso: "Cassini Calypso imagery and the user-supplied reference frame",
+  Helene: "Cassini Helene close imagery and the user-supplied reference frame",
+  Polydeuces: "Conservative reconstruction from the user-supplied Polydeuces image",
+  Hyperion: "Cassini Hyperion close imagery and the user-supplied reference frame",
+  Phoebe: "Cassini Phoebe flyby imagery and the user-supplied reference frame",
+});
+
+const RESOLVED_MINOR_SURFACE_STRUCTURE = Object.freeze({
+  Pan: "Irregular icy core wrapped by a broad equatorial skirt of accreted ring material",
+  Daphnis: "Small irregular ring moon with a restrained equatorial ridge and dusty icy coating",
+  Atlas: "Pointed flying-saucer body with a thick, smooth equatorial ridge of ring debris",
+  Prometheus: "Sweet-potato-shaped porous ice body with pockmarked terrain and several large craters",
+  Pandora: "Potato-shaped moon coated in fine icy dust, with softened craters, grooves, and low ridges",
+  Janus: "Blocky, battered co-orbital moon with a broad prominent basin, many smaller craters, and rough icy highlands",
+  Epimetheus: "Lumpy dirty-ice body with a large steep-walled crater, a battered left edge, and densely cratered broken terrain",
+  Aegaeon: "Tiny elongated ring-arc moon represented conservatively from its Cassini silhouette",
+  Methone: "Very smooth, pale egg-shaped moon with an almost pristine surface and a muted darker cap region",
+  Anthe: "Tiny rugged irregular moon with a dark coarse surface, angular facets, and a couple of shallow basins",
+  Pallene: "Small smooth icy ellipsoid with subtle albedo mottling and subdued impact relief",
+  Telesto: "Very bright smooth teardrop-like Trojan moon with a swollen right lobe and a ragged broken left margin",
+  Calypso: "Long flattened Trojan moon with a smooth bright upper face, blunt ends, and a darker scuffed lower-right underside",
+  Helene: "Bright rounded moon with dramatic fan-like flow streaks across the right half and a smaller lower lobe",
+  Polydeuces: "Small upright potato-shaped Trojan moon with subdued basins, a rough pebbled surface, and a broader left shoulder",
+  Hyperion: "Tall sponge-like moon covered in dense pitting, with large deep-walled basins and a gnawed-away right edge",
+  Phoebe: "Dark captured irregular moon with two giant shadowed craters near the crown, many smaller pits, and a brighter sunlit right flank",
+});
+
 const DIRECT_NAMES = new Set(Object.keys(RESOLVED));
 const INUIT_NAMES = new Set(["Kiviuq", "Ijiraq", "Paaliaq", "Siarnaq", "Tarqeq"]);
 const GALLIC_NAMES = new Set(["Albiorix", "Bebhionn", "Erriapus", "Tarvos"]);
@@ -172,7 +212,37 @@ function createResolvedProfile(name) {
     instanced: false,
     interactionTier: "direct",
     atmosphere: data.atmosphere,
-    initialRotation: name === "Titan"
+    initialRotation: name === "Pan"
+      ? [-0.10, 0.02, -0.015]
+      : name === "Atlas"
+        ? [0.14, 0.10, -0.06]
+        : name === "Daphnis"
+          ? [0.20, -0.18, -0.34]
+          : name === "Prometheus"
+            ? [0.12, -0.16, -0.66]
+            : name === "Pandora"
+              ? [0.16, 0.05, -0.10]
+              : name === "Janus"
+                ? [0.06, -0.22, -0.04]
+                : name === "Epimetheus"
+                  ? [0.04, -0.14, -0.02]
+                  : name === "Methone"
+                    ? [0.02, 0.08, 0.00]
+                    : name === "Anthe"
+                      ? [0.10, -0.18, -0.04]
+                      : name === "Telesto"
+                        ? [0.00, -0.02, 0.00]
+                        : name === "Calypso"
+                          ? [0.02, -0.12, -0.02]
+                          : name === "Helene"
+                            ? [0.00, 0.02, -0.02]
+                            : name === "Polydeuces"
+                              ? [0.04, -0.08, 0.00]
+                              : name === "Hyperion"
+                                ? [0.00, -0.16, -0.03]
+                                : name === "Phoebe"
+                                  ? [0.02, -0.22, -0.02]
+                                  : name === "Titan"
       ? [0.04, -0.72, -0.02]
       : name === "Mimas"
         ? [-0.14, 0.94, -0.02]
@@ -201,7 +271,7 @@ function createResolvedProfile(name) {
                 ? "NASA Cassini global maps PIA12814 and PIA18434"
                 : name === "Rhea"
                   ? "NASA Cassini global map PIA14928"
-                  : undefined,
+                  : RESOLVED_MINOR_SURFACE_EVIDENCE[name],
     surfaceStructure: name === "Titan"
       ? "Broad icy-organic terrain units beneath dense nitrogen-methane haze"
       : name === "Mimas"
@@ -216,7 +286,7 @@ function createResolvedProfile(name) {
                 ? "Cratered ice with braided bright cliffs and tectonic fractures across the trailing hemisphere"
                 : name === "Rhea"
                   ? "Ancient densely cratered ice with large overlapping basins and restrained fractures"
-                  : undefined,
+                  : RESOLVED_MINOR_SURFACE_STRUCTURE[name],
     surfaceRoughness: name === "Titan"
       ? 0.86
       : name === "Mimas"
