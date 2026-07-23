@@ -1219,8 +1219,10 @@ import { createCelestialDetailsPanel } from './ui/planetDetailsPanel.js';
   const cameraFocusPoint = new THREE.Vector3();
   const targetFocusPoint = new THREE.Vector3();
 
-  // AmbientLight illuminates every surface equally so shadowed sides are not pure black.
-  scene.add(new THREE.AmbientLight(0x8da1c6, 0.16));
+  // AmbientLight keeps broad journey silhouettes readable. Its intensity eases
+  // lower during satellite inspection so sunlight can form a clear terminator.
+  const sceneAmbientLight = new THREE.AmbientLight(0x8da1c6, 0.16);
+  scene.add(sceneAmbientLight);
 
   // A cool DirectionalLight adds readable edge detail from a consistent direction.
   const fillLight = new THREE.DirectionalLight(0x8bdcff, 0.32);
@@ -1237,26 +1239,52 @@ import { createCelestialDetailsPanel } from './ui/planetDetailsPanel.js';
   asteroidInspectionLight.visible = false;
   scene.add(asteroidInspectionLight);
 
-  // Jupiter's moons previously relied only on the distant Sun and a weak scene
-  // fill. Their relief existed, but close views still read like painted discs.
-  // A dedicated inspection layer now adds a camera-side key light plus a soft
-  // neutral fill only to the currently selected Jovian satellite.
-  const jovianMoonInspectionFill = new THREE.AmbientLight(0xc8dcff, 0.16);
+  // Close moon inspection uses a dedicated layer shared by all resolved
+  // satellites. The key is positioned on the true Sun-facing side below; a
+  // very faint neutral fill keeps the night hemisphere legible without making
+  // it appear self-lit.
+  const jovianMoonInspectionFill = new THREE.AmbientLight(0xc8dcff, 0.035);
   jovianMoonInspectionFill.layers.set(JOVIAN_MOON_INSPECTION_LAYER);
   jovianMoonInspectionFill.visible = false;
   scene.add(jovianMoonInspectionFill);
 
-  const jovianMoonInspectionKey = new THREE.PointLight(0xffe4bc, 4.8, 14, 1.55);
+  const jovianMoonInspectionKey = new THREE.PointLight(0xffe8c8, 3.4, 18, 1.55);
   jovianMoonInspectionKey.layers.set(JOVIAN_MOON_INSPECTION_LAYER);
   jovianMoonInspectionKey.visible = false;
   scene.add(jovianMoonInspectionKey);
-  const jovianMoonInspectionRim = new THREE.PointLight(0x79bfff, 1.25, 12, 1.7);
+  const jovianMoonInspectionRim = new THREE.PointLight(0x79bfff, 0.18, 12, 1.7);
   jovianMoonInspectionRim.layers.set(JOVIAN_MOON_INSPECTION_LAYER);
   jovianMoonInspectionRim.visible = false;
   scene.add(jovianMoonInspectionRim);
   const jovianMoonInspectionPosition = new THREE.Vector3();
-  const jovianMoonInspectionView = new THREE.Vector3();
-  const jovianMoonInspectionSide = new THREE.Vector3();
+  const satelliteInspectionSunPosition = new THREE.Vector3();
+  const satelliteInspectionSunDirection = new THREE.Vector3();
+  let satelliteInspectionLayerBody = null;
+
+  /**
+   * Gives the selected resolved moon access to the inspection-only solar key.
+   * Enabling a layer never removes the default layer, so the real Sun continues
+   * to illuminate the surface as well. Dense InstancedMesh moons are excluded:
+   * enabling their shared mesh would brighten every unresolved moon at once.
+   */
+  function setSatelliteInspectionLayer(body) {
+    const isNaturalSatellite = Boolean(
+      body?.userData?.isSatellite
+      || getInteractiveType(body) === "natural satellite",
+    );
+    const nextBody = isNaturalSatellite && !body?.userData?.isDenseSatellite
+      ? body
+      : null;
+    if (nextBody === satelliteInspectionLayerBody) return;
+
+    satelliteInspectionLayerBody?.traverse?.((object) => {
+      if (object.isMesh) object.layers.disable(JOVIAN_MOON_INSPECTION_LAYER);
+    });
+    satelliteInspectionLayerBody = nextBody;
+    satelliteInspectionLayerBody?.traverse?.((object) => {
+      if (object.isMesh) object.layers.enable(JOVIAN_MOON_INSPECTION_LAYER);
+    });
+  }
 
   // Asset loading is isolated so scene setup only consumes a ready texture dictionary.
   const preferredAnisotropy = creationQuality === "high"
@@ -5067,44 +5095,61 @@ import { createCelestialDetailsPanel } from './ui/planetDetailsPanel.js';
     );
     asteroidInspectionLight.visible = isAsteroidFocused;
 
-    const isJovianMoonFocused = Boolean(
-      focusedBody?.userData?.isJovianSatellite,
+    const isNaturalSatelliteFocused = Boolean(
+      focusedBody
+      && (
+        focusedBody.userData?.isSatellite
+        || getInteractiveType(focusedBody) === "natural satellite"
+      ),
     );
-    jovianMoonInspectionFill.visible = isJovianMoonFocused;
-    jovianMoonInspectionKey.visible = isJovianMoonFocused;
-    jovianMoonInspectionRim.visible = isJovianMoonFocused;
-    if (isJovianMoonFocused) {
+    setSatelliteInspectionLayer(isNaturalSatelliteFocused ? focusedBody : null);
+    const hasResolvedSatelliteSurface = Boolean(
+      isNaturalSatelliteFocused
+      && !focusedBody?.userData?.isDenseSatellite
+      && satelliteInspectionLayerBody,
+    );
+    jovianMoonInspectionFill.visible = hasResolvedSatelliteSurface;
+    jovianMoonInspectionKey.visible = hasResolvedSatelliteSurface;
+    // A camera-side rim was making the night hemisphere look illuminated.
+    // The real silhouette now stays dark; only the Sun-aligned key is active.
+    jovianMoonInspectionRim.visible = false;
+
+    // Reduce non-directional scene fill only while a moon is being inspected.
+    // The transition is eased so entering or leaving focus never flashes.
+    const satelliteLightEase = frameAdjustedEase(0.12, deltaTime);
+    sceneAmbientLight.intensity = THREE.MathUtils.lerp(
+      sceneAmbientLight.intensity,
+      isNaturalSatelliteFocused ? 0.075 : 0.16,
+      satelliteLightEase,
+    );
+    fillLight.intensity = THREE.MathUtils.lerp(
+      fillLight.intensity,
+      isNaturalSatelliteFocused ? 0.11 : 0.32,
+      satelliteLightEase,
+    );
+
+    if (hasResolvedSatelliteSurface) {
       focusedBody.getWorldPosition(jovianMoonInspectionPosition);
+      sun.system.getWorldPosition(satelliteInspectionSunPosition);
       const moonRadius = Number(focusedBody.userData?.visualRadius ?? 0.1);
       const focusDistance = Number(focusedBody.userData?.focusDistance ?? 1);
-      jovianMoonInspectionView
-        .subVectors(camera.position, jovianMoonInspectionPosition)
-        .normalize();
-      jovianMoonInspectionSide
-        .crossVectors(jovianMoonInspectionView, camera.up)
+      satelliteInspectionSunDirection
+        .subVectors(satelliteInspectionSunPosition, jovianMoonInspectionPosition)
         .normalize();
 
-      // Offset the key sideways rather than placing it directly behind the
-      // camera. The grazing angle creates the shadows that make crater bowls,
-      // icy grooves, mountains and irregular rock edges read as true depth.
+      // Reinforce the real solar direction at inspection scale. The helper
+      // light sits between the selected moon and the Sun, so orbiting the
+      // camera reveals the same fixed day side from changing viewpoints.
       jovianMoonInspectionKey.position
         .copy(jovianMoonInspectionPosition)
-        .addScaledVector(jovianMoonInspectionView, Math.max(moonRadius * 4.0, focusDistance * 0.52))
-        .addScaledVector(jovianMoonInspectionSide, moonRadius * 3.1);
-      jovianMoonInspectionKey.position.y += Math.max(0.16, moonRadius * 1.9);
+        .addScaledVector(
+          satelliteInspectionSunDirection,
+          Math.max(moonRadius * 5.5, focusDistance * 0.64),
+        );
       jovianMoonInspectionKey.distance = Math.max(
         4,
-        focusDistance * 7.5,
+        focusDistance * 8.5,
       );
-
-      // A faint cool rim on the opposite side separates the silhouette from
-      // black space without washing out the warm, crater-revealing key light.
-      jovianMoonInspectionRim.position
-        .copy(jovianMoonInspectionPosition)
-        .addScaledVector(jovianMoonInspectionView, moonRadius * 1.2)
-        .addScaledVector(jovianMoonInspectionSide, moonRadius * -3.8);
-      jovianMoonInspectionRim.position.y += moonRadius * 0.6;
-      jovianMoonInspectionRim.distance = Math.max(3.5, focusDistance * 6.0);
     }
 
     // Focused bodies use their authored framing. Empty-space exploration no
