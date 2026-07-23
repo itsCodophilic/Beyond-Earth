@@ -813,7 +813,7 @@ body.is-hovering-asteroid #universe {
   opacity: 0;
   pointer-events: none;
   transform: translateX(-5px);
-  transition: opacity 150ms ease, transform 150ms ease;
+  transition: opacity 55ms ease, transform 55ms ease;
   white-space: nowrap;
 }
 
@@ -1140,5 +1140,408 @@ body.is-hovering-celestial #universe {
   .distance-readout__method-arrow {
     animation: none !important;
     transition: none;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Planet-orbit discovery and selected satellite-system highlighting
+   -------------------------------------------------------------------------- */
+
+.planet-orbit-hover-tooltip {
+  position: fixed;
+  z-index: 15;
+  display: grid;
+  gap: 3px;
+  min-width: 208px;
+  max-width: min(280px, calc(100vw - 24px));
+  padding: 10px 13px;
+  border: 1px solid rgba(112, 234, 255, 0.58);
+  border-radius: 11px;
+  background:
+    linear-gradient(135deg, rgba(5, 24, 34, 0.94), rgba(4, 13, 23, 0.88));
+  color: rgba(232, 252, 255, 0.98);
+  box-shadow:
+    inset 0 0 24px rgba(91, 225, 255, 0.08),
+    0 0 24px rgba(72, 218, 255, 0.22),
+    0 14px 36px rgba(0, 0, 0, 0.42);
+  backdrop-filter: blur(14px);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(7px) scale(0.965);
+  transition: opacity 55ms ease, transform 55ms ease;
+}
+
+.planet-orbit-hover-tooltip.is-visible {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+
+.planet-orbit-hover-tooltip__eyebrow {
+  color: rgba(129, 229, 255, 0.70);
+  font-size: 0.58rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.planet-orbit-hover-tooltip strong {
+  overflow: hidden;
+  max-width: 240px;
+  font-size: 0.80rem;
+  letter-spacing: 0.075em;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.planet-orbit-hover-tooltip small {
+  color: rgba(153, 246, 255, 0.82);
+  font-size: 0.65rem;
+  letter-spacing: 0.035em;
+}
+
+.planet-orbit-hover-tooltip__secondary {
+  margin-top: 2px;
+  padding-top: 5px;
+  border-top: 1px solid rgba(117, 234, 255, 0.14);
+  color: rgba(190, 255, 231, 0.72) !important;
+  font-size: 0.58rem !important;
+  line-height: 1.35;
+}
+
+.planet-system-banner {
+  position: fixed;
+  z-index: 12;
+  display: grid;
+  gap: 3px;
+  min-width: 218px;
+  max-width: min(310px, calc(100vw - 28px));
+  padding: 10px 14px;
+  border: 1px solid rgba(103, 255, 207, 0.44);
+  border-radius: 12px;
+  background: rgba(3, 18, 20, 0.76);
+  color: rgba(231, 255, 246, 0.96);
+  box-shadow:
+    inset 0 0 24px rgba(83, 255, 194, 0.055),
+    0 0 22px rgba(76, 255, 197, 0.16),
+    0 12px 30px rgba(0, 0, 0, 0.34);
+  backdrop-filter: blur(12px);
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, 8px) scale(0.97);
+  transition: opacity 180ms ease, transform 180ms ease;
+}
+
+.planet-system-banner.is-visible {
+  opacity: 1;
+  transform: translate(-50%, 0) scale(1);
+}
+
+.planet-system-banner > span {
+  color: rgba(124, 255, 211, 0.68);
+  font-size: 0.57rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.planet-system-banner strong {
+  overflow: hidden;
+  font-size: 0.80rem;
+  letter-spacing: 0.075em;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.planet-system-banner small {
+  color: rgba(175, 255, 226, 0.74);
+  font-size: 0.64rem;
+  letter-spacing: 0.03em;
+}
+
+.planet-system-banner__instruction {
+  margin-top: 2px;
+  padding-top: 5px;
+  border-top: 1px solid rgba(103, 255, 207, 0.13);
+  color: rgba(214, 255, 239, 0.84) !important;
+  font-size: 0.58rem !important;
+  line-height: 1.35;
+}
+
+.satellite-name-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 11;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.satellite-name-label {
+  position: absolute;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 23px;
+  padding: 0 7px 0 6px;
+  border: 1px solid rgba(104, 255, 208, 0.32);
+  border-radius: 999px;
+  background: rgba(2, 18, 20, 0.76);
+  color: rgba(232, 255, 247, 0.96);
+  box-shadow: 0 0 15px rgba(77, 255, 197, 0.12);
+  backdrop-filter: blur(8px);
+  opacity: 0;
+  transform: translateY(3px) scale(0.96);
+  transition: opacity 90ms ease, transform 90ms ease;
+  white-space: nowrap;
+}
+
+.satellite-name-label.is-visible {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+
+.satellite-name-label__marker {
+  width: 5px;
+  height: 5px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: rgba(111, 255, 206, 0.98);
+  box-shadow: 0 0 8px rgba(91, 255, 196, 0.86);
+}
+
+.satellite-name-label strong {
+  overflow: hidden;
+  max-width: 96px;
+  font-size: 0.57rem;
+  font-weight: 700;
+  letter-spacing: 0.055em;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+}
+
+.satellite-name-label em {
+  color: rgba(149, 255, 217, 0.58);
+  font-size: 0.43rem;
+  font-style: normal;
+  font-weight: 700;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+}
+
+body.is-hovering-planet-orbit #universe {
+  cursor: pointer;
+}
+
+@media (max-width: 680px) {
+  .planet-orbit-hover-tooltip {
+    min-width: 182px;
+    padding: 9px 11px;
+  }
+
+  .planet-system-banner {
+    min-width: 190px;
+    padding: 9px 11px;
+  }
+
+  .satellite-name-label {
+    height: 21px;
+    padding-inline: 5px 6px;
+  }
+
+  .satellite-name-label strong {
+    max-width: 78px;
+    font-size: 0.53rem;
+  }
+
+  .satellite-name-label em {
+    display: none;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Unified celestial selection card
+   -------------------------------------------------------------------------- */
+
+.celestial-selection-card {
+  position: fixed;
+  z-index: 14;
+  display: grid;
+  width: 268px;
+  gap: 8px;
+  padding: 12px 14px 13px;
+  border: 1px solid rgba(112, 234, 255, 0.46);
+  border-radius: 14px;
+  outline: none;
+  background:
+    radial-gradient(circle at 95% 5%, rgba(151, 91, 255, 0.11), transparent 38%),
+    linear-gradient(145deg, rgba(5, 24, 35, 0.94), rgba(3, 12, 24, 0.91));
+  color: rgba(236, 252, 255, 0.98);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.055),
+    inset 0 0 28px rgba(91, 225, 255, 0.055),
+    0 0 26px rgba(72, 218, 255, 0.16),
+    0 15px 38px rgba(0, 0, 0, 0.44);
+  backdrop-filter: blur(15px) saturate(125%);
+  -webkit-backdrop-filter: blur(15px) saturate(125%);
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(7px) scale(0.965);
+  transform-origin: 50% 50%;
+  transition:
+    opacity 150ms ease,
+    transform 230ms cubic-bezier(0.16, 1, 0.3, 1),
+    border-color 180ms ease,
+    box-shadow 180ms ease;
+  text-align: left;
+}
+
+.celestial-selection-card.is-visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0) scale(1);
+}
+
+.celestial-selection-card:hover,
+.celestial-selection-card:focus-visible {
+  border-color: rgba(139, 241, 255, 0.82);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    inset 0 0 34px rgba(91, 225, 255, 0.08),
+    0 0 31px rgba(72, 218, 255, 0.28),
+    0 17px 42px rgba(0, 0, 0, 0.48);
+  transform: translateY(-2px) scale(1.015);
+}
+
+.celestial-selection-card__path {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: rgba(126, 230, 255, 0.68);
+  font-size: 0.55rem;
+  font-weight: 780;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.celestial-selection-card__path i {
+  color: rgba(176, 126, 255, 0.75);
+  font-style: normal;
+}
+
+.celestial-selection-card__identity {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.celestial-selection-card__identity > span:first-child {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.celestial-selection-card__identity strong {
+  overflow: hidden;
+  color: #f4fdff;
+  font-size: 0.91rem;
+  letter-spacing: 0.065em;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.celestial-selection-card__identity small {
+  overflow: hidden;
+  color: rgba(189, 226, 238, 0.66);
+  font-size: 0.61rem;
+  letter-spacing: 0.035em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.celestial-selection-card__info-icon {
+  display: grid;
+  flex: 0 0 auto;
+  width: 31px;
+  height: 31px;
+  place-items: center;
+  border: 1px solid rgba(119, 237, 255, 0.54);
+  border-radius: 50%;
+  background: rgba(12, 65, 82, 0.34);
+  color: #bff7ff;
+  box-shadow: 0 0 15px rgba(91, 225, 255, 0.18);
+  font-family: Georgia, serif;
+  font-size: 0.86rem;
+  font-style: italic;
+  transition: transform 180ms ease, box-shadow 180ms ease, background 180ms ease;
+}
+
+.celestial-selection-card:hover .celestial-selection-card__info-icon,
+.celestial-selection-card:focus-visible .celestial-selection-card__info-icon {
+  background: rgba(20, 93, 112, 0.50);
+  box-shadow: 0 0 21px rgba(91, 225, 255, 0.38);
+  transform: scale(1.08);
+}
+
+.celestial-selection-card__satellite-rank {
+  display: inline-flex;
+  width: fit-content;
+  max-width: 100%;
+  align-items: center;
+  padding: 5px 8px;
+  border: 1px solid rgba(148, 255, 211, 0.22);
+  border-radius: 999px;
+  background: rgba(20, 78, 65, 0.23);
+  color: rgba(189, 255, 226, 0.88);
+  font-size: 0.54rem;
+  font-weight: 760;
+  letter-spacing: 0.045em;
+  line-height: 1.25;
+}
+
+.celestial-selection-card__satellite-rank[hidden] {
+  display: none;
+}
+
+.celestial-selection-card__instruction {
+  padding-top: 7px;
+  border-top: 1px solid rgba(111, 231, 255, 0.14);
+  color: rgba(175, 255, 226, 0.80);
+  font-size: 0.58rem;
+  font-weight: 650;
+  letter-spacing: 0.045em;
+}
+
+/* Satellite labels are now real compact information controls. The full-screen
+   layer remains transparent to input while only visible labels receive clicks. */
+.satellite-name-label {
+  appearance: none;
+  border-style: solid;
+  cursor: pointer;
+  font: inherit;
+  pointer-events: none;
+  text-align: left;
+}
+
+.satellite-name-label.is-visible {
+  pointer-events: auto;
+}
+
+.satellite-name-label:hover,
+.satellite-name-label:focus-visible {
+  border-color: rgba(137, 255, 217, 0.74);
+  outline: none;
+  background: rgba(4, 34, 34, 0.92);
+  box-shadow: 0 0 22px rgba(77, 255, 197, 0.25);
+  transform: translateY(-1px) scale(1.035);
+}
+
+@media (max-width: 560px) {
+  .celestial-selection-card {
+    width: 232px;
+    padding: 10px 12px 11px;
   }
 }

@@ -320,3 +320,10 @@
     transform: translateY(0) scale(1);
   }
 }
+
+/* v8 uses the unified compact selection card + centred dossier for every body. */
+.body-card,
+.body-card-restore,
+.body-connector {
+  display: none !important;
+}

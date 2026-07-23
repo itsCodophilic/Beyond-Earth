@@ -16,7 +16,7 @@ function createCloudMaterial(cloudMap, {
   const imageWidth = cloudMap?.image?.width ?? 1024;
   const imageHeight = cloudMap?.image?.height ?? 512;
 
-  return new THREE.ShaderMaterial({
+  const material = new THREE.ShaderMaterial({
     uniforms: {
       uCloudMap: { value: cloudMap },
       uOpacity: { value: opacity },
@@ -114,6 +114,22 @@ function createCloudMaterial(cloudMap, {
     roughness: 1,
     side: THREE.FrontSide,
   });
+
+  // Remote cloud imagery now upgrades the same Texture object after the first
+  // frame. Keep the nine-tap filter's pixel step in sync when that placeholder
+  // changes from 1×1 to the real NASA/backup image dimensions.
+  let sampledImageSize = `${imageWidth}x${imageHeight}`;
+  material.onBeforeRender = () => {
+    const currentWidth = cloudMap?.image?.width ?? imageWidth;
+    const currentHeight = cloudMap?.image?.height ?? imageHeight;
+    const currentImageSize = `${currentWidth}x${currentHeight}`;
+    if (currentImageSize === sampledImageSize) return;
+
+    sampledImageSize = currentImageSize;
+    material.uniforms.uTexel.value.set(1 / currentWidth, 1 / currentHeight);
+  };
+
+  return material;
 }
 
 function createAtmosphereMaterial() {

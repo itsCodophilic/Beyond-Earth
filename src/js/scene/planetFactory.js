@@ -1262,6 +1262,7 @@ export function createPlanet({
   orbitRoot,
   planets,
   hoverTargets,
+  orbitTargets = [],
   quality = "high",
 }) {
   const segmentScale = quality === "low" ? 0.58 : quality === "medium" ? 0.78 : 1;
@@ -1357,7 +1358,7 @@ export function createPlanet({
   hoverTargets.push(mesh);
 
   if (config.orbitRadius > 0) {
-    createOrbitLine(
+    const orbitGuide = createOrbitLine(
       orbitRoot,
       config.orbitRadius,
       config.orbitColor,
@@ -1366,6 +1367,13 @@ export function createPlanet({
       config.orbitEccentricity ?? 0,
       config.orbitRotation ?? 0,
     );
+    orbitGuide.name = `${config.name} orbit`;
+    orbitGuide.userData.planetName = config.name;
+    orbitGuide.userData.planet = mesh;
+    orbitGuide.userData.orbitRadius = config.orbitRadius;
+    orbitGuide.userData.orbitEccentricity = config.orbitEccentricity ?? 0;
+    mesh.userData.orbitGuide = orbitGuide;
+    orbitTargets.push(orbitGuide);
   }
   return mesh;
 }

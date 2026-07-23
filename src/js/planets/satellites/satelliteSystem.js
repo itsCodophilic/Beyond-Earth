@@ -57,6 +57,31 @@ const parentWorldPosition = new THREE.Vector3();
 const moonWorldPosition = new THREE.Vector3();
 const projectedParentPosition = new THREE.Vector3();
 const projectedMoonPosition = new THREE.Vector3();
+const sharedSatelliteResources = new Map();
+
+/**
+ * Staged construction calls the factory once per planetary system. Reuse the
+ * same generic moon texture/geometry that the previous all-at-once build used,
+ * so staging does not multiply GPU memory.
+ */
+function getSharedSatelliteResources(quality) {
+  if (sharedSatelliteResources.has(quality)) {
+    return sharedSatelliteResources.get(quality);
+  }
+
+  const textureSize = quality === "low" ? 384 : quality === "medium" ? 512 : 768;
+  const sphereSegments = quality === "low"
+    ? [32, 24]
+    : quality === "medium"
+      ? [44, 32]
+      : [56, 40];
+  const resources = {
+    texture: makeNoiseTexture("moon", textureSize),
+    geometry: new THREE.SphereGeometry(1, sphereSegments[0], sphereSegments[1]),
+  };
+  sharedSatelliteResources.set(quality, resources);
+  return resources;
+}
 
 function isJovianProfile(profile, parentName) {
   return parentName === "Jupiter" && Boolean(profile.family);
@@ -388,15 +413,30 @@ function updateDenseSatelliteField(field, motionScale = 0) {
   field.mesh.instanceMatrix.needsUpdate = true;
 }
 
-/** Builds every configured moon without modifying any parent planet mesh. */
-export function createMajorSatelliteSystems({ world, planets, hoverTargets, quality = "high" }) {
-  const textureSize = quality === "low" ? 384 : quality === "medium" ? 512 : 768;
-  const sphereSegments = quality === "low" ? [32, 24] : quality === "medium" ? [44, 32] : [56, 40];
-  const sharedTexture = makeNoiseTexture("moon", textureSize);
-  const sharedGeometry = new THREE.SphereGeometry(1, sphereSegments[0], sphereSegments[1]);
+/**
+ * Builds the requested moon systems without modifying any parent planet mesh.
+ *
+ * `parentNames` lets the application construct distant systems between frames.
+ * Their geometry and scientific presentation stay identical; only the moment
+ * at which each off-screen system is prepared changes.
+ */
+export function createMajorSatelliteSystems({
+  world,
+  planets,
+  hoverTargets,
+  quality = "high",
+  parentNames = null,
+  deferDirectBodies = false,
+}) {
+  const {
+    texture: sharedTexture,
+    geometry: sharedGeometry,
+  } = getSharedSatelliteResources(quality);
   const systems = [];
+  const requestedParents = parentNames ? new Set(parentNames) : null;
 
   Object.entries(MOON_SYSTEMS).forEach(([parentName, moonProfiles], systemIndex) => {
+    if (requestedParents && !requestedParents.has(parentName)) return;
     const parent = planets.find((planet) => planet.name === parentName);
     if (!parent) return;
 
@@ -428,7 +468,20 @@ export function createMajorSatelliteSystems({ world, planets, hoverTargets, qual
     let maximumOrbitRadius = 0;
     const directProfiles = moonProfiles.filter((profile) => !profile.instanced);
     const denseProfiles = moonProfiles.filter((profile) => profile.instanced);
-    const moons = directProfiles.map((profile, index) => {
+    const moons = [];
+
+    // Orbit radius is metadata, so it can be complete before expensive surface
+    // geometry is hydrated. Camera encounter logic therefore remains stable
+    // throughout progressive construction.
+    directProfiles.forEach((profile) => {
+      const semiMajorVisualRadius = parentRadius * profile.orbitScale;
+      maximumOrbitRadius = Math.max(
+        maximumOrbitRadius,
+        semiMajorVisualRadius * (1 + Math.min(0.86, profile.eccentricity ?? 0)),
+      );
+    });
+
+    const buildDirectSatellite = (profile, index) => {
       const orbitNode = new THREE.Group();
       orbitNode.rotation.y = profile.node ?? 0;
 
@@ -448,10 +501,13 @@ export function createMajorSatelliteSystems({ world, planets, hoverTargets, qual
         quality,
       );
       const { moon, hitTarget, semiMajorVisualRadius } = satellite;
-      maximumOrbitRadius = Math.max(
-        maximumOrbitRadius,
-        semiMajorVisualRadius * (1 + Math.min(0.86, profile.eccentricity ?? 0)),
-      );
+      if (deferDirectBodies) {
+        // A progressively hydrated body starts hidden. The screen-space
+        // visibility pass enables it only when its parent system is legible,
+        // preventing an off-screen texture upload from stalling the opening.
+        moon.visible = false;
+        if (hitTarget) hitTarget.visible = false;
+      }
 
       pivot.add(moon);
       if (hitTarget) pivot.add(hitTarget);
@@ -467,14 +523,23 @@ export function createMajorSatelliteSystems({ world, planets, hoverTargets, qual
         if (hitTarget) hoverTargets.push(hitTarget);
       }
 
-      return {
+      const hydratedSatellite = {
         ...satellite,
         orbitNode,
         orbitPlane,
         pivot,
         speed: profile.speed,
       };
-    });
+      moons.push(hydratedSatellite);
+      return hydratedSatellite;
+    };
+
+    const pendingDirectSatellites = deferDirectBodies
+      ? directProfiles.map((profile, index) => ({ profile, index }))
+      : [];
+    if (!deferDirectBodies) {
+      directProfiles.forEach(buildDirectSatellite);
+    }
 
     const denseFields = createDenseSatelliteFields(denseProfiles, parentRadius, parentName, quality);
     denseFields.forEach((field) => {
@@ -489,7 +554,7 @@ export function createMajorSatelliteSystems({ world, planets, hoverTargets, qual
     });
 
     world.add(root);
-    systems.push({
+    const system = {
       parent,
       parentName,
       root,
@@ -497,10 +562,33 @@ export function createMajorSatelliteSystems({ world, planets, hoverTargets, qual
       denseFields,
       maximumOrbitRadius,
       quality,
-    });
+      pendingDirectSatellites,
+      /**
+       * Builds at most one resolved moon. Keeping the closure here avoids
+       * duplicating the scientifically-authored factory selection in main.js.
+       */
+      hydrateNextSatellite() {
+        const pending = pendingDirectSatellites.shift();
+        if (!pending) return null;
+        return buildDirectSatellite(pending.profile, pending.index);
+      },
+    };
+    systems.push(system);
   });
 
   return systems;
+}
+
+/** Hydrates one resolved moon and reports whether that system has work left. */
+export function hydrateNextMajorSatellite(system) {
+  if (!system?.hydrateNextSatellite) return null;
+  const satellite = system.hydrateNextSatellite();
+  if (!satellite) return null;
+  return {
+    system,
+    satellite,
+    remaining: system.pendingDirectSatellites?.length ?? 0,
+  };
 }
 
 /**
@@ -656,9 +744,6 @@ export function updateMajorSatelliteVisibility({
     / Math.max(0.0001, Math.tan(THREE.MathUtils.degToRad(camera.fov * 0.5)));
 
   systems.forEach((system) => {
-    const denseSystem = system.parentName === "Saturn" || system.parentName === "Jupiter";
-    if (!denseSystem) return;
-
     system.parent.getWorldPosition(parentWorldPosition);
     const parentDistance = Math.max(0.0001, camera.position.distanceTo(parentWorldPosition));
     const parentRadius = Number(system.parent.userData?.visualRadius ?? 1);
@@ -677,12 +762,21 @@ export function updateMajorSatelliteVisibility({
     });
 
     system.moons.forEach(({ moon, hitTarget }) => {
+      const held = moon === focusedBody || moon === hoveredBody;
       if (system.parentName !== "Jupiter") {
-        moon.visible = true;
-        if (hitTarget) hitTarget.visible = true;
+        moon.getWorldPosition(moonWorldPosition);
+        const moonDistance = Math.max(0.0001, camera.position.distanceTo(moonWorldPosition));
+        const visualRadius = Number(moon.userData?.visualRadius ?? 0);
+        const radiusPixels = visualRadius / moonDistance * focalPixels;
+        const visible = held
+          || focusedInSystem
+          || parentRadiusPixels >= 0.48
+          || radiusPixels >= 0.11;
+        if (moon.visible !== visible) moon.visible = visible;
+        if (hitTarget && hitTarget.visible !== visible) hitTarget.visible = visible;
         return;
       }
-      const held = moon === focusedBody || moon === hoveredBody;
+
       const focusedOnParent = focusedBody === system.parent;
       const focusedOnSatellite = focusedBody?.userData?.parentPlanet === system.parentName;
       const tier = moon.userData?.interactionTier ?? "background";

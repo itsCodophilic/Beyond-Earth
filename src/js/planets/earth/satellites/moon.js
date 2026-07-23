@@ -99,8 +99,19 @@ export function createMoonSystem({ earth, textures, hoverTargets, quality = "hig
   });
   const moonOrbit = new THREE.Line(
     new THREE.BufferGeometry().setFromPoints(orbitPoints),
-    new THREE.LineBasicMaterial({ color: 0x9fdcff, transparent: true, opacity: 0.22 }),
+    new THREE.LineBasicMaterial({
+      color: 0x9fdcff,
+      transparent: true,
+      opacity: 0.22,
+      depthWrite: false,
+    }),
   );
+  moonOrbit.name = "Earth satellite orbit guide";
+  moonOrbit.userData = {
+    baseColor: 0x9fdcff,
+    baseOpacity: 0.22,
+    parentPlanet: "Earth",
+  };
 
   // The real lunar orbit is tilted about 5.14° relative to Earth's orbital plane.
   const moonSystem = new THREE.Group();

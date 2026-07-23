@@ -25,6 +25,7 @@ import { PLANET_CONFIGS } from './planets/index.js';
 import {
   createMajorSatelliteSystems,
   findNearestJovianSatelliteAtPointer,
+  hydrateNextMajorSatellite,
   JOVIAN_MOON_INSPECTION_LAYER,
   getJovianSatelliteEncounterIntensity,
   updateMajorSatelliteSystems,
@@ -51,10 +52,12 @@ import {
   interpolateCameraDistanceFromEarth,
 } from './scene/distanceFromEarth.js';
 import { createPlanet, updatePlanetVisuals } from './scene/planetFactory.js';
+import { setOrbitPosition, solveOrbitEccentricAnomaly } from './scene/orbits.js';
 import { SpaceEnvironment } from './scene/space/spaceEnvironment.js';
 import { JOURNEY_MAP } from './scene/space/spaceEnvironmentConfig.js';
 import { createSun, setSunPerformanceProfile, updateSun } from './stars/sun/sun.js';
 import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
+import { createCelestialDetailsPanel } from './ui/planetDetailsPanel.js';
 
 // An async immediately-invoked function lets us await texture loading while
 // keeping all application variables private to this module.
@@ -634,6 +637,81 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
   const asteroidHoverName = asteroidHoverTooltip.querySelector("#asteroid-hover-name");
   const celestialHoverAction = asteroidHoverTooltip.querySelector("#celestial-hover-action");
 
+  // Planetary orbit guides double as a discovery map. Hovering one freezes
+  // celestial motion, brightens that exact path, and reveals the planet name
+  // even when the planet itself is still a sub-pixel point in deep space.
+  let orbitHoverTooltip = document.querySelector("#planet-orbit-hover-tooltip");
+  if (!orbitHoverTooltip) {
+    orbitHoverTooltip = document.createElement("div");
+    orbitHoverTooltip.id = "planet-orbit-hover-tooltip";
+    orbitHoverTooltip.className = "planet-orbit-hover-tooltip";
+    orbitHoverTooltip.setAttribute("aria-hidden", "true");
+    orbitHoverTooltip.innerHTML = `
+      <span class="planet-orbit-hover-tooltip__eyebrow">Planet route discovered</span>
+      <strong id="planet-orbit-hover-name">Planet orbit</strong>
+      <small id="planet-orbit-hover-action">Click this orbit to travel to the planet</small>
+      <small id="planet-orbit-hover-satellite-action" class="planet-orbit-hover-tooltip__secondary">Highlighted satellites can also be clicked after arrival</small>
+    `;
+    document.body.append(orbitHoverTooltip);
+  }
+  const orbitHoverName = orbitHoverTooltip.querySelector("#planet-orbit-hover-name");
+  const orbitHoverAction = orbitHoverTooltip.querySelector("#planet-orbit-hover-action");
+  const orbitHoverSatelliteAction = orbitHoverTooltip.querySelector("#planet-orbit-hover-satellite-action");
+
+  let celestialSelectionCard = document.querySelector("#celestial-selection-card");
+  if (!celestialSelectionCard) {
+    celestialSelectionCard = document.createElement("button");
+    celestialSelectionCard.id = "celestial-selection-card";
+    celestialSelectionCard.className = "celestial-selection-card";
+    celestialSelectionCard.type = "button";
+    celestialSelectionCard.setAttribute("aria-hidden", "true");
+    celestialSelectionCard.setAttribute("aria-label", "Open detailed information for the selected celestial body");
+    celestialSelectionCard.innerHTML = `
+      <span class="celestial-selection-card__path">
+        <span>Milky Way Galaxy</span>
+        <i aria-hidden="true">›</i>
+        <span>Solar System</span>
+      </span>
+      <span class="celestial-selection-card__identity">
+        <span>
+          <strong id="celestial-selection-card-name">Celestial body</strong>
+          <small id="celestial-selection-card-type">Selected object</small>
+        </span>
+        <span class="celestial-selection-card__info-icon" aria-hidden="true">i</span>
+      </span>
+      <span class="celestial-selection-card__satellite-rank" id="celestial-selection-card-satellite-rank" hidden></span>
+      <span class="celestial-selection-card__instruction">Click to know more information</span>
+    `;
+    document.body.append(celestialSelectionCard);
+  }
+  const celestialSelectionCardName = celestialSelectionCard.querySelector("#celestial-selection-card-name");
+  const celestialSelectionCardType = celestialSelectionCard.querySelector("#celestial-selection-card-type");
+  const celestialSelectionCardSatelliteRank = celestialSelectionCard.querySelector("#celestial-selection-card-satellite-rank");
+
+  let satelliteNameLayer = document.querySelector("#satellite-name-layer");
+  if (!satelliteNameLayer) {
+    satelliteNameLayer = document.createElement("div");
+    satelliteNameLayer.id = "satellite-name-layer";
+    satelliteNameLayer.className = "satellite-name-layer";
+    satelliteNameLayer.setAttribute("aria-hidden", "true");
+    document.body.append(satelliteNameLayer);
+  }
+  const satelliteNameLabels = new Map();
+
+  // Every celestial body uses the same focused dossier. The first click keeps
+  // the universe visible and reveals only the compact selection card; this
+  // explicit action opens the blurred, frozen full-screen information view.
+  const celestialDetailsPanel = createCelestialDetailsPanel();
+  celestialSelectionCard.addEventListener("pointerdown", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+  });
+  celestialSelectionCard.addEventListener("click", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    openCelestialDetails(focusedBody);
+  });
+
   // A persistent rocket button resets focus, regional exploration, camera angle,
   // page distance and scroll position, then returns to the opening Earth view.
   let earthReturnButton = document.querySelector("#earth-return-button");
@@ -689,9 +767,17 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
   const CINEMATIC_MAX_PIXEL_RATIO = 2;
   const CINEMATIC_TARGET_FPS = 60;
   const CINEMATIC_FRAME_INTERVAL_MS = 1000 / CINEMATIC_TARGET_FPS;
-  const CINEMATIC_HOVER_DELAY_MS = 18;
   let cinematicPixelRatio = 1;
   let lastCinematicFrameTime = 0;
+  let hasRenderedOpeningFrame = false;
+  let hasRevealedOpeningFrame = false;
+  // Celestial motion remains still behind the loader, then eases into normal
+  // speed after the first visible frame. Starting Earth rotation, the lunar
+  // orbit, and the asteroid belt at full velocity made small startup frame
+  // costs read as an obvious jump or vertical wobble.
+  let openingMotionStartedAt = null;
+  const OPENING_MOTION_HOLD_MS = 160;
+  const OPENING_MOTION_EASE_MS = 1600;
 
   function resizeCinematicRenderer() {
     cinematicPixelRatio = THREE.MathUtils.clamp(
@@ -713,6 +799,9 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
   const clock = new THREE.Clock();
   // Raycaster projects an invisible ray from the camera through the mouse position.
   const raycaster = new THREE.Raycaster();
+  // Line raycasting uses a world-space threshold. It is updated dynamically from
+  // camera distance before every orbit scan so thin guides remain discoverable.
+  raycaster.params.Line.threshold = 0.28;
   // Pointer stores normalized device coordinates: x/y values from -1 to +1.
   const pointer = new THREE.Vector2(-10, -10);
 
@@ -722,6 +811,7 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
   const orbitRoot = new THREE.Group();
   const planets = [];
   const hoverTargets = [];
+  const orbitTargets = [];
   scene.add(world, orbitRoot);
 
   function createAsteroidLocatorTexture() {
@@ -771,6 +861,21 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
   asteroidHoverLocator.renderOrder = 36;
   scene.add(asteroidHoverLocator);
 
+  const planetOrbitLocator = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: celestialLocatorTexture,
+    color: 0x77eaff,
+    transparent: true,
+    opacity: 0,
+    depthTest: false,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+    toneMapped: false,
+  }));
+  planetOrbitLocator.name = "Planet orbit discovery locator";
+  planetOrbitLocator.visible = false;
+  planetOrbitLocator.renderOrder = 38;
+  scene.add(planetOrbitLocator);
+
   // A brief confirmation ring appears whenever focus moves to a new celestial
   // body. It confirms the selection without permanently covering the surface.
   const focusedBodyLocator = new THREE.Sprite(new THREE.SpriteMaterial({
@@ -800,9 +905,14 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
   let lastPointer = { x: 0, y: 0 };
   let pointerDownPosition = { x: 0, y: 0 };
   let pointerDownCelestialBody = null;
+  let pointerDownPlanetOrbit = null;
   let dragDistance = 0;
   // focusedBody is null during free flight or references the clicked Mesh.
   let focusedBody = null;
+  // Pulling far away from a focused system hides its compact card, satellite
+  // labels, orbit emphasis, and selection rim. The 3D camera can remain in the
+  // wide focused pose, but the body must be clicked again before its UI returns.
+  let focusedUiSuppressedByWideView = false;
   // Focus navigation behaves like a real view stack. Every body-to-body jump
   // stores the complete previous inspection state. Example:
   // Jupiter -> Io -> Europa -> Jupiter
@@ -877,6 +987,22 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
   let freeExploreDistanceResetTimer = null;
   let spaceDiveModeUntil = 0;
   let hoveredCelestialBody = null;
+  let hoveredPlanetOrbit = null;
+  const hoveredPlanetOrbitPoint = new THREE.Vector3();
+  const planetOrbitTooltipAnchorPoint = new THREE.Vector3();
+  const planetOrbitTooltipProjectedPosition = new THREE.Vector3();
+  const orbitPlanetWorldPosition = new THREE.Vector3();
+  const orbitPlanetProjectedPosition = new THREE.Vector3();
+  const planetSystemWorldPosition = new THREE.Vector3();
+  const planetSystemProjectedPosition = new THREE.Vector3();
+  const satelliteLabelWorldPosition = new THREE.Vector3();
+  const satelliteLabelProjectedPosition = new THREE.Vector3();
+  const satelliteLabelCandidates = [];
+  const orbitBaseColourScratch = new THREE.Color();
+  const orbitTargetColourScratch = new THREE.Color();
+  const orbitHoverColour = new THREE.Color(0x77efff);
+  const orbitFocusColour = new THREE.Color(0x9affcf);
+  const satelliteHighlightColour = new THREE.Color(0x64ffd0);
   let celestialHoverTimer = null;
   let celestialHoverFramePending = false;
   let focusSelectionPulseStartedAt = -Infinity;
@@ -890,6 +1016,7 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
   let elapsedTime = 0;
   let isPageVisible = !document.hidden;
   let isAboutExperienceOpen = false;
+  let isPlanetDetailsOpen = false;
   const cameraFocusPoint = new THREE.Vector3();
   const targetFocusPoint = new THREE.Vector3();
 
@@ -960,6 +1087,7 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
       orbitRoot,
       planets,
       hoverTargets,
+      orbitTargets,
       quality: creationQuality,
     });
   });
@@ -1002,22 +1130,88 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
   });
 
   // Earth owns its satellite builder; main.js only keeps references needed for animation.
-  const { moon, moonPivot } = createMoonSystem({
+  const { moon, moonPivot, moonOrbit } = createMoonSystem({
     earth,
     textures,
     hoverTargets,
     quality: creationQuality,
   });
 
-  // Mars and the giant planets share one reusable major-satellite builder. The
-  // moon meshes keep scientific diameter ordering while using a readable,
-  // compressed scale for this cinematic experience.
+  // Create only the lightweight system roots, orbit metadata, and instanced
+  // unresolved populations now. Resolved high-detail moons are added one at a
+  // time after the opening frame, preventing Uranus and Saturn from each
+  // producing a visible full-frame pause.
   const majorSatelliteSystems = createMajorSatelliteSystems({
     world,
     planets,
     hoverTargets,
     quality: creationQuality,
+    deferDirectBodies: true,
   });
+  let majorSatelliteHydrationStarted = false;
+  let majorSatelliteHydrationCursor = 0;
+
+  function scheduleMajorSatelliteHydration() {
+    if (majorSatelliteHydrationStarted) return;
+    majorSatelliteHydrationStarted = true;
+
+    const findNextPendingSystem = () => {
+      for (let offset = 0; offset < majorSatelliteSystems.length; offset += 1) {
+        const index = (majorSatelliteHydrationCursor + offset)
+          % majorSatelliteSystems.length;
+        const system = majorSatelliteSystems[index];
+        if ((system.pendingDirectSatellites?.length ?? 0) > 0) {
+          majorSatelliteHydrationCursor = (index + 1) % majorSatelliteSystems.length;
+          return system;
+        }
+      }
+      return null;
+    };
+
+    const queueNextMoon = (delay = 24) => {
+      setTimeout(() => {
+        const runWhenIdle = (deadline = null) => {
+          // Never spend an idle slot on moon construction while the viewer is
+          // actively dragging or while the camera is still catching up with a
+          // scroll gesture. The queue resumes automatically once motion settles.
+          if (!isPageVisible
+            || isDragging
+            || navigator.scheduling?.isInputPending?.()
+            || Math.abs(scrollProgress - smoothProgress) > 0.008) {
+            queueNextMoon(80);
+            return;
+          }
+
+          // An idle callback can legally fire with almost no remaining budget.
+          // Wait for a genuinely quiet gap instead of beginning detailed terrain
+          // work immediately before the next animation frame.
+          if (deadline && !deadline.didTimeout && deadline.timeRemaining() < 8) {
+            queueNextMoon(18);
+            return;
+          }
+
+          const system = findNextPendingSystem();
+          if (!system) return;
+
+          const startedAt = performance.now();
+          hydrateNextMajorSatellite(system);
+          const buildDuration = performance.now() - startedAt;
+
+          // One unusually detailed hero moon gets a longer recovery gap, while
+          // normal previews continue quickly enough to finish in the background.
+          queueNextMoon(buildDuration > 18 ? 72 : 24);
+        };
+
+        if ("requestIdleCallback" in window) {
+          window.requestIdleCallback(runWhenIdle, { timeout: 900 });
+        } else {
+          runWhenIdle();
+        }
+      }, delay);
+    };
+
+    queueNextMoon(220);
+  }
 
   // Space is a distant celestial sphere rather than a nearby cloud of coloured
   // particles. The environment owns steady stars, the tilted Milky Way, cloudy
@@ -1031,21 +1225,36 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
   });
   await spaceEnvironment.init();
 
-  // The DOM-based project transmission announces its state so this WebGL
-  // director can truly freeze the universe behind the blurred information card.
+  function isInformationOverlayOpen() {
+    return isAboutExperienceOpen || isPlanetDetailsOpen;
+  }
+
+  function pauseUniverseForInformationOverlay() {
+    spaceEnvironment.setPaused(!isPageVisible || isInformationOverlayOpen());
+    if (!isInformationOverlayOpen()) return;
+    isDragging = false;
+    clearCelestialHover();
+    clearPlanetOrbitHover();
+    if (activeDistanceInfo && distanceUnitPopover && !distanceUnitPopover.hidden) {
+      closeDistanceInfoPopover({ resumeJourneyImmediately: true });
+    }
+  }
+
+  // DOM information experiences announce their state so this WebGL director
+  // can truly freeze the universe behind each blurred card.
   addEventListener("beyond-earth:about-state", (event) => {
     isAboutExperienceOpen = Boolean(event.detail?.open);
-    spaceEnvironment.setPaused(!isPageVisible || isAboutExperienceOpen);
-    if (isAboutExperienceOpen) {
-      isDragging = false;
-      clearCelestialHover();
-      if (activeDistanceInfo && distanceUnitPopover && !distanceUnitPopover.hidden) {
-        closeDistanceInfoPopover({ resumeJourneyImmediately: true });
-      }
-    } else {
+    pauseUniverseForInformationOverlay();
+    if (!isInformationOverlayOpen()) {
       // Ignore time spent reading so orbital bodies cannot jump on resume.
       clock.getDelta();
     }
+  });
+
+  addEventListener("beyond-earth:planet-details-state", (event) => {
+    isPlanetDetailsOpen = Boolean(event.detail?.open);
+    pauseUniverseForInformationOverlay();
+    if (!isInformationOverlayOpen()) clock.getDelta();
   });
 
   // Asteroid meshes provide nearby shape; dust points cheaply supply density.
@@ -1307,48 +1516,25 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
     return sun.system.getWorldPosition(target);
   }
 
-  function solveEccentricAnomaly(meanAnomaly, eccentricity) {
-    if (eccentricity <= 0.0001) return meanAnomaly;
-    let eccentricAnomaly = meanAnomaly;
-    for (let iteration = 0; iteration < 5; iteration += 1) {
-      const delta = (eccentricAnomaly - eccentricity * Math.sin(eccentricAnomaly) - meanAnomaly)
-        / Math.max(0.000001, 1 - eccentricity * Math.cos(eccentricAnomaly));
-      eccentricAnomaly -= delta;
-      if (Math.abs(delta) < 0.00001) break;
-    }
-    return eccentricAnomaly;
-  }
-
   function updatePlanetOrbitPosition(planet) {
     const data = planet.userData;
-    const semiMajorAxis = data.orbitRadius;
-    const eccentricity = THREE.MathUtils.clamp(data.orbitEccentricity ?? 0, 0, 0.92);
-    const orbitRotation = data.orbitRotation ?? 0;
-    const orbitInclination = data.orbitInclination ?? 0;
-    const meanAnomaly = data.meanAnomaly ?? data.angle ?? 0;
-    const eccentricAnomaly = solveEccentricAnomaly(meanAnomaly, eccentricity);
-    const semiMinorAxis = semiMajorAxis * Math.sqrt(Math.max(0.0001, 1 - eccentricity * eccentricity));
-
-    const orbitalX = semiMajorAxis * (Math.cos(eccentricAnomaly) - eccentricity);
-    const orbitalZ = semiMinorAxis * Math.sin(eccentricAnomaly);
-
-    const inclinedZ = orbitalZ * Math.cos(orbitInclination);
-    const inclinedY = orbitalZ * Math.sin(orbitInclination);
-
-    const cosRotation = Math.cos(orbitRotation);
-    const sinRotation = Math.sin(orbitRotation);
-
-    planet.position.set(
-      orbitalX * cosRotation - inclinedZ * sinRotation,
-      inclinedY,
-      orbitalX * sinRotation + inclinedZ * cosRotation,
+    setOrbitPosition(
+      planet.position,
+      data.orbitRadius,
+      data.orbitEccentricity ?? 0,
+      data.meanAnomaly ?? data.angle ?? 0,
+      data.orbitInclination ?? 0,
+      data.orbitRotation ?? 0,
     );
 
+    const eccentricity = THREE.MathUtils.clamp(data.orbitEccentricity ?? 0, 0, 0.92);
+    const meanAnomaly = data.meanAnomaly ?? data.angle ?? 0;
+    const eccentricAnomaly = solveOrbitEccentricAnomaly(meanAnomaly, eccentricity);
     const trueAnomaly = 2 * Math.atan2(
       Math.sqrt(1 + eccentricity) * Math.sin(eccentricAnomaly * 0.5),
       Math.sqrt(1 - eccentricity) * Math.cos(eccentricAnomaly * 0.5),
     );
-    data.angle = trueAnomaly + orbitRotation;
+    data.angle = trueAnomaly + (data.orbitRotation ?? 0);
   }
 
   const SUN_RADIUS_KM = PLANET_SCALE_PROFILES.Sun.diameterKm * 0.5;
@@ -1905,68 +2091,28 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
     }
   }
 
-  /** Writes a body's structured metadata into the right-side inspection panel. */
-  function updateBodyCard(body) {
-    const isVisible = Boolean(body);
-    bodyCard.classList.toggle("is-visible", isVisible);
-    bodyCard.setAttribute("aria-hidden", String(!isVisible));
-    if (!body) {
-      displayedBody = null;
-      setBodyCardCollapsed(false);
-      bodyConnector.classList.remove("is-visible");
-      return;
-    }
-
-    // DOM text only needs rewriting when the inspected object changes.
-    if (displayedBody !== body) {
-      const info = body.userData.info ?? {};
-      cardType.textContent = info.type ?? "Celestial body";
-      cardName.textContent = body.userData.name ?? body.name;
-      cardDiameter.textContent = info.diameter ?? "Not available";
-      cardSpeed.textContent = info.orbitalSpeed ?? "Not available";
-      cardDescription.textContent = info.description ?? body.userData.detail ?? "No description available.";
-      displayedBody = body;
-    }
-
-    const earthDistance = earthDistanceTracker.getBodyDistanceFromEarth(body);
-    const formattedEarthDistance = formatEarthDistance(earthDistance.kilometres);
-    cardDistance.textContent = `${formattedEarthDistance.primary} from Earth`;
-    if (cardScaleComparison) {
-      cardScaleComparison.textContent = body.userData?.info?.sizeComparison
-        ?? body.userData?.sizeComparison
-        ?? "Scale comparison unavailable";
-    }
-    cardMode.textContent = "Slow motion · Focused";
-    cardHint.textContent = "Journey paused · Drag to orbit · Pull back to the outer boundary · Click another body or space to leave";
+  function isPlanetaryBody(body) {
+    const type = getInteractiveType(body);
+    return type === "planet" || type === "dwarf planet";
   }
 
-  /** Projects a 3D world position into 2D pixels and points the line at the body. */
-  function updateBodyConnector(body) {
-    if (!body || isBodyCardCollapsed || innerWidth <= 760) {
-      bodyConnector.classList.remove("is-visible");
-      return;
-    }
+  /**
+   * The former right-side dossier is intentionally retired. Every celestial
+   * body now uses the same compact selection card followed by one centred,
+   * blurred full-screen dossier.
+   */
+  function updateBodyCard(body) {
+    bodyCard?.classList.remove("is-visible", "is-collapsed");
+    bodyCard?.setAttribute("aria-hidden", "true");
+    cardRestore?.classList.remove("is-visible");
+    bodyConnector?.classList.remove("is-visible");
+    displayedBody = body ?? null;
+    isBodyCardCollapsed = false;
+  }
 
-    const projected = body.getWorldPosition(connectorProjectedPosition).project(camera);
-    const bodyX = (projected.x * 0.5 + 0.5) * innerWidth;
-    const bodyY = (-projected.y * 0.5 + 0.5) * innerHeight;
-    const isOnScreen = projected.z > -1 && projected.z < 1
-      && bodyX >= 0 && bodyX <= innerWidth && bodyY >= 0 && bodyY <= innerHeight;
-    if (!isOnScreen) {
-      bodyConnector.classList.remove("is-visible");
-      return;
-    }
-
-    const cardRect = bodyCard.getBoundingClientRect();
-    const cardX = cardRect.left;
-    const cardY = THREE.MathUtils.clamp(bodyY, cardRect.top + 26, cardRect.bottom - 26);
-    const deltaX = cardX - bodyX;
-    const deltaY = cardY - bodyY;
-    bodyConnector.style.left = `${bodyX}px`;
-    bodyConnector.style.top = `${bodyY}px`;
-    bodyConnector.style.width = `${Math.hypot(deltaX, deltaY)}px`;
-    bodyConnector.style.transform = `rotate(${Math.atan2(deltaY, deltaX)}rad)`;
-    bodyConnector.classList.add("is-visible");
+  /** The retired right-side card no longer needs a body-to-card connector. */
+  function updateBodyConnector() {
+    bodyConnector?.classList.remove("is-visible");
   }
 
   /** Keeps the inspection panel synchronized with the currently clicked body. */
@@ -2026,7 +2172,7 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
 
   function updateFocusedSelectionVisual() {
     const age = elapsedTime - focusSelectionPulseStartedAt;
-    if (!focusedBody || age < 0 || age > 1.85) {
+    if (!focusedBody || focusedUiSuppressedByWideView || age < 0 || age > 1.85) {
       focusedBodyLocator.visible = false;
       focusedBodyLocator.material.opacity = 0;
       return;
@@ -2247,6 +2393,536 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
     return distancePixels <= radiusPixels + assistPixels;
   }
 
+
+  function findPlanetOrbitAtPointer() {
+    if (focusExitTransition || isDragging || lastPointerType === "touch" || orbitTargets.length === 0) return null;
+    // The first Earth composition is intentionally held close for a few scroll
+    // frames. Its large projected orbit used to acquire an accidental hover as
+    // soon as the cursor entered the canvas, freezing the opening camera before
+    // the viewer had actually started travelling.
+    if (!hasLeftOpeningEarthView && !focusedBody) return null;
+
+    const cameraDistanceFromSystem = Math.max(1, camera.position.length());
+    const worldUnitsPerPixel = 2 * cameraDistanceFromSystem
+      * Math.tan(THREE.MathUtils.degToRad(camera.fov * 0.5))
+      / Math.max(1, innerHeight);
+    raycaster.params.Line.threshold = THREE.MathUtils.clamp(
+      worldUnitsPerPixel * (innerWidth <= 760 ? 16 : 12),
+      0.10,
+      4.9,
+    );
+    raycaster.setFromCamera(pointer, camera);
+
+    const hit = raycaster.intersectObjects(orbitTargets, false).find(({ object }) => (
+      object.visible
+      && object.userData?.isPlanetOrbit
+      && object.userData?.planet
+    ));
+    if (!hit) return null;
+    return { orbit: hit.object, point: hit.point };
+  }
+
+  function isPointerStillOnHoveredPlanetOrbit() {
+    if (!hoveredPlanetOrbit) return false;
+    const candidate = findPlanetOrbitAtPointer();
+    if (!candidate || candidate.orbit !== hoveredPlanetOrbit) return false;
+    hoveredPlanetOrbitPoint.copy(candidate.point);
+    return true;
+  }
+
+  function clearPlanetOrbitHover() {
+    hoveredPlanetOrbit = null;
+    planetOrbitLocator.visible = false;
+    planetOrbitLocator.material.opacity = 0;
+    orbitHoverTooltip.classList.remove("is-visible");
+    orbitHoverTooltip.setAttribute("aria-hidden", "true");
+    document.body.classList.remove("is-hovering-planet-orbit");
+  }
+
+  function getSatelliteCountForPlanet(planetName) {
+    if (planetName === "Earth") return 1;
+    const system = majorSatelliteSystems.find((candidate) => candidate.parentName === planetName);
+    return Number(system?.root?.userData?.catalogueCount ?? system?.root?.userData?.satelliteCount ?? 0);
+  }
+
+  function ordinalNumber(value) {
+    const number = Math.max(1, Math.trunc(Number(value) || 1));
+    const remainder100 = number % 100;
+    if (remainder100 >= 11 && remainder100 <= 13) return `${number}th`;
+    if (number % 10 === 1) return `${number}st`;
+    if (number % 10 === 2) return `${number}nd`;
+    if (number % 10 === 3) return `${number}rd`;
+    return `${number}th`;
+  }
+
+  function getSatelliteProfilesForParent(parentName) {
+    const system = majorSatelliteSystems.find((candidate) => candidate.parentName === parentName);
+    if (!system) return [];
+    const profilesByName = new Map();
+    system.moons.forEach(({ profile }) => {
+      if (profile?.name) profilesByName.set(profile.name, profile);
+    });
+    (system.pendingDirectSatellites ?? []).forEach(({ profile }) => {
+      if (profile?.name) profilesByName.set(profile.name, profile);
+    });
+    (system.denseFields ?? []).forEach((field) => {
+      (field.records ?? []).forEach(({ profile }) => {
+        if (profile?.name) profilesByName.set(profile.name, profile);
+      });
+    });
+    return [...profilesByName.values()];
+  }
+
+  function getSatelliteRankInfo(body) {
+    if (!body?.userData?.isSatellite) return null;
+    const parentName = String(body.userData?.parentPlanet ?? "").trim();
+    if (!parentName) return null;
+
+    const profiles = getSatelliteProfilesForParent(parentName)
+      .filter((profile) => Number.isFinite(Number(profile?.diameterKm)))
+      .sort((a, b) => Number(b.diameterKm) - Number(a.diameterKm));
+    if (profiles.length <= 1) return null;
+
+    const bodyName = String(body.userData?.name ?? body.name ?? "").trim();
+    let rankIndex = profiles.findIndex((profile) => profile.name === bodyName);
+    if (rankIndex < 0) {
+      const diameter = Number(body.userData?.physicalDiameterKm ?? 0);
+      if (!(diameter > 0)) return null;
+      rankIndex = profiles.filter((profile) => Number(profile.diameterKm) > diameter).length;
+    }
+
+    const rank = rankIndex + 1;
+    const catalogueCount = Math.max(
+      profiles.length,
+      getSatelliteCountForPlanet(parentName),
+    );
+    const ordinal = ordinalNumber(rank);
+    const compactText = rank === 1
+      ? `${ordinal} · Largest of ${parentName}'s ${catalogueCount.toLocaleString("en-US")} satellites`
+      : `${ordinal}-largest of ${parentName}'s ${catalogueCount.toLocaleString("en-US")} satellites`;
+    const modalText = rank === 1
+      ? `Largest of ${parentName}'s ${catalogueCount.toLocaleString("en-US")} known satellites`
+      : `${ordinal}-largest of ${parentName}'s ${catalogueCount.toLocaleString("en-US")} known satellites`;
+    return { rank, ordinal, parentName, catalogueCount, compactText, modalText };
+  }
+
+  function setPlanetOrbitHover(orbit, hitPoint = null) {
+    if (!orbit?.userData?.planet || (
+      orbit.userData.planet === focusedBody && !focusedUiSuppressedByWideView
+    )) {
+      clearPlanetOrbitHover();
+      return;
+    }
+
+    clearCelestialHover();
+    hoveredPlanetOrbit = orbit;
+    const planet = orbit.userData.planet;
+    if (hitPoint) {
+      hoveredPlanetOrbitPoint.copy(hitPoint);
+      planetOrbitTooltipAnchorPoint.copy(hitPoint);
+    } else {
+      planet.getWorldPosition(planetOrbitTooltipAnchorPoint);
+      hoveredPlanetOrbitPoint.copy(planetOrbitTooltipAnchorPoint);
+    }
+    const planetName = planet.userData?.name ?? planet.name ?? orbit.userData.planetName ?? "Planet";
+    const satelliteCount = getSatelliteCountForPlanet(planetName);
+    orbitHoverName.textContent = `${planetName} orbit`;
+    orbitHoverAction.textContent = `Click this orbit to travel directly to ${planetName}`;
+    if (orbitHoverSatelliteAction) {
+      orbitHoverSatelliteAction.textContent = satelliteCount > 0
+        ? `${satelliteCount.toLocaleString("en-US")} satellite${satelliteCount === 1 ? "" : "s"} available · named moons are clickable after arrival`
+        : "No natural satellites · click the orbit to inspect the planet";
+    }
+    orbit.material.opacity = Math.max(Number(orbit.material.opacity ?? 0), 0.88);
+    orbit.material.color.lerp(orbitHoverColour, 0.82);
+    orbitHoverTooltip.classList.add("is-visible");
+    orbitHoverTooltip.setAttribute("aria-hidden", "false");
+    planetOrbitLocator.visible = true;
+    document.body.classList.add("is-hovering-planet-orbit");
+  }
+
+  function updatePlanetOrbitHoverVisual() {
+    if (!hoveredPlanetOrbit || !planetOrbitLocator.visible) return;
+    if (!isPointerStillOnHoveredPlanetOrbit()) {
+      clearPlanetOrbitHover();
+      if (lastPointerType !== "touch" && !isDragging) scheduleCelestialHover();
+      return;
+    }
+    const planet = hoveredPlanetOrbit.userData?.planet;
+    if (!planet?.parent) {
+      clearPlanetOrbitHover();
+      return;
+    }
+
+    planet.getWorldPosition(orbitPlanetWorldPosition);
+    orbitPlanetProjectedPosition.copy(orbitPlanetWorldPosition).project(camera);
+    if (orbitPlanetProjectedPosition.z < -1 || orbitPlanetProjectedPosition.z > 1) {
+      clearPlanetOrbitHover();
+      return;
+    }
+
+    planetOrbitLocator.position.copy(orbitPlanetWorldPosition);
+    const cameraDistance = Math.max(0.001, camera.position.distanceTo(orbitPlanetWorldPosition));
+    const worldUnitsPerPixel = 2 * cameraDistance
+      * Math.tan(THREE.MathUtils.degToRad(camera.fov * 0.5))
+      / Math.max(1, innerHeight);
+    const bodyRadiusPixels = projectedBodyRadiusPixels(planet);
+    const locatorPixels = THREE.MathUtils.clamp(bodyRadiusPixels * 2.6 + 34, 38, 76);
+    const pulse = 1 + Math.sin(elapsedTime * 4.2) * 0.07;
+    const markerSize = worldUnitsPerPixel * locatorPixels * pulse;
+    planetOrbitLocator.scale.set(markerSize, markerSize, 1);
+    planetOrbitLocator.material.opacity = 0.84 + Math.sin(elapsedTime * 4.2) * 0.10;
+
+    // Anchor the route card to the first acquired point on the orbit instead of
+    // continuously attaching it to the cursor. This keeps the card calm while
+    // the user moves toward the click target.
+    planetOrbitTooltipProjectedPosition.copy(planetOrbitTooltipAnchorPoint).project(camera);
+    const screenX = (planetOrbitTooltipProjectedPosition.x * 0.5 + 0.5) * innerWidth;
+    const screenY = (-planetOrbitTooltipProjectedPosition.y * 0.5 + 0.5) * innerHeight;
+    const tooltipWidth = innerWidth <= 560 ? 246 : 278;
+    const placeToRight = screenX < innerWidth * 0.64;
+    const preferredLeft = placeToRight ? screenX + 18 : screenX - tooltipWidth - 18;
+    orbitHoverTooltip.style.left = `${THREE.MathUtils.clamp(preferredLeft, 12, innerWidth - tooltipWidth - 12)}px`;
+    orbitHoverTooltip.style.top = `${THREE.MathUtils.clamp(screenY - 62, 12, innerHeight - 116)}px`;
+  }
+
+  function getSelectedSystemPlanet() {
+    if (!focusedBody || focusedUiSuppressedByWideView) return null;
+    const type = getInteractiveType(focusedBody);
+    if (type === "planet" || type === "dwarf planet") return focusedBody;
+    const parentName = focusedBody.userData?.parentPlanet;
+    return parentName ? planets.find((planet) => planet.name === parentName) ?? null : null;
+  }
+
+  function updatePlanetOrbitVisuals(deltaTime) {
+    const baseJourneyOpacity = THREE.MathUtils.clamp(
+      (smoothProgress - 0.035) / 0.18,
+      0.04,
+      0.22,
+    );
+    const selectedPlanet = getSelectedSystemPlanet();
+    const ease = frameAdjustedEase(hoveredPlanetOrbit ? 0.52 : 0.18, deltaTime);
+
+    orbitTargets.forEach((orbit) => {
+      const baseOpacity = Number(orbit.userData?.baseOpacity ?? 0.18);
+      const relativeOpacity = baseOpacity / 0.18;
+      const normalOpacity = THREE.MathUtils.clamp(baseJourneyOpacity * relativeOpacity, 0.025, 0.28);
+      const isHovered = orbit === hoveredPlanetOrbit;
+      const isSelected = orbit.userData?.planet === selectedPlanet;
+      let targetOpacity = normalOpacity;
+
+      if (hoveredPlanetOrbit) {
+        targetOpacity = isHovered ? 0.92 : Math.max(0.012, normalOpacity * 0.16);
+      } else if (selectedPlanet) {
+        targetOpacity = isSelected ? 0.68 : Math.max(0.016, normalOpacity * 0.23);
+      }
+
+      orbit.material.opacity = THREE.MathUtils.lerp(orbit.material.opacity, targetOpacity, ease);
+      orbitBaseColourScratch.setHex(orbit.userData?.baseColor ?? orbit.material.color.getHex());
+      orbitTargetColourScratch.copy(orbitBaseColourScratch);
+      if (isHovered) orbitTargetColourScratch.lerp(orbitHoverColour, 0.78);
+      else if (isSelected) orbitTargetColourScratch.lerp(orbitFocusColour, 0.66);
+      orbit.material.color.lerp(orbitTargetColourScratch, ease);
+    });
+  }
+
+  function forEachMaterial(material, callback) {
+    if (Array.isArray(material)) material.forEach((entry) => callback(entry));
+    else if (material) callback(material);
+  }
+
+  function ensureSatelliteRimGlow(body) {
+    if (!body?.geometry) return null;
+    if (body.userData?.systemRimGlow) return body.userData.systemRimGlow;
+
+    const material = new THREE.MeshBasicMaterial({
+      color: satelliteHighlightColour,
+      transparent: true,
+      opacity: 0,
+      side: THREE.BackSide,
+      blending: THREE.AdditiveBlending,
+      depthTest: true,
+      depthWrite: false,
+      toneMapped: false,
+    });
+    const rim = new THREE.Mesh(body.geometry, material);
+    rim.name = `${body.userData?.name ?? body.name ?? "Satellite"} selection rim`;
+    rim.visible = false;
+    rim.renderOrder = 9;
+    rim.scale.setScalar(1.045);
+    rim.raycast = () => {};
+    rim.userData.ignoreInteraction = true;
+    body.add(rim);
+    body.userData.systemRimGlow = rim;
+    return rim;
+  }
+
+  function updateSatelliteRimGlow(body, intensity, pulse) {
+    const rim = ensureSatelliteRimGlow(body);
+    if (!rim) return;
+    rim.visible = intensity > 0.012;
+    rim.material.opacity = intensity * (0.40 + Math.sin(elapsedTime * 3.4) * 0.035);
+    rim.scale.setScalar(1.045 + intensity * 0.030 * pulse);
+  }
+
+  function updatePlanetSatelliteHighlights(deltaTime) {
+    const selectedPlanet = getSelectedSystemPlanet();
+    const selectedName = selectedPlanet?.userData?.name ?? selectedPlanet?.name ?? null;
+    const ease = frameAdjustedEase(0.12, deltaTime);
+    const pulse = 1 + Math.sin(elapsedTime * 3.4) * 0.020;
+
+    majorSatelliteSystems.forEach((system) => {
+      const target = selectedName === system.parentName ? 1 : 0;
+      system.highlightIntensity = THREE.MathUtils.lerp(
+        Number(system.highlightIntensity ?? 0),
+        target,
+        ease,
+      );
+      const intensity = system.highlightIntensity;
+      const orbitGuides = system.root.children.find(
+        (child) => child.name === "Major satellite orbit guides",
+      );
+      if (orbitGuides?.material) {
+        if (!orbitGuides.userData.systemHighlightBase) {
+          orbitGuides.userData.systemHighlightBase = {
+            color: orbitGuides.material.color.clone(),
+            opacity: Number(orbitGuides.material.opacity ?? 0.10),
+          };
+        }
+        const base = orbitGuides.userData.systemHighlightBase;
+        orbitGuides.material.color.copy(base.color).lerp(satelliteHighlightColour, intensity * 0.74);
+        orbitGuides.material.opacity = THREE.MathUtils.lerp(base.opacity, 0.62, intensity);
+        if (intensity > 0.015) orbitGuides.visible = true;
+      }
+
+      // Preserve each moon's actual albedo and shading. Selection is expressed
+      // only by a thin additive shell rendered behind the visible surface.
+      system.moons.forEach(({ moon: satellite }) => {
+        updateSatelliteRimGlow(satellite, intensity, pulse);
+      });
+
+      // Dense instanced populations do not have individual meshes that can own
+      // a clean silhouette shell. Their orbit guide remains the highlight so
+      // the field does not turn into one glowing cloud.
+      (system.denseFields ?? []).forEach((field) => {
+        if (intensity > 0.015) field.mesh.visible = true;
+      });
+    });
+
+    const earthIntensityTarget = selectedName === "Earth" ? 1 : 0;
+    moon.userData.earthSystemHighlightIntensity = THREE.MathUtils.lerp(
+      Number(moon.userData.earthSystemHighlightIntensity ?? 0),
+      earthIntensityTarget,
+      ease,
+    );
+    const earthIntensity = moon.userData.earthSystemHighlightIntensity;
+    updateSatelliteRimGlow(moon, earthIntensity, pulse);
+    if (moonOrbit?.material) {
+      if (!moonOrbit.userData.systemHighlightBase) {
+        moonOrbit.userData.systemHighlightBase = {
+          color: moonOrbit.material.color.clone(),
+          opacity: Number(moonOrbit.material.opacity ?? 0.22),
+        };
+      }
+      const base = moonOrbit.userData.systemHighlightBase;
+      moonOrbit.material.color.copy(base.color).lerp(satelliteHighlightColour, earthIntensity * 0.78);
+      moonOrbit.material.opacity = THREE.MathUtils.lerp(base.opacity, 0.72, earthIntensity);
+    }
+  }
+
+  function getCelestialSelectionType(body) {
+    const infoType = body?.userData?.info?.type;
+    if (infoType) return infoType;
+    const interactiveType = getInteractiveType(body);
+    return interactiveType === "dwarf planet" ? "Dwarf planet" : interactiveType || "Celestial body";
+  }
+
+  function updateCelestialSelectionCard() {
+    const body = focusedBody;
+    if (!body || focusedUiSuppressedByWideView || focusExitTransition || celestialDetailsPanel?.isOpen()) {
+      celestialSelectionCard.classList.remove("is-visible");
+      celestialSelectionCard.setAttribute("aria-hidden", "true");
+      return;
+    }
+
+    const bodyName = body.userData?.name ?? body.name ?? "Celestial body";
+    const parentName = body.userData?.parentPlanet;
+    celestialSelectionCardName.textContent = bodyName;
+    celestialSelectionCardType.textContent = parentName
+      ? `${getCelestialSelectionType(body)} · ${parentName} system`
+      : getCelestialSelectionType(body);
+    const satelliteRank = getSatelliteRankInfo(body);
+    if (celestialSelectionCardSatelliteRank) {
+      celestialSelectionCardSatelliteRank.hidden = !satelliteRank;
+      celestialSelectionCardSatelliteRank.textContent = satelliteRank?.compactText ?? "";
+    }
+    celestialSelectionCard.setAttribute("aria-label", `Open detailed information for ${bodyName}`);
+
+    body.getWorldPosition(planetSystemWorldPosition);
+    planetSystemProjectedPosition.copy(planetSystemWorldPosition).project(camera);
+    if (planetSystemProjectedPosition.z < -1 || planetSystemProjectedPosition.z > 1) {
+      celestialSelectionCard.classList.remove("is-visible");
+      celestialSelectionCard.setAttribute("aria-hidden", "true");
+      return;
+    }
+
+    const screenX = (planetSystemProjectedPosition.x * 0.5 + 0.5) * innerWidth;
+    const screenY = (-planetSystemProjectedPosition.y * 0.5 + 0.5) * innerHeight;
+    const radiusPixels = projectedBodyRadiusPixels(body);
+    const cardWidth = innerWidth <= 560 ? 232 : 268;
+    const placeRight = screenX < innerWidth * 0.62;
+    const preferredLeft = placeRight
+      ? screenX + Math.max(18, radiusPixels + 12)
+      : screenX - cardWidth - Math.max(18, radiusPixels + 12);
+    celestialSelectionCard.style.left = `${THREE.MathUtils.clamp(preferredLeft, 12, innerWidth - cardWidth - 12)}px`;
+    celestialSelectionCard.style.top = `${THREE.MathUtils.clamp(screenY - 46, 18, innerHeight - 126)}px`;
+    celestialSelectionCard.classList.add("is-visible");
+    celestialSelectionCard.setAttribute("aria-hidden", "false");
+  }
+
+  function getSatelliteNameLabel(body) {
+    let label = satelliteNameLabels.get(body);
+    if (label) return label;
+
+    label = document.createElement("button");
+    label.type = "button";
+    label.className = "satellite-name-label";
+    label.innerHTML = `
+      <span class="satellite-name-label__marker" aria-hidden="true"></span>
+      <strong></strong>
+      <em>Details</em>
+    `;
+    const bodyName = body.userData?.name ?? body.name ?? "Satellite";
+    label.querySelector("strong").textContent = bodyName;
+    label.setAttribute("aria-label", `Open detailed information for ${bodyName}`);
+    label.addEventListener("pointerdown", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+    });
+    label.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      focusBody(body);
+      requestAnimationFrame(() => openCelestialDetails(body));
+    });
+    satelliteNameLayer.append(label);
+    satelliteNameLabels.set(body, label);
+    return label;
+  }
+
+  function hideSatelliteNameLabels() {
+    satelliteNameLabels.forEach((label) => label.classList.remove("is-visible"));
+    satelliteNameLayer.setAttribute("aria-hidden", "true");
+  }
+
+  function rectanglesOverlap(a, b, padding = 5) {
+    return !(
+      a.right + padding < b.left
+      || a.left - padding > b.right
+      || a.bottom + padding < b.top
+      || a.top - padding > b.bottom
+    );
+  }
+
+  function updateSatelliteNameLabels() {
+    if (focusedUiSuppressedByWideView) {
+      hideSatelliteNameLabels();
+      return;
+    }
+    const selectedPlanet = getSelectedSystemPlanet();
+    if (!selectedPlanet) {
+      hideSatelliteNameLabels();
+      return;
+    }
+
+    const selectedName = selectedPlanet.userData?.name ?? selectedPlanet.name;
+    const selectedSystem = majorSatelliteSystems.find((system) => system.parentName === selectedName);
+    const entries = selectedName === "Earth"
+      ? [{ moon, profile: { diameterKm: moon.userData?.physicalDiameterKm ?? 3474.8 } }]
+      : (selectedSystem?.moons ?? []);
+
+    satelliteLabelCandidates.length = 0;
+    entries.forEach((entry) => {
+      const body = entry.moon;
+      if (!body?.visible || !body.parent || body === focusedBody) return;
+      body.getWorldPosition(satelliteLabelWorldPosition);
+      satelliteLabelProjectedPosition.copy(satelliteLabelWorldPosition).project(camera);
+      if (satelliteLabelProjectedPosition.z < -1 || satelliteLabelProjectedPosition.z > 1) return;
+
+      const screenX = (satelliteLabelProjectedPosition.x * 0.5 + 0.5) * innerWidth;
+      const screenY = (-satelliteLabelProjectedPosition.y * 0.5 + 0.5) * innerHeight;
+      if (screenX < -28 || screenX > innerWidth + 28 || screenY < -28 || screenY > innerHeight + 28) return;
+
+      const diameter = Number(entry.profile?.diameterKm ?? body.userData?.physicalDiameterKm ?? 0);
+      const radiusPixels = projectedBodyRadiusPixels(body);
+      const interactionTier = body.userData?.interactionTier ?? "direct";
+      const tierBonus = interactionTier === "direct" ? 160 : interactionTier === "notable" ? 70 : 0;
+      const centreDistance = Math.hypot(screenX - innerWidth * 0.5, screenY - innerHeight * 0.5);
+      satelliteLabelCandidates.push({
+        body,
+        screenX,
+        screenY,
+        radiusPixels,
+        priority: tierBonus + Math.log10(Math.max(1, diameter) + 1) * 90 + radiusPixels * 24 - centreDistance * 0.012,
+      });
+    });
+
+    satelliteLabelCandidates.sort((a, b) => b.priority - a.priority);
+    const maximumLabels = innerWidth <= 680 ? 5 : innerWidth <= 1050 ? 8 : 11;
+    const occupied = [];
+    if (celestialSelectionCard.classList.contains("is-visible")) {
+      const cardRect = celestialSelectionCard.getBoundingClientRect();
+      occupied.push({
+        left: cardRect.left,
+        top: cardRect.top,
+        right: cardRect.right,
+        bottom: cardRect.bottom,
+      });
+    }
+    const shownBodies = new Set();
+
+    satelliteLabelCandidates.slice(0, maximumLabels * 3).some((candidate) => {
+      if (shownBodies.size >= maximumLabels) return true;
+      const name = candidate.body.userData?.name ?? candidate.body.name ?? "Satellite";
+      const width = THREE.MathUtils.clamp(62 + name.length * 6.1, 78, 156);
+      const height = 23;
+      const markerOffset = Math.max(8, candidate.radiusPixels + 7);
+      const placements = [
+        [markerOffset, -height * 0.5],
+        [markerOffset, 8],
+        [-width - markerOffset, -height * 0.5],
+        [-width - markerOffset, 8],
+        [-width * 0.5, -height - markerOffset],
+        [-width * 0.5, markerOffset],
+      ];
+
+      let chosen = null;
+      for (const [offsetX, offsetY] of placements) {
+        const left = candidate.screenX + offsetX;
+        const top = candidate.screenY + offsetY;
+        const rect = { left, top, right: left + width, bottom: top + height };
+        if (rect.left < 8 || rect.right > innerWidth - 8 || rect.top < 8 || rect.bottom > innerHeight - 8) continue;
+        if (occupied.some((existing) => rectanglesOverlap(rect, existing))) continue;
+        chosen = rect;
+        break;
+      }
+      if (!chosen) return false;
+
+      const label = getSatelliteNameLabel(candidate.body);
+      label.style.left = `${chosen.left}px`;
+      label.style.top = `${chosen.top}px`;
+      label.classList.add("is-visible");
+      occupied.push(chosen);
+      shownBodies.add(candidate.body);
+      return false;
+    });
+
+    satelliteNameLabels.forEach((label, body) => {
+      if (!shownBodies.has(body)) label.classList.remove("is-visible");
+    });
+    satelliteNameLayer.setAttribute("aria-hidden", shownBodies.size > 0 ? "false" : "true");
+  }
+
   function clearCelestialHover() {
     hoveredCelestialBody = null;
     asteroidHoverLocator.visible = false;
@@ -2257,7 +2933,8 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
   }
 
   function setCelestialHover(body) {
-    if (!body || body === focusedBody) {
+    if (body) clearPlanetOrbitHover();
+    if (!body || (body === focusedBody && !focusedUiSuppressedByWideView)) {
       clearCelestialHover();
       return;
     }
@@ -2266,9 +2943,14 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
     const bodyType = body.userData?.info?.type ?? (isAsteroidBody(body) ? "Asteroid" : "Celestial body");
     asteroidHoverName.textContent = body.userData?.name ?? body.name ?? bodyType;
     if (celestialHoverAction) {
-      celestialHoverAction.textContent = focusedBody
-        ? `${bodyType} · Click to switch focus`
-        : `${bodyType} · Slow motion · Click to inspect`;
+      if (body.userData?.isSatellite) {
+        const parentName = body.userData?.parentPlanet ?? "planet";
+        celestialHoverAction.textContent = `Satellite of ${parentName} · Click to inspect`;
+      } else {
+        celestialHoverAction.textContent = focusedBody
+          ? `${bodyType} · Click to switch focus`
+          : `${bodyType} · Slow motion · Click to inspect`;
+      }
     }
     asteroidHoverTooltip.classList.add("is-visible");
     asteroidHoverTooltip.setAttribute("aria-hidden", "false");
@@ -2287,14 +2969,17 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
     // hover label, preparing the exact body the user may click next.
     if (isDragging || lastPointerType === "touch") {
       clearCelestialHover();
+      clearPlanetOrbitHover();
       return;
     }
 
     // While inspecting a body, its own visible surface should not reveal a
     // target hidden behind it. Nearby visible bodies can still be discovered
     // and selected without closing focus first.
-    if (focusedBody && isPointerInsideVisibleBodyDisk(focusedBody, 1.5)) {
+    if (focusedBody && !focusedUiSuppressedByWideView
+      && isPointerInsideVisibleBodyDisk(focusedBody, 1.5)) {
       clearCelestialHover();
+      clearPlanetOrbitHover();
       return;
     }
 
@@ -2302,7 +2987,9 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
     const hits = raycaster.intersectObjects(hoverTargets, true);
     const hitBodies = hits
       .map((hit) => findInteractiveObject(hit))
-      .filter((body) => Boolean(body && body !== focusedBody));
+      .filter((body) => Boolean(
+        body && (body !== focusedBody || focusedUiSuppressedByWideView)
+      ));
 
     // Jupiter's full 115-moon system uses a dedicated visibility-aware search.
     // Only the eight resolved regular moons own direct pointer proxies; notable
@@ -2361,7 +3048,18 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
       radiusMultiplier: THREE.MathUtils.lerp(1.42, 1.78, encounterIntensity),
       visibleRadiusPreference: THREE.MathUtils.lerp(0.10, 0.18, encounterIntensity),
     });
-    setCelestialHover(nearbyInstance);
+    if (nearbyInstance) {
+      setCelestialHover(nearbyInstance);
+      return;
+    }
+
+    const orbitCandidate = findPlanetOrbitAtPointer();
+    if (orbitCandidate) {
+      setPlanetOrbitHover(orbitCandidate.orbit, orbitCandidate.point);
+      return;
+    }
+    clearCelestialHover();
+    clearPlanetOrbitHover();
   }
 
   function scheduleCelestialHover() {
@@ -2369,27 +3067,18 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
       clearTimeout(celestialHoverTimer);
       celestialHoverTimer = null;
     }
+    if (celestialHoverFramePending) return;
 
-    // Inside dense small-body regions (the asteroid belt or Jupiter's complete
-    // moon system), the pointer may cross several tiny objects within a few
-    // milliseconds. Coalesce those events into one scan on the next frame rather
-    // than repeatedly restarting a timeout.
-    if (getAsteroidEncounterIntensity() >= 0.12 || getJovianEncounterIntensity() >= 0.10) {
-      if (celestialHoverFramePending) return;
-      celestialHoverFramePending = true;
-      requestAnimationFrame(() => {
-        celestialHoverFramePending = false;
-        if (!isDragging && lastPointerType !== "touch" && !hoveredCelestialBody) {
-          findCelestialForHover();
-        }
-      });
-      return;
-    }
-
-    celestialHoverTimer = setTimeout(() => {
-      celestialHoverTimer = null;
-      findCelestialForHover();
-    }, CINEMATIC_HOVER_DELAY_MS);
+    // Pointer movement is coalesced into exactly one scan on the next paint.
+    // Unlike the previous timeout debounce, this still fires while the cursor is
+    // moving across a path, so even a brief accidental orbit crossing is shown.
+    celestialHoverFramePending = true;
+    requestAnimationFrame(() => {
+      celestialHoverFramePending = false;
+      if (!isDragging && lastPointerType !== "touch" && !hoveredCelestialBody && !hoveredPlanetOrbit) {
+        findCelestialForHover();
+      }
+    });
   }
 
   function updateCelestialHoverVisual() {
@@ -2618,6 +3307,8 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
    */
   function beginFocusExitTransition(snapshot, body) {
     if (!snapshot || !body || focusExitTransition) return;
+    cancelPlanetDetailsReveal();
+    celestialDetailsPanel?.hide({ restoreFocus: false });
 
     focusExitTransition = {
       phase: "camera",
@@ -2831,6 +3522,7 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
     setAsteroidFocusAppearance(focusedBody, false);
     setAsteroidInspectionDetail(focusedBody, false);
     focusedBody = null;
+    focusedUiSuppressedByWideView = false;
     displayedBody = null;
     focusNavigationHistory.length = 0;
     focusExitTransition = null;
@@ -2956,6 +3648,7 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
     }
 
     focusedBody = state.body;
+    focusedUiSuppressedByWideView = false;
     focusedBody.getWorldPosition(focusHistoryWorldPosition);
 
     yaw = state.yaw;
@@ -3029,31 +3722,67 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
     return true;
   }
 
+  function cancelPlanetDetailsReveal() {
+    // The v8 interaction no longer auto-opens a dossier after a delay. The
+    // compact selection card gives the user an explicit information action.
+  }
+
+  function getCelestialDetailsContext(body) {
+    if (!body) return {};
+    const earthDistance = earthDistanceTracker.getBodyDistanceFromEarth(body);
+    const formatted = formatEarthDistance(earthDistance.kilometres);
+    const satelliteRank = getSatelliteRankInfo(body);
+    return {
+      distanceFromEarth: `${formatted.primary} from Earth`,
+      parentName: body.userData?.parentPlanet ?? null,
+      satelliteRankText: satelliteRank?.modalText ?? null,
+    };
+  }
+
+  function openCelestialDetails(body = focusedBody) {
+    if (!body || focusExitTransition || !celestialDetailsPanel?.hasDetailsFor(body)) return false;
+    return celestialDetailsPanel.show(body, getCelestialDetailsContext(body));
+  }
+
   /*
     focusBody
     - Focuses a clicked object without changing the page journey position.
-    - Every body-to-body jump stores the complete previous inspection state.
-    - Selecting the already focused body is a no-op; it never exits focus.
+    - The first click reveals one compact Milky Way / Solar System card.
+    - Clicking that card, a named satellite label, or the focused body again
+      opens the centred celestial dossier.
     - Escape/clicking empty space performs one Back step.
-    - Free-flight is restored only after the focus stack becomes empty.
   */
   function focusBody(body) {
     if (focusExitTransition) return;
     clearCelestialHover();
+    clearPlanetOrbitHover();
 
     if (activeDistanceInfo && distanceUnitPopover && !distanceUnitPopover.hidden) {
       closeDistanceInfoPopover({ releaseJourneyLock: false });
     }
 
     if (!body) {
+      celestialDetailsPanel?.hide({ restoreFocus: false });
       navigateBackFromFocusedBody();
       return;
     }
 
-    // Clicking the current body should keep its exact view. Treating it as null
-    // previously made repeated clicks unexpectedly leave the inspection stack.
-    if (body === focusedBody) return;
+    // After a deep zoom-out, the old local-system UI is intentionally dormant.
+    // Clicking that body or its orbit again reactivates the compact card first;
+    // the following explicit card/body click opens the full dossier.
+    if (body === focusedBody) {
+      if (focusedUiSuppressedByWideView) {
+        focusedUiSuppressedByWideView = false;
+        focusSelectionPulseStartedAt = elapsedTime;
+        focusedBodyLocator.visible = true;
+        updateBodyCard(focusedBody);
+        return;
+      }
+      openCelestialDetails(body);
+      return;
+    }
 
+    celestialDetailsPanel?.hide({ restoreFocus: false });
     setBodyCardCollapsed(false);
     if (!isJourneyScrollLocked) {
       focusNavigationHistory.length = 0;
@@ -3062,8 +3791,6 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
 
     if (focusedBody) {
       if (isFocusedWideView()) {
-        // At the outer boundary, selecting another object starts a fresh
-        // inspection rather than keeping the previous body trapped in history.
         focusNavigationHistory.length = 0;
       } else {
         pushFocusedNavigationState(focusedBody);
@@ -3073,6 +3800,7 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
     }
 
     focusedBody = body;
+    focusedUiSuppressedByWideView = false;
     focusSelectionPulseStartedAt = elapsedTime;
     focusedBodyLocator.visible = true;
     focusZoomTarget = 1;
@@ -3090,9 +3818,28 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
     - Wires scroll, pointer, drag, and keyboard events to the camera control state.
     - Keeps the scene interactive while preserving pointer selection and drag motion.
   */
+  const JOURNEY_UI_SELECTOR = ".about-experience, .planet-details, .celestial-selection-card, .satellite-name-label, .body-card, .body-card-restore, .progress, .distance-cinematic-layer, .earth-return-button";
+
+  /**
+   * A hover may slow orbital motion for inspection, but it must never capture a
+   * deliberate journey gesture. Releasing it during the wheel's capture phase
+   * lets the same wheel event update scroll and camera state immediately.
+   */
+  function releaseTransientHoverForJourneyIntent(event = null) {
+    if (event?.target?.closest?.(JOURNEY_UI_SELECTOR)) return;
+    if (hoveredCelestialBody) clearCelestialHover();
+    if (hoveredPlanetOrbit) clearPlanetOrbitHover();
+  }
+
+  addEventListener("wheel", releaseTransientHoverForJourneyIntent, {
+    capture: true,
+    passive: true,
+  });
+
   // `passive` promises that the handler will not cancel scrolling, helping browsers
   // keep scrolling responsive while JavaScript updates its normalized value.
-  addEventListener("scroll", () => {
+  addEventListener("scroll", (event) => {
+    releaseTransientHoverForJourneyIntent(event);
     updateScrollProgress();
   }, { passive: true });
   function getFocusedBaseDistance(body = focusedBody) {
@@ -3116,6 +3863,22 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
     if (!focusedBody) return false;
     const focusedDistance = getFocusedBaseDistance(focusedBody) * focusZoomCurrent;
     return focusedDistance >= MAX_CINEMATIC_CAMERA_DISTANCE * 0.72;
+  }
+
+  function updateFocusedUiDistanceState() {
+    if (!focusedBody) {
+      focusedUiSuppressedByWideView = false;
+      return;
+    }
+    if (focusedUiSuppressedByWideView || celestialDetailsPanel?.isOpen()) return;
+    if (!isFocusedWideView()) return;
+
+    focusedUiSuppressedByWideView = true;
+    focusedBodyLocator.visible = false;
+    focusedBodyLocator.material.opacity = 0;
+    celestialSelectionCard.classList.remove("is-visible");
+    celestialSelectionCard.setAttribute("aria-hidden", "true");
+    hideSatelliteNameLabels();
   }
 
   function adjustFocusedZoom(delta) {
@@ -3169,7 +3932,11 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
 
   /** Performs the camera reset only after any open distance shot has ended. */
   function completeTravelBackToEarth() {
+    cancelPlanetDetailsReveal();
+    celestialDetailsPanel?.hide({ restoreFocus: false });
     clearCelestialHover();
+    clearPlanetOrbitHover();
+    pointerDownPlanetOrbit = null;
     if (celestialHoverTimer) {
       clearTimeout(celestialHoverTimer);
       celestialHoverTimer = null;
@@ -3180,6 +3947,7 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
       setAsteroidInspectionDetail(focusedBody, false);
     }
     focusedBody = null;
+    focusedUiSuppressedByWideView = false;
     focusNavigationHistory.length = 0;
     focusExitTransition = null;
     document.documentElement.classList.remove("is-focus-exit-restoring");
@@ -3351,7 +4119,7 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
 
   const preventFocusedJourneyScroll = (event) => {
     // Cards and the distance explanation retain their own internal scrolling.
-    if (event.target.closest?.(".body-card, .body-card-restore, .progress, .distance-cinematic-layer")) return;
+    if (event.target.closest?.(".planet-details, .celestial-selection-card, .satellite-name-label, .body-card, .body-card-restore, .progress, .distance-cinematic-layer")) return;
     if (!isJourneyScrollLocked) return;
 
     event.preventDefault();
@@ -3360,7 +4128,7 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
   addEventListener("wheel", preventFocusedJourneyScroll, { passive: false });
 
   addEventListener("touchstart", (event) => {
-    if (event.target.closest?.(".body-card, .body-card-restore, .progress, .distance-cinematic-layer")) return;
+    if (event.target.closest?.(".planet-details, .celestial-selection-card, .satellite-name-label, .body-card, .body-card-restore, .progress, .distance-cinematic-layer")) return;
     if (!focusedBody || event.touches.length !== 2) return;
     focusPinchDistance = Math.hypot(
       event.touches[0].clientX - event.touches[1].clientX,
@@ -3369,7 +4137,7 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
   }, { passive: true });
 
   addEventListener("touchmove", (event) => {
-    if (event.target.closest?.(".body-card, .body-card-restore, .progress, .distance-cinematic-layer")) return;
+    if (event.target.closest?.(".planet-details, .celestial-selection-card, .satellite-name-label, .body-card, .body-card-restore, .progress, .distance-cinematic-layer")) return;
     if (!focusedBody || event.touches.length !== 2 || focusPinchDistance == null) return;
     event.preventDefault();
 
@@ -3397,13 +4165,18 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
     if (hoveredCelestialBody && !isPointerStillOnHoveredBody(hoveredCelestialBody)) {
       clearCelestialHover();
     }
-    if (event.target.closest?.(".about-experience, .hud, .body-card, .body-card-restore, .progress, .distance-cinematic-layer, .earth-return-button")) {
+    if (hoveredPlanetOrbit && !isPointerStillOnHoveredPlanetOrbit()) {
+      clearPlanetOrbitHover();
+    }
+    if (event.target.closest?.(".about-experience, .planet-details, .celestial-selection-card, .satellite-name-label, .hud, .body-card, .body-card-restore, .progress, .distance-cinematic-layer, .earth-return-button")) {
       clearCelestialHover();
+      clearPlanetOrbitHover();
       lastPointer = { x: event.clientX, y: event.clientY };
       return;
     }
     if (isDragging) {
       clearCelestialHover();
+      clearPlanetOrbitHover();
       // Track the largest movement so pointerup can distinguish a drag from a click.
       dragDistance = Math.max(
         dragDistance,
@@ -3415,6 +4188,7 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
       targetPitch = THREE.MathUtils.clamp(targetPitch, -1.1, 1.1);
     } else if (!spaceEnvironment.reducedMotion
       && !hoveredCelestialBody
+      && !hoveredPlanetOrbit
       && getAsteroidEncounterIntensity() < 0.18
       && getJovianEncounterIntensity() < 0.12
       && !distanceCinematicPanel?.isOpen()) {
@@ -3426,16 +4200,22 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
       targetPitch += pointer.y * 0.00025;
     }
     lastPointer = { x: event.clientX, y: event.clientY };
-    if (!isDragging && lastPointerType !== "touch" && !hoveredCelestialBody) {
+    if (!isDragging && lastPointerType !== "touch" && !hoveredCelestialBody && !hoveredPlanetOrbit) {
       scheduleCelestialHover();
     }
   });
 
-  addEventListener("pointerleave", clearCelestialHover);
+  addEventListener("pointerleave", () => {
+    clearCelestialHover();
+    clearPlanetOrbitHover();
+  });
 
   addEventListener("pointerdown", (event) => {
-    if (event.target.closest?.(".about-experience, .body-card-restore, .progress, .distance-cinematic-layer, .earth-return-button")) return;
+    if (event.target.closest?.(".about-experience, .planet-details, .celestial-selection-card, .satellite-name-label, .body-card-restore, .progress, .distance-cinematic-layer, .earth-return-button")) return;
     updatePointerFromEvent(event);
+    const pressedOrbitCandidate = hoveredPlanetOrbit && isPointerStillOnHoveredPlanetOrbit()
+      ? hoveredPlanetOrbit
+      : findPlanetOrbitAtPointer()?.orbit ?? null;
     isDragging = true;
     dragDistance = 0;
     pointerDownPosition = { x: event.clientX, y: event.clientY };
@@ -3448,26 +4228,37 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
       && isPointerStillOnHoveredBody(hoveredCelestialBody)
         ? hoveredCelestialBody
         : getBodyAtPointer();
+    pointerDownPlanetOrbit = pointerDownCelestialBody ? null : pressedOrbitCandidate;
   });
 
   addEventListener("pointerup", (event) => {
     updatePointerFromEvent(event);
     isDragging = false;
     // HUD clicks belong to HTML controls and must not select objects behind them.
-    if (event.target.closest?.(".about-experience, .hud, .body-card, .body-card-restore, .progress, .distance-cinematic-layer, .earth-return-button")) {
+    if (event.target.closest?.(".about-experience, .planet-details, .celestial-selection-card, .satellite-name-label, .hud, .body-card, .body-card-restore, .progress, .distance-cinematic-layer, .earth-return-button")) {
       pointerDownCelestialBody = null;
+      pointerDownPlanetOrbit = null;
       return;
     }
     if (dragDistance > 12) {
       pointerDownCelestialBody = null;
+      pointerDownPlanetOrbit = null;
       return;
     }
     // Prefer the press-time target in dense populations. Fall back to a fresh
     // visibility-aware scan only when the press began on empty space.
     const body = pointerDownCelestialBody ?? getBodyAtPointer();
+    const orbit = body
+      ? null
+      : pointerDownPlanetOrbit ?? findPlanetOrbitAtPointer()?.orbit ?? null;
     pointerDownCelestialBody = null;
+    pointerDownPlanetOrbit = null;
     if (body) {
       focusBody(body);
+      return;
+    }
+    if (orbit?.userData?.planet) {
+      focusBody(orbit.userData.planet);
       return;
     }
 
@@ -3491,7 +4282,9 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
     // Browsers can cancel input when a gesture leaves the window or becomes a system gesture.
     isDragging = false;
     pointerDownCelestialBody = null;
+    pointerDownPlanetOrbit = null;
     clearCelestialHover();
+    clearPlanetOrbitHover();
   });
 
   /** Exits whichever temporary view currently owns the experience. */
@@ -3517,7 +4310,7 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
   addEventListener("keydown", (event) => {
     // The modal's capture-phase keyboard handler owns Escape and focus while
     // its project transmission is visible.
-    if (isAboutExperienceOpen) return;
+    if (isInformationOverlayOpen()) return;
 
     const journeyKeys = [
       " ", "PageUp", "PageDown", "Home", "End",
@@ -3560,7 +4353,7 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
   // simulation, raycast-interface, and shader-uniform update explicitly.
   addEventListener("visibilitychange", () => {
     isPageVisible = !document.hidden;
-    spaceEnvironment.setPaused(!isPageVisible || isAboutExperienceOpen);
+    spaceEnvironment.setPaused(!isPageVisible || isInformationOverlayOpen());
     if (isPageVisible) clock.getDelta();
   });
 
@@ -3589,7 +4382,7 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
     }
     lastCinematicFrameTime = frameTime;
     const deltaTime = Math.min(clock.getDelta(), 0.05);
-    if (!isPageVisible || isAboutExperienceOpen) {
+    if (!isPageVisible || isInformationOverlayOpen()) {
       requestAnimationFrame(animate);
       return;
     }
@@ -3597,15 +4390,28 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
     const isRestoringFocusExit = advanceFocusExitTransition(deltaTime);
     // Focus mode and its short deterministic exit hold slow physical scene motion
     // without slowing input during ordinary exploration.
-    const motionScale = focusExitTransition
-      ? 0.02
-      : hoveredCelestialBody
-        ? 0.018
-        : focusedBody
-          ? 0.026
-          : 1;
-    const frameMotionScale = motionScale * deltaTime * 60;
-    simulationTime += deltaTime * motionScale;
+    const motionScale = hoveredPlanetOrbit
+      ? 0
+      : focusExitTransition
+        ? 0.02
+        : hoveredCelestialBody
+          ? 0.018
+          : focusedBody
+            ? 0.026
+            : 1;
+    const openingMotionElapsed = openingMotionStartedAt === null
+      ? 0
+      : frameTime - openingMotionStartedAt - OPENING_MOTION_HOLD_MS;
+    const openingMotionBlend = openingMotionStartedAt === null
+      ? 0
+      : THREE.MathUtils.smootherstep(
+        openingMotionElapsed,
+        0,
+        OPENING_MOTION_EASE_MS,
+      );
+    const celestialMotionScale = motionScale * openingMotionBlend;
+    const frameMotionScale = celestialMotionScale * deltaTime * 60;
+    simulationTime += deltaTime * celestialMotionScale;
 
     if (!isRestoringFocusExit) {
       // Easing with lerp each frame creates inertia. Larger factors catch up faster.
@@ -3633,7 +4439,7 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
         updatePlanetVisuals(
           planet,
           simulationTime,
-          motionScale * planetVisualDelta * 60,
+          celestialMotionScale * planetVisualDelta * 60,
         );
       }
     });
@@ -3642,7 +4448,7 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
     // Throttling this update caused visible stepping and cursor/target flicker.
     updateMajorSatelliteSystems(
       majorSatelliteSystems,
-      motionScale * deltaTime * 60,
+      frameMotionScale,
       { hoveredBody: hoveredCelestialBody, focusedBody },
     );
 
@@ -3800,19 +4606,19 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
 
     // ----- Animate special meshes and scene effects -----
     const frameScale = deltaTime * 60;
-    updateEarthVisualSystem(earthVisualSystem, frameScale);
-    updateMarsVisualSystem(marsVisualSystem, frameScale);
+    updateEarthVisualSystem(earthVisualSystem, frameMotionScale);
+    updateMarsVisualSystem(marsVisualSystem, frameMotionScale);
     updateJupiterVisualSystem(
       jupiterVisualSystem,
       simulationTime,
-      frameScale,
+      frameMotionScale,
     );
-    updateSaturnVisualSystem(saturnVisualSystem, frameScale);
+    updateSaturnVisualSystem(saturnVisualSystem, frameMotionScale);
     moonPivot.rotation.y += 0.011 * frameMotionScale;
     // A small oscillation suggests lunar libration while the pivot maintains tidal lock.
     moon.rotation.y = Math.sin(simulationTime * 0.35) * 0.04;
 
-    updateSun(sun, simulationTime, motionScale * deltaTime * 60);
+    updateSun(sun, simulationTime, frameMotionScale);
     updateSunApparentScale(deltaTime);
     // Numerical safety only. The normal Sun scale is intentionally dynamic and
     // follows observer distance even while no celestial body is focused.
@@ -3827,7 +4633,7 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
     // Asteroid self-rotation is cheap and does not change object positions, so
     // keep its GPU clock smooth even when the heavier belt-orbit update is
     // throttled on lower-performance devices.
-    updateAsteroidSpinClock(asteroidBelt, deltaTime, {
+    updateAsteroidSpinClock(asteroidBelt, deltaTime * celestialMotionScale, {
       focusedBody,
       hoveredBody: hoveredCelestialBody,
     });
@@ -3838,7 +4644,7 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
 
     updateAsteroidBelt(
       asteroidBelt,
-      motionScale * deltaTime * 60,
+      frameMotionScale,
       camera,
       currentSunAngularRadius,
       {
@@ -3849,34 +4655,65 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
     // One journey value coordinates exposure, stellar layers, galaxies, local
     // dust, and zodiacal light for scroll, reverse travel, and body focus alike.
     spaceEnvironment.setJourneyProgress(getEnvironmentJourneyProgress());
-    spaceEnvironment.update(deltaTime, elapsedTime);
-    orbitRoot.children.forEach((orbit) => {
-      orbit.material.opacity = THREE.MathUtils.clamp((smoothProgress - 0.035) / 0.18, 0.04, 0.22);
-    });
+    spaceEnvironment.setPaused(!isPageVisible || isInformationOverlayOpen());
+    spaceEnvironment.update(deltaTime * motionScale, simulationTime);
+    updateFocusedUiDistanceState();
+    updatePlanetOrbitVisuals(deltaTime);
+    updatePlanetSatelliteHighlights(deltaTime);
 
     // ----- Sync HTML, draw the frame, then schedule the next frame -----
     // Matrix updates make the latest camera transform available to 3D→2D projection.
     camera.updateMatrixWorld();
+    updatePlanetOrbitHoverVisual();
+    updateCelestialSelectionCard();
+    updateSatelliteNameLabels();
     updateInspectionInterface();
     renderer.render(scene, camera);
+
+    // Loader visibility is tied to a frame that was actually submitted, not to
+    // elapsed wall-clock time. This prevents the HTML HUD from appearing over
+    // a canvas that is still compiling its first WebGL scene.
+    if (!hasRenderedOpeningFrame) {
+      hasRenderedOpeningFrame = true;
+      requestAnimationFrame(revealExperienceAfterOpeningFrame);
+    }
+
     // requestAnimationFrame runs before the browser's next repaint (usually ~60 FPS).
     requestAnimationFrame(animate);
+  }
+
+  function revealExperienceAfterOpeningFrame() {
+    if (hasRevealedOpeningFrame) return;
+    hasRevealedOpeningFrame = true;
+
+    // Preserve a short cinematic beat, now measured from the first real frame.
+    setTimeout(() => {
+      loader.classList.add("is-hidden");
+      // `.loader` takes 700 ms to fade. Start the celestial entrance from the
+      // end of that transition—not from the moment its class changes—otherwise
+      // Earth, the Moon, and the belt are already moving rapidly when the user
+      // sees the first clear frame.
+      openingMotionStartedAt = performance.now() + 700;
+      // The loader fade itself lasts 700 ms. Starting terrain construction
+      // during that transition could freeze the overlay halfway out, making its
+      // text disappear while the dark loading backdrop remained on screen.
+      // Hydration begins only after the opening motion ramp is nearly complete,
+      // so a detailed outer moon cannot interrupt Earth and Moon settling into
+      // their first visible orbit.
+      setTimeout(scheduleMajorSatelliteHydration, 2600);
+
+      // Let the loader nearly complete its fade before the persistent navigation
+      // rocket flies in, overshoots its resting point, and bounces into place.
+      setTimeout(() => {
+        earthReturnButton.disabled = false;
+        earthReturnButton.classList.remove("is-awaiting-entrance");
+        earthReturnButton.classList.add("is-entering");
+        setTimeout(() => earthReturnButton.classList.remove("is-entering"), 1500);
+      }, 620);
+    }, 420);
   }
 
   // Seed state and begin the deterministic requestAnimationFrame render loop.
   updateScrollProgress();
   requestAnimationFrame(animate);
-
-  // Keep the loader visible briefly after setup so the opening transition feels intentional.
-  setTimeout(() => {
-    loader.classList.add("is-hidden");
-    // Let the loader nearly complete its fade before the persistent navigation
-    // rocket flies in, overshoots its resting point, and bounces into place.
-    setTimeout(() => {
-      earthReturnButton.disabled = false;
-      earthReturnButton.classList.remove("is-awaiting-entrance");
-      earthReturnButton.classList.add("is-entering");
-      setTimeout(() => earthReturnButton.classList.remove("is-entering"), 1500);
-    }, 620);
-  }, 1350);
 })();

@@ -1,11 +1,7 @@
-1. Dione and Tethys line issue
+5. All planets accomodate between earth and moon
+
+
+1. Remove Universe Frozen word from aall the carts everywhere
+2. Mars has a 5 seconds logic for aurora borelis which glows back side is it there code changes but it is not working 
+3. When Page is loaded, we see earth asteroids belt and moon, when cursor is hover over asteroid the screen keeps moving up and down like on railing
 2. Satellite or celestial body overlaps over larger celestial then focus only comes over larger celestial
-3. Sometimes page load is blank sometimes it is proper
-4. Post page load it seems many focus and hovering issue flickering
-
-
-Janus and Epimetheus — irregular, rugged co-orbitals with dense cratering and rough dirty-ice terrain.
-Methone, Pallene, Anthe and Aegaeon — smoother ring-arc ellipsoids; Methone now has its recognizable crater-free gray egg appearance.
-Telesto, Calypso, Helene and Polydeuces — individual Trojan-moon shapes, regolith smoothing, buried craters and Helene’s flow-like gullies.
-Hyperion — irregular sponge-like silhouette, deep sharp pits, highly porous terrain and dark crater floors.
-Phoebe — dark irregular captured body with dense cratering, large basins and brighter excavated icy material.
