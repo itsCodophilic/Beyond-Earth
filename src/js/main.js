@@ -2283,8 +2283,7 @@ import { createCelestialDetailsPanel } from './ui/planetDetailsPanel.js';
       candidates.push(body);
     });
 
-    let nearest = null;
-    let nearestScore = Infinity;
+    const pointerHits = [];
     const projected = pointerProjectedPosition;
 
     candidates.forEach((body) => {
@@ -2314,22 +2313,35 @@ import { createCelestialDetailsPanel } from './ui/planetDetailsPanel.js';
       );
       if (distancePixels > clickRadius) return;
 
-      const type = getInteractiveType(body);
-      const typeBias = type === "natural satellite" ? -2 : (type === "planet" || type === "dwarf planet") ? -1 : 0;
-      // Prefer the body whose visible disk most clearly contains the cursor.
-      // This avoids selecting Earth when the pointer is actually in the gap
-      // between Earth and the Moon.
       const coverage = Math.max(0.001, radiusPixels - distancePixels);
       const score = distancePixels / Math.max(1, clickRadius)
-        - Math.min(0.35, coverage / Math.max(1, radiusPixels) * 0.25)
-        + typeBias * 0.03;
-      if (score < nearestScore) {
-        nearest = body;
-        nearestScore = score;
-      }
+        - Math.min(0.35, coverage / Math.max(1, radiusPixels) * 0.25);
+      pointerHits.push({
+        body,
+        radiusPixels,
+        score,
+        isInsideVisibleDisk: distancePixels <= radiusPixels,
+      });
     });
 
-    return nearest;
+    if (!pointerHits.length) return null;
+
+    // A moon or small body can cross a planet's visible silhouette. When the
+    // cursor is genuinely inside both rendered disks, the larger celestial body
+    // is the visually dominant target and must own hover/click focus. Outside a
+    // larger body's real silhouette, normal proximity scoring still lets the
+    // smaller satellite remain easy to discover.
+    const visibleDiskHits = pointerHits.filter((candidate) => candidate.isInsideVisibleDisk);
+    if (visibleDiskHits.length > 0) {
+      visibleDiskHits.sort((a, b) => (
+        b.radiusPixels - a.radiusPixels
+        || a.score - b.score
+      ));
+      return visibleDiskHits[0].body;
+    }
+
+    pointerHits.sort((a, b) => a.score - b.score);
+    return pointerHits[0].body;
   }
 
   function isPointerInsideVisibleBodyDisk(body, extraPixels = 0) {
@@ -2991,10 +3003,20 @@ import { createCelestialDetailsPanel } from './ui/planetDetailsPanel.js';
         body && (body !== focusedBody || focusedUiSuppressedByWideView)
       ));
 
+    const nearbyMajor = findNearestMajorBodyAtPointer({
+      minimumVisibleRadiusPixels: 0.14,
+      extraHitPixels: innerWidth <= 760 ? 12 : 7,
+      maximumHitRadiusPixels: innerWidth <= 760 ? 30 : 23,
+      excludedBody: focusedBody,
+    });
+    if (nearbyMajor) {
+      setCelestialHover(nearbyMajor);
+      return;
+    }
+
     // Jupiter's full 115-moon system uses a dedicated visibility-aware search.
-    // Only the eight resolved regular moons own direct pointer proxies; notable
-    // and distant irregular moons become selectable progressively as the camera
-    // enters Jupiter's local system. This avoids 115 overlapping hidden spheres.
+    // Run it after the major-body silhouette test so a small satellite crossing
+    // Jupiter's disk cannot steal the visibly larger planet's interaction.
     const nearbyJovianSatellite = findNearestJovianSatelliteAtPointer({
       systems: majorSatelliteSystems,
       pointer,
@@ -3005,17 +3027,6 @@ import { createCelestialDetailsPanel } from './ui/planetDetailsPanel.js';
     });
     if (nearbyJovianSatellite) {
       setCelestialHover(nearbyJovianSatellite);
-      return;
-    }
-
-    const nearbyMajor = findNearestMajorBodyAtPointer({
-      minimumVisibleRadiusPixels: 0.14,
-      extraHitPixels: innerWidth <= 760 ? 12 : 7,
-      maximumHitRadiusPixels: innerWidth <= 760 ? 30 : 23,
-      excludedBody: focusedBody,
-    });
-    if (nearbyMajor) {
-      setCelestialHover(nearbyMajor);
       return;
     }
 
@@ -3143,9 +3154,16 @@ import { createCelestialDetailsPanel } from './ui/planetDetailsPanel.js';
     // from owning nearby empty space simply because a large interaction sphere
     // happened to intersect the ray.
 
+    // Give visible planets, moons and the Sun a small screen-space click cushion.
+    // This is intentionally disabled while they are sub-pixel dots; clicking then
+    // moves the camera toward the region instead of opening an unseen object.
+    const nearbyMajorBody = findNearestMajorBodyAtPointer();
+    if (nearbyMajorBody) return nearbyMajorBody;
+
     // Use the same dense-system selector for pointerup that hover uses. This
-    // preserves the selected Jovian moon even if it advances slightly between
-    // pointermove and click, without letting an unseen irregular moon steal input.
+    // preserves a visible Jovian moon if it advances slightly between pointermove
+    // and click. It runs after the major-body silhouette test so an overlapping
+    // moon cannot steal focus from the visibly larger planet.
     const nearbyJovianSatellite = findNearestJovianSatelliteAtPointer({
       systems: majorSatelliteSystems,
       pointer,
@@ -3155,12 +3173,6 @@ import { createCelestialDetailsPanel } from './ui/planetDetailsPanel.js';
       focusedBody,
     });
     if (nearbyJovianSatellite) return nearbyJovianSatellite;
-
-    // Give visible planets, moons and the Sun a small screen-space click cushion.
-    // This is intentionally disabled while they are sub-pixel dots; clicking then
-    // moves the camera toward the region instead of opening an unseen object.
-    const nearbyMajorBody = findNearestMajorBodyAtPointer();
-    if (nearbyMajorBody) return nearbyMajorBody;
 
     // Once the green locator is visible, the click is unambiguous even if a
     // revolving body travels a few pixels between hover detection and pointerup.
@@ -4223,11 +4235,7 @@ import { createCelestialDetailsPanel } from './ui/planetDetailsPanel.js';
     // Capture the exact candidate at press time. Dense belt rocks can still move
     // slightly before pointerup, so this prevents the click target from swapping
     // to a neighbour or disappearing during a deliberate press.
-    pointerDownCelestialBody = hoveredCelestialBody
-      && asteroidHoverLocator.visible
-      && isPointerStillOnHoveredBody(hoveredCelestialBody)
-        ? hoveredCelestialBody
-        : getBodyAtPointer();
+    pointerDownCelestialBody = getBodyAtPointer();
     pointerDownPlanetOrbit = pointerDownCelestialBody ? null : pressedOrbitCandidate;
   });
 
@@ -4390,11 +4398,17 @@ import { createCelestialDetailsPanel } from './ui/planetDetailsPanel.js';
     const isRestoringFocusExit = advanceFocusExitTransition(deltaTime);
     // Focus mode and its short deterministic exit hold slow physical scene motion
     // without slowing input during ordinary exploration.
+    // Asteroid hover slows the belt locally inside updateAsteroidBelt(). It must
+    // not repeatedly brake and release Earth, the Moon, and the opening camera
+    // as the pointer crosses thousands of tightly packed rocks.
+    const hoveredBodySlowsWholeScene = Boolean(
+      hoveredCelestialBody && !isAsteroidBody(hoveredCelestialBody),
+    );
     const motionScale = hoveredPlanetOrbit
       ? 0
       : focusExitTransition
         ? 0.02
-        : hoveredCelestialBody
+        : hoveredBodySlowsWholeScene
           ? 0.018
           : focusedBody
             ? 0.026
@@ -4607,7 +4621,7 @@ import { createCelestialDetailsPanel } from './ui/planetDetailsPanel.js';
     // ----- Animate special meshes and scene effects -----
     const frameScale = deltaTime * 60;
     updateEarthVisualSystem(earthVisualSystem, frameMotionScale);
-    updateMarsVisualSystem(marsVisualSystem, frameMotionScale);
+    updateMarsVisualSystem(marsVisualSystem, frameMotionScale, deltaTime);
     updateJupiterVisualSystem(
       jupiterVisualSystem,
       simulationTime,

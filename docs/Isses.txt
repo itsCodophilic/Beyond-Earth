@@ -1,7 +1,3 @@
 5. All planets accomodate between earth and moon
 
 
-1. Remove Universe Frozen word from aall the carts everywhere
-2. Mars has a 5 seconds logic for aurora borelis which glows back side is it there code changes but it is not working 
-3. When Page is loaded, we see earth asteroids belt and moon, when cursor is hover over asteroid the screen keeps moving up and down like on railing
-2. Satellite or celestial body overlaps over larger celestial then focus only comes over larger celestial

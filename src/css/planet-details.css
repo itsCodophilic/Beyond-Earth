@@ -163,31 +163,6 @@
   letter-spacing: 0.055em;
 }
 
-.planet-details__status {
-  display: inline-flex;
-  flex: 0 0 auto;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 2px;
-  padding: 8px 12px;
-  border: 1px solid rgba(101, 255, 206, 0.24);
-  border-radius: 999px;
-  background: rgba(18, 67, 59, 0.22);
-  color: rgba(178, 255, 227, 0.84);
-  font-size: 0.69rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.planet-details__status i {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: #63ffcb;
-  box-shadow: 0 0 10px rgba(99, 255, 203, 0.80);
-}
-
 .planet-details__core {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -523,10 +498,6 @@ body.is-planet-details-open .asteroid-hover-tooltip {
 
   .planet-details__heading-row {
     display: block;
-  }
-
-  .planet-details__status {
-    margin-top: 14px;
   }
 
   .planet-details__core,

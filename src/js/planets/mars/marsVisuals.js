@@ -165,7 +165,7 @@ export function createMarsVisualSystem({ mars, radius, quality = "high" }) {
   };
 }
 
-export function updateMarsVisualSystem(system, frameScale = 1) {
+export function updateMarsVisualSystem(system, frameScale = 1, deltaSeconds = 1 / 60) {
   if (!system) return;
   system.atmosphere.rotation.y -= 0.00012 * frameScale;
   updatePlanetAuroraLayer(system.aurora, frameScale, { rotationSpeed: 0.000035 });
@@ -176,9 +176,19 @@ export function updateMarsVisualSystem(system, frameScale = 1) {
   setPlanetAuroraStrength(system.aurora, 1.0);
   setPlanetAuroraStrength(system.auroraCompanion, 1.0);
 
+  // The event cadence uses real elapsed time rather than frameScale. frameScale
+  // deliberately drops to a tiny value while Mars is focused, and previously
+  // stretched this five-second wait into several minutes. The plasma animation
+  // above still respects slow motion; only the event trigger keeps real time.
+  const safeDeltaSeconds = THREE.MathUtils.clamp(
+    Number.isFinite(deltaSeconds) ? deltaSeconds : 1 / 60,
+    0,
+    0.05,
+  );
+  system.stormElapsed += safeDeltaSeconds;
+
   // After ~5 seconds, let a stronger solar-wave event expand the aurora across
   // a much larger southern region, then settle it back to the normal localized patch.
-  system.stormElapsed += 0.0166667 * frameScale;
   const cycleDuration = 7.8;
   const calmDuration = 5.0;
   const stormTime = system.stormElapsed % cycleDuration;

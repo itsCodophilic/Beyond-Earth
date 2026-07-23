@@ -272,7 +272,6 @@ export function createCelestialDetailsPanel() {
               <h2 id="planet-details-title" data-cosmic-text>Celestial body</h2>
               <p id="planet-details-classification" data-cosmic-text>Classification</p>
             </div>
-            <span class="planet-details__status"><i></i> Universe frozen</span>
           </div>
         </header>
 
