@@ -24,10 +24,12 @@ import { createSaturnVisualSystem, updateSaturnVisualSystem } from './planets/sa
 import { PLANET_CONFIGS } from './planets/index.js';
 import {
   createMajorSatelliteSystems,
+  findNearestDenseSatelliteAtPointer,
   findNearestJovianSatelliteAtPointer,
   hydrateNextMajorSatellite,
   JOVIAN_MOON_INSPECTION_LAYER,
   getJovianSatelliteEncounterIntensity,
+  setSatelliteAtlasOrbitHighlight,
   updateMajorSatelliteSystems,
   updateMajorSatelliteVisibility,
 } from './planets/satellites/satelliteSystem.js';
@@ -688,6 +690,149 @@ import { createCelestialDetailsPanel } from './ui/planetDetailsPanel.js';
   const celestialSelectionCardType = celestialSelectionCard.querySelector("#celestial-selection-card-type");
   const celestialSelectionCardSatelliteRank = celestialSelectionCard.querySelector("#celestial-selection-card-satellite-rank");
 
+  // Jupiter and Saturn contain far more moons than can share a close planetary
+  // portrait. This companion control opens a presentation-only orbital atlas:
+  // every catalogue body remains rendered, while extreme irregular orbits are
+  // compressed just enough to fit in one cinematic frame.
+  let satelliteSystemOverview = document.querySelector("#satellite-system-overview");
+  if (!satelliteSystemOverview) {
+    satelliteSystemOverview = document.createElement("button");
+    satelliteSystemOverview.id = "satellite-system-overview";
+    satelliteSystemOverview.className = "satellite-system-overview";
+    satelliteSystemOverview.type = "button";
+    satelliteSystemOverview.setAttribute("aria-hidden", "true");
+    satelliteSystemOverview.innerHTML = `
+      <span class="satellite-system-overview__signal" aria-hidden="true"></span>
+      <span class="satellite-system-overview__copy">
+        <small>Complete satellite system</small>
+        <strong id="satellite-system-overview-title">Reveal every moon</strong>
+        <em id="satellite-system-overview-note">Cinematic orbital atlas</em>
+      </span>
+      <span class="satellite-system-overview__icon" aria-hidden="true">◎</span>
+    `;
+    document.body.append(satelliteSystemOverview);
+  }
+  const satelliteSystemOverviewTitle = satelliteSystemOverview.querySelector(
+    "#satellite-system-overview-title",
+  );
+  const satelliteSystemOverviewNote = satelliteSystemOverview.querySelector(
+    "#satellite-system-overview-note",
+  );
+
+  // Atlas mode replaces dozens of overlapping in-scene name pills with one
+  // stable directory. Every rendered moon remains clickable in 3D, while this
+  // searchable strip guarantees that even a sub-pixel or temporarily occluded
+  // satellite can be selected without disturbing the camera.
+  let satelliteAtlasDirectory = document.querySelector("#satellite-atlas-directory");
+  if (!satelliteAtlasDirectory) {
+    satelliteAtlasDirectory = document.createElement("section");
+    satelliteAtlasDirectory.id = "satellite-atlas-directory";
+    satelliteAtlasDirectory.className = "satellite-atlas-directory";
+    satelliteAtlasDirectory.setAttribute("aria-hidden", "true");
+    satelliteAtlasDirectory.setAttribute("aria-label", "Complete satellite directory");
+    satelliteAtlasDirectory.innerHTML = `
+      <header class="satellite-atlas-directory__header">
+        <span>
+          <small>Complete orbital atlas</small>
+          <strong id="satellite-atlas-directory-title">Satellite system</strong>
+        </span>
+        <div class="satellite-atlas-directory__actions">
+          <label class="satellite-atlas-directory__search">
+            <input id="satellite-atlas-directory-search" type="search" placeholder="Find a moon…" aria-label="Find a satellite" autocomplete="off">
+          </label>
+          <button id="satellite-atlas-directory-close" class="satellite-atlas-directory__close" type="button" aria-label="Close the complete satellite atlas">
+            <span aria-hidden="true">×</span>
+          </button>
+        </div>
+      </header>
+      <div id="satellite-atlas-directory-list" class="satellite-atlas-directory__list" aria-label="Satellites"></div>
+      <footer>
+        <span id="satellite-atlas-directory-status">Preparing catalogue…</span>
+        <span>Click a moon to inspect · Esc returns to this atlas</span>
+      </footer>
+    `;
+    document.body.append(satelliteAtlasDirectory);
+  }
+  const satelliteAtlasDirectoryTitle = satelliteAtlasDirectory.querySelector(
+    "#satellite-atlas-directory-title",
+  );
+  const satelliteAtlasDirectorySearch = satelliteAtlasDirectory.querySelector(
+    "#satellite-atlas-directory-search",
+  );
+  const satelliteAtlasDirectoryList = satelliteAtlasDirectory.querySelector(
+    "#satellite-atlas-directory-list",
+  );
+  const satelliteAtlasDirectoryStatus = satelliteAtlasDirectory.querySelector(
+    "#satellite-atlas-directory-status",
+  );
+  const satelliteAtlasDirectoryClose = satelliteAtlasDirectory.querySelector(
+    "#satellite-atlas-directory-close",
+  );
+  const satelliteAtlasBodiesByName = new Map();
+  let satelliteAtlasDirectorySignature = "";
+  let satelliteAtlasDirectoryRenderedAt = 0;
+  let satelliteAtlasDirectoryParentName = null;
+  let satelliteAtlasDirectoryHoverBody = null;
+
+  function clearSatelliteAtlasDirectoryHover() {
+    satelliteAtlasDirectoryHoverBody = null;
+    setSatelliteAtlasOrbitHighlight(majorSatelliteSystems, null);
+  }
+
+  function closeSatelliteAtlas() {
+    if (!satelliteOverviewParentName) return;
+    clearSatelliteAtlasDirectoryHover();
+    satelliteOverviewParentName = null;
+    focusZoomTarget = 1;
+    satelliteAtlasDirectory.classList.remove("is-visible");
+    satelliteAtlasDirectory.setAttribute("aria-hidden", "true");
+  }
+
+  function filterSatelliteAtlasDirectory() {
+    const query = satelliteAtlasDirectorySearch?.value.trim().toLowerCase() ?? "";
+    satelliteAtlasDirectoryList?.querySelectorAll(".satellite-atlas-directory__moon")
+      .forEach((button) => {
+        button.hidden = Boolean(query) && !button.dataset.search?.includes(query);
+      });
+  }
+
+  satelliteAtlasDirectorySearch?.addEventListener("input", filterSatelliteAtlasDirectory);
+  satelliteAtlasDirectory.addEventListener("pointerdown", (event) => {
+    event.stopPropagation();
+  });
+  satelliteAtlasDirectory.addEventListener("pointerup", (event) => {
+    event.stopPropagation();
+  });
+  satelliteAtlasDirectory.addEventListener("click", (event) => {
+    event.stopPropagation();
+    if (event.target.closest?.("#satellite-atlas-directory-close")) {
+      closeSatelliteAtlas();
+      return;
+    }
+    const button = event.target.closest?.(".satellite-atlas-directory__moon");
+    if (!button) return;
+    const body = satelliteAtlasBodiesByName.get(button.dataset.moonName);
+    if (body) {
+      clearSatelliteAtlasDirectoryHover();
+      focusBody(body);
+    }
+  });
+  satelliteAtlasDirectoryList?.addEventListener("pointerover", (event) => {
+    const button = event.target.closest?.(".satellite-atlas-directory__moon");
+    if (!button) return;
+    const body = satelliteAtlasBodiesByName.get(button.dataset.moonName);
+    if (!body || body === satelliteAtlasDirectoryHoverBody) return;
+    satelliteAtlasDirectoryHoverBody = body;
+    setSatelliteAtlasOrbitHighlight(majorSatelliteSystems, body);
+  });
+  satelliteAtlasDirectoryList?.addEventListener("pointerout", (event) => {
+    if (event.relatedTarget?.closest?.(".satellite-atlas-directory__moon")) return;
+    clearSatelliteAtlasDirectoryHover();
+  });
+  satelliteAtlasDirectoryClose?.addEventListener("pointerenter", () => {
+    clearSatelliteAtlasDirectoryHover();
+  });
+
   let satelliteNameLayer = document.querySelector("#satellite-name-layer");
   if (!satelliteNameLayer) {
     satelliteNameLayer = document.createElement("div");
@@ -710,6 +855,57 @@ import { createCelestialDetailsPanel } from './ui/planetDetailsPanel.js';
     event.preventDefault();
     event.stopPropagation();
     openCelestialDetails(focusedBody);
+  });
+  satelliteSystemOverview.addEventListener("pointerdown", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+  });
+  satelliteSystemOverview.addEventListener("pointerup", (event) => {
+    // The universe selects bodies on window.pointerup. Swallowing this matching
+    // event prevents the reveal gesture from raycasting through the HUD and
+    // reopening the focused planet's full information dossier.
+    event.stopPropagation();
+    pointerDownCelestialBody = null;
+    pointerDownPlanetOrbit = null;
+    isDragging = false;
+  });
+  satelliteSystemOverview.addEventListener("click", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const parentName = focusedBody?.userData?.name ?? focusedBody?.name ?? null;
+    const system = majorSatelliteSystems.find(
+      (candidate) => candidate.parentName === parentName,
+    );
+    if (!system || !["Jupiter", "Saturn"].includes(parentName)) return;
+
+    if (satelliteOverviewParentName === parentName) {
+      closeSatelliteAtlas();
+      return;
+    }
+
+    satelliteOverviewParentName = parentName;
+    // Atlas mode owns the full view. Retire both planet-side cards immediately
+    // instead of leaving them visible until the next animation frame.
+    celestialSelectionCard.classList.remove("is-visible");
+    celestialSelectionCard.setAttribute("aria-hidden", "true");
+    satelliteSystemOverview.classList.remove("is-visible", "is-active");
+    satelliteSystemOverview.setAttribute("aria-hidden", "true");
+    const baseDistance = Math.max(0.001, getFocusedBaseDistance(focusedBody));
+    const parentRadius = Number(system.parent.userData?.visualRadius ?? 1);
+    // The planet is deliberately a compact central reference in atlas mode.
+    // Six-to-seven planet radii leave enough negative space to read the full
+    // irregular population without making Jupiter or Saturn dominate the shot.
+    const atlasRadius = parentRadius * (parentName === "Saturn" ? 7.20 : 6.80);
+    const atlasHalfFov = THREE.MathUtils.degToRad(
+      Number(focusedBody.userData?.focusFov ?? camera.fov ?? 34) * 0.5,
+    );
+    // The small margin leaves room for labels and for Saturn's ring silhouette.
+    const atlasDistance = atlasRadius / Math.max(0.08, Math.tan(atlasHalfFov)) * 1.22;
+    focusZoomTarget = THREE.MathUtils.clamp(
+      atlasDistance / baseDistance,
+      1.6,
+      getFocusedMaximumZoom(focusedBody),
+    );
   });
 
   // A persistent rocket button resets focus, regional exploration, camera angle,
@@ -955,6 +1151,9 @@ import { createCelestialDetailsPanel } from './ui/planetDetailsPanel.js';
   let focusZoomTarget = 1;
   let focusZoomCurrent = 1;
   let focusPinchDistance = null;
+  // Null in ordinary inspection; set to Jupiter or Saturn while the complete
+  // catalogue atlas is active.
+  let satelliteOverviewParentName = null;
   // Empty-space exploration moves the complete camera rig through the 3D
   // scene. Separate camera/focus offsets let a clicked region become centred
   // while the viewer physically advances toward it; distance is never inferred
@@ -1949,6 +2148,7 @@ import { createCelestialDetailsPanel } from './ui/planetDetailsPanel.js';
     suppressJourneyScrollSync = false;
     focusZoomTarget = 1;
     focusZoomCurrent = 1;
+    satelliteOverviewParentName = null;
     focusPinchDistance = null;
     focusedBodyLocator.visible = false;
     focusedBodyLocator.material.opacity = 0;
@@ -2035,6 +2235,7 @@ import { createCelestialDetailsPanel } from './ui/planetDetailsPanel.js';
       viewportHeight: innerHeight,
       focusedBody: null,
       hoveredBody: null,
+      overviewParentName: null,
     });
 
     const pixelRatio = resizeCinematicRenderer();
@@ -2172,7 +2373,21 @@ import { createCelestialDetailsPanel } from './ui/planetDetailsPanel.js';
 
   function updateFocusedSelectionVisual() {
     const age = elapsedTime - focusSelectionPulseStartedAt;
-    if (!focusedBody || focusedUiSuppressedByWideView || age < 0 || age > 1.85) {
+    const focusedType = getInteractiveType(focusedBody);
+    const isFocusedSatellite = Boolean(
+      focusedBody?.userData?.isSatellite
+      || focusedType === "natural satellite",
+    );
+    // A satellite's real surface must remain unobstructed during inspection.
+    // The green acquisition locator belongs to hover only, so remove the focus
+    // confirmation ring as soon as a moon becomes the inspected body.
+    if (
+      !focusedBody
+      || isFocusedSatellite
+      || focusedUiSuppressedByWideView
+      || age < 0
+      || age > 1.85
+    ) {
       focusedBodyLocator.visible = false;
       focusedBodyLocator.material.opacity = 0;
       return;
@@ -2193,12 +2408,14 @@ import { createCelestialDetailsPanel } from './ui/planetDetailsPanel.js';
       / Math.max(1, innerHeight);
     const bodyRadiusPixels = projectedBodyRadiusPixels(focusedBody);
     const baseMarkerPixels = THREE.MathUtils.clamp(bodyRadiusPixels * 2.25 + 30, 34, 104);
-    const pulse = 1 + Math.sin(age * 9.5) * 0.10;
+    const pulseClock = age * 9.5;
+    const pulse = 1 + Math.sin(pulseClock) * 0.10;
     const markerSize = worldUnitsPerPixel * baseMarkerPixels * pulse;
     focusedBodyLocator.scale.set(markerSize, markerSize, 1);
 
     const fadeOut = 1 - THREE.MathUtils.smoothstep(age, 1.05, 1.85);
-    focusedBodyLocator.material.opacity = (0.58 + Math.sin(age * 9.5) * 0.18) * fadeOut;
+    focusedBodyLocator.material.opacity =
+      (0.58 + Math.sin(pulseClock) * 0.18) * fadeOut;
   }
 
   /*
@@ -2391,6 +2608,11 @@ import { createCelestialDetailsPanel } from './ui/planetDetailsPanel.js';
         radiusPixels + satelliteAssist,
         maximumReleaseRadius,
       );
+    }
+
+    if (body.userData?.isDenseSatellite) {
+      const satelliteAssist = radiusPixels >= 3 ? 3.5 : 5.5;
+      return distancePixels <= Math.min(radiusPixels + satelliteAssist, 8.5);
     }
 
     // Other non-lunar major satellites remain deliberately easy to hold after
@@ -2673,7 +2895,8 @@ import { createCelestialDetailsPanel } from './ui/planetDetailsPanel.js';
     const rim = ensureSatelliteRimGlow(body);
     if (!rim) return;
     rim.visible = intensity > 0.012;
-    rim.material.opacity = intensity * (0.40 + Math.sin(elapsedTime * 3.4) * 0.035);
+    rim.material.opacity =
+      intensity * (0.40 + Math.sin(elapsedTime * 3.4) * 0.035);
     rim.scale.setScalar(1.045 + intensity * 0.030 * pulse);
   }
 
@@ -2685,6 +2908,10 @@ import { createCelestialDetailsPanel } from './ui/planetDetailsPanel.js';
 
     majorSatelliteSystems.forEach((system) => {
       const target = selectedName === system.parentName ? 1 : 0;
+      const atlasActive = satelliteOverviewParentName === system.parentName;
+      const focusedSatellite = focusedBody?.userData?.parentPlanet === system.parentName
+        ? focusedBody
+        : null;
       system.highlightIntensity = THREE.MathUtils.lerp(
         Number(system.highlightIntensity ?? 0),
         target,
@@ -2704,20 +2931,26 @@ import { createCelestialDetailsPanel } from './ui/planetDetailsPanel.js';
         const base = orbitGuides.userData.systemHighlightBase;
         orbitGuides.material.color.copy(base.color).lerp(satelliteHighlightColour, intensity * 0.74);
         orbitGuides.material.opacity = THREE.MathUtils.lerp(base.opacity, 0.62, intensity);
-        if (intensity > 0.015) orbitGuides.visible = true;
+        if (intensity > 0.015 && !atlasActive) orbitGuides.visible = true;
       }
 
       // Preserve each moon's actual albedo and shading. Selection is expressed
       // only by a thin additive shell rendered behind the visible surface.
+      // Once a moon itself is inspected, every system rim is removed so neither
+      // the selected surface nor its siblings glow around the edges.
       system.moons.forEach(({ moon: satellite }) => {
-        updateSatelliteRimGlow(satellite, intensity, pulse);
+        updateSatelliteRimGlow(
+          satellite,
+          focusedSatellite ? 0 : intensity,
+          pulse,
+        );
       });
 
       // Dense instanced populations do not have individual meshes that can own
       // a clean silhouette shell. Their orbit guide remains the highlight so
       // the field does not turn into one glowing cloud.
       (system.denseFields ?? []).forEach((field) => {
-        if (intensity > 0.015) field.mesh.visible = true;
+        if (intensity > 0.015 && atlasActive) field.mesh.visible = true;
       });
     });
 
@@ -2728,7 +2961,11 @@ import { createCelestialDetailsPanel } from './ui/planetDetailsPanel.js';
       ease,
     );
     const earthIntensity = moon.userData.earthSystemHighlightIntensity;
-    updateSatelliteRimGlow(moon, earthIntensity, pulse);
+    updateSatelliteRimGlow(
+      moon,
+      focusedBody === moon ? 0 : earthIntensity,
+      pulse,
+    );
     if (moonOrbit?.material) {
       if (!moonOrbit.userData.systemHighlightBase) {
         moonOrbit.userData.systemHighlightBase = {
@@ -2751,15 +2988,26 @@ import { createCelestialDetailsPanel } from './ui/planetDetailsPanel.js';
 
   function updateCelestialSelectionCard() {
     const body = focusedBody;
-    if (!body || focusedUiSuppressedByWideView || focusExitTransition || celestialDetailsPanel?.isOpen()) {
+    const bodyName = body?.userData?.name ?? body?.name ?? null;
+    const atlasParentOwnsView = Boolean(
+      satelliteOverviewParentName
+      && bodyName === satelliteOverviewParentName,
+    );
+    if (
+      !body
+      || atlasParentOwnsView
+      || focusedUiSuppressedByWideView
+      || focusExitTransition
+      || celestialDetailsPanel?.isOpen()
+    ) {
       celestialSelectionCard.classList.remove("is-visible");
       celestialSelectionCard.setAttribute("aria-hidden", "true");
       return;
     }
 
-    const bodyName = body.userData?.name ?? body.name ?? "Celestial body";
+    const visibleBodyName = bodyName ?? "Celestial body";
     const parentName = body.userData?.parentPlanet;
-    celestialSelectionCardName.textContent = bodyName;
+    celestialSelectionCardName.textContent = visibleBodyName;
     celestialSelectionCardType.textContent = parentName
       ? `${getCelestialSelectionType(body)} · ${parentName} system`
       : getCelestialSelectionType(body);
@@ -2768,7 +3016,7 @@ import { createCelestialDetailsPanel } from './ui/planetDetailsPanel.js';
       celestialSelectionCardSatelliteRank.hidden = !satelliteRank;
       celestialSelectionCardSatelliteRank.textContent = satelliteRank?.compactText ?? "";
     }
-    celestialSelectionCard.setAttribute("aria-label", `Open detailed information for ${bodyName}`);
+    celestialSelectionCard.setAttribute("aria-label", `Open detailed information for ${visibleBodyName}`);
 
     body.getWorldPosition(planetSystemWorldPosition);
     planetSystemProjectedPosition.copy(planetSystemWorldPosition).project(camera);
@@ -2792,6 +3040,177 @@ import { createCelestialDetailsPanel } from './ui/planetDetailsPanel.js';
     celestialSelectionCard.setAttribute("aria-hidden", "false");
   }
 
+  /**
+   * Keeps the complete-system control joined to the focused planet card.
+   *
+   * We deliberately expose the full catalogue as an alternate camera shot
+   * instead of replacing the normal close inspection. This lets the viewer
+   * study Jupiter's clouds or Saturn's rings, then pull back to count the whole
+   * satellite population without losing focus.
+   */
+  function updateSatelliteSystemOverviewControl() {
+    const parentName = focusedBody?.userData?.name ?? focusedBody?.name ?? null;
+    const system = majorSatelliteSystems.find(
+      (candidate) => candidate.parentName === parentName,
+    );
+    const atlasActive = satelliteOverviewParentName === parentName;
+    const canOpen = Boolean(
+      system
+      && ["Jupiter", "Saturn"].includes(parentName)
+      && !atlasActive
+      && !focusedUiSuppressedByWideView
+      && !focusExitTransition
+      && !celestialDetailsPanel?.isOpen()
+      && celestialSelectionCard.classList.contains("is-visible"),
+    );
+
+    if (!canOpen) {
+      satelliteSystemOverview.classList.remove("is-visible", "is-active");
+      satelliteSystemOverview.setAttribute("aria-hidden", "true");
+      return;
+    }
+
+    const count = Number(
+      system.root.userData?.catalogueCount
+      ?? system.root.userData?.satelliteCount
+      ?? 0,
+    );
+    satelliteSystemOverviewTitle.textContent =
+      `Reveal all ${count.toLocaleString("en-US")} moons`;
+    satelliteSystemOverviewNote.textContent = "Complete cinematic orbital atlas";
+    satelliteSystemOverview.setAttribute(
+      "aria-label",
+      `Reveal all ${count.toLocaleString("en-US")} satellites of ${parentName}`,
+    );
+
+    const cardRect = celestialSelectionCard.getBoundingClientRect();
+    const controlWidth = innerWidth <= 560 ? 232 : 268;
+    const controlHeight = 76;
+    const preferredTop = cardRect.bottom + 10 + controlHeight <= innerHeight - 12
+      ? cardRect.bottom + 10
+      : cardRect.top - controlHeight - 10;
+    satelliteSystemOverview.style.left = `${THREE.MathUtils.clamp(
+      cardRect.left,
+      12,
+      innerWidth - controlWidth - 12,
+    )}px`;
+    satelliteSystemOverview.style.top = `${THREE.MathUtils.clamp(
+      preferredTop,
+      18,
+      innerHeight - controlHeight - 12,
+    )}px`;
+    satelliteSystemOverview.classList.remove("is-active");
+    satelliteSystemOverview.classList.add("is-visible");
+    satelliteSystemOverview.setAttribute("aria-hidden", "false");
+  }
+
+  /** Returns every currently hydrated focus target in stable catalogue order. */
+  function getSatelliteAtlasBodies(system) {
+    if (!system) return [];
+    const bodies = [
+      ...system.moons.map(({ moon: body }) => body),
+      ...(system.denseFields ?? []).flatMap((field) => (
+        field.records.map(({ target }) => target)
+      )),
+    ].filter(Boolean);
+    bodies.sort((a, b) => (
+      Number(a.userData?.catalogueOrdinal ?? Number.MAX_SAFE_INTEGER)
+      - Number(b.userData?.catalogueOrdinal ?? Number.MAX_SAFE_INTEGER)
+    ));
+    return bodies;
+  }
+
+  /**
+   * Maintains the persistent atlas directory without rebuilding it every frame.
+   * Jupiter's lightweight previews hydrate progressively, so the list refreshes
+   * at a gentle interval until the full catalogue is ready.
+   */
+  function updateSatelliteAtlasDirectory() {
+    const system = majorSatelliteSystems.find(
+      (candidate) => candidate.parentName === satelliteOverviewParentName,
+    );
+    const atlasOwnsView = Boolean(
+      system
+      && focusedBody === system.parent
+      && !focusExitTransition
+      && !celestialDetailsPanel?.isOpen(),
+    );
+    if (!atlasOwnsView) {
+      if (satelliteAtlasDirectoryHoverBody) clearSatelliteAtlasDirectoryHover();
+      satelliteAtlasDirectory.classList.remove("is-visible");
+      satelliteAtlasDirectory.setAttribute("aria-hidden", "true");
+      return;
+    }
+
+    const bodies = getSatelliteAtlasBodies(system);
+    const catalogueTotal = Number(
+      system.root.userData?.catalogueCount
+      ?? system.root.userData?.satelliteCount
+      ?? bodies.length,
+    );
+    const signature = `${system.parentName}:${bodies.length}:${catalogueTotal}`;
+    const now = performance.now();
+    if (satelliteAtlasDirectoryParentName !== system.parentName) {
+      satelliteAtlasDirectoryParentName = system.parentName;
+      if (satelliteAtlasDirectorySearch) satelliteAtlasDirectorySearch.value = "";
+      if (satelliteAtlasDirectoryList) satelliteAtlasDirectoryList.scrollLeft = 0;
+    }
+    const catalogueReady = bodies.length >= catalogueTotal;
+    const shouldRender = signature !== satelliteAtlasDirectorySignature
+      && (
+        catalogueReady
+        || satelliteAtlasDirectoryRenderedAt === 0
+        || now - satelliteAtlasDirectoryRenderedAt >= 320
+      );
+
+    satelliteAtlasBodiesByName.clear();
+    bodies.forEach((body) => {
+      satelliteAtlasBodiesByName.set(body.userData?.name ?? body.name, body);
+    });
+
+    if (shouldRender) {
+      const query = satelliteAtlasDirectorySearch?.value ?? "";
+      satelliteAtlasDirectoryList.replaceChildren(
+        ...bodies.map((body) => {
+          const name = body.userData?.name ?? body.name ?? "Satellite";
+          const ordinal = Number(body.userData?.catalogueOrdinal ?? 1);
+          const digits = Math.max(2, String(Math.max(1, catalogueTotal)).length);
+          const ordinalText = String(Math.max(1, ordinal)).padStart(digits, "0");
+          const button = document.createElement("button");
+          button.type = "button";
+          button.className = "satellite-atlas-directory__moon";
+          button.dataset.moonName = name;
+          button.dataset.search = `${ordinalText} ${name}`.toLowerCase();
+          button.setAttribute(
+            "aria-label",
+            `Inspect satellite ${ordinalText}, ${name}`,
+          );
+          button.innerHTML = `
+            <span>${ordinalText}</span>
+            <strong></strong>
+          `;
+          button.querySelector("strong").textContent = name;
+          return button;
+        }),
+      );
+      if (satelliteAtlasDirectorySearch) satelliteAtlasDirectorySearch.value = query;
+      filterSatelliteAtlasDirectory();
+      satelliteAtlasDirectorySignature = signature;
+      satelliteAtlasDirectoryRenderedAt = now;
+    }
+
+    satelliteAtlasDirectoryTitle.textContent =
+      `${system.parentName} · ${catalogueTotal.toLocaleString("en-US")} satellites`;
+    // Direct moon surfaces continue hydrating quietly between frames. Showing
+    // that internal ready count made the footer appear to increase whenever
+    // the user happened to hover or scroll during loading. The atlas identity
+    // should stay stable, so always present the complete catalogue total.
+    satelliteAtlasDirectoryStatus.textContent =
+      `${catalogueTotal.toLocaleString("en-US")} selectable orbital bodies`;
+    satelliteAtlasDirectory.classList.add("is-visible");
+    satelliteAtlasDirectory.setAttribute("aria-hidden", "false");
+  }
+
   function getSatelliteNameLabel(body) {
     let label = satelliteNameLabels.get(body);
     if (label) return label;
@@ -2801,8 +3220,8 @@ import { createCelestialDetailsPanel } from './ui/planetDetailsPanel.js';
     label.className = "satellite-name-label";
     label.innerHTML = `
       <span class="satellite-name-label__marker" aria-hidden="true"></span>
+      <span class="satellite-name-label__number" aria-hidden="true">01</span>
       <strong></strong>
-      <em>Details</em>
     `;
     const bodyName = body.userData?.name ?? body.name ?? "Satellite";
     label.querySelector("strong").textContent = bodyName;
@@ -2848,10 +3267,30 @@ import { createCelestialDetailsPanel } from './ui/planetDetailsPanel.js';
     }
 
     const selectedName = selectedPlanet.userData?.name ?? selectedPlanet.name;
+    // Atlas mode uses the permanent searchable directory below the scene.
+    // Removing the floating label cloud keeps every moon visible and leaves the
+    // existing green hover locator free to identify the exact 3D point.
+    if (satelliteOverviewParentName === selectedName) {
+      hideSatelliteNameLabels();
+      return;
+    }
     const selectedSystem = majorSatelliteSystems.find((system) => system.parentName === selectedName);
+    const selectedSystemEntries = selectedSystem
+      ? [
+        ...selectedSystem.moons,
+        ...(selectedSystem.denseFields ?? []).flatMap((field) => (
+          field.records.map(({ target, profile }) => ({ moon: target, profile }))
+        )),
+      ]
+      : [];
     const entries = selectedName === "Earth"
-      ? [{ moon, profile: { diameterKm: moon.userData?.physicalDiameterKm ?? 3474.8 } }]
-      : (selectedSystem?.moons ?? []);
+      ? [{
+        moon,
+        profile: { diameterKm: moon.userData?.physicalDiameterKm ?? 3474.8 },
+        catalogueOrdinal: 1,
+        catalogueTotal: 1,
+      }]
+      : selectedSystemEntries;
 
     satelliteLabelCandidates.length = 0;
     entries.forEach((entry) => {
@@ -2875,6 +3314,18 @@ import { createCelestialDetailsPanel } from './ui/planetDetailsPanel.js';
         screenX,
         screenY,
         radiusPixels,
+        catalogueOrdinal: Number(
+          entry.catalogueOrdinal
+          ?? body.userData?.catalogueOrdinal
+          ?? 1,
+        ),
+        catalogueTotal: Number(
+          entry.catalogueTotal
+          ?? body.userData?.catalogueTotal
+          ?? selectedSystem?.root?.userData?.catalogueCount
+          ?? entries.length
+          ?? 1,
+        ),
         priority: tierBonus + Math.log10(Math.max(1, diameter) + 1) * 90 + radiusPixels * 24 - centreDistance * 0.012,
       });
     });
@@ -2896,7 +3347,10 @@ import { createCelestialDetailsPanel } from './ui/planetDetailsPanel.js';
     satelliteLabelCandidates.slice(0, maximumLabels * 3).some((candidate) => {
       if (shownBodies.size >= maximumLabels) return true;
       const name = candidate.body.userData?.name ?? candidate.body.name ?? "Satellite";
-      const width = THREE.MathUtils.clamp(62 + name.length * 6.1, 78, 156);
+      const ordinalDigits = Math.max(2, String(Math.max(1, candidate.catalogueTotal)).length);
+      const ordinalText = String(Math.max(1, candidate.catalogueOrdinal))
+        .padStart(ordinalDigits, "0");
+      const width = THREE.MathUtils.clamp(68 + name.length * 6.1, 88, 164);
       const height = 23;
       const markerOffset = Math.max(8, candidate.radiusPixels + 7);
       const placements = [
@@ -2921,6 +3375,12 @@ import { createCelestialDetailsPanel } from './ui/planetDetailsPanel.js';
       if (!chosen) return false;
 
       const label = getSatelliteNameLabel(candidate.body);
+      const number = label.querySelector(".satellite-name-label__number");
+      if (number) number.textContent = ordinalText;
+      label.setAttribute(
+        "aria-label",
+        `Satellite ${ordinalText} of ${candidate.catalogueTotal}: open detailed information for ${name}`,
+      );
       label.style.left = `${chosen.left}px`;
       label.style.top = `${chosen.top}px`;
       label.classList.add("is-visible");
@@ -3027,6 +3487,20 @@ import { createCelestialDetailsPanel } from './ui/planetDetailsPanel.js';
     });
     if (nearbyJovianSatellite) {
       setCelestialHover(nearbyJovianSatellite);
+      return;
+    }
+
+    const nearbyDenseSatellite = findNearestDenseSatelliteAtPointer({
+      systems: majorSatelliteSystems,
+      pointer,
+      camera,
+      viewportWidth: innerWidth,
+      viewportHeight: innerHeight,
+      focusedBody,
+      overviewParentName: satelliteOverviewParentName,
+    });
+    if (nearbyDenseSatellite) {
+      setCelestialHover(nearbyDenseSatellite);
       return;
     }
 
@@ -3173,6 +3647,17 @@ import { createCelestialDetailsPanel } from './ui/planetDetailsPanel.js';
       focusedBody,
     });
     if (nearbyJovianSatellite) return nearbyJovianSatellite;
+
+    const nearbyDenseSatellite = findNearestDenseSatelliteAtPointer({
+      systems: majorSatelliteSystems,
+      pointer,
+      camera,
+      viewportWidth: innerWidth,
+      viewportHeight: innerHeight,
+      focusedBody,
+      overviewParentName: satelliteOverviewParentName,
+    });
+    if (nearbyDenseSatellite) return nearbyDenseSatellite;
 
     // Once the green locator is visible, the click is unambiguous even if a
     // revolving body travels a few pixels between hover detection and pointerup.
@@ -3434,6 +3919,7 @@ import { createCelestialDetailsPanel } from './ui/planetDetailsPanel.js';
         focusedBodyLocator.material.opacity = 0;
         focusZoomTarget = 1;
         focusZoomCurrent = 1;
+        satelliteOverviewParentName = null;
         focusPinchDistance = null;
         focusNavigationHistory.length = 0;
         restoreJourneyCameraSnapshot(snapshot);
@@ -3542,6 +4028,7 @@ import { createCelestialDetailsPanel } from './ui/planetDetailsPanel.js';
     focusedBodyLocator.material.opacity = 0;
     focusZoomTarget = 1;
     focusZoomCurrent = 1;
+    satelliteOverviewParentName = null;
     focusPinchDistance = null;
     setBodyCardCollapsed(false);
     updateBodyCard(null);
@@ -3625,6 +4112,7 @@ import { createCelestialDetailsPanel } from './ui/planetDetailsPanel.js';
       targetPitch,
       focusZoomTarget,
       focusZoomCurrent,
+      satelliteOverviewParentName,
       cameraFov: camera.fov,
       cameraOffset: camera.position.clone().sub(focusHistoryWorldPosition),
       focusOffset: cameraFocusPoint.clone().sub(focusHistoryWorldPosition),
@@ -3669,6 +4157,7 @@ import { createCelestialDetailsPanel } from './ui/planetDetailsPanel.js';
     targetPitch = state.targetPitch;
     focusZoomTarget = state.focusZoomTarget;
     focusZoomCurrent = state.focusZoomCurrent;
+    satelliteOverviewParentName = state.satelliteOverviewParentName ?? null;
     focusPinchDistance = null;
 
     camera.position.copy(focusHistoryWorldPosition).add(state.cameraOffset);
@@ -3721,6 +4210,7 @@ import { createCelestialDetailsPanel } from './ui/planetDetailsPanel.js';
       focusedBodyLocator.material.opacity = 0;
       focusZoomTarget = 1;
       focusZoomCurrent = 1;
+      satelliteOverviewParentName = null;
       focusPinchDistance = null;
       restoreBroadSolarSystemScale();
       updateBodyCard(null);
@@ -3766,6 +4256,9 @@ import { createCelestialDetailsPanel } from './ui/planetDetailsPanel.js';
   */
   function focusBody(body) {
     if (focusExitTransition) return;
+    const retainedAtlasParentName = body?.userData?.parentPlanet === satelliteOverviewParentName
+      ? satelliteOverviewParentName
+      : null;
     clearCelestialHover();
     clearPlanetOrbitHover();
 
@@ -3817,6 +4310,10 @@ import { createCelestialDetailsPanel } from './ui/planetDetailsPanel.js';
     focusedBodyLocator.visible = true;
     focusZoomTarget = 1;
     focusZoomCurrent = 1;
+    // A moon chosen from the atlas keeps its compressed orbit while the camera
+    // flies in. This prevents the target from racing outward to its ordinary
+    // system-scale position during the inspection transition.
+    satelliteOverviewParentName = retainedAtlasParentName;
     focusPinchDistance = null;
 
     setAsteroidInspectionDetail(focusedBody, true);
@@ -3830,7 +4327,7 @@ import { createCelestialDetailsPanel } from './ui/planetDetailsPanel.js';
     - Wires scroll, pointer, drag, and keyboard events to the camera control state.
     - Keeps the scene interactive while preserving pointer selection and drag motion.
   */
-  const JOURNEY_UI_SELECTOR = ".about-experience, .planet-details, .celestial-selection-card, .satellite-name-label, .body-card, .body-card-restore, .progress, .distance-cinematic-layer, .earth-return-button";
+  const JOURNEY_UI_SELECTOR = ".about-experience, .planet-details, .celestial-selection-card, .satellite-system-overview, .satellite-atlas-directory, .satellite-name-label, .body-card, .body-card-restore, .progress, .distance-cinematic-layer, .earth-return-button";
 
   /**
    * A hover may slow orbital motion for inspection, but it must never capture a
@@ -3879,6 +4376,12 @@ import { createCelestialDetailsPanel } from './ui/planetDetailsPanel.js';
 
   function updateFocusedUiDistanceState() {
     if (!focusedBody) {
+      focusedUiSuppressedByWideView = false;
+      return;
+    }
+    // The directory is the atlas navigation surface, so it must remain present
+    // when the user zooms farther out to compare every orbit.
+    if (satelliteOverviewParentName) {
       focusedUiSuppressedByWideView = false;
       return;
     }
@@ -4131,7 +4634,7 @@ import { createCelestialDetailsPanel } from './ui/planetDetailsPanel.js';
 
   const preventFocusedJourneyScroll = (event) => {
     // Cards and the distance explanation retain their own internal scrolling.
-    if (event.target.closest?.(".planet-details, .celestial-selection-card, .satellite-name-label, .body-card, .body-card-restore, .progress, .distance-cinematic-layer")) return;
+    if (event.target.closest?.(".planet-details, .celestial-selection-card, .satellite-system-overview, .satellite-atlas-directory, .satellite-name-label, .body-card, .body-card-restore, .progress, .distance-cinematic-layer")) return;
     if (!isJourneyScrollLocked) return;
 
     event.preventDefault();
@@ -4140,7 +4643,7 @@ import { createCelestialDetailsPanel } from './ui/planetDetailsPanel.js';
   addEventListener("wheel", preventFocusedJourneyScroll, { passive: false });
 
   addEventListener("touchstart", (event) => {
-    if (event.target.closest?.(".planet-details, .celestial-selection-card, .satellite-name-label, .body-card, .body-card-restore, .progress, .distance-cinematic-layer")) return;
+    if (event.target.closest?.(".planet-details, .celestial-selection-card, .satellite-system-overview, .satellite-atlas-directory, .satellite-name-label, .body-card, .body-card-restore, .progress, .distance-cinematic-layer")) return;
     if (!focusedBody || event.touches.length !== 2) return;
     focusPinchDistance = Math.hypot(
       event.touches[0].clientX - event.touches[1].clientX,
@@ -4149,7 +4652,7 @@ import { createCelestialDetailsPanel } from './ui/planetDetailsPanel.js';
   }, { passive: true });
 
   addEventListener("touchmove", (event) => {
-    if (event.target.closest?.(".planet-details, .celestial-selection-card, .satellite-name-label, .body-card, .body-card-restore, .progress, .distance-cinematic-layer")) return;
+    if (event.target.closest?.(".planet-details, .celestial-selection-card, .satellite-system-overview, .satellite-atlas-directory, .satellite-name-label, .body-card, .body-card-restore, .progress, .distance-cinematic-layer")) return;
     if (!focusedBody || event.touches.length !== 2 || focusPinchDistance == null) return;
     event.preventDefault();
 
@@ -4180,7 +4683,7 @@ import { createCelestialDetailsPanel } from './ui/planetDetailsPanel.js';
     if (hoveredPlanetOrbit && !isPointerStillOnHoveredPlanetOrbit()) {
       clearPlanetOrbitHover();
     }
-    if (event.target.closest?.(".about-experience, .planet-details, .celestial-selection-card, .satellite-name-label, .hud, .body-card, .body-card-restore, .progress, .distance-cinematic-layer, .earth-return-button")) {
+    if (event.target.closest?.(".about-experience, .planet-details, .celestial-selection-card, .satellite-system-overview, .satellite-atlas-directory, .satellite-name-label, .hud, .body-card, .body-card-restore, .progress, .distance-cinematic-layer, .earth-return-button")) {
       clearCelestialHover();
       clearPlanetOrbitHover();
       lastPointer = { x: event.clientX, y: event.clientY };
@@ -4223,7 +4726,7 @@ import { createCelestialDetailsPanel } from './ui/planetDetailsPanel.js';
   });
 
   addEventListener("pointerdown", (event) => {
-    if (event.target.closest?.(".about-experience, .planet-details, .celestial-selection-card, .satellite-name-label, .body-card-restore, .progress, .distance-cinematic-layer, .earth-return-button")) return;
+    if (event.target.closest?.(".about-experience, .planet-details, .celestial-selection-card, .satellite-system-overview, .satellite-atlas-directory, .satellite-name-label, .body-card-restore, .progress, .distance-cinematic-layer, .earth-return-button")) return;
     updatePointerFromEvent(event);
     const pressedOrbitCandidate = hoveredPlanetOrbit && isPointerStillOnHoveredPlanetOrbit()
       ? hoveredPlanetOrbit
@@ -4243,7 +4746,7 @@ import { createCelestialDetailsPanel } from './ui/planetDetailsPanel.js';
     updatePointerFromEvent(event);
     isDragging = false;
     // HUD clicks belong to HTML controls and must not select objects behind them.
-    if (event.target.closest?.(".about-experience, .planet-details, .celestial-selection-card, .satellite-name-label, .hud, .body-card, .body-card-restore, .progress, .distance-cinematic-layer, .earth-return-button")) {
+    if (event.target.closest?.(".about-experience, .planet-details, .celestial-selection-card, .satellite-system-overview, .satellite-atlas-directory, .satellite-name-label, .hud, .body-card, .body-card-restore, .progress, .distance-cinematic-layer, .earth-return-button")) {
       pointerDownCelestialBody = null;
       pointerDownPlanetOrbit = null;
       return;
@@ -4463,7 +4966,11 @@ import { createCelestialDetailsPanel } from './ui/planetDetailsPanel.js';
     updateMajorSatelliteSystems(
       majorSatelliteSystems,
       frameMotionScale,
-      { hoveredBody: hoveredCelestialBody, focusedBody },
+      {
+        hoveredBody: hoveredCelestialBody ?? satelliteAtlasDirectoryHoverBody,
+        focusedBody,
+        overviewParentName: satelliteOverviewParentName,
+      },
     );
 
     // ----- Calculate the camera's spherical orbit around its focus point -----
@@ -4546,7 +5053,8 @@ import { createCelestialDetailsPanel } from './ui/planetDetailsPanel.js';
       camera,
       viewportHeight: innerHeight,
       focusedBody,
-      hoveredBody: hoveredCelestialBody,
+      hoveredBody: hoveredCelestialBody ?? satelliteAtlasDirectoryHoverBody,
+      overviewParentName: satelliteOverviewParentName,
     });
 
     const isAsteroidFocused = Boolean(
@@ -4680,6 +5188,8 @@ import { createCelestialDetailsPanel } from './ui/planetDetailsPanel.js';
     camera.updateMatrixWorld();
     updatePlanetOrbitHoverVisual();
     updateCelestialSelectionCard();
+    updateSatelliteSystemOverviewControl();
+    updateSatelliteAtlasDirectory();
     updateSatelliteNameLabels();
     updateInspectionInterface();
     renderer.render(scene, camera);

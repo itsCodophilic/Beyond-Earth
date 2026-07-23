@@ -1310,6 +1310,23 @@ body.is-hovering-celestial #universe {
   box-shadow: 0 0 8px rgba(91, 255, 196, 0.86);
 }
 
+.satellite-name-label__number {
+  display: inline-grid;
+  min-width: 22px;
+  height: 14px;
+  place-items: center;
+  padding-inline: 4px;
+  border: 1px solid rgba(127, 235, 255, 0.24);
+  border-radius: 999px;
+  background: rgba(75, 151, 177, 0.12);
+  color: rgba(157, 235, 255, 0.82);
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 0.43rem;
+  font-weight: 760;
+  letter-spacing: 0.055em;
+  line-height: 1;
+}
+
 .satellite-name-label strong {
   overflow: hidden;
   max-width: 96px;
@@ -1352,6 +1369,13 @@ body.is-hovering-planet-orbit #universe {
   .satellite-name-label strong {
     max-width: 78px;
     font-size: 0.53rem;
+  }
+
+  .satellite-name-label__number {
+    min-width: 20px;
+    height: 13px;
+    padding-inline: 3px;
+    font-size: 0.40rem;
   }
 
   .satellite-name-label em {
@@ -1515,6 +1539,374 @@ body.is-hovering-planet-orbit #universe {
   letter-spacing: 0.045em;
 }
 
+/* --------------------------------------------------------------------------
+   Complete Jupiter / Saturn satellite atlas
+   -------------------------------------------------------------------------- */
+
+.satellite-system-overview {
+  position: fixed;
+  z-index: 14;
+  display: grid;
+  width: 268px;
+  grid-template-columns: 12px 1fr 34px;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 12px;
+  border: 1px solid rgba(143, 122, 255, 0.42);
+  border-radius: 13px;
+  outline: none;
+  background:
+    radial-gradient(circle at 88% 18%, rgba(177, 109, 255, 0.15), transparent 40%),
+    linear-gradient(145deg, rgba(8, 18, 38, 0.95), rgba(4, 11, 25, 0.93));
+  color: #effcff;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 0 24px rgba(116, 92, 255, 0.13),
+    0 13px 32px rgba(0, 0, 0, 0.40);
+  backdrop-filter: blur(15px) saturate(125%);
+  -webkit-backdrop-filter: blur(15px) saturate(125%);
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-7px) scale(0.965);
+  transition:
+    opacity 180ms ease,
+    transform 310ms cubic-bezier(0.16, 1, 0.3, 1),
+    border-color 200ms ease,
+    box-shadow 200ms ease;
+  text-align: left;
+}
+
+.satellite-system-overview.is-visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0) scale(1);
+}
+
+.satellite-system-overview:hover,
+.satellite-system-overview:focus-visible,
+.satellite-system-overview.is-active {
+  border-color: rgba(139, 236, 255, 0.72);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 0 31px rgba(101, 220, 255, 0.23),
+    0 15px 36px rgba(0, 0, 0, 0.46);
+  transform: translateY(-2px) scale(1.012);
+}
+
+.satellite-system-overview__signal {
+  width: 9px;
+  height: 9px;
+  border: 1px solid rgba(132, 235, 255, 0.90);
+  border-radius: 50%;
+  background: rgba(124, 208, 255, 0.70);
+  box-shadow:
+    0 0 0 4px rgba(111, 184, 255, 0.08),
+    0 0 16px rgba(111, 229, 255, 0.72);
+  animation: satellite-atlas-signal 2.2s ease-in-out infinite;
+}
+
+.satellite-system-overview__copy {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.satellite-system-overview__copy small {
+  color: rgba(132, 221, 255, 0.68);
+  font-size: 0.50rem;
+  font-weight: 780;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+}
+
+.satellite-system-overview__copy strong {
+  overflow: hidden;
+  color: #f5fdff;
+  font-size: 0.75rem;
+  letter-spacing: 0.025em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.satellite-system-overview__copy em {
+  overflow: hidden;
+  color: rgba(185, 202, 229, 0.66);
+  font-size: 0.55rem;
+  font-style: normal;
+  letter-spacing: 0.025em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.satellite-system-overview__icon {
+  display: grid;
+  width: 31px;
+  height: 31px;
+  place-items: center;
+  border: 1px solid rgba(159, 126, 255, 0.43);
+  border-radius: 50%;
+  color: rgba(182, 237, 255, 0.92);
+  font-size: 1.1rem;
+  transition: transform 420ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.satellite-system-overview:hover .satellite-system-overview__icon,
+.satellite-system-overview.is-active .satellite-system-overview__icon {
+  transform: rotate(180deg) scale(1.08);
+}
+
+@keyframes satellite-atlas-signal {
+  0%,
+  100% {
+    opacity: 0.68;
+    transform: scale(0.86);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.14);
+  }
+}
+
+/* The complete-system directory replaces the floating label cloud in atlas
+   mode. It keeps all names reachable while leaving the 3D orbits unobstructed. */
+.satellite-atlas-directory {
+  position: fixed;
+  right: 88px;
+  bottom: 16px;
+  z-index: 14;
+  display: grid;
+  width: min(820px, calc(100vw - 520px));
+  min-width: 520px;
+  gap: 9px;
+  padding: 12px 13px 10px;
+  border: 1px solid rgba(116, 220, 255, 0.38);
+  border-radius: 16px;
+  background:
+    radial-gradient(circle at 92% 0%, rgba(151, 96, 255, 0.13), transparent 36%),
+    linear-gradient(145deg, rgba(4, 19, 34, 0.95), rgba(3, 10, 23, 0.94));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.055),
+    0 0 32px rgba(78, 203, 255, 0.14),
+    0 18px 44px rgba(0, 0, 0, 0.48);
+  backdrop-filter: blur(18px) saturate(128%);
+  -webkit-backdrop-filter: blur(18px) saturate(128%);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(13px) scale(0.985);
+  transform-origin: 70% 100%;
+  transition:
+    opacity 210ms ease,
+    transform 360ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.satellite-atlas-directory.is-visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0) scale(1);
+}
+
+.satellite-atlas-directory__header,
+.satellite-atlas-directory footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.satellite-atlas-directory__header > span {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.satellite-atlas-directory__header small {
+  color: rgba(123, 225, 255, 0.66);
+  font-size: 0.48rem;
+  font-weight: 780;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.satellite-atlas-directory__header strong {
+  overflow: hidden;
+  color: rgba(242, 253, 255, 0.97);
+  font-size: 0.78rem;
+  letter-spacing: 0.035em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.satellite-atlas-directory__actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 7px;
+}
+
+.satellite-atlas-directory__search {
+  position: relative;
+  flex: 0 0 166px;
+}
+
+.satellite-atlas-directory__search::before {
+  position: absolute;
+  top: 50%;
+  left: 10px;
+  color: rgba(125, 228, 255, 0.58);
+  content: "⌕";
+  font-size: 0.86rem;
+  pointer-events: none;
+  transform: translateY(-54%);
+}
+
+.satellite-atlas-directory__search input {
+  width: 100%;
+  height: 29px;
+  padding: 0 9px 0 27px;
+  border: 1px solid rgba(118, 222, 255, 0.25);
+  border-radius: 999px;
+  outline: none;
+  background: rgba(5, 26, 38, 0.68);
+  color: rgba(235, 252, 255, 0.96);
+  font: inherit;
+  font-size: 0.59rem;
+  letter-spacing: 0.025em;
+}
+
+.satellite-atlas-directory__search input:focus {
+  border-color: rgba(127, 238, 255, 0.72);
+  box-shadow: 0 0 17px rgba(88, 222, 255, 0.17);
+}
+
+.satellite-atlas-directory__search input::placeholder {
+  color: rgba(164, 199, 211, 0.48);
+}
+
+.satellite-atlas-directory__close {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 30px;
+  place-items: center;
+  padding: 0;
+  border: 1px solid rgba(126, 229, 255, 0.42);
+  border-radius: 50%;
+  outline: none;
+  background: rgba(5, 25, 39, 0.76);
+  box-shadow:
+    inset 0 0 12px rgba(91, 222, 255, 0.05),
+    0 0 13px rgba(91, 222, 255, 0.08);
+  color: rgba(236, 253, 255, 0.94);
+  cursor: pointer;
+  font: inherit;
+  font-size: 1.05rem;
+  line-height: 1;
+  transition:
+    border-color 160ms ease,
+    background 160ms ease,
+    box-shadow 160ms ease,
+    color 160ms ease,
+    transform 220ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.satellite-atlas-directory__close:hover,
+.satellite-atlas-directory__close:focus-visible {
+  border-color: rgba(128, 255, 213, 0.78);
+  background: rgba(9, 56, 57, 0.88);
+  box-shadow: 0 0 19px rgba(77, 255, 201, 0.22);
+  color: #ffffff;
+  transform: rotate(90deg) scale(1.06);
+}
+
+.satellite-atlas-directory__list {
+  display: flex;
+  gap: 7px;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  padding: 2px 1px 7px;
+  scrollbar-color: rgba(106, 224, 255, 0.32) transparent;
+  scrollbar-width: thin;
+}
+
+.satellite-atlas-directory__list::-webkit-scrollbar {
+  height: 4px;
+}
+
+.satellite-atlas-directory__list::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgba(106, 224, 255, 0.32);
+}
+
+.satellite-atlas-directory__moon {
+  display: grid;
+  min-width: 116px;
+  max-width: 164px;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 7px;
+  padding: 7px 9px 7px 7px;
+  border: 1px solid rgba(108, 239, 255, 0.19);
+  border-radius: 10px;
+  outline: none;
+  background: rgba(6, 32, 45, 0.58);
+  color: rgba(235, 253, 255, 0.93);
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+  transition:
+    border-color 150ms ease,
+    background 150ms ease,
+    box-shadow 150ms ease,
+    transform 150ms ease;
+}
+
+.satellite-atlas-directory__moon:hover,
+.satellite-atlas-directory__moon:focus-visible {
+  border-color: rgba(126, 255, 210, 0.66);
+  background: rgba(9, 54, 56, 0.82);
+  box-shadow: 0 0 17px rgba(80, 255, 201, 0.17);
+  transform: translateY(-1px);
+}
+
+.satellite-atlas-directory__moon[hidden] {
+  display: none;
+}
+
+.satellite-atlas-directory__moon > span {
+  display: grid;
+  min-width: 29px;
+  height: 23px;
+  place-items: center;
+  border: 1px solid rgba(126, 223, 255, 0.23);
+  border-radius: 7px;
+  background: rgba(67, 139, 183, 0.12);
+  color: rgba(153, 232, 255, 0.82);
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 0.47rem;
+  font-weight: 760;
+}
+
+.satellite-atlas-directory__moon strong {
+  overflow: hidden;
+  font-size: 0.58rem;
+  letter-spacing: 0.025em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.satellite-atlas-directory footer {
+  padding-top: 1px;
+  color: rgba(163, 202, 215, 0.55);
+  font-size: 0.46rem;
+  font-weight: 650;
+  letter-spacing: 0.035em;
+}
+
+.satellite-atlas-directory footer span:first-child {
+  color: rgba(136, 246, 215, 0.72);
+}
+
 /* Satellite labels are now real compact information controls. The full-screen
    layer remains transparent to input while only visible labels receive clicks. */
 .satellite-name-label {
@@ -1543,5 +1935,58 @@ body.is-hovering-planet-orbit #universe {
   .celestial-selection-card {
     width: 232px;
     padding: 10px 12px 11px;
+  }
+
+  .satellite-system-overview {
+    width: 232px;
+  }
+}
+
+@media (max-width: 1050px) {
+  .satellite-atlas-directory {
+    right: 12px;
+    bottom: 12px;
+    left: 12px;
+    width: auto;
+    min-width: 0;
+  }
+}
+
+@media (max-width: 620px) {
+  .satellite-atlas-directory {
+    gap: 7px;
+    padding: 10px;
+  }
+
+  .satellite-atlas-directory__header {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 7px;
+  }
+
+  .satellite-atlas-directory__search {
+    flex: 1 1 auto;
+  }
+
+  .satellite-atlas-directory__actions {
+    width: 100%;
+  }
+
+  .satellite-atlas-directory__moon {
+    min-width: 108px;
+  }
+
+  .satellite-atlas-directory footer span:last-child {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .satellite-system-overview__signal {
+    animation: none;
+  }
+
+  .satellite-atlas-directory {
+    transition-duration: 1ms;
   }
 }

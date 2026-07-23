@@ -28,8 +28,10 @@ const PROVISIONAL_NAMES = Object.freeze([
   "S/2007 S2", "S/2007 S3", ...rangeDesignations(2007, 5, 11),
   "S/2009 S1",
   ...rangeDesignations(2019, 1, 44),
-  ...rangeDesignations(2020, 1, 44),
-  ...rangeDesignations(2023, 1, 50),
+  // The IAU Minor Planet Center announced eleven additional Saturnian moons
+  // on 26 March 2026: four 2020 discoveries and seven 2023 discoveries.
+  ...rangeDesignations(2020, 1, 48),
+  ...rangeDesignations(2023, 1, 57),
 ]);
 
 export const SATURN_OFFICIAL_MOON_NAMES = Object.freeze([
@@ -347,6 +349,6 @@ export const SATURN_MOON_PROFILES = Object.freeze(
 
 export const SATURN_MOON_COUNT = SATURN_MOON_PROFILES.length;
 
-if (SATURN_MOON_COUNT !== 274) {
-  throw new Error(`Saturn catalogue integrity error: expected 274 moons, got ${SATURN_MOON_COUNT}.`);
+if (SATURN_MOON_COUNT !== 285) {
+  throw new Error(`Saturn catalogue integrity error: expected 285 moons, got ${SATURN_MOON_COUNT}.`);
 }

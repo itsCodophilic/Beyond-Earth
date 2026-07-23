@@ -107,12 +107,27 @@ function orbitRadiusAtAngle(semiMajorRadius, eccentricity, angle) {
     / Math.max(0.08, 1 + safeEccentricity * Math.cos(angle));
 }
 
-function createOrbitLines(moons, parentRadius, quality = "high") {
+function createOrbitLines(
+  moons,
+  parentRadius,
+  quality = "high",
+  {
+    includeEveryOrbit = false,
+    name = "Major satellite orbit guides",
+    color = 0x9bc6d9,
+    opacity = 0.10,
+  } = {},
+) {
   const positions = [];
-  const segments = quality === "low" ? 64 : quality === "medium" ? 96 : 128;
+  // The complete Jupiter/Saturn atlas contains hundreds of paths. A lower
+  // segment budget keeps them smooth at atlas scale while retaining one draw
+  // call and avoiding hundreds of individual LineLoop objects.
+  const segments = includeEveryOrbit
+    ? (quality === "low" ? 40 : quality === "medium" ? 52 : 64)
+    : (quality === "low" ? 64 : quality === "medium" ? 96 : 128);
 
   moons.forEach((moon) => {
-    if (moon.showOrbitGuide === false) return;
+    if (!includeEveryOrbit && moon.showOrbitGuide === false) return;
 
     const semiMajorRadius = parentRadius * moon.orbitScale;
     const inclination = moon.inclination ?? 0;
@@ -139,13 +154,13 @@ function createOrbitLines(moons, parentRadius, quality = "high") {
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
   const material = new THREE.LineBasicMaterial({
-    color: 0x9bc6d9,
+    color,
     transparent: true,
-    opacity: 0.10,
+    opacity,
     depthWrite: false,
   });
   const lines = new THREE.LineSegments(geometry, material);
-  lines.name = "Major satellite orbit guides";
+  lines.name = name;
   return lines;
 }
 
@@ -346,6 +361,78 @@ function createSatelliteMesh(
 const denseMoonDummy = new THREE.Object3D();
 const denseMoonColour = new THREE.Color();
 
+/**
+ * Creates a render-free focus anchor for one moon stored inside an InstancedMesh.
+ *
+ * The InstancedMesh remains responsible for drawing hundreds of tiny rocks in
+ * one GPU call. This Object3D only carries scientific metadata and a live world
+ * position so hover, click, camera focus, Back/Escape, and information cards can
+ * address that exact catalogue entry.
+ */
+function createDenseSatelliteInteractionTarget(profile, parentName) {
+  const target = new THREE.Object3D();
+  const visualRadius = Number(profile.visualRadius ?? 0.02);
+  const orbitalScale = PARENT_ORBITAL_SCALE[parentName];
+  const diameterKm = Number(profile.diameterKm ?? 0);
+  const sizeComparison = getSizeComparisonText({
+    diameterKm,
+    name: profile.name,
+  });
+  const diameterPrefix = profile.diameterEstimated ? "≈ " : "";
+  const scientificDescription = [
+    profile.description,
+    profile.surfaceStructure ? `Surface structure: ${profile.surfaceStructure}` : null,
+    profile.orbitSummary,
+    profile.dataNote,
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  target.name = profile.name;
+  target.userData = {
+    name: profile.name,
+    detail: `${parentName} satellite · unresolved catalogue body`,
+    parentPlanet: parentName,
+    isSatellite: true,
+    isDenseSatellite: true,
+    satelliteFamily: profile.family ?? null,
+    interactionTier: "background",
+    surfaceEvidence: profile.surfaceEvidence ?? "Unresolved",
+    surfaceStructure: profile.surfaceStructure ?? null,
+    surfaceRoughness: profile.surfaceRoughness ?? 1,
+    estimatedAlbedo: profile.albedo ?? null,
+    heliocentricAU: orbitalScale?.heliocentricAU,
+    orbitalEccentricity: orbitalScale?.eccentricity,
+    satelliteOrbitalEccentricity: profile.eccentricity ?? 0,
+    distanceBasis: "satellite-parent-orbit",
+    visualRadius,
+    baseVisualRadius: visualRadius,
+    physicalDiameterKm: diameterKm,
+    diameterEarths: diameterKm / 12_756,
+    volumeEarths: Math.pow(diameterKm / 12_756, 3),
+    sizeComparison,
+    focusDistance: Math.max(0.44, visualRadius * 6.5),
+    minFocusDistance: Math.max(0.32, visualRadius * 4.8),
+    focusEase: 0.10,
+    focusFov: 30,
+    info: {
+      type: "Natural satellite",
+      diameter: `${diameterPrefix}${diameterKm.toLocaleString("en-US", {
+        maximumFractionDigits: 2,
+      })} km`,
+      orbitalSpeed: profile.orbitalSpeed,
+      distanceFromEarth: `Varies with ${parentName}'s orbit`,
+      sizeComparison,
+      surfaceEvidence: profile.surfaceEvidence ?? "Unresolved telescopic body",
+      roughness: Number.isFinite(profile.surfaceRoughness)
+        ? Number(profile.surfaceRoughness).toFixed(2)
+        : "Family reconstruction",
+      description: scientificDescription || `${profile.name} is a satellite of ${parentName}.`,
+    },
+  };
+  return target;
+}
+
 function createDenseSatelliteFields(profiles, parentRadius, parentName, quality) {
   const grouped = new Map();
   profiles.forEach((profile) => {
@@ -370,42 +457,67 @@ function createDenseSatelliteFields(profiles, parentRadius, parentName, quality)
     mesh.castShadow = false;
     mesh.receiveShadow = false;
     mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    const targetsGroup = new THREE.Group();
+    targetsGroup.name = `${parentName} ${key} satellite interaction anchors`;
 
     const fieldRecords = records.map((profile, index) => {
       denseMoonColour.set(profile.color ?? profile.colour ?? 0x666666);
       const tint = 0.82 + ((profile.seed ?? index * 0.137) % 1) * 0.28;
       denseMoonColour.multiplyScalar(tint);
       mesh.setColorAt(index, denseMoonColour);
+      const target = createDenseSatelliteInteractionTarget(profile, parentName);
+      targetsGroup.add(target);
       return {
         profile,
+        target,
         angle: profile.meanAnomaly ?? ((index / Math.max(1, records.length)) * Math.PI * 2),
         semiMajorVisualRadius: parentRadius * profile.orbitScale,
       };
     });
     if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
 
-    return { key, mesh, records: fieldRecords };
+    return { key, mesh, targetsGroup, records: fieldRecords };
   });
 }
 
-function updateDenseSatelliteField(field, motionScale = 0) {
+function updateDenseSatelliteField(
+  field,
+  motionScale = 0,
+  orbitPresentationScale = 1,
+  visualBoost = 1,
+  hoveredBody = null,
+  focusedBody = null,
+) {
   if (!field.mesh.visible && motionScale !== 0) return;
   field.records.forEach((record, index) => {
     const { profile, semiMajorVisualRadius } = record;
-    record.angle += (profile.speed ?? 0) * motionScale;
+    const isHeld = record.target === hoveredBody || record.target === focusedBody;
+    if (!isHeld) record.angle += (profile.speed ?? 0) * motionScale;
     const radius = orbitRadiusAtAngle(semiMajorVisualRadius, profile.eccentricity, record.angle);
     orbitPoint.set(Math.cos(record.angle) * radius, 0, -Math.sin(record.angle) * radius);
     orbitPoint.applyAxisAngle(orbitTiltAxis, profile.inclination ?? 0);
     orbitPoint.applyAxisAngle(THREE.Object3D.DEFAULT_UP, profile.node ?? 0);
 
-    denseMoonDummy.position.copy(orbitPoint);
+    // Complete-system overview keeps the scientific ordering and orbital
+    // inclination, but compresses the enormous irregular-moon distances into a
+    // readable cinematic map. The ordinary close view always eases back to 1.
+    denseMoonDummy.position.copy(orbitPoint).multiplyScalar(orbitPresentationScale);
+    if (record.target) {
+      record.target.position.copy(denseMoonDummy.position);
+      record.target.userData.visualRadius = Number(
+        record.target.userData.baseVisualRadius ?? profile.visualRadius ?? 0.02,
+      ) * visualBoost;
+    }
     denseMoonDummy.rotation.set(
       (profile.seed ?? 0) * 0.7,
       record.angle * (profile.retrograde ? -0.37 : 0.37),
       (profile.seed ?? 0) * 0.4,
     );
     const shape = profile.shape ?? [1, 1, 1];
-    const radiusScale = profile.visualRadius ?? 0.02;
+    // Most recently discovered Saturnian moons are only a fraction of a pixel
+    // at system scale. A restrained overview-only boost keeps every catalogue
+    // entry visible without replacing the efficient instanced representation.
+    const radiusScale = (profile.visualRadius ?? 0.02) * visualBoost;
     denseMoonDummy.scale.set(radiusScale * shape[0], radiusScale * shape[1], radiusScale * shape[2]);
     denseMoonDummy.updateMatrix();
     field.mesh.setMatrixAt(index, denseMoonDummy.matrix);
@@ -441,6 +553,11 @@ export function createMajorSatelliteSystems({
     if (!parent) return;
 
     const parentRadius = parent.userData.visualRadius ?? 1;
+    // The catalogue ordinal is independent of label priority or current screen
+    // position. A moon therefore keeps the same number throughout the journey.
+    const catalogueOrdinalByName = new Map(
+      moonProfiles.map((profile, index) => [profile.name, index + 1]),
+    );
     const root = new THREE.Group();
     root.name = `${parentName} major satellite system`;
     root.position.copy(parent.position);
@@ -464,6 +581,42 @@ export function createMajorSatelliteSystems({
         : moonProfiles.length,
     };
     root.add(createOrbitLines(moonProfiles, parentRadius, quality));
+    let atlasOrbitGuides = null;
+    let atlasOrbitHighlight = null;
+    if (parentName === "Jupiter" || parentName === "Saturn") {
+      atlasOrbitGuides = createOrbitLines(
+        moonProfiles,
+        parentRadius,
+        quality,
+        {
+          includeEveryOrbit: true,
+          name: "Complete satellite atlas orbit guides",
+          color: parentName === "Saturn" ? 0x9dbfff : 0x91e9ff,
+          opacity: parentName === "Saturn" ? 0.055 : 0.065,
+        },
+      );
+      atlasOrbitGuides.visible = false;
+      atlasOrbitGuides.renderOrder = 1;
+      root.add(atlasOrbitGuides);
+
+      // One reusable neon path follows whichever directory entry is hovered.
+      // Reusing a single LineLoop avoids adding 285 extra draw calls.
+      atlasOrbitHighlight = new THREE.LineLoop(
+        new THREE.BufferGeometry(),
+        new THREE.LineBasicMaterial({
+          color: parentName === "Saturn" ? 0xb9d6ff : 0x8ff8ff,
+          transparent: true,
+          opacity: 0.92,
+          blending: THREE.AdditiveBlending,
+          depthWrite: false,
+          toneMapped: false,
+        }),
+      );
+      atlasOrbitHighlight.name = "Hovered satellite atlas orbit";
+      atlasOrbitHighlight.visible = false;
+      atlasOrbitHighlight.renderOrder = 5;
+      root.add(atlasOrbitHighlight);
+    }
 
     let maximumOrbitRadius = 0;
     const directProfiles = moonProfiles.filter((profile) => !profile.instanced);
@@ -501,6 +654,8 @@ export function createMajorSatelliteSystems({
         quality,
       );
       const { moon, hitTarget, semiMajorVisualRadius } = satellite;
+      moon.userData.catalogueOrdinal = catalogueOrdinalByName.get(profile.name);
+      moon.userData.catalogueTotal = moonProfiles.length;
       if (deferDirectBodies) {
         // A progressively hydrated body starts hidden. The screen-space
         // visibility pass enables it only when its parent system is legible,
@@ -529,6 +684,11 @@ export function createMajorSatelliteSystems({
         orbitPlane,
         pivot,
         speed: profile.speed,
+        // These authored values let overview mode enlarge tiny moons without
+        // permanently mutating their close-inspection scale.
+        baseMoonScale: moon.scale.clone(),
+        baseHitTargetScale: hitTarget?.scale.clone() ?? null,
+        baseVisualRadius: Number(moon.userData?.visualRadius ?? 0),
       };
       moons.push(hydratedSatellite);
       return hydratedSatellite;
@@ -543,7 +703,12 @@ export function createMajorSatelliteSystems({
 
     const denseFields = createDenseSatelliteFields(denseProfiles, parentRadius, parentName, quality);
     denseFields.forEach((field) => {
-      field.records.forEach(({ profile, semiMajorVisualRadius }) => {
+      field.records.forEach((record) => {
+        const { profile, semiMajorVisualRadius } = record;
+        if (record.target) {
+          record.target.userData.catalogueOrdinal = catalogueOrdinalByName.get(profile.name);
+          record.target.userData.catalogueTotal = moonProfiles.length;
+        }
         maximumOrbitRadius = Math.max(
           maximumOrbitRadius,
           semiMajorVisualRadius * (1 + Math.min(0.86, profile.eccentricity ?? 0)),
@@ -551,6 +716,7 @@ export function createMajorSatelliteSystems({
       });
       updateDenseSatelliteField(field, 0);
       root.add(field.mesh);
+      root.add(field.targetsGroup);
     });
 
     world.add(root);
@@ -563,6 +729,12 @@ export function createMajorSatelliteSystems({
       maximumOrbitRadius,
       quality,
       pendingDirectSatellites,
+      atlasOrbitGuides,
+      atlasOrbitHighlight,
+      // Presentation-only values animate between the natural close-up layout
+      // and the complete catalogue map. They never alter orbital metadata.
+      orbitPresentationScale: 1,
+      satelliteVisualBoost: 1,
       /**
        * Builds at most one resolved moon. Keeping the closure here avoids
        * duplicating the scientifically-authored factory selection in main.js.
@@ -726,6 +898,108 @@ export function findNearestJovianSatelliteAtPointer({
 }
 
 /**
+ * Resolves one moon drawn inside a dense InstancedMesh.
+ *
+ * The major planet silhouette is still tested first in main.js. This helper is
+ * intentionally screen-space based so hundreds of invisible raycast spheres do
+ * not overlap Saturn or compete with one another.
+ */
+export function findNearestDenseSatelliteAtPointer({
+  systems,
+  pointer,
+  camera,
+  viewportWidth,
+  viewportHeight,
+  focusedBody = null,
+  overviewParentName = null,
+}) {
+  if (!pointer || !camera) return null;
+  const width = Math.max(1, viewportWidth);
+  const height = Math.max(1, viewportHeight);
+  const focalPixels = height * 0.5
+    / Math.max(0.0001, Math.tan(THREE.MathUtils.degToRad(camera.fov * 0.5)));
+  let nearest = null;
+  let nearestScore = Infinity;
+
+  systems.forEach((system) => {
+    if (!(system.denseFields?.length > 0)) return;
+
+    system.parent.getWorldPosition(parentWorldPosition);
+    const parentCameraDistance = Math.max(
+      0.0001,
+      camera.position.distanceTo(parentWorldPosition),
+    );
+    const parentVisualRadius = Number(system.parent.userData?.visualRadius ?? 1);
+    const parentRadiusPixels = parentVisualRadius / parentCameraDistance * focalPixels;
+    const systemRadiusPixels = system.maximumOrbitRadius
+      * Number(system.orbitPresentationScale ?? 1)
+      / parentCameraDistance
+      * focalPixels;
+    const focusedInSystem = focusedBody === system.parent
+      || focusedBody?.userData?.parentPlanet === system.parentName;
+    const overviewActive = overviewParentName === system.parentName;
+    if (!focusedInSystem && !overviewActive && systemRadiusPixels < 28) return;
+
+    projectedParentPosition.copy(parentWorldPosition).project(camera);
+
+    system.denseFields.forEach((field) => {
+      if (!field.mesh.visible) return;
+      field.records.forEach(({ target, profile }) => {
+        if (!target?.parent || target === focusedBody) return;
+
+        target.getWorldPosition(moonWorldPosition);
+        projectedMoonPosition.copy(moonWorldPosition).project(camera);
+        if (projectedMoonPosition.z < -1 || projectedMoonPosition.z > 1) return;
+
+        const moonCameraDistance = Math.max(
+          0.0001,
+          camera.position.distanceTo(moonWorldPosition),
+        );
+        const visualRadius = Number(target.userData?.visualRadius ?? 0.02);
+        const radiusPixels = visualRadius / moonCameraDistance * focalPixels;
+        if (radiusPixels < (focusedInSystem || overviewActive ? 0.12 : 0.24)) return;
+
+        const dx = (projectedMoonPosition.x - pointer.x) * width * 0.5;
+        const dy = (projectedMoonPosition.y - pointer.y) * height * 0.5;
+        const distancePixels = Math.hypot(dx, dy);
+
+        // An outer moon behind Saturn must not steal a click from the visibly
+        // opaque planet disk.
+        const parentDx = (projectedMoonPosition.x - projectedParentPosition.x) * width * 0.5;
+        const parentDy = (projectedMoonPosition.y - projectedParentPosition.y) * height * 0.5;
+        const parentSeparation = Math.hypot(parentDx, parentDy);
+        if (moonCameraDistance > parentCameraDistance
+          && parentSeparation < Math.max(0, parentRadiusPixels - radiusPixels * 0.35)) {
+          return;
+        }
+
+        const hitRadius = Math.min(
+          11,
+          Math.max(4.25, radiusPixels + (overviewActive ? 4.4 : 3.4)),
+        );
+        if (distancePixels > hitRadius) return;
+
+        const depthBias = THREE.MathUtils.clamp(
+          (moonCameraDistance - parentCameraDistance)
+            / Math.max(1, system.maximumOrbitRadius),
+          -0.06,
+          0.10,
+        );
+        const sizeBias = -Math.min(0.16, radiusPixels * 0.035);
+        const guideBias = profile.showOrbitGuide ? -0.03 : 0;
+        const score = distancePixels / hitRadius + depthBias + sizeBias + guideBias;
+        if (score < nearestScore) {
+          nearest = target;
+          nearestScore = score;
+        }
+      });
+    });
+  });
+
+  return nearest;
+}
+
+/**
  * Applies a screen-space visibility budget to Jupiter's dense 115-moon system.
  * At broad Solar-System scale the unresolved moons are sub-pixel points, so
  * drawing every sculpted mesh wastes GPU work and can force a runtime-quality
@@ -738,6 +1012,7 @@ export function updateMajorSatelliteVisibility({
   viewportHeight,
   focusedBody = null,
   hoveredBody = null,
+  overviewParentName = null,
 }) {
   if (!camera) return;
   const focalPixels = Math.max(1, viewportHeight) * 0.5
@@ -751,14 +1026,28 @@ export function updateMajorSatelliteVisibility({
     const systemRadiusPixels = system.maximumOrbitRadius / parentDistance * focalPixels;
     const focusedInSystem = focusedBody === system.parent
       || focusedBody?.userData?.parentPlanet === system.parentName;
+    const overviewActive = overviewParentName === system.parentName;
 
     const orbitGuides = system.root.children.find(
       (child) => child.name === "Major satellite orbit guides",
     );
-    if (orbitGuides) orbitGuides.visible = focusedInSystem || systemRadiusPixels >= 12;
+    if (orbitGuides) {
+      orbitGuides.visible = !overviewActive && (focusedInSystem || systemRadiusPixels >= 12);
+    }
+    if (system.atlasOrbitGuides) {
+      system.atlasOrbitGuides.visible = overviewActive && focusedBody === system.parent;
+    }
+    if (system.atlasOrbitHighlight && !overviewActive) {
+      system.atlasOrbitHighlight.visible = false;
+    }
 
     (system.denseFields ?? []).forEach((field) => {
-      field.mesh.visible = focusedInSystem || systemRadiusPixels >= (system.parentName === "Saturn" ? 34 : 72);
+      const focusedDenseMoon = focusedBody?.userData?.isDenseSatellite
+        && focusedBody?.userData?.parentPlanet === system.parentName;
+      field.mesh.visible = overviewActive
+        || focusedDenseMoon
+        || (!focusedInSystem
+          && systemRadiusPixels >= (system.parentName === "Saturn" ? 34 : 72));
     });
 
     system.moons.forEach(({ moon, hitTarget }) => {
@@ -788,12 +1077,17 @@ export function updateMajorSatelliteVisibility({
           // owns the frame. Keeping 114 unrelated bodies fully visible was the
           // main source of the second lag spike after clicking a satellite.
           visible = tier === "direct";
-        } else if (focusedOnParent) {
+        } else if (overviewActive) {
           // Jupiter inspection still reveals the complete catalogue, but every
           // moon is now a lightweight preview mesh rather than a maximum-detail
           // sculpt. This preserves the populated-system effect without the v4
           // million-triangle cost.
           visible = true;
+        } else if (focusedOnParent) {
+          // The ordinary Jupiter portrait is reserved for the eight resolved
+          // regular moons. Irregular populations belong to the complete atlas;
+          // otherwise they appear detached at the edges of a close planet shot.
+          visible = tier === "direct";
         } else {
           moon.getWorldPosition(moonWorldPosition);
           const moonDistance = Math.max(0.0001, camera.position.distanceTo(moonWorldPosition));
@@ -816,14 +1110,115 @@ export function updateMajorSatelliteVisibility({
   });
 }
 
+/**
+ * Draws one bright orbital path for the moon currently hovered in the atlas
+ * directory. The complete catalogue remains a single quiet LineSegments mesh;
+ * this reusable LineLoop is rebuilt only when the hovered directory entry
+ * changes, so highlighting an orbit does not add hundreds of draw calls.
+ */
+export function setSatelliteAtlasOrbitHighlight(systems, body = null) {
+  systems.forEach((system) => {
+    if (system.atlasOrbitHighlight) system.atlasOrbitHighlight.visible = false;
+  });
+  if (!body) return;
+
+  const parentName = body.userData?.parentPlanet;
+  const system = systems.find((candidate) => candidate.parentName === parentName);
+  if (!system?.atlasOrbitHighlight) return;
+
+  const directEntry = system.moons.find(({ moon }) => moon === body);
+  let profile = directEntry?.profile ?? null;
+  if (!profile) {
+    for (const field of system.denseFields ?? []) {
+      const record = field.records.find(({ target }) => target === body);
+      if (record) {
+        profile = record.profile;
+        break;
+      }
+    }
+  }
+  if (!profile) return;
+
+  const parentRadius = Number(system.parent.userData?.visualRadius ?? 1);
+  const semiMajorRadius = parentRadius * Number(profile.orbitScale ?? 1);
+  const inclination = Number(profile.inclination ?? 0);
+  const node = Number(profile.node ?? 0);
+  const segments = system.quality === "low" ? 96 : system.quality === "medium" ? 128 : 160;
+  const positions = new Float32Array(segments * 3);
+
+  for (let index = 0; index < segments; index += 1) {
+    const angle = index / segments * Math.PI * 2;
+    const radius = orbitRadiusAtAngle(semiMajorRadius, profile.eccentricity, angle);
+    orbitPoint.set(Math.cos(angle) * radius, 0, -Math.sin(angle) * radius);
+    orbitPoint.applyAxisAngle(orbitTiltAxis, inclination);
+    orbitPoint.applyAxisAngle(THREE.Object3D.DEFAULT_UP, node);
+    positions[index * 3] = orbitPoint.x;
+    positions[index * 3 + 1] = orbitPoint.y;
+    positions[index * 3 + 2] = orbitPoint.z;
+  }
+
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+  system.atlasOrbitHighlight.geometry.dispose();
+  system.atlasOrbitHighlight.geometry = geometry;
+  system.atlasOrbitHighlight.scale.setScalar(system.orbitPresentationScale);
+  system.atlasOrbitHighlight.visible = true;
+}
+
 export function updateMajorSatelliteSystems(
   systems,
   motionScale = 1,
-  { hoveredBody = null, focusedBody = null } = {},
+  {
+    hoveredBody = null,
+    focusedBody = null,
+    overviewParentName = null,
+  } = {},
 ) {
   systems.forEach((system) => {
     system.root.position.copy(system.parent.position);
-    (system.denseFields ?? []).forEach((field) => updateDenseSatelliteField(field, motionScale));
+    const overviewActive = overviewParentName === system.parentName;
+    const parentRadius = Number(system.parent.userData?.visualRadius ?? 1);
+    const overviewRadiusMultiplier = system.parentName === "Saturn" ? 7.20 : 6.80;
+    const overviewMaximumRadius = parentRadius * overviewRadiusMultiplier;
+    const targetOrbitScale = overviewActive
+      ? Math.min(1, overviewMaximumRadius / Math.max(0.001, system.maximumOrbitRadius))
+      : 1;
+    const targetVisualBoost = overviewActive
+      ? (system.parentName === "Saturn" ? 6.2 : 5.4)
+      : 1;
+
+    // A slow ease makes the population unfold as one coherent orbital atlas
+    // instead of snapping hundreds of bodies to new positions in one frame.
+    system.orbitPresentationScale = THREE.MathUtils.lerp(
+      Number(system.orbitPresentationScale ?? 1),
+      targetOrbitScale,
+      0.075,
+    );
+    system.satelliteVisualBoost = THREE.MathUtils.lerp(
+      Number(system.satelliteVisualBoost ?? 1),
+      targetVisualBoost,
+      0.09,
+    );
+
+    const orbitGuides = system.root.children.find(
+      (child) => child.name === "Major satellite orbit guides",
+    );
+    if (orbitGuides) orbitGuides.scale.setScalar(system.orbitPresentationScale);
+    if (system.atlasOrbitGuides) {
+      system.atlasOrbitGuides.scale.setScalar(system.orbitPresentationScale);
+    }
+    if (system.atlasOrbitHighlight) {
+      system.atlasOrbitHighlight.scale.setScalar(system.orbitPresentationScale);
+    }
+
+    (system.denseFields ?? []).forEach((field) => updateDenseSatelliteField(
+      field,
+      motionScale,
+      system.orbitPresentationScale,
+      system.satelliteVisualBoost,
+      hoveredBody,
+      focusedBody,
+    ));
 
     system.moons.forEach(({
       moon,
@@ -832,6 +1227,9 @@ export function updateMajorSatelliteSystems(
       speed,
       profile,
       semiMajorVisualRadius,
+      baseMoonScale,
+      baseHitTargetScale,
+      baseVisualRadius,
     }, index) => {
       const isFocused = moon === focusedBody;
       const isHeld = moon === hoveredBody || isFocused;
@@ -850,6 +1248,22 @@ export function updateMajorSatelliteSystems(
         }
       }
 
+      // Resolved moons keep their authored proportions. Only the tiny notable
+      // and background populations receive a visibility lift in the overview.
+      const interactionTier = moon.userData?.interactionTier ?? "direct";
+      const tierBoost = interactionTier === "background"
+        ? system.satelliteVisualBoost
+        : interactionTier === "notable"
+          ? THREE.MathUtils.lerp(1, system.satelliteVisualBoost, 0.52)
+          : 1;
+      if (baseMoonScale) moon.scale.copy(baseMoonScale).multiplyScalar(tierBoost);
+      if (Number.isFinite(baseVisualRadius)) {
+        moon.userData.visualRadius = baseVisualRadius * tierBoost;
+      }
+      if (hitTarget && baseHitTargetScale) {
+        hitTarget.scale.copy(baseHitTargetScale).multiplyScalar(tierBoost);
+      }
+
       // Hidden sub-pixel moons still advance their analytical orbit angle, but
       // do not rewrite object matrices until they are needed again.
       if (moon.visible || isHeld) {
@@ -857,7 +1271,7 @@ export function updateMajorSatelliteSystems(
           semiMajorVisualRadius,
           profile.eccentricity,
           pivot.rotation.y,
-        );
+        ) * system.orbitPresentationScale;
         if (hitTarget) hitTarget.position.copy(moon.position);
       }
     });
