@@ -28,11 +28,13 @@ They are resized and lightly processed for real-time WebGL rendering.
 
 ## Callisto
 
-- Source mosaic: **Callisto USGS global map**, based on Galileo and Voyager data
-- Producer: USGS Astrogeology Science Center
-- Source page: https://commons.wikimedia.org/wiki/File:Callisto_USGS_global_small.jpg
-- Status: USGS public-domain material
-- Local processing: polar-edge crop, restrained visible-colour mapping, and derived subtle relief and roughness maps
+- Visual reference: the user-supplied crater-saturated Callisto image
+- Local reconstruction: an original seamless 2:1 albedo map matching its dark
+  brown-grey terrain, dense bright ejecta, pale basins, and cool mineral hints
+- Supporting maps: subtle height and roughness textures locally derived from
+  the new albedo reconstruction for real-time WebGL lighting
+- Accuracy note: this is a reference-directed visual reconstruction rather than
+  an authoritative global digital elevation model
 
 The height maps are intentionally subtle visual aids derived from the source mosaics. They are not claimed to be authoritative global digital elevation models.
 
@@ -51,3 +53,26 @@ Erinome, Isonoe, Praxidike, Themisto, and Megaclite.
   global mosaics and not authoritative geology.
 - Copyright hygiene: the supplied screenshots are not embedded in the project;
   black backgrounds, baked lighting, labels, and watermarks were excluded.
+
+## Post-Praxidike collage reconstructions
+
+The `collage-reference/` directory contains original seamless albedo maps for
+the clear post-Praxidike references: Autonoe, Hermippe, Aitne, Eurydome,
+Euanthe, Euporie, Orthosie, Sponde, Kale, Mneme, Aoede, Thelxinoe, Carpo,
+Eukelade, Hegemone, Dia, Cyllene, Kallichore, S/2010 J 2, and S/2010 J 1.
+
+- The source collage is used only as visual direction for colour, mineral
+  markings, and broad texture character.
+- Labels, black space, fixed lighting, silhouettes, and blurry source pixels
+  are not copied into the texture maps.
+- A later set of clearer individual references replaced the blurred Hegemone,
+  Dia, Cyllene, and Kallichore thumbnails. Aitne's albedo and asymmetric
+  two-lobed geometry were rebuilt from its clearer reference; Thelxinoe kept
+  its accepted colour wrap but received a new rounded concave silhouette;
+  Eukelade's wrap was revised to a very pale dusty-red and lilac-grey balance.
+- Cyllene intentionally follows the nearly spherical, red-banded rocky visual
+  supplied by the user. That treatment is visual direction, not a claimed
+  spacecraft-resolved global map.
+- These tiny moons are unresolved; every map remains an artistic
+  reconstruction wrapped over the project's independent 3D relief, roughness,
+  sunlight, and night-side rendering.

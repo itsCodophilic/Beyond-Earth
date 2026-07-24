@@ -128,6 +128,8 @@ const REFERENCE_VISUAL_STYLES = Object.freeze({
 });
 
 const THEMISTO_CHIPPED_AXIS = new THREE.Vector3(-0.84, 0.41, 0.35).normalize();
+const THELXINOE_CAVITY_AXIS = new THREE.Vector3(0.86, -0.08, 0.50).normalize();
+const HEGEMONE_CHIPPED_AXIS = new THREE.Vector3(-0.78, 0.24, 0.58).normalize();
 
 /**
  * Converts measured broadband colour indices into a compact material palette.
@@ -482,6 +484,100 @@ const NAMED_SURFACES = Object.freeze({
     shardStrength: 0.085,
     colourContrast: 0.64,
   },
+  Aitne: {
+    broadRelief: 0.034,
+    rockRelief: 0.022,
+    fineRelief: 0.010,
+    craterCount: 7,
+    inspectionCraterCount: 11,
+    craterDepth: 0.050,
+    craterRadiusMin: 0.035,
+    craterRadiusMax: 0.13,
+    silhouetteWarp: 0.040,
+    asymmetry: 0.024,
+    bilobeStrength: 0.055,
+    shardStrength: 0.016,
+  },
+  Hegemone: {
+    broadRelief: 0.052,
+    rockRelief: 0.030,
+    fineRelief: 0.013,
+    craterCount: 10,
+    inspectionCraterCount: 14,
+    craterDepth: 0.064,
+    silhouetteWarp: 0.065,
+    asymmetry: 0.050,
+    bilobeStrength: 0.012,
+    shardStrength: 0.078,
+  },
+  Thelxinoe: {
+    broadRelief: 0.024,
+    rockRelief: 0.015,
+    fineRelief: 0.007,
+    craterCount: 4,
+    inspectionCraterCount: 6,
+    craterDepth: 0.032,
+    craterRadiusMin: 0.036,
+    craterRadiusMax: 0.105,
+    silhouetteWarp: 0.018,
+    asymmetry: 0.014,
+    bilobeStrength: 0,
+    shardStrength: 0,
+  },
+  Kallichore: {
+    broadRelief: 0.043,
+    rockRelief: 0.027,
+    fineRelief: 0.012,
+    craterCount: 13,
+    inspectionCraterCount: 18,
+    craterDepth: 0.058,
+    craterRadiusMin: 0.032,
+    craterRadiusMax: 0.14,
+    silhouetteWarp: 0.032,
+    asymmetry: 0.024,
+    bilobeStrength: 0,
+    shardStrength: 0.018,
+  },
+  Eukelade: {
+    broadRelief: 0.040,
+    rockRelief: 0.024,
+    fineRelief: 0.011,
+    craterCount: 9,
+    inspectionCraterCount: 13,
+    craterDepth: 0.052,
+    silhouetteWarp: 0.030,
+    asymmetry: 0.022,
+    bilobeStrength: 0,
+    shardStrength: 0.018,
+  },
+  Cyllene: {
+    broadRelief: 0.010,
+    rockRelief: 0.007,
+    fineRelief: 0.004,
+    craterCount: 5,
+    inspectionCraterCount: 8,
+    craterDepth: 0.022,
+    craterRadiusMin: 0.028,
+    craterRadiusMax: 0.085,
+    silhouetteWarp: 0.003,
+    asymmetry: 0.002,
+    bilobeStrength: 0,
+    shardStrength: 0,
+    flatShading: false,
+    roughness: 0.96,
+  },
+  Dia: {
+    broadRelief: 0.038,
+    rockRelief: 0.023,
+    fineRelief: 0.010,
+    craterCount: 8,
+    inspectionCraterCount: 12,
+    craterDepth: 0.050,
+    silhouetteWarp: 0.032,
+    asymmetry: 0.025,
+    bilobeStrength: 0.008,
+    shardStrength: 0.018,
+  },
   Carpo: { craterCount: 7, craterDepth: 0.090, shardStrength: 0.088 },
   Valetudo: { craterCount: 5, craterDepth: 0.092, shardStrength: 0.100 },
 });
@@ -657,7 +753,9 @@ function resolveModeSettings(profile, mode = "preview") {
     } else if (isInner && !["Metis", "Adrastea"].includes(profile.catalogueName)) {
       settings.craterCount = Math.max(settings.craterCount, 18);
     } else if (!isHero && !isInner) {
-      settings.craterCount = Math.max(settings.craterCount, 16);
+      settings.craterCount = Number.isFinite(settings.inspectionCraterCount)
+        ? settings.inspectionCraterCount
+        : Math.max(settings.craterCount, 16);
     }
   }
 
@@ -820,6 +918,50 @@ function sampleCallistoBasin(direction) {
 
 function morphologyWarp(direction, profile, settings) {
   if (profile.family === "Galilean moon") return 0;
+
+  // Aitne's supplied reconstruction is an upright, asymmetric two-lobed body.
+  // The catalogue scale supplies the tall silhouette; these latitude fields
+  // form its broad lower mass, narrower upper lobe, and restrained waist.
+  if (profile.catalogueName === "Aitne") {
+    const axialPosition = direction.y;
+    const upperLobe = Math.exp(-Math.pow((axialPosition - 0.54) / 0.35, 2)) * 0.085;
+    const lowerLobe = Math.exp(-Math.pow((axialPosition + 0.40) / 0.46, 2)) * 0.145;
+    const waist = Math.exp(-Math.pow((axialPosition - 0.04) / 0.19, 2)) * 0.055;
+    const sideBias = direction.x * 0.018 + direction.z * 0.010;
+    return upperLobe + lowerLobe - waist + sideBias;
+  }
+
+  // The generic irregular warp made Thelxinoe too jagged. Its new reference
+  // calls for a soft multi-lobed body with one dominant cavity. Carving that
+  // cavity into the radius lets real sunlight describe it without painting a
+  // false permanent shadow into the colour map.
+  if (profile.catalogueName === "Thelxinoe") {
+    const cavityAlignment = Math.max(0, direction.dot(THELXINOE_CAVITY_AXIS));
+    const cavity = Math.pow(cavityAlignment, 4.6) * 0.245;
+    const roundedLobes = (
+      Math.pow(Math.abs(direction.x), 3.0)
+      + Math.pow(Math.abs(direction.y), 3.2)
+    ) * 0.018;
+    const rearBulge = Math.pow(
+      Math.max(0, -direction.dot(THELXINOE_CAVITY_AXIS)),
+      3.2,
+    ) * 0.032;
+    return roundedLobes + rearBulge - cavity;
+  }
+
+  // Cyllene's supplied image is explicitly planet-like. Suppress the generic
+  // shard and bilobe field so only restrained terrain relief breaks the limb.
+  if (profile.catalogueName === "Cyllene") return 0;
+
+  // Hegemone is reconstructed as a compact wedge. A clipped leading face and
+  // small longitudinal taper keep that silhouette readable from many angles.
+  if (profile.catalogueName === "Hegemone") {
+    const chippedFace = Math.pow(
+      Math.max(0, direction.dot(HEGEMONE_CHIPPED_AXIS)),
+      5.0,
+    ) * 0.105;
+    return direction.x * 0.040 - chippedFace;
+  }
 
   // The supplied Themisto reference is a contact-binary-like body. Align its
   // two lobes with the mesh's long X axis so the narrow waist remains visible
@@ -1148,9 +1290,18 @@ const HERO_GALILEAN_ASSET_URLS = Object.freeze({
     roughness: new URL("../../../../assets/textures/jovian/ganymede-roughness.jpg", import.meta.url).href,
   },
   Callisto: {
-    albedo: new URL("../../../../assets/textures/jovian/callisto-albedo.jpg", import.meta.url).href,
-    height: new URL("../../../../assets/textures/jovian/callisto-height.jpg", import.meta.url).href,
-    roughness: new URL("../../../../assets/textures/jovian/callisto-roughness.jpg", import.meta.url).href,
+    albedo: new URL(
+      "../../../../assets/textures/jovian/callisto-reference-albedo.jpg",
+      import.meta.url,
+    ).href,
+    height: new URL(
+      "../../../../assets/textures/jovian/callisto-reference-height.jpg",
+      import.meta.url,
+    ).href,
+    roughness: new URL(
+      "../../../../assets/textures/jovian/callisto-reference-roughness.jpg",
+      import.meta.url,
+    ).href,
   },
 });
 
@@ -1212,6 +1363,96 @@ const REFERENCE_IRREGULAR_ALBEDO_URLS = Object.freeze({
   // JPL's catalogue spelling is Magaclite; the interface displays Megaclite.
   Magaclite: new URL(
     "../../../../assets/textures/jovian/irregular-reference/megaclite-albedo.jpg",
+    import.meta.url,
+  ).href,
+});
+
+/**
+ * Clear post-Praxidike bodies selected from the supplied moon collage.
+ *
+ * Blurry references deliberately remain on their existing evidence-tiered
+ * procedural surfaces. Keeping this group separate also makes it explicit that
+ * the previously completed twelve-moon pass above is unchanged.
+ */
+const COLLAGE_REFERENCE_ALBEDO_URLS = Object.freeze({
+  Autonoe: new URL(
+    "../../../../assets/textures/jovian/collage-reference/autonoe-albedo.jpg",
+    import.meta.url,
+  ).href,
+  Hermippe: new URL(
+    "../../../../assets/textures/jovian/collage-reference/hermippe-albedo.jpg",
+    import.meta.url,
+  ).href,
+  Aitne: new URL(
+    "../../../../assets/textures/jovian/collage-reference/aitne-albedo.jpg",
+    import.meta.url,
+  ).href,
+  Eurydome: new URL(
+    "../../../../assets/textures/jovian/collage-reference/eurydome-albedo.jpg",
+    import.meta.url,
+  ).href,
+  Euanthe: new URL(
+    "../../../../assets/textures/jovian/collage-reference/euanthe-albedo.jpg",
+    import.meta.url,
+  ).href,
+  Euporie: new URL(
+    "../../../../assets/textures/jovian/collage-reference/euporie-albedo.jpg",
+    import.meta.url,
+  ).href,
+  Orthosie: new URL(
+    "../../../../assets/textures/jovian/collage-reference/orthosie-albedo.jpg",
+    import.meta.url,
+  ).href,
+  Sponde: new URL(
+    "../../../../assets/textures/jovian/collage-reference/sponde-albedo.jpg",
+    import.meta.url,
+  ).href,
+  Kale: new URL(
+    "../../../../assets/textures/jovian/collage-reference/kale-albedo.jpg",
+    import.meta.url,
+  ).href,
+  Mneme: new URL(
+    "../../../../assets/textures/jovian/collage-reference/mneme-albedo.jpg",
+    import.meta.url,
+  ).href,
+  Aoede: new URL(
+    "../../../../assets/textures/jovian/collage-reference/aoede-albedo.jpg",
+    import.meta.url,
+  ).href,
+  Thelxinoe: new URL(
+    "../../../../assets/textures/jovian/collage-reference/thelxinoe-albedo.jpg",
+    import.meta.url,
+  ).href,
+  Carpo: new URL(
+    "../../../../assets/textures/jovian/collage-reference/carpo-albedo.jpg",
+    import.meta.url,
+  ).href,
+  Eukelade: new URL(
+    "../../../../assets/textures/jovian/collage-reference/eukelade-albedo.jpg",
+    import.meta.url,
+  ).href,
+  Hegemone: new URL(
+    "../../../../assets/textures/jovian/collage-reference/hegemone-albedo.jpg",
+    import.meta.url,
+  ).href,
+  Dia: new URL(
+    "../../../../assets/textures/jovian/collage-reference/dia-albedo.jpg",
+    import.meta.url,
+  ).href,
+  Cyllene: new URL(
+    "../../../../assets/textures/jovian/collage-reference/cyllene-albedo.jpg",
+    import.meta.url,
+  ).href,
+  Kallichore: new URL(
+    "../../../../assets/textures/jovian/collage-reference/kallichore-albedo.jpg",
+    import.meta.url,
+  ).href,
+  S2010_J_2: new URL(
+    "../../../../assets/textures/jovian/collage-reference/s2010-j2-albedo.jpg",
+    import.meta.url,
+  ).href,
+  S2010_J_1: new URL(
+    "../../../../assets/textures/jovian/collage-reference/s2010-j1-albedo.jpg",
     import.meta.url,
   ).href,
 });
@@ -1287,7 +1528,8 @@ function getHeroGalileanSurfaceMaps(profile) {
  * behaves like a flat, self-lit picture pasted onto the body.
  */
 function getReferenceIrregularAlbedo(profile) {
-  const url = REFERENCE_IRREGULAR_ALBEDO_URLS[profile.catalogueName];
+  const url = REFERENCE_IRREGULAR_ALBEDO_URLS[profile.catalogueName]
+    ?? COLLAGE_REFERENCE_ALBEDO_URLS[profile.catalogueName];
   return url ? loadPersistentHeroTexture(url, { color: true }) : null;
 }
 
@@ -1314,7 +1556,26 @@ const PROCEDURAL_REALISM_MOON_TEXTURES = new Set([
   "Erinome",
   "Isonoe",
   "Praxidike",
+  "Autonoe",
+  "Hermippe",
+  "Aitne",
+  "Eurydome",
+  "Euanthe",
+  "Euporie",
+  "Orthosie",
+  "Sponde",
+  "Kale",
+  "Mneme",
+  "Aoede",
+  "Thelxinoe",
   "Carpo",
+  "Eukelade",
+  "Hegemone",
+  "Dia",
+  "Cyllene",
+  "Kallichore",
+  "S2010_J_2",
+  "S2010_J_1",
   "Valetudo",
 ]);
 
