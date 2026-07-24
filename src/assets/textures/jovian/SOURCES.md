@@ -35,3 +35,19 @@ They are resized and lightly processed for real-time WebGL rendering.
 - Local processing: polar-edge crop, restrained visible-colour mapping, and derived subtle relief and roughness maps
 
 The height maps are intentionally subtle visual aids derived from the source mosaics. They are not claimed to be authoritative global digital elevation models.
+
+## Irregular-moon reference reconstructions
+
+The `irregular-reference/` directory contains original, seamless 2:1 albedo
+textures for Lysithea, Ananke, Leda, Chaldene, Harpalyke, Kalyke, Iocaste,
+Erinome, Isonoe, Praxidike, Themisto, and Megaclite.
+
+- Method: generated as clean texture assets from the user's supplied visual
+  direction, then resized to 1024×512 and optimized for real-time WebGL.
+- Intended use: surface colour and broad markings only. Existing procedural
+  height and roughness maps continue to create the physical relief and lighting.
+- Accuracy note: most of these distant moons have not been resolved into global
+  spacecraft maps. These assets are visual reconstructions, not observational
+  global mosaics and not authoritative geology.
+- Copyright hygiene: the supplied screenshots are not embedded in the project;
+  black backgrounds, baked lighting, labels, and watermarks were excluded.

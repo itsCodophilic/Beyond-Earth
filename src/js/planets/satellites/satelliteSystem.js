@@ -60,6 +60,49 @@ const projectedMoonPosition = new THREE.Vector3();
 const sharedSatelliteResources = new Map();
 
 /**
+ * Planet letters used inside IAU provisional natural-satellite designations.
+ *
+ * Example: "S/2019 J 1"
+ * - S = natural satellite
+ * - 2019 = year of the observations that led to the discovery
+ * - J = Jupiter
+ * - 1 = the sequence number in that planet/year designation series
+ */
+const SATELLITE_DESIGNATION_PLANETS = Object.freeze({
+  M: "Mars",
+  J: "Jupiter",
+  S: "Saturn",
+  U: "Uranus",
+  N: "Neptune",
+  P: "Pluto",
+});
+
+/**
+ * Turns a compact provisional moon name into an explanation suitable for the
+ * celestial-body information card. Named moons return null because their
+ * familiar proper name does not need this extra decoding paragraph.
+ */
+function getSatelliteDesignationExplanation(name) {
+  const match = String(name ?? "")
+    .trim()
+    .match(/^S\/(\d{4})\s*([MJSUNP])\s*(\d+)$/i);
+
+  if (!match) return null;
+
+  const [, observationYear, rawPlanetCode, sequenceNumber] = match;
+  const planetCode = rawPlanetCode.toUpperCase();
+  const planetName = SATELLITE_DESIGNATION_PLANETS[planetCode];
+
+  return [
+    `Designation explained: “S” means natural satellite.`,
+    `“${observationYear}” is the year of the discovery observations, not necessarily the year the very first image was taken.`,
+    `“${planetCode}” identifies ${planetName},`,
+    `and “${sequenceNumber}” is its sequence number in ${planetName}'s ${observationYear} provisional-satellite designation series.`,
+    `This scientific code is used while the moon has no approved proper name.`,
+  ].join(" ");
+}
+
+/**
  * Staged construction calls the factory once per planetary system. Reuse the
  * same generic moon texture/geometry that the previous all-at-once build used,
  * so staging does not multiply GPU memory.
@@ -233,10 +276,12 @@ function createSatelliteMesh(
   const jovian = isJovianProfile(profile, parentName);
   const interactionTier = jovian ? getJovianInteractionTier(profile) : "direct";
   const diameterPrefix = profile.diameterEstimated ? "≈ " : "";
+  const designationExplanation = getSatelliteDesignationExplanation(profile.name);
   const scientificDescription = [
     profile.description,
     profile.surfaceStructure ? `Surface structure: ${profile.surfaceStructure}` : null,
     profile.orbitSummary,
+    designationExplanation,
     profile.dataNote,
   ]
     .filter(Boolean)
@@ -379,10 +424,12 @@ function createDenseSatelliteInteractionTarget(profile, parentName) {
     name: profile.name,
   });
   const diameterPrefix = profile.diameterEstimated ? "≈ " : "";
+  const designationExplanation = getSatelliteDesignationExplanation(profile.name);
   const scientificDescription = [
     profile.description,
     profile.surfaceStructure ? `Surface structure: ${profile.surfaceStructure}` : null,
     profile.orbitSummary,
+    designationExplanation,
     profile.dataNote,
   ]
     .filter(Boolean)

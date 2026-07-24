@@ -235,13 +235,29 @@ const OUTER_SURFACE_DATA = Object.freeze({
     structure: "A dark grey-brown retrograde irregular associated with hydrated carbonaceous material.",
   },
   Themisto: {
-    appearance: "p-type",
-    colour: 0x5b5048,
+    appearance: "mixed-dark",
+    colour: 0x38393c,
     albedo: 0.04,
     roughness: 1.0,
-    shape: [1.20, 0.87, 0.76],
-    surfaceEvidence: "dynamical and photometric constraints",
-    structure: "An isolated, steeply inclined prograde irregular represented as a compact dark fragment.",
+    // This double-lobed silhouette follows the supplied artistic reference.
+    // Themisto itself has never been resolved as a disc, so the information
+    // card explicitly identifies this terrain as a reconstruction.
+    shape: [1.42, 0.86, 0.78],
+    surfaceEvidence: "reference-directed artistic reconstruction with measured photometry",
+    structure: "A dark double-lobed reconstruction with a narrow waist, chipped silhouette, fine impact pits, and charcoal-grey mineral mottling based on the supplied visual reference.",
+    description: "Themisto is an isolated prograde irregular moon. This experience follows the supplied dark contact-binary-like reference for its silhouette and terrain; no spacecraft has yet resolved Themisto closely enough to confirm those exact lobes or craters.",
+  },
+  Magaclite: {
+    appearance: "mixed-dark",
+    colour: 0x6d6875,
+    albedo: 0.04,
+    roughness: 1.0,
+    // JPL stores the historical spelling "Magaclite"; the interface correctly
+    // displays the IAU name Megaclite.
+    shape: [1.36, 0.94, 0.82],
+    surfaceEvidence: "reference-directed artistic reconstruction with measured photometry",
+    structure: "A compact angular reconstruction with a tapered end, shallow pits, and layered grey-violet, charcoal, and pale mineral patches matching the supplied reference.",
+    description: "Megaclite is a tiny retrograde irregular moon associated dynamically with the diverse Pasiphae group. Its displayed grey-violet, tapered body follows the supplied visual reference; the real moon remains unresolved and its exact terrain is unknown.",
   },
   Carpo: {
     appearance: "p-type",
@@ -261,6 +277,32 @@ const OUTER_SURFACE_DATA = Object.freeze({
     surfaceEvidence: "dynamical-family reconstruction",
     structure: "A very small prograde irregular crossing the retrograde population, shown as a sharply fractured dark shard.",
   },
+});
+
+/**
+ * Individually measured visible colours for the moons requested for the
+ * realism pass. B−V and V−R are colour indices, not literal RGB values. The
+ * surface factory converts their slopes relative to sunlight into restrained
+ * red/grey material palettes.
+ *
+ * Values are adopted from Graykowski & Jewitt (2018), Table 3. Ananke uses the
+ * widely reported Grav et al. optical measurement because it was not included
+ * in that table. These observations see the moons only as points of light, so
+ * they constrain colour but do not reveal mapped surface markings.
+ */
+const OBSERVED_IRREGULAR_PHOTOMETRY = Object.freeze({
+  Lysithea: { bV: 0.72, vR: 0.41, bR: 1.13, colourClass: "neutral grey with a gentle red slope" },
+  Ananke: { bV: 0.90, vR: 0.38, bR: 1.28, colourClass: "neutral-to-light-red, P-type-like" },
+  Leda: { bV: 0.66, vR: 0.43, bR: 1.09, colourClass: "nearly neutral grey with a warm red slope" },
+  Chaldene: { bV: 0.82, vR: 0.50, bR: 1.32, colourClass: "light red" },
+  Harpalyke: { bV: 0.70, vR: 0.42, bR: 1.12, colourClass: "neutral grey" },
+  Kalyke: { bV: 0.69, vR: 0.46, bR: 1.15, colourClass: "grey with a modest red slope" },
+  Iocaste: { bV: 0.86, vR: 0.38, bR: 1.24, colourClass: "ochre-grey" },
+  Erinome: { bV: 0.72, vR: 0.42, bR: 1.14, colourClass: "neutral grey with a gentle red slope" },
+  Isonoe: { bV: 0.78, vR: 0.53, bR: 1.31, colourClass: "light red" },
+  Praxidike: { bV: 0.71, vR: 0.32, bR: 1.03, colourClass: "comparatively neutral grey" },
+  Themisto: { bV: 0.80, vR: 0.48, bR: 1.28, colourClass: "light red, P/D-type-like" },
+  Magaclite: { bV: 0.82, vR: 0.44, bR: 1.26, colourClass: "light red" },
 });
 
 const ESTIMATED_DIAMETERS_KM = Object.freeze({
@@ -360,6 +402,7 @@ export const JUPITER_MOON_PROFILES = Object.freeze(JPL_JOVIAN_ORBITS.map((row) =
   const resolvedData = RESOLVED_GALILEAN_DATA[catalogueName] ?? INNER_MOON_DATA[catalogueName] ?? null;
   const outerSurfaceData = OUTER_SURFACE_DATA[catalogueName] ?? null;
   const family = classifyFamily(catalogueName, semiMajorAxisKm, inclinationDeg);
+  const opticalPhotometry = OBSERVED_IRREGULAR_PHOTOMETRY[catalogueName] ?? null;
   const appearance = resolvedData
     ?? outerSurfaceData
     ?? FAMILY_APPEARANCE[family]
@@ -368,7 +411,10 @@ export const JUPITER_MOON_PROFILES = Object.freeze(JPL_JOVIAN_ORBITS.map((row) =
   const diameterEstimated = !resolvedData;
   const surfaceEvidence = resolvedData
     ? "spacecraft-resolved"
-    : outerSurfaceData?.surfaceEvidence ?? "dynamical-family reconstruction";
+    : outerSurfaceData?.surfaceEvidence
+      ?? (opticalPhotometry
+        ? "measured optical photometry with unresolved-shape reconstruction"
+        : "dynamical-family reconstruction");
   const surfaceStructure = outerSurfaceData?.structure
     ?? (resolvedData
       ? "Shape and characteristic terrain are constrained by spacecraft observations."
@@ -386,6 +432,7 @@ export const JUPITER_MOON_PROFILES = Object.freeze(JPL_JOVIAN_ORBITS.map((row) =
     family,
     appearance: appearance.appearance,
     colour: appearance.colour,
+    opticalPhotometry,
     albedo: appearance.albedo ?? (resolvedData ? null : 0.04),
     surfaceRoughness: appearance.roughness ?? (resolvedData ? 0.92 : 1.0),
     surfaceEvidence,
@@ -429,7 +476,12 @@ export const JUPITER_MOON_PROFILES = Object.freeze(JPL_JOVIAN_ORBITS.map((row) =
       ?? createIrregularDescription(displayName, family, appearance, direction, diameterEstimated),
     dataNote: surfaceEvidence === "spacecraft-resolved"
       ? "Dimensions and characteristic terrain are constrained by spacecraft observations; orbit uses JPL mean elements."
-      : `Diameter and exact terrain are uncertain. The displayed 3D surface is a ${surfaceEvidence} model; orbit uses JPL mean elements.`,
+      : [
+        `Diameter and exact terrain are uncertain. The displayed 3D surface is a ${surfaceEvidence} model; orbit uses JPL mean elements.`,
+        opticalPhotometry
+          ? `Measured visible colour: ${opticalPhotometry.colourClass} (B−V ${opticalPhotometry.bV.toFixed(2)}, V−R ${opticalPhotometry.vR.toFixed(2)}, B−R ${opticalPhotometry.bR.toFixed(2)}).`
+          : null,
+      ].filter(Boolean).join(" "),
   });
 }));
 

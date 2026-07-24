@@ -29,6 +29,165 @@ const SURFACE_PALETTES = Object.freeze({
   "mixed-dark": { base: 0x504a46, light: 0x766c65, dark: 0x201e1c, accent: 0x947665 },
 });
 
+/**
+ * User-supplied visual references for this group deliberately show much
+ * stronger marbling than the moons' unresolved photometry alone can reveal.
+ * These palettes and blend strengths reproduce that reference art while the
+ * catalogue continues to label the surfaces as reconstructions.
+ *
+ * The keys use JPL's catalogue spelling; "Magaclite" is displayed as
+ * "Megaclite" everywhere in the interface.
+ */
+const REFERENCE_VISUAL_STYLES = Object.freeze({
+  Lysithea: {
+    palette: { base: 0x9b3d4c, light: 0xef9ea5, dark: 0x260e17, accent: 0xffc8bc },
+    lightPatch: 0.43,
+    accentPatch: 0.34,
+    darkPatch: 0.58,
+    fineSpeckle: 0.19,
+  },
+  Ananke: {
+    palette: { base: 0xb88b80, light: 0xffe0d0, dark: 0x4b3535, accent: 0xfff0df },
+    lightPatch: 0.56,
+    accentPatch: 0.20,
+    darkPatch: 0.27,
+    fineSpeckle: 0.18,
+  },
+  Leda: {
+    palette: { base: 0x9b6f40, light: 0xedbd78, dark: 0x302722, accent: 0xffe2a1 },
+    lightPatch: 0.56,
+    accentPatch: 0.28,
+    darkPatch: 0.37,
+    fineSpeckle: 0.10,
+  },
+  Chaldene: {
+    palette: { base: 0x69645c, light: 0xa99d8a, dark: 0x24211f, accent: 0xc8b598 },
+    lightPatch: 0.32,
+    accentPatch: 0.14,
+    darkPatch: 0.40,
+    fineSpeckle: 0.09,
+  },
+  Harpalyke: {
+    palette: { base: 0x898a86, light: 0xffffff, dark: 0x292832, accent: 0xd6d4c6 },
+    lightPatch: 0.78,
+    accentPatch: 0.39,
+    darkPatch: 0.50,
+    fineSpeckle: 0.16,
+  },
+  Kalyke: {
+    palette: { base: 0xc0a099, light: 0xffe0cf, dark: 0x59484a, accent: 0xefd0c5 },
+    lightPatch: 0.61,
+    accentPatch: 0.24,
+    darkPatch: 0.30,
+    fineSpeckle: 0.12,
+  },
+  Iocaste: {
+    palette: { base: 0x858078, light: 0xc2b7a5, dark: 0x303039, accent: 0xded0b7 },
+    lightPatch: 0.37,
+    accentPatch: 0.18,
+    darkPatch: 0.57,
+    fineSpeckle: 0.08,
+  },
+  Erinome: {
+    palette: { base: 0xc0a09a, light: 0xffe0d2, dark: 0x625153, accent: 0xebc8c0 },
+    lightPatch: 0.62,
+    accentPatch: 0.28,
+    darkPatch: 0.29,
+    fineSpeckle: 0.11,
+  },
+  Isonoe: {
+    palette: { base: 0x898a85, light: 0xffffff, dark: 0x302e39, accent: 0xd8d5c7 },
+    lightPatch: 0.78,
+    accentPatch: 0.38,
+    darkPatch: 0.53,
+    fineSpeckle: 0.16,
+  },
+  Praxidike: {
+    palette: { base: 0xb38e65, light: 0xffe3a6, dark: 0x514035, accent: 0xfff1c8 },
+    lightPatch: 0.68,
+    accentPatch: 0.25,
+    darkPatch: 0.30,
+    fineSpeckle: 0.13,
+    rift: 0x73382f,
+    riftStrength: 0.72,
+  },
+  Themisto: {
+    palette: { base: 0x38393c, light: 0x737477, dark: 0x111216, accent: 0x96979a },
+    lightPatch: 0.29,
+    accentPatch: 0.12,
+    darkPatch: 0.48,
+    fineSpeckle: 0.13,
+  },
+  Magaclite: {
+    palette: { base: 0x85808d, light: 0xc9c3d0, dark: 0x302c39, accent: 0xd7d8c6 },
+    lightPatch: 0.48,
+    accentPatch: 0.25,
+    darkPatch: 0.54,
+    fineSpeckle: 0.13,
+  },
+});
+
+const THEMISTO_CHIPPED_AXIS = new THREE.Vector3(-0.84, 0.41, 0.35).normalize();
+
+/**
+ * Converts measured broadband colour indices into a compact material palette.
+ *
+ * B−V and V−R describe how the body's reflected light slopes away from the
+ * colour of the Sun. Comparing the moon with solar indices produces relative
+ * blue, green and red reflectance. The final intensity is deliberately lifted
+ * above the literal ~4% albedo so these kilometre-scale moons remain readable
+ * on a monitor; their hue relationships still come from the observations.
+ */
+function createMeasuredOpticalPalette(profile) {
+  const referenceStyle = REFERENCE_VISUAL_STYLES[profile.catalogueName];
+  if (referenceStyle) return referenceStyle.palette;
+
+  const photometry = profile.opticalPhotometry;
+  if (!photometry) {
+    return SURFACE_PALETTES[profile.appearance] ?? SURFACE_PALETTES["mixed-dark"];
+  }
+
+  const solarBV = 0.65;
+  const solarVR = 0.36;
+  const blueReflectance = Math.pow(10, -0.4 * (photometry.bV - solarBV));
+  const greenReflectance = 1;
+  const redReflectance = Math.pow(10, 0.4 * (photometry.vR - solarVR));
+  const maximumReflectance = Math.max(
+    redReflectance,
+    greenReflectance,
+    blueReflectance,
+  );
+  const rawMeasured = [
+    redReflectance / maximumReflectance,
+    greenReflectance / maximumReflectance,
+    blueReflectance / maximumReflectance,
+  ];
+  // Low-albedo rendering and filmic tone mapping visually compress small
+  // colour differences. A restrained exponent restores the measured ordering
+  // on screen without turning these red-grey bodies into saturated red rocks.
+  const measured = rawMeasured.map((channel) => Math.pow(channel, 1.45));
+
+  const packTone = (peak, neutralMix = 0) => {
+    const average = (measured[0] + measured[1] + measured[2]) / 3;
+    const channels = measured.map((channel) => THREE.MathUtils.lerp(
+      channel,
+      average,
+      neutralMix,
+    ));
+    const red = Math.round(THREE.MathUtils.clamp(channels[0] * peak, 0, 255));
+    const green = Math.round(THREE.MathUtils.clamp(channels[1] * peak, 0, 255));
+    const blue = Math.round(THREE.MathUtils.clamp(channels[2] * peak, 0, 255));
+    return (red << 16) | (green << 8) | blue;
+  };
+
+  return {
+    base: packTone(104, 0.08),
+    light: packTone(150, 0.20),
+    dark: packTone(39, 0.06),
+    accent: packTone(176, 0.02),
+  };
+}
+
 const BASE_SURFACE = Object.freeze({
   broadRelief: 0.06,
   rockRelief: 0.028,
@@ -295,7 +454,34 @@ const NAMED_SURFACES = Object.freeze({
   Sinope: { craterCount: 11, craterDepth: 0.086, colourContrast: 0.58 },
   Carme: { craterCount: 12, craterDepth: 0.086, colourContrast: 0.62 },
   Ananke: { craterCount: 11, craterDepth: 0.088, bilobeStrength: 0.032 },
-  Themisto: { craterCount: 9, craterDepth: 0.086 },
+  Themisto: {
+    broadRelief: 0.064,
+    rockRelief: 0.043,
+    fineRelief: 0.024,
+    craterCount: 22,
+    craterDepth: 0.068,
+    craterRadiusMin: 0.028,
+    craterRadiusMax: 0.115,
+    silhouetteWarp: 0.145,
+    asymmetry: 0.060,
+    bilobeStrength: 0.205,
+    shardStrength: 0.055,
+    colourContrast: 0.58,
+  },
+  Magaclite: {
+    broadRelief: 0.082,
+    rockRelief: 0.049,
+    fineRelief: 0.023,
+    craterCount: 10,
+    craterDepth: 0.078,
+    craterRadiusMin: 0.038,
+    craterRadiusMax: 0.145,
+    silhouetteWarp: 0.096,
+    asymmetry: 0.065,
+    bilobeStrength: 0.010,
+    shardStrength: 0.085,
+    colourContrast: 0.64,
+  },
   Carpo: { craterCount: 7, craterDepth: 0.090, shardStrength: 0.088 },
   Valetudo: { craterCount: 5, craterDepth: 0.092, shardStrength: 0.100 },
 });
@@ -634,6 +820,26 @@ function sampleCallistoBasin(direction) {
 
 function morphologyWarp(direction, profile, settings) {
   if (profile.family === "Galilean moon") return 0;
+
+  // The supplied Themisto reference is a contact-binary-like body. Align its
+  // two lobes with the mesh's long X axis so the narrow waist remains visible
+  // from multiple inspection angles instead of becoming random noise.
+  if (profile.catalogueName === "Themisto") {
+    const axialPosition = direction.x;
+    const lobes = (
+      Math.pow(Math.abs(axialPosition), 2.4) - 0.24
+    ) * settings.silhouetteWarp;
+    const neck = -Math.exp(
+      -Math.pow(axialPosition / 0.21, 2),
+    ) * settings.bilobeStrength;
+    const unevenLobes = Math.max(0, axialPosition) * settings.asymmetry * 0.70;
+    const chippedEnd = Math.pow(
+      Math.max(0, direction.dot(THEMISTO_CHIPPED_AXIS)),
+      4,
+    ) * settings.shardStrength;
+    return lobes + neck + unevenLobes + chippedEnd;
+  }
+
   const axisA = randomDirection(profile.seed + 211.3, 0);
   const axisB = randomDirection(profile.seed + 277.9, 1);
   const axisC = randomDirection(profile.seed + 331.1, 2);
@@ -655,7 +861,7 @@ function createJovianGeometry(profile, quality, mode = "preview") {
   const sourceGeometry = new THREE.IcosahedronGeometry(1, detailFor(profile, quality, mode));
   const positions = sourceGeometry.getAttribute("position");
   const colours = new Float32Array(positions.count * 3);
-  const palette = SURFACE_PALETTES[profile.appearance] ?? SURFACE_PALETTES["mixed-dark"];
+  const palette = createMeasuredOpticalPalette(profile);
   const baseColour = new THREE.Color(palette.base);
   const lightColour = new THREE.Color(palette.light);
   const darkColour = new THREE.Color(palette.dark);
@@ -948,6 +1154,68 @@ const HERO_GALILEAN_ASSET_URLS = Object.freeze({
   },
 });
 
+/**
+ * Original, seamless 2:1 colour maps created from the user's visual direction.
+ *
+ * We intentionally do not wrap the supplied reference screenshots themselves:
+ * their black backgrounds, baked-in shadows, fixed viewpoints and occasional
+ * watermarks would be stretched around the mesh. These clean albedo maps carry
+ * only surface colour and markings. The procedural height/roughness maps below
+ * still provide the actual crater relief, rocky silhouette and response to the
+ * Sun's light.
+ */
+const REFERENCE_IRREGULAR_ALBEDO_URLS = Object.freeze({
+  Lysithea: new URL(
+    "../../../../assets/textures/jovian/irregular-reference/lysithea-albedo.jpg",
+    import.meta.url,
+  ).href,
+  Ananke: new URL(
+    "../../../../assets/textures/jovian/irregular-reference/ananke-albedo.jpg",
+    import.meta.url,
+  ).href,
+  Leda: new URL(
+    "../../../../assets/textures/jovian/irregular-reference/leda-albedo.jpg",
+    import.meta.url,
+  ).href,
+  Chaldene: new URL(
+    "../../../../assets/textures/jovian/irregular-reference/chaldene-albedo.jpg",
+    import.meta.url,
+  ).href,
+  Harpalyke: new URL(
+    "../../../../assets/textures/jovian/irregular-reference/harpalyke-albedo.jpg",
+    import.meta.url,
+  ).href,
+  Kalyke: new URL(
+    "../../../../assets/textures/jovian/irregular-reference/kalyke-albedo.jpg",
+    import.meta.url,
+  ).href,
+  Iocaste: new URL(
+    "../../../../assets/textures/jovian/irregular-reference/iocaste-albedo.jpg",
+    import.meta.url,
+  ).href,
+  Erinome: new URL(
+    "../../../../assets/textures/jovian/irregular-reference/erinome-albedo.jpg",
+    import.meta.url,
+  ).href,
+  Isonoe: new URL(
+    "../../../../assets/textures/jovian/irregular-reference/isonoe-albedo.jpg",
+    import.meta.url,
+  ).href,
+  Praxidike: new URL(
+    "../../../../assets/textures/jovian/irregular-reference/praxidike-albedo.jpg",
+    import.meta.url,
+  ).href,
+  Themisto: new URL(
+    "../../../../assets/textures/jovian/irregular-reference/themisto-albedo.jpg",
+    import.meta.url,
+  ).href,
+  // JPL's catalogue spelling is Magaclite; the interface displays Megaclite.
+  Magaclite: new URL(
+    "../../../../assets/textures/jovian/irregular-reference/megaclite-albedo.jpg",
+    import.meta.url,
+  ).href,
+});
+
 const HERO_GALILEAN_MATERIAL = Object.freeze({
   Io: {
     roughness: 0.84,
@@ -1013,6 +1281,16 @@ function getHeroGalileanSurfaceMaps(profile) {
   };
 }
 
+/**
+ * Returns a photograph-like colour wrap for the selected irregular moon.
+ * Height and roughness deliberately remain separate so this texture never
+ * behaves like a flat, self-lit picture pasted onto the body.
+ */
+function getReferenceIrregularAlbedo(profile) {
+  const url = REFERENCE_IRREGULAR_ALBEDO_URLS[profile.catalogueName];
+  return url ? loadPersistentHeroTexture(url, { color: true }) : null;
+}
+
 
 const PROCEDURAL_REALISM_MOON_TEXTURES = new Set([
   "Metis",
@@ -1028,6 +1306,14 @@ const PROCEDURAL_REALISM_MOON_TEXTURES = new Set([
   "Ananke",
   "Leda",
   "Themisto",
+  "Magaclite",
+  "Chaldene",
+  "Harpalyke",
+  "Kalyke",
+  "Iocaste",
+  "Erinome",
+  "Isonoe",
+  "Praxidike",
   "Carpo",
   "Valetudo",
 ]);
@@ -1081,7 +1367,7 @@ function getProceduralRealismSurfaceMaps(profile, settings, quality = "high") {
   const heightPixels = new Uint8Array(width * height * 4);
   const roughPixels = new Uint8Array(width * height * 4);
 
-  const palette = SURFACE_PALETTES[profile.appearance] ?? SURFACE_PALETTES["mixed-dark"];
+  const palette = createMeasuredOpticalPalette(profile);
   const baseColour = new THREE.Color(palette.base);
   const lightColour = new THREE.Color(palette.light);
   const darkColour = new THREE.Color(palette.dark);
@@ -1091,6 +1377,10 @@ function getProceduralRealismSurfaceMaps(profile, settings, quality = "high") {
   const rustyGrey = new THREE.Color(0x70625a);
   const dustyIvory = new THREE.Color(0xcfc4b4);
   const innerRed = new THREE.Color(0x9f5a47);
+  const referenceStyle = REFERENCE_VISUAL_STYLES[profile.catalogueName] ?? null;
+  const referenceRift = referenceStyle?.rift
+    ? new THREE.Color(referenceStyle.rift)
+    : null;
   const colour = new THREE.Color();
   const direction = new THREE.Vector3();
 
@@ -1164,7 +1454,36 @@ function getProceduralRealismSurfaceMaps(profile, settings, quality = "high") {
         .lerp(darkColour, THREE.MathUtils.clamp((1 - macroMottle) * 0.24 + craterFloor * 0.18, 0, 0.48));
       colour.lerp(lightColour, craterRim * 0.26 + craterEjecta * 0.12);
 
-      if (profile.catalogueName === "Amalthea") {
+      if (referenceStyle) {
+        // Layer broad mineral provinces, smaller stains and fine speckling to
+        // reproduce the supplied visual reference without flattening the mesh
+        // into a single painted colour.
+        const broadPatch = smoothstep(0.40, 0.82, macroMottle);
+        const mineralPatch = smoothstep(0.53, 0.90, secondaryMottle);
+        const darkStain = smoothstep(0.56, 0.91, 1 - colourNoise);
+        const brightGrain = smoothstep(0.72, 0.975, facetMottle);
+        colour.copy(baseColour)
+          .lerp(accentColour, broadPatch * referenceStyle.accentPatch)
+          .lerp(lightColour, mineralPatch * referenceStyle.lightPatch)
+          .lerp(
+            darkColour,
+            darkStain * referenceStyle.darkPatch + craterFloor * 0.20,
+          )
+          .lerp(
+            lightColour,
+            brightGrain * referenceStyle.fineSpeckle
+              + craterRim * 0.16
+              + craterEjecta * 0.08,
+          );
+
+        if (referenceRift) {
+          const wanderingRift = direction.y
+            + fbm3(direction, 4.8, 3, profile.seed + 1889) * 0.085;
+          const riftMask = Math.exp(-Math.pow(wanderingRift / 0.046, 2));
+          colour.lerp(referenceRift, riftMask * referenceStyle.riftStrength);
+          relief -= riftMask * 0.024;
+        }
+      } else if (profile.catalogueName === "Amalthea") {
         colour.copy(new THREE.Color(0x7c4639))
           .lerp(innerRed, smoothstep(0.18, 0.72, macroMottle) * 0.34)
           .lerp(sulfurDust, brightPatch * 0.54)
@@ -1269,14 +1588,18 @@ function createJovianMaterial(profile, settings, palette, quality = "high", mode
   const heroMaps = getHeroGalileanSurfaceMaps(profile);
   const proceduralMaps = heroMaps ? null : getProceduralRealismSurfaceMaps(profile, settings, quality);
   const activeMaps = heroMaps ?? proceduralMaps;
+  const referenceAlbedoMap = heroMaps ? null : getReferenceIrregularAlbedo(profile);
+  const albedoMap = referenceAlbedoMap ?? activeMaps?.albedoMap ?? null;
   const heroSettings = HERO_GALILEAN_MATERIAL[profile.catalogueName] ?? null;
   const reliefMap = activeMaps?.heightMap
     ?? (inspection ? createInspectionBumpTexture(profile, settings, quality) : null);
 
-  const usesMappedSurface = Boolean(activeMaps);
+  const usesMappedSurface = Boolean(albedoMap || activeMaps);
+  const usesRebuiltIrregularRelief = profile.catalogueName === "Themisto"
+    || profile.catalogueName === "Magaclite";
   const common = {
     color: 0xffffff,
-    map: activeMaps?.albedoMap ?? null,
+    map: albedoMap,
     vertexColors: !usesMappedSurface,
     roughness: heroSettings?.roughness
       ?? THREE.MathUtils.clamp(settings.roughness, 0.45, 1),
@@ -1295,8 +1618,16 @@ function createJovianMaterial(profile, settings, palette, quality = "high", mode
       ? (inspection ? heroSettings.inspectionBumpScale : heroSettings.previewBumpScale)
       : proceduralMaps
         ? (inspection
-          ? (profile.family === "Inner regular moon" ? 0.060 : 0.038)
-          : (profile.family === "Inner regular moon" ? 0.020 : 0.012))
+          ? (profile.family === "Inner regular moon"
+            ? 0.060
+            : usesRebuiltIrregularRelief
+              ? 0.054
+              : 0.038)
+          : (profile.family === "Inner regular moon"
+            ? 0.020
+            : usesRebuiltIrregularRelief
+              ? 0.018
+              : 0.012))
         : inspection
           ? (profile.family === "Galilean moon" ? 0.052 : profile.family === "Inner regular moon" ? 0.095 : 0.120)
           : 0,
@@ -1304,13 +1635,21 @@ function createJovianMaterial(profile, settings, palette, quality = "high", mode
     displacementScale: inspection
       ? (heroSettings?.displacementScale
         ?? (proceduralMaps
-          ? (profile.family === "Inner regular moon" ? 0.020 : 0.010)
+          ? (profile.family === "Inner regular moon"
+            ? 0.020
+            : usesRebuiltIrregularRelief
+              ? 0.016
+              : 0.010)
           : (profile.family === "Galilean moon" ? 0.010 : profile.family === "Inner regular moon" ? 0.045 : 0.056)))
       : 0,
     displacementBias: inspection
       ? (heroSettings?.displacementBias
         ?? (proceduralMaps
-          ? (profile.family === "Inner regular moon" ? -0.010 : -0.005)
+          ? (profile.family === "Inner regular moon"
+            ? -0.010
+            : usesRebuiltIrregularRelief
+              ? -0.008
+              : -0.005)
           : (profile.family === "Galilean moon" ? -0.005 : profile.family === "Inner regular moon" ? -0.0225 : -0.028)))
       : 0,
   };
@@ -1329,6 +1668,8 @@ function createJovianMaterial(profile, settings, palette, quality = "high", mode
 
   material.name = heroMaps
     ? `${profile.name} spacecraft mosaic material`
+    : referenceAlbedoMap
+      ? `${profile.name} reference-wrapped 3D material`
     : proceduralMaps
       ? `${profile.name} realism surface material`
       : `${profile.name} evidence-tiered moon material`;
@@ -1337,6 +1678,7 @@ function createJovianMaterial(profile, settings, palette, quality = "high", mode
     albedo: profile.albedo ?? null,
     roughness: common.roughness,
     usesSpacecraftMosaic: Boolean(heroMaps),
+    usesReferenceAlbedo: Boolean(referenceAlbedoMap),
     usesProceduralRealismMaps: Boolean(proceduralMaps),
   };
   return material;
