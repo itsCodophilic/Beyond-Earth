@@ -125,6 +125,90 @@ const REFERENCE_VISUAL_STYLES = Object.freeze({
     darkPatch: 0.54,
     fineSpeckle: 0.13,
   },
+  Callirrhoe: {
+    palette: { base: 0x3d3932, light: 0x706b60, dark: 0x171714, accent: 0x8b806d },
+    lightPatch: 0.24,
+    accentPatch: 0.12,
+    darkPatch: 0.48,
+    fineSpeckle: 0.14,
+  },
+  Thyone: {
+    palette: { base: 0xc9a99c, light: 0xffe6d5, dark: 0x76636a, accent: 0xf3c5a9 },
+    lightPatch: 0.58,
+    accentPatch: 0.26,
+    darkPatch: 0.24,
+    fineSpeckle: 0.12,
+  },
+  Pasithee: {
+    palette: { base: 0x686763, light: 0xa7a59d, dark: 0x292a28, accent: 0xc0bcae },
+    lightPatch: 0.30,
+    accentPatch: 0.14,
+    darkPatch: 0.46,
+    fineSpeckle: 0.18,
+  },
+  Arche: {
+    palette: { base: 0x87383f, light: 0xe56c5c, dark: 0x2c1118, accent: 0xfa7b58 },
+    lightPatch: 0.48,
+    accentPatch: 0.24,
+    darkPatch: 0.52,
+    fineSpeckle: 0.20,
+  },
+  Helike: {
+    palette: { base: 0x806454, light: 0xc9a582, dark: 0x30251f, accent: 0xdfbd99 },
+    lightPatch: 0.46,
+    accentPatch: 0.21,
+    darkPatch: 0.39,
+    fineSpeckle: 0.13,
+  },
+  Kore: {
+    palette: { base: 0x707781, light: 0xa5acb5, dark: 0x363b43, accent: 0xc0c5cb },
+    lightPatch: 0.34,
+    accentPatch: 0.18,
+    darkPatch: 0.34,
+    fineSpeckle: 0.10,
+  },
+  Herse: {
+    palette: { base: 0x70443d, light: 0x995d52, dark: 0x2f201e, accent: 0x854d43 },
+    lightPatch: 0.22,
+    accentPatch: 0.10,
+    darkPatch: 0.31,
+    fineSpeckle: 0.12,
+  },
+  Eirene: {
+    palette: { base: 0x673e37, light: 0x975b4c, dark: 0x271c1a, accent: 0x7f4b3e },
+    lightPatch: 0.27,
+    accentPatch: 0.12,
+    darkPatch: 0.39,
+    fineSpeckle: 0.18,
+  },
+  Philophrosyn: {
+    palette: { base: 0x584b28, light: 0x9d8752, dark: 0x201c0f, accent: 0xc2a25d },
+    lightPatch: 0.37,
+    accentPatch: 0.18,
+    darkPatch: 0.44,
+    fineSpeckle: 0.16,
+  },
+  Eupheme: {
+    palette: { base: 0xb8a47c, light: 0xebdeb1, dark: 0x4b3d2d, accent: 0xd1be8f },
+    lightPatch: 0.48,
+    accentPatch: 0.22,
+    darkPatch: 0.34,
+    fineSpeckle: 0.13,
+  },
+  Pandia: {
+    palette: { base: 0xb8b6b0, light: 0xf2f0e7, dark: 0x464442, accent: 0xdad9d3 },
+    lightPatch: 0.58,
+    accentPatch: 0.27,
+    darkPatch: 0.31,
+    fineSpeckle: 0.11,
+  },
+  Ersa: {
+    palette: { base: 0x9799a9, light: 0xcfd2de, dark: 0x585a6a, accent: 0xb4b8c9 },
+    lightPatch: 0.42,
+    accentPatch: 0.18,
+    darkPatch: 0.24,
+    fineSpeckle: 0.07,
+  },
 });
 
 const THEMISTO_CHIPPED_AXIS = new THREE.Vector3(-0.84, 0.41, 0.35).normalize();
@@ -136,6 +220,23 @@ const AITNE_INNER_NOTCH_AXIS = new THREE.Vector3(-0.94, 0.32, 0.10).normalize();
 const DIA_BULGE_AXIS = new THREE.Vector3(0.96, -0.23, 0.12).normalize();
 const DIA_MAIN_MASS_AXIS = new THREE.Vector3(-0.82, 0.06, 0.56).normalize();
 const DIA_SHOULDER_NOTCH_AXIS = new THREE.Vector3(0.36, 0.92, 0.14).normalize();
+const CALLIRRHOE_FULL_SHOULDER_AXIS = new THREE.Vector3(0.72, 0.43, 0.54).normalize();
+const CALLIRRHOE_CLIPPED_END_AXIS = new THREE.Vector3(-0.92, -0.16, 0.36).normalize();
+const THYONE_FLAT_FACE_AXIS = new THREE.Vector3(-0.50, 0.56, 0.66).normalize();
+const THYONE_SOFT_BULGE_AXIS = new THREE.Vector3(0.74, -0.28, 0.61).normalize();
+const PASITHEE_UPPER_CAP_AXIS = new THREE.Vector3(-0.30, 0.91, 0.29).normalize();
+const PASITHEE_REAR_SHOULDER_AXIS = new THREE.Vector3(0.34, 0.44, -0.83).normalize();
+const ARCHE_CROWN_AXIS = new THREE.Vector3(0.34, 0.74, 0.58).normalize();
+const ARCHE_CLIPPED_FACE_AXIS = new THREE.Vector3(-0.86, -0.12, 0.49).normalize();
+const HERSE_FULL_END_AXIS = new THREE.Vector3(0.72, 0.30, 0.62).normalize();
+const HERSE_FLAT_END_AXIS = new THREE.Vector3(-0.82, -0.12, 0.56).normalize();
+const EIRENE_MAIN_LOBE_AXIS = new THREE.Vector3(-0.62, 0.18, 0.76).normalize();
+const EIRENE_SHARD_AXIS = new THREE.Vector3(0.78, 0.48, 0.40).normalize();
+const EIRENE_NOTCH_AXIS = new THREE.Vector3(0.28, -0.88, 0.38).normalize();
+const EUPHEME_HERO_BASIN_AXIS = new THREE.Vector3(0.832, 0.444, 0.332).normalize();
+const PANDIA_FRACTURE_AXIS = new THREE.Vector3(0.489, 0.030, -0.872).normalize();
+const PANDIA_CROWN_AXIS = new THREE.Vector3(-0.32, 0.82, -0.47).normalize();
+const ERSA_SOFT_BULGE_AXIS = new THREE.Vector3(0.64, 0.18, 0.75).normalize();
 
 /**
  * Converts measured broadband colour indices into a compact material palette.
@@ -462,6 +563,202 @@ const NAMED_SURFACES = Object.freeze({
   Sinope: { craterCount: 11, craterDepth: 0.086, colourContrast: 0.58 },
   Carme: { craterCount: 12, craterDepth: 0.086, colourContrast: 0.62 },
   Ananke: { craterCount: 11, craterDepth: 0.088, bilobeStrength: 0.032 },
+  Callirrhoe: {
+    broadRelief: 0.044,
+    rockRelief: 0.028,
+    fineRelief: 0.012,
+    craterCount: 12,
+    inspectionCraterCount: 18,
+    craterDepth: 0.058,
+    craterRadiusMin: 0.030,
+    craterRadiusMax: 0.125,
+    silhouetteWarp: 0.030,
+    asymmetry: 0.024,
+    bilobeStrength: 0,
+    shardStrength: 0.018,
+    colourContrast: 0.50,
+  },
+  Thyone: {
+    broadRelief: 0.027,
+    rockRelief: 0.018,
+    fineRelief: 0.008,
+    craterCount: 8,
+    inspectionCraterCount: 12,
+    craterDepth: 0.040,
+    craterRadiusMin: 0.030,
+    craterRadiusMax: 0.105,
+    silhouetteWarp: 0.018,
+    asymmetry: 0.014,
+    bilobeStrength: 0,
+    shardStrength: 0.008,
+    colourContrast: 0.44,
+    roughness: 0.93,
+  },
+  Pasithee: {
+    broadRelief: 0.058,
+    rockRelief: 0.038,
+    fineRelief: 0.018,
+    craterCount: 16,
+    inspectionCraterCount: 25,
+    craterDepth: 0.062,
+    craterRadiusMin: 0.024,
+    craterRadiusMax: 0.115,
+    silhouetteWarp: 0.022,
+    asymmetry: 0.020,
+    bilobeStrength: 0,
+    shardStrength: 0.012,
+    colourContrast: 0.56,
+  },
+  Arche: {
+    broadRelief: 0.060,
+    rockRelief: 0.042,
+    fineRelief: 0.020,
+    craterCount: 22,
+    inspectionCraterCount: 34,
+    craterDepth: 0.070,
+    craterRadiusMin: 0.024,
+    craterRadiusMax: 0.120,
+    silhouetteWarp: 0.040,
+    asymmetry: 0.032,
+    bilobeStrength: 0,
+    shardStrength: 0.038,
+    colourContrast: 0.62,
+    roughness: 0.98,
+  },
+  Helike: {
+    broadRelief: 0.032,
+    rockRelief: 0.021,
+    fineRelief: 0.010,
+    craterCount: 8,
+    inspectionCraterCount: 14,
+    craterDepth: 0.044,
+    craterRadiusMin: 0.028,
+    craterRadiusMax: 0.105,
+    silhouetteWarp: 0.012,
+    asymmetry: 0.010,
+    bilobeStrength: 0,
+    shardStrength: 0,
+    colourContrast: 0.46,
+    roughness: 0.93,
+    flatShading: false,
+  },
+  Kore: {
+    broadRelief: 0.010,
+    rockRelief: 0.006,
+    fineRelief: 0.003,
+    craterCount: 32,
+    inspectionCraterCount: 46,
+    craterDepth: 0.043,
+    craterRadiusMin: 0.020,
+    craterRadiusMax: 0.110,
+    silhouetteWarp: 0,
+    asymmetry: 0,
+    bilobeStrength: 0,
+    shardStrength: 0,
+    colourContrast: 0.34,
+    roughness: 0.91,
+    flatShading: false,
+  },
+  Philophrosyn: {
+    broadRelief: 0.019,
+    rockRelief: 0.011,
+    fineRelief: 0.005,
+    craterCount: 24,
+    inspectionCraterCount: 34,
+    craterDepth: 0.052,
+    craterRadiusMin: 0.022,
+    craterRadiusMax: 0.128,
+    silhouetteWarp: 0.004,
+    asymmetry: 0.003,
+    bilobeStrength: 0,
+    shardStrength: 0,
+    colourContrast: 0.44,
+    roughness: 0.97,
+    flatShading: false,
+  },
+  Herse: {
+    broadRelief: 0.052,
+    rockRelief: 0.036,
+    fineRelief: 0.017,
+    craterCount: 15,
+    inspectionCraterCount: 22,
+    craterDepth: 0.067,
+    craterRadiusMin: 0.025,
+    craterRadiusMax: 0.120,
+    silhouetteWarp: 0.038,
+    asymmetry: 0.030,
+    bilobeStrength: 0,
+    shardStrength: 0.030,
+    colourContrast: 0.30,
+    roughness: 0.99,
+  },
+  Eirene: {
+    broadRelief: 0.076,
+    rockRelief: 0.052,
+    fineRelief: 0.024,
+    craterCount: 25,
+    inspectionCraterCount: 38,
+    craterDepth: 0.082,
+    craterRadiusMin: 0.020,
+    craterRadiusMax: 0.135,
+    silhouetteWarp: 0.090,
+    asymmetry: 0.065,
+    bilobeStrength: 0.018,
+    shardStrength: 0.075,
+    colourContrast: 0.38,
+    roughness: 1.0,
+  },
+  Eupheme: {
+    broadRelief: 0.016,
+    rockRelief: 0.011,
+    fineRelief: 0.005,
+    craterCount: 54,
+    inspectionCraterCount: 78,
+    craterDepth: 0.050,
+    craterRadiusMin: 0.014,
+    craterRadiusMax: 0.095,
+    silhouetteWarp: 0.003,
+    asymmetry: 0.002,
+    bilobeStrength: 0,
+    shardStrength: 0,
+    colourContrast: 0.40,
+    roughness: 0.96,
+    flatShading: false,
+  },
+  Pandia: {
+    broadRelief: 0.038,
+    rockRelief: 0.027,
+    fineRelief: 0.012,
+    craterCount: 30,
+    inspectionCraterCount: 44,
+    craterDepth: 0.055,
+    craterRadiusMin: 0.017,
+    craterRadiusMax: 0.108,
+    silhouetteWarp: 0.025,
+    asymmetry: 0.018,
+    bilobeStrength: 0,
+    shardStrength: 0.032,
+    colourContrast: 0.48,
+    roughness: 0.93,
+    flatShading: false,
+  },
+  Ersa: {
+    broadRelief: 0.010,
+    rockRelief: 0.006,
+    fineRelief: 0.0025,
+    craterCount: 18,
+    inspectionCraterCount: 28,
+    craterDepth: 0.028,
+    craterRadiusMin: 0.016,
+    craterRadiusMax: 0.082,
+    silhouetteWarp: 0.002,
+    asymmetry: 0.001,
+    bilobeStrength: 0,
+    shardStrength: 0,
+    colourContrast: 0.28,
+    roughness: 0.87,
+    flatShading: false,
+  },
   Themisto: {
     broadRelief: 0.064,
     rockRelief: 0.043,
@@ -585,7 +882,7 @@ const NAMED_SURFACES = Object.freeze({
     shardStrength: 0,
   },
   Carpo: { craterCount: 7, craterDepth: 0.090, shardStrength: 0.088 },
-  Valetudo: { craterCount: 5, craterDepth: 0.092, shardStrength: 0.100 },
+  Valetudo: { craterCount: 24, craterDepth: 0.034, craterRadiusMin: 0.025, craterRadiusMax: 0.18, shardStrength: 0, silhouetteWarp: 0, asymmetry: 0, bilobeStrength: 0 },
 });
 
 const NAMED_CRATERS = Object.freeze({
@@ -737,6 +1034,22 @@ function resolveModeSettings(profile, mode = "preview") {
   settings.shardStrength *= inspection ? 1.07 : 1.0;
   settings.craterRimBrightening *= inspection ? 1.18 : 1.0;
   settings.colourContrast *= inspection ? 1.16 : 1.0;
+
+  // Valetudo follows the supplied planet-like reference. Keep its limb truly
+  // spherical and let the crater/height maps provide the visible terrain.
+  // The generic irregular-moon warp previously made it look like an asteroid.
+  if (profile.catalogueName === "Valetudo") {
+    settings.broadRelief = inspection ? 0.010 : 0.0045;
+    settings.rockRelief = inspection ? 0.007 : 0.0030;
+    settings.fineRelief = inspection ? 0.0035 : 0.0015;
+    settings.silhouetteWarp = 0;
+    settings.asymmetry = 0;
+    settings.shardStrength = 0;
+    settings.bilobeStrength = 0;
+    settings.craterCount = inspection ? Math.max(settings.craterCount, 34) : Math.max(settings.craterCount, 22);
+    settings.craterDepth = inspection ? 0.045 : 0.022;
+    settings.flatShading = false;
+  }
 
   if (inspection) {
     // A selected satellite is always smooth-shaded. Its silhouette and relief
@@ -925,6 +1238,202 @@ function sampleCallistoBasin(direction) {
 function morphologyWarp(direction, profile, settings) {
   if (profile.family === "Galilean moon") return 0;
 
+  // Callirrhoe's supplied reference is a compact dark potato rather than a
+  // generic spiky asteroid. A fuller upper shoulder and softly clipped opposite
+  // end reproduce its asymmetric trapezoidal outline while keeping one mesh.
+  if (profile.catalogueName === "Callirrhoe") {
+    const fullShoulder = Math.pow(
+      Math.max(0, direction.dot(CALLIRRHOE_FULL_SHOULDER_AXIS)),
+      2.5,
+    ) * 0.130;
+    const clippedEnd = Math.pow(
+      Math.max(0, direction.dot(CALLIRRHOE_CLIPPED_END_AXIS)),
+      4.4,
+    ) * 0.110;
+    const lowBelly = Math.pow(Math.max(0, -direction.y), 2.8) * 0.042;
+    return fullShoulder + lowBelly - clippedEnd + direction.x * 0.020;
+  }
+
+  // Thyone remains broadly rounded in the reference, with only restrained
+  // facet changes. Suppressing the family shard field prevents a tiny moon from
+  // becoming an implausibly sharp rock in close inspection.
+  if (profile.catalogueName === "Thyone") {
+    const softBulge = Math.pow(
+      Math.max(0, direction.dot(THYONE_SOFT_BULGE_AXIS)),
+      2.8,
+    ) * 0.075;
+    const flatFace = Math.pow(
+      Math.max(0, direction.dot(THYONE_FLAT_FACE_AXIS)),
+      4.6,
+    ) * 0.062;
+    const roundedFacets = (
+      Math.pow(Math.abs(direction.x), 4.2)
+      + Math.pow(Math.abs(direction.y), 4.2)
+      + Math.pow(Math.abs(direction.z), 4.2)
+      - 0.72
+    ) * 0.028;
+    return softBulge + roundedFacets - flatFace;
+  }
+
+  // Pasithee's supplied artwork has a distinctive top-heavy pear silhouette:
+  // broad through the middle, pinched below an offset cap, then tapering to a
+  // lower point. These smooth fields preserve that readable outline from many
+  // camera angles without resorting to detached lobes.
+  if (profile.catalogueName === "Pasithee") {
+    const equatorialBulge = Math.max(0, 1 - direction.y * direction.y) * 0.095;
+    const upperCap = Math.pow(
+      Math.max(0, direction.dot(PASITHEE_UPPER_CAP_AXIS)),
+      2.7,
+    ) * 0.165;
+    const rearShoulder = Math.pow(
+      Math.max(0, direction.dot(PASITHEE_REAR_SHOULDER_AXIS)),
+      3.2,
+    ) * 0.090;
+    const neck = Math.exp(-Math.pow((direction.y - 0.55) / 0.16, 2)) * 0.118;
+    const lowerPoint = Math.pow(Math.max(0, -direction.y), 4.0) * 0.145;
+    return equatorialBulge + upperCap + rearShoulder + lowerPoint - neck;
+  }
+
+  // Arche's reference is a chunky, warm-red impact fragment. Keep the body
+  // compact, push one crown outward and softly plane off the opposite side so
+  // its readable angular rock silhouette does not collapse into a generic oval.
+  if (profile.catalogueName === "Arche") {
+    const crown = Math.pow(
+      Math.max(0, direction.dot(ARCHE_CROWN_AXIS)),
+      2.5,
+    ) * 0.135;
+    const clippedFace = Math.pow(
+      Math.max(0, direction.dot(ARCHE_CLIPPED_FACE_AXIS)),
+      4.4,
+    ) * 0.105;
+    const broadFacet = (
+      Math.pow(Math.abs(direction.x), 3.4)
+      + Math.pow(Math.abs(direction.y), 3.8)
+      + Math.pow(Math.abs(direction.z), 3.2)
+      - 0.80
+    ) * 0.030;
+    return crown + broadFacet - clippedFace + direction.x * 0.018;
+  }
+
+  // Helike's supplied artwork reads as a hooked crescent with an enormous
+  // concavity. The cut is based on the body's right-side longitude and vertical
+  // position, so it actually reaches the visible limb instead of becoming only
+  // a shallow front-facing dent. Upper and lower horns remain around the cut.
+  if (profile.catalogueName === "Helike") {
+    const rightSide = smoothstep(0.05, 0.98, direction.x);
+    const middleBand = Math.exp(-Math.pow(direction.y / 0.55, 4));
+    const cavity = rightSide * middleBand * 0.90;
+    const upperHorn = smoothstep(0.32, 0.95, direction.y)
+      * smoothstep(0.10, 0.95, direction.x)
+      * 0.24;
+    const lowerHook = smoothstep(0.18, 0.95, -direction.y)
+      * smoothstep(0.05, 0.95, direction.x)
+      * 0.42;
+    const rearMass = smoothstep(0.10, 0.95, -direction.x) * 0.08;
+    return rearMass + upperHorn + lowerHook - cavity;
+  }
+
+  // Kore is intentionally planet-like in the supplied reference: almost round,
+  // smoothly lit and defined by craters rather than by an asteroid silhouette.
+  if (profile.catalogueName === "Kore") return 0;
+
+  // Philophrosyne is shown as a compact dwarf-moon-like globe. Retain only a
+  // tiny natural unevenness so the crater field, not random spikes, defines it.
+  if (profile.catalogueName === "Philophrosyn") {
+    const lowEquatorialBulge = Math.max(0, 1 - direction.y * direction.y) * 0.012;
+    return lowEquatorialBulge + direction.x * 0.004;
+  }
+
+  // Herse follows the supplied homogeneous light-red Carme-family guidance. Its
+  // muted colour is paired with a simple rounded potato body, one fuller end and
+  // one flatter fractured end rather than dramatic lobes or colour provinces.
+  if (profile.catalogueName === "Herse") {
+    const fullEnd = Math.pow(
+      Math.max(0, direction.dot(HERSE_FULL_END_AXIS)),
+      2.7,
+    ) * 0.090;
+    const flatEnd = Math.pow(
+      Math.max(0, direction.dot(HERSE_FLAT_END_AXIS)),
+      4.0,
+    ) * 0.075;
+    return fullEnd - flatEnd + direction.y * 0.012;
+  }
+
+  // Eirene is deliberately more fragmented and porous: a dominant lobe, raised
+  // shard and missing lower notch produce a jagged potato-shaped collision
+  // fragment whose heavy crater relief remains visible during inspection.
+  if (profile.catalogueName === "Eirene") {
+    const mainLobe = Math.pow(
+      Math.max(0, direction.dot(EIRENE_MAIN_LOBE_AXIS)),
+      2.25,
+    ) * 0.125;
+    const shard = Math.pow(
+      Math.max(0, direction.dot(EIRENE_SHARD_AXIS)),
+      3.8,
+    ) * 0.115;
+    const notch = Math.pow(
+      Math.max(0, direction.dot(EIRENE_NOTCH_AXIS)),
+      4.0,
+    ) * 0.105;
+    return mainLobe + shard - notch + direction.x * 0.026;
+  }
+
+  // Eupheme is shown as a compact, almost spherical heavily cratered body.
+  // Its dominant upper basin is cut into the actual radius and surrounded by a
+  // raised broken rim so the feature changes naturally with moving light.
+  if (profile.catalogueName === "Eupheme") {
+    const alignment = THREE.MathUtils.clamp(
+      direction.dot(EUPHEME_HERO_BASIN_AXIS),
+      -1,
+      1,
+    );
+    const angularDistance = Math.acos(alignment);
+    const bowl = (1 - smoothstep(0.065, 0.285, angularDistance)) * 0.072;
+    const rim = Math.exp(-Math.pow((angularDistance - 0.302) / 0.042, 2)) * 0.026;
+    const innerFloor = (1 - smoothstep(0.030, 0.118, angularDistance)) * 0.010;
+    const subtleEquator = Math.max(0, 1 - direction.y * direction.y) * 0.008;
+    return rim + subtleEquator - bowl - innerFloor;
+  }
+
+  // Pandia's reference combines a rounded pale hemisphere with a crushed,
+  // irregular fracture face. A broad directional cut, rubble relief and a small
+  // crown reproduce that contrast without making it two detached meshes.
+  if (profile.catalogueName === "Pandia") {
+    const alignment = THREE.MathUtils.clamp(
+      direction.dot(PANDIA_FRACTURE_AXIS),
+      -1,
+      1,
+    );
+    const fractureMask = smoothstep(0.02, 0.94, Math.max(0, alignment));
+    const rubbleNoise = fbm3(direction, 7.5, 4, profile.seed + 1901);
+    const coarseBreaks = fbm3(direction, 3.4, 3, profile.seed + 1919);
+    const fractureFace = fractureMask * 0.185;
+    const rubbleRelief = fractureMask
+      * (rubbleNoise * 0.040 + Math.abs(coarseBreaks) * 0.030);
+    const crown = Math.pow(
+      Math.max(0, direction.dot(PANDIA_CROWN_AXIS)),
+      3.0,
+    ) * 0.052;
+    const faceting = (
+      Math.pow(Math.abs(direction.x), 4.2)
+      + Math.pow(Math.abs(direction.y), 4.0)
+      + Math.pow(Math.abs(direction.z), 4.4)
+      - 0.72
+    ) * 0.014;
+    return crown + faceting + rubbleRelief - fractureFace;
+  }
+
+  // Ersa remains softly rounded and only slightly uneven, matching the pale
+  // lavender-grey reference rather than the generic sharp irregular-moon warp.
+  if (profile.catalogueName === "Ersa") {
+    const softBulge = Math.pow(
+      Math.max(0, direction.dot(ERSA_SOFT_BULGE_AXIS)),
+      3.2,
+    ) * 0.018;
+    const gentleFlattening = -Math.pow(Math.abs(direction.y), 4.0) * 0.008;
+    return softBulge + gentleFlattening;
+  }
+
   // Aitne's reference is bent rather than simply vertically stretched. Three
   // directional fields build the narrow upper arm, offset lower mass and inner
   // notch that form its readable L-shaped outline.
@@ -981,9 +1490,10 @@ function morphologyWarp(direction, profile, settings) {
     return roundedLobes + rearBulge - cavity;
   }
 
-  // Cyllene's supplied image is explicitly planet-like. Suppress the generic
-  // shard and bilobe field so only restrained terrain relief breaks the limb.
-  if (profile.catalogueName === "Cyllene") return 0;
+  // Cyllene and Valetudo are explicitly planet-like in their supplied visual
+  // references. Suppress the generic shard/bilobe field so the silhouette stays
+  // spherical while real crater relief catches the moving sunlight.
+  if (["Cyllene", "Valetudo"].includes(profile.catalogueName)) return 0;
 
   // Hegemone is reconstructed as a compact wedge. A clipped leading face and
   // small longitudinal taper keep that silhouette readable from many angles.
@@ -1112,8 +1622,13 @@ function createJovianGeometry(profile, quality, mode = "preview") {
     const proceduralReliefScale = usesSpacecraftMosaic
       ? (mode === "inspection" ? 0.12 : 0.035)
       : 1;
+    const minimumRadialHeight = profile.catalogueName === "Helike"
+      ? 0.08
+      : profile.family === "Galilean moon"
+        ? 0.97
+        : 0.55;
     const radialHeight = Math.max(
-      profile.family === "Galilean moon" ? 0.97 : 0.55,
+      minimumRadialHeight,
       1
         + (broad + rocky + fine) * proceduralReliefScale
         + morphology
@@ -1129,7 +1644,42 @@ function createJovianGeometry(profile, quality, mode = "preview") {
     let positionY = direction.y * radialHeight;
     let positionZ = direction.z * radialHeight;
 
-    if (profile.catalogueName === "Aitne") {
+    if (profile.catalogueName === "Callirrhoe") {
+      const shoulder = Math.pow(
+        Math.max(0, direction.dot(CALLIRRHOE_FULL_SHOULDER_AXIS)),
+        2.7,
+      );
+      positionX += shoulder * 0.060;
+      positionY += shoulder * 0.026;
+    } else if (profile.catalogueName === "Pasithee") {
+      // Shift the cap slightly to one side and pull the bottom downward so the
+      // source image's lopsided pear silhouette remains evident after the
+      // catalogue's overall Y elongation is applied.
+      const upper = smoothstep(0.34, 0.94, direction.y);
+      const lower = smoothstep(0.30, 0.96, -direction.y);
+      positionX -= upper * 0.125;
+      positionZ += upper * 0.060;
+      positionY -= lower * 0.095;
+    } else if (profile.catalogueName === "Helike") {
+      // Pull both horns out past the carved middle band. This keeps the deep
+      // crescent opening and the lower inward-curving hook visible in silhouette.
+      const rightSide = smoothstep(0.05, 0.98, direction.x);
+      const middleBand = Math.exp(-Math.pow(direction.y / 0.55, 4));
+      const cavity = rightSide * middleBand;
+      const upperHorn = smoothstep(0.32, 0.95, direction.y) * rightSide;
+      const lowerHook = smoothstep(0.18, 0.95, -direction.y) * rightSide;
+      positionX += upperHorn * 0.15 + lowerHook * 0.28 - cavity * 0.08;
+      positionY -= lowerHook * 0.10;
+      positionZ += lowerHook * 0.035;
+    } else if (profile.catalogueName === "Pandia") {
+      const fracture = Math.pow(
+        Math.max(0, direction.dot(PANDIA_FRACTURE_AXIS)),
+        2.4,
+      );
+      positionX -= PANDIA_FRACTURE_AXIS.x * fracture * 0.060;
+      positionY -= PANDIA_FRACTURE_AXIS.y * fracture * 0.060;
+      positionZ -= PANDIA_FRACTURE_AXIS.z * fracture * 0.060;
+    } else if (profile.catalogueName === "Aitne") {
       // Radial relief alone can make two lobes, but it cannot convincingly
       // shift one lobe sideways. Smoothly offset the upper and lower portions
       // in opposite directions to form the bent reference silhouette without
@@ -1358,6 +1908,207 @@ const HERO_GALILEAN_ASSET_URLS = Object.freeze({
 });
 
 /**
+ * Dedicated image- and description-directed surface sets for the supplied
+ * irregular-moon references. The screenshots were not pasted directly onto the meshes: their
+ * black space, labels, fixed lighting and silhouette were removed first. Their
+ * colour/mineral character and local terrain were then rebuilt as clean,
+ * seamless 2:1 albedo, height and roughness maps so sunlight can move naturally
+ * across the final 3D bodies. Herse and Eirene use the same clean-map pipeline
+ * from the user-provided colour, composition and terrain guidance. Eupheme,
+ * Pandia and Ersa continue this reference-directed surface workflow.
+ */
+const REFERENCE_IRREGULAR_SURFACE_URLS = Object.freeze({
+  Callirrhoe: {
+    albedo: new URL(
+      "../../../../assets/textures/jovian/irregular-reference/callirrhoe-albedo.jpg",
+      import.meta.url,
+    ).href,
+    height: new URL(
+      "../../../../assets/textures/jovian/irregular-reference/callirrhoe-height.jpg",
+      import.meta.url,
+    ).href,
+    roughness: new URL(
+      "../../../../assets/textures/jovian/irregular-reference/callirrhoe-roughness.jpg",
+      import.meta.url,
+    ).href,
+  },
+  Thyone: {
+    albedo: new URL(
+      "../../../../assets/textures/jovian/irregular-reference/thyone-albedo.jpg",
+      import.meta.url,
+    ).href,
+    height: new URL(
+      "../../../../assets/textures/jovian/irregular-reference/thyone-height.jpg",
+      import.meta.url,
+    ).href,
+    roughness: new URL(
+      "../../../../assets/textures/jovian/irregular-reference/thyone-roughness.jpg",
+      import.meta.url,
+    ).href,
+  },
+  Pasithee: {
+    albedo: new URL(
+      "../../../../assets/textures/jovian/irregular-reference/pasithee-albedo.jpg",
+      import.meta.url,
+    ).href,
+    height: new URL(
+      "../../../../assets/textures/jovian/irregular-reference/pasithee-height.jpg",
+      import.meta.url,
+    ).href,
+    roughness: new URL(
+      "../../../../assets/textures/jovian/irregular-reference/pasithee-roughness.jpg",
+      import.meta.url,
+    ).href,
+  },
+  Arche: {
+    albedo: new URL(
+      "../../../../assets/textures/jovian/irregular-reference/arche-albedo.jpg",
+      import.meta.url,
+    ).href,
+    height: new URL(
+      "../../../../assets/textures/jovian/irregular-reference/arche-height.jpg",
+      import.meta.url,
+    ).href,
+    roughness: new URL(
+      "../../../../assets/textures/jovian/irregular-reference/arche-roughness.jpg",
+      import.meta.url,
+    ).href,
+  },
+  Helike: {
+    albedo: new URL(
+      "../../../../assets/textures/jovian/irregular-reference/helike-albedo.jpg",
+      import.meta.url,
+    ).href,
+    height: new URL(
+      "../../../../assets/textures/jovian/irregular-reference/helike-height.jpg",
+      import.meta.url,
+    ).href,
+    roughness: new URL(
+      "../../../../assets/textures/jovian/irregular-reference/helike-roughness.jpg",
+      import.meta.url,
+    ).href,
+  },
+  Kore: {
+    albedo: new URL(
+      "../../../../assets/textures/jovian/irregular-reference/kore-albedo.jpg",
+      import.meta.url,
+    ).href,
+    height: new URL(
+      "../../../../assets/textures/jovian/irregular-reference/kore-height.jpg",
+      import.meta.url,
+    ).href,
+    roughness: new URL(
+      "../../../../assets/textures/jovian/irregular-reference/kore-roughness.jpg",
+      import.meta.url,
+    ).href,
+  },
+  Herse: {
+    albedo: new URL(
+      "../../../../assets/textures/jovian/irregular-reference/herse-albedo.jpg",
+      import.meta.url,
+    ).href,
+    height: new URL(
+      "../../../../assets/textures/jovian/irregular-reference/herse-height.jpg",
+      import.meta.url,
+    ).href,
+    roughness: new URL(
+      "../../../../assets/textures/jovian/irregular-reference/herse-roughness.jpg",
+      import.meta.url,
+    ).href,
+  },
+  Eirene: {
+    albedo: new URL(
+      "../../../../assets/textures/jovian/irregular-reference/eirene-albedo.jpg",
+      import.meta.url,
+    ).href,
+    height: new URL(
+      "../../../../assets/textures/jovian/irregular-reference/eirene-height.jpg",
+      import.meta.url,
+    ).href,
+    roughness: new URL(
+      "../../../../assets/textures/jovian/irregular-reference/eirene-roughness.jpg",
+      import.meta.url,
+    ).href,
+  },
+  Philophrosyn: {
+    albedo: new URL(
+      "../../../../assets/textures/jovian/irregular-reference/philophrosyne-albedo.jpg",
+      import.meta.url,
+    ).href,
+    height: new URL(
+      "../../../../assets/textures/jovian/irregular-reference/philophrosyne-height.jpg",
+      import.meta.url,
+    ).href,
+    roughness: new URL(
+      "../../../../assets/textures/jovian/irregular-reference/philophrosyne-roughness.jpg",
+      import.meta.url,
+    ).href,
+  },
+  Eupheme: {
+    albedo: new URL(
+      "../../../../assets/textures/jovian/irregular-reference/eupheme-albedo.jpg",
+      import.meta.url,
+    ).href,
+    height: new URL(
+      "../../../../assets/textures/jovian/irregular-reference/eupheme-height.jpg",
+      import.meta.url,
+    ).href,
+    roughness: new URL(
+      "../../../../assets/textures/jovian/irregular-reference/eupheme-roughness.jpg",
+      import.meta.url,
+    ).href,
+  },
+  Pandia: {
+    albedo: new URL(
+      "../../../../assets/textures/jovian/irregular-reference/pandia-albedo.jpg",
+      import.meta.url,
+    ).href,
+    height: new URL(
+      "../../../../assets/textures/jovian/irregular-reference/pandia-height.jpg",
+      import.meta.url,
+    ).href,
+    roughness: new URL(
+      "../../../../assets/textures/jovian/irregular-reference/pandia-roughness.jpg",
+      import.meta.url,
+    ).href,
+  },
+  Pasiphae: {
+    albedo: new URL("../../../../assets/textures/jovian/irregular-reference/pasiphae-albedo.jpg", import.meta.url).href,
+    height: new URL("../../../../assets/textures/jovian/irregular-reference/pasiphae-height.jpg", import.meta.url).href,
+    roughness: new URL("../../../../assets/textures/jovian/irregular-reference/pasiphae-roughness.jpg", import.meta.url).href,
+  },
+  Sinope: {
+    albedo: new URL("../../../../assets/textures/jovian/irregular-reference/sinope-albedo.jpg", import.meta.url).href,
+    height: new URL("../../../../assets/textures/jovian/irregular-reference/sinope-height.jpg", import.meta.url).href,
+    roughness: new URL("../../../../assets/textures/jovian/irregular-reference/sinope-roughness.jpg", import.meta.url).href,
+  },
+  Carme: {
+    albedo: new URL("../../../../assets/textures/jovian/irregular-reference/carme-albedo.jpg", import.meta.url).href,
+    height: new URL("../../../../assets/textures/jovian/irregular-reference/carme-height.jpg", import.meta.url).href,
+    roughness: new URL("../../../../assets/textures/jovian/irregular-reference/carme-roughness.jpg", import.meta.url).href,
+  },
+  Valetudo: {
+    albedo: new URL("../../../../assets/textures/jovian/irregular-reference/valetudo-albedo.jpg", import.meta.url).href,
+    height: new URL("../../../../assets/textures/jovian/irregular-reference/valetudo-height.jpg", import.meta.url).href,
+    roughness: new URL("../../../../assets/textures/jovian/irregular-reference/valetudo-roughness.jpg", import.meta.url).href,
+  },
+  Ersa: {
+    albedo: new URL(
+      "../../../../assets/textures/jovian/irregular-reference/ersa-albedo.jpg",
+      import.meta.url,
+    ).href,
+    height: new URL(
+      "../../../../assets/textures/jovian/irregular-reference/ersa-height.jpg",
+      import.meta.url,
+    ).href,
+    roughness: new URL(
+      "../../../../assets/textures/jovian/irregular-reference/ersa-roughness.jpg",
+      import.meta.url,
+    ).href,
+  },
+});
+
+/**
  * Original, seamless 2:1 colour maps created from the user's visual direction.
  *
  * We intentionally do not wrap the supplied reference screenshots themselves:
@@ -1544,6 +2295,109 @@ const HERO_GALILEAN_MATERIAL = Object.freeze({
   },
 });
 
+const REFERENCE_IRREGULAR_MATERIAL = Object.freeze({
+  Callirrhoe: {
+    roughness: 0.99,
+    previewBumpScale: 0.014,
+    inspectionBumpScale: 0.050,
+    displacementScale: 0.013,
+    displacementBias: -0.0065,
+    envMapIntensity: 0.009,
+  },
+  Thyone: {
+    roughness: 0.92,
+    previewBumpScale: 0.011,
+    inspectionBumpScale: 0.038,
+    displacementScale: 0.010,
+    displacementBias: -0.0050,
+    envMapIntensity: 0.012,
+  },
+  Pasithee: {
+    roughness: 0.99,
+    previewBumpScale: 0.020,
+    inspectionBumpScale: 0.064,
+    displacementScale: 0.018,
+    displacementBias: -0.0090,
+    envMapIntensity: 0.008,
+  },
+  Arche: {
+    roughness: 0.98,
+    previewBumpScale: 0.018,
+    inspectionBumpScale: 0.060,
+    displacementScale: 0.016,
+    displacementBias: -0.0080,
+    envMapIntensity: 0.008,
+  },
+  Helike: {
+    roughness: 0.93,
+    previewBumpScale: 0.012,
+    inspectionBumpScale: 0.042,
+    displacementScale: 0.012,
+    displacementBias: -0.0060,
+    envMapIntensity: 0.011,
+  },
+  Kore: {
+    roughness: 0.91,
+    previewBumpScale: 0.014,
+    inspectionBumpScale: 0.052,
+    displacementScale: 0.014,
+    displacementBias: -0.0070,
+    envMapIntensity: 0.012,
+  },
+  Herse: {
+    roughness: 0.99,
+    previewBumpScale: 0.016,
+    inspectionBumpScale: 0.055,
+    displacementScale: 0.015,
+    displacementBias: -0.0075,
+    envMapIntensity: 0.008,
+  },
+  Eirene: {
+    roughness: 1.0,
+    previewBumpScale: 0.022,
+    inspectionBumpScale: 0.070,
+    displacementScale: 0.020,
+    displacementBias: -0.0100,
+    envMapIntensity: 0.006,
+  },
+  Philophrosyn: {
+    roughness: 0.97,
+    previewBumpScale: 0.018,
+    inspectionBumpScale: 0.060,
+    displacementScale: 0.016,
+    displacementBias: -0.0080,
+    envMapIntensity: 0.009,
+  },
+  Eupheme: {
+    roughness: 0.96,
+    previewBumpScale: 0.020,
+    inspectionBumpScale: 0.068,
+    displacementScale: 0.018,
+    displacementBias: -0.0090,
+    envMapIntensity: 0.010,
+  },
+  Pandia: {
+    roughness: 0.93,
+    previewBumpScale: 0.018,
+    inspectionBumpScale: 0.060,
+    displacementScale: 0.016,
+    displacementBias: -0.0080,
+    envMapIntensity: 0.012,
+  },
+  Pasiphae: { roughness: 0.99, previewBumpScale: 0.019, inspectionBumpScale: 0.064, displacementScale: 0.018, displacementBias: -0.009, envMapIntensity: 0.012 },
+  Sinope: { roughness: 0.99, previewBumpScale: 0.017, inspectionBumpScale: 0.058, displacementScale: 0.016, displacementBias: -0.008, envMapIntensity: 0.011 },
+  Carme: { roughness: 0.98, previewBumpScale: 0.016, inspectionBumpScale: 0.055, displacementScale: 0.015, displacementBias: -0.0075, envMapIntensity: 0.012 },
+  Valetudo: { roughness: 0.92, previewBumpScale: 0.026, inspectionBumpScale: 0.078, displacementScale: 0.012, displacementBias: -0.006, envMapIntensity: 0.030 },
+  Ersa: {
+    roughness: 0.87,
+    previewBumpScale: 0.009,
+    inspectionBumpScale: 0.030,
+    displacementScale: 0.008,
+    displacementBias: -0.0040,
+    envMapIntensity: 0.018,
+  },
+});
+
 const heroTextureLoader = new THREE.TextureLoader();
 const heroTextureCache = new Map();
 
@@ -1566,6 +2420,16 @@ function loadPersistentHeroTexture(url, { color = false } = {}) {
 
 function getHeroGalileanSurfaceMaps(profile) {
   const urls = HERO_GALILEAN_ASSET_URLS[profile.catalogueName];
+  if (!urls) return null;
+  return {
+    albedoMap: loadPersistentHeroTexture(urls.albedo, { color: true }),
+    heightMap: loadPersistentHeroTexture(urls.height),
+    roughnessMap: loadPersistentHeroTexture(urls.roughness),
+  };
+}
+
+function getReferenceIrregularSurfaceMaps(profile) {
+  const urls = REFERENCE_IRREGULAR_SURFACE_URLS[profile.catalogueName];
   if (!urls) return null;
   return {
     albedoMap: loadPersistentHeroTexture(urls.albedo, { color: true }),
@@ -1899,11 +2763,18 @@ function getProceduralRealismSurfaceMaps(profile, settings, quality = "high") {
 function createJovianMaterial(profile, settings, palette, quality = "high", mode = "preview") {
   const inspection = mode === "inspection";
   const heroMaps = getHeroGalileanSurfaceMaps(profile);
-  const proceduralMaps = heroMaps ? null : getProceduralRealismSurfaceMaps(profile, settings, quality);
-  const activeMaps = heroMaps ?? proceduralMaps;
-  const referenceAlbedoMap = heroMaps ? null : getReferenceIrregularAlbedo(profile);
+  const referenceSurfaceMaps = heroMaps ? null : getReferenceIrregularSurfaceMaps(profile);
+  const proceduralMaps = heroMaps || referenceSurfaceMaps
+    ? null
+    : getProceduralRealismSurfaceMaps(profile, settings, quality);
+  const activeMaps = heroMaps ?? referenceSurfaceMaps ?? proceduralMaps;
+  const referenceAlbedoMap = heroMaps || referenceSurfaceMaps
+    ? null
+    : getReferenceIrregularAlbedo(profile);
   const albedoMap = referenceAlbedoMap ?? activeMaps?.albedoMap ?? null;
   const heroSettings = HERO_GALILEAN_MATERIAL[profile.catalogueName] ?? null;
+  const referenceSettings = REFERENCE_IRREGULAR_MATERIAL[profile.catalogueName] ?? null;
+  const mappedSurfaceSettings = heroSettings ?? referenceSettings;
   const reliefMap = activeMaps?.heightMap
     ?? (inspection ? createInspectionBumpTexture(profile, settings, quality) : null);
 
@@ -1914,12 +2785,12 @@ function createJovianMaterial(profile, settings, palette, quality = "high", mode
     color: 0xffffff,
     map: albedoMap,
     vertexColors: !usesMappedSurface,
-    roughness: heroSettings?.roughness
+    roughness: mappedSurfaceSettings?.roughness
       ?? THREE.MathUtils.clamp(settings.roughness, 0.45, 1),
     roughnessMap: activeMaps?.roughnessMap ?? null,
     metalness: 0,
-    envMapIntensity: heroSettings?.envMapIntensity
-      ?? (proceduralMaps ? Math.max(settings.envMapIntensity, 0.010) : settings.envMapIntensity),
+    envMapIntensity: mappedSurfaceSettings?.envMapIntensity
+      ?? (proceduralMaps ? Math.max(settings.envMapIntensity, 0.022) : settings.envMapIntensity),
     flatShading: usesMappedSurface ? false : settings.flatShading,
     dithering: true,
     emissive: usesMappedSurface
@@ -1927,8 +2798,10 @@ function createJovianMaterial(profile, settings, palette, quality = "high", mode
       : new THREE.Color(palette.dark).multiplyScalar(0.12),
     emissiveIntensity: usesMappedSurface ? 0 : settings.emissiveIntensity,
     bumpMap: reliefMap,
-    bumpScale: heroSettings
-      ? (inspection ? heroSettings.inspectionBumpScale : heroSettings.previewBumpScale)
+    bumpScale: mappedSurfaceSettings
+      ? (inspection
+        ? mappedSurfaceSettings.inspectionBumpScale
+        : mappedSurfaceSettings.previewBumpScale)
       : proceduralMaps
         ? (inspection
           ? (profile.family === "Inner regular moon"
@@ -1946,7 +2819,7 @@ function createJovianMaterial(profile, settings, palette, quality = "high", mode
           : 0,
     displacementMap: inspection ? reliefMap : null,
     displacementScale: inspection
-      ? (heroSettings?.displacementScale
+      ? (mappedSurfaceSettings?.displacementScale
         ?? (proceduralMaps
           ? (profile.family === "Inner regular moon"
             ? 0.020
@@ -1956,7 +2829,7 @@ function createJovianMaterial(profile, settings, palette, quality = "high", mode
           : (profile.family === "Galilean moon" ? 0.010 : profile.family === "Inner regular moon" ? 0.045 : 0.056)))
       : 0,
     displacementBias: inspection
-      ? (heroSettings?.displacementBias
+      ? (mappedSurfaceSettings?.displacementBias
         ?? (proceduralMaps
           ? (profile.family === "Inner regular moon"
             ? -0.010
@@ -1981,16 +2854,19 @@ function createJovianMaterial(profile, settings, palette, quality = "high", mode
 
   material.name = heroMaps
     ? `${profile.name} spacecraft mosaic material`
-    : referenceAlbedoMap
-      ? `${profile.name} reference-wrapped 3D material`
-    : proceduralMaps
-      ? `${profile.name} realism surface material`
-      : `${profile.name} evidence-tiered moon material`;
+    : referenceSurfaceMaps
+      ? `${profile.name} image-derived reference surface material`
+      : referenceAlbedoMap
+        ? `${profile.name} reference-wrapped 3D material`
+        : proceduralMaps
+          ? `${profile.name} realism surface material`
+          : `${profile.name} evidence-tiered moon material`;
   material.userData = {
     surfaceEvidence: profile.surfaceEvidence,
     albedo: profile.albedo ?? null,
     roughness: common.roughness,
     usesSpacecraftMosaic: Boolean(heroMaps),
+    usesReferenceSurfaceSet: Boolean(referenceSurfaceMaps),
     usesReferenceAlbedo: Boolean(referenceAlbedoMap),
     usesProceduralRealismMaps: Boolean(proceduralMaps),
   };

@@ -1,4 +1,11 @@
+
+1. When click on "Click to know more info" the mouse and the white character moving fadeness is not in sync it likes delayes the when mouse is hover
+
+
+
 5. All planets accomodate between earth and moon
 
 
 6. View Things from Nasa Solar System
+
+

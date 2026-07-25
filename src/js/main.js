@@ -1229,6 +1229,12 @@ import { createCelestialDetailsPanel } from './ui/planetDetailsPanel.js';
   fillLight.position.set(-50, 40, 90);
   scene.add(fillLight);
 
+  // Restrained warm directional fill for sub-pixel unresolved moons. It
+  // preserves a day/night terminator and avoids the flat, unlit appearance.
+  const distantMoonSunlight = new THREE.DirectionalLight(0xffe2b8, 0.34);
+  distantMoonSunlight.position.set(120, 18, 36);
+  scene.add(distantMoonSunlight);
+
   // A neutral fill reveals C/S/M composition while inspecting an asteroid.
   // It is restricted to the dedicated asteroid-inspection layer, so the many
   // surrounding belt rocks do not brighten and darken as the camera moves. An
@@ -5103,9 +5109,12 @@ import { createCelestialDetailsPanel } from './ui/planetDetailsPanel.js';
       ),
     );
     setSatelliteInspectionLayer(isNaturalSatelliteFocused ? focusedBody : null);
+    const isDenseSatelliteFocused = Boolean(
+      isNaturalSatelliteFocused && focusedBody?.userData?.isDenseSatellite,
+    );
     const hasResolvedSatelliteSurface = Boolean(
       isNaturalSatelliteFocused
-      && !focusedBody?.userData?.isDenseSatellite
+      && !isDenseSatelliteFocused
       && satelliteInspectionLayerBody,
     );
     jovianMoonInspectionFill.visible = hasResolvedSatelliteSurface;
@@ -5119,7 +5128,16 @@ import { createCelestialDetailsPanel } from './ui/planetDetailsPanel.js';
     const satelliteLightEase = frameAdjustedEase(0.12, deltaTime);
     sceneAmbientLight.intensity = THREE.MathUtils.lerp(
       sceneAmbientLight.intensity,
-      isNaturalSatelliteFocused ? 0.075 : 0.16,
+      isDenseSatelliteFocused ? 0.14 : isNaturalSatelliteFocused ? 0.075 : 0.16,
+      satelliteLightEase,
+    );
+    // Dense catalogue moons remain inside an InstancedMesh when selected. Give
+    // that shared physically based material a stronger Sun-facing key while a
+    // dense moon is focused, instead of dropping it into the resolved-moon
+    // inspection-light path that cannot address one instance independently.
+    distantMoonSunlight.intensity = THREE.MathUtils.lerp(
+      distantMoonSunlight.intensity,
+      isDenseSatelliteFocused ? 0.62 : 0.34,
       satelliteLightEase,
     );
     fillLight.intensity = THREE.MathUtils.lerp(

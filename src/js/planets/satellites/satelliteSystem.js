@@ -494,9 +494,15 @@ function createDenseSatelliteFields(profiles, parentRadius, parentName, quality)
     const material = new THREE.MeshStandardMaterial({
       color: 0xffffff,
       vertexColors: true,
-      roughness: 1,
+      roughness: 0.94,
       metalness: 0,
-      envMapIntensity: 0.008,
+      // Keep tiny unresolved bodies responsive to real directional sunlight at
+      // system scale. Slightly stronger image-based response restores readable
+      // day-side colour while emissive remains zero and the night side stays dark.
+      envMapIntensity: 0.055,
+      emissive: 0x000000,
+      emissiveIntensity: 0,
+      dithering: true,
     });
     const mesh = new THREE.InstancedMesh(geometry, material, records.length);
     mesh.name = `${parentName} ${key} background satellites`;
@@ -509,7 +515,7 @@ function createDenseSatelliteFields(profiles, parentRadius, parentName, quality)
 
     const fieldRecords = records.map((profile, index) => {
       denseMoonColour.set(profile.color ?? profile.colour ?? 0x666666);
-      const tint = 0.82 + ((profile.seed ?? index * 0.137) % 1) * 0.28;
+      const tint = 0.96 + ((profile.seed ?? index * 0.137) % 1) * 0.20;
       denseMoonColour.multiplyScalar(tint);
       mesh.setColorAt(index, denseMoonColour);
       const target = createDenseSatelliteInteractionTarget(profile, parentName);

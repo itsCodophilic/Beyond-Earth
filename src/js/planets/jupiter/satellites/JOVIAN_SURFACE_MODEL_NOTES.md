@@ -49,3 +49,40 @@ The four Galilean hero moons now use local global spacecraft mosaics instead of 
 The previous great-circle line generator and clean procedural crater rings are disabled for these four bodies. Their real image mosaics now provide the visible terrain identity in both preview and inspection modes. Local derived height and roughness maps add only restrained lighting relief; they are not presented as authoritative elevation products. Shared texture caching prevents the maps from being regenerated or reloaded every time inspection mode changes.
 
 Full texture provenance and attribution are recorded in `src/assets/textures/jovian/SOURCES.md`.
+
+## v7 image-directed irregular reference surfaces
+
+Callirrhoe, Thyone and Pasithee now use dedicated reference-derived 3D surface sets. The supplied screenshots were treated as visual direction rather than pasted decals: labels, stars, black backgrounds, fixed shadows and object silhouettes were removed before their colour character and local terrain were rebuilt as seamless 2:1 albedo, height and roughness maps.
+
+Each moon also receives an individually sculpted silhouette:
+
+- **Callirrhoe:** compact dark potato-like body with one fuller shoulder and a softly clipped end.
+- **Thyone:** pale peach-and-cream rounded fragment with restrained facets and weathered mineral provinces.
+- **Pasithee:** tall top-heavy pear form with an offset cap, shallow neck, broad centre, tapered lower point and strongly corrugated grey regolith.
+
+These remain explicitly labelled reference-directed artistic reconstructions because spacecraft have not resolved the exact shapes or mapped surfaces of these small irregular moons.
+
+
+## v8 Arche, Helike, Kore, Herse, Eirene and Philophrosyne
+
+Six further outer moons now receive dedicated full albedo, height and roughness sets plus individual silhouettes:
+
+- **Arche:** compact angular red impact fragment with a raised crown, clipped face, dark pits and granular ruby/rust regolith.
+- **Helike:** tall hooked crescent with a deep real geometry cavity, rounded rear shell, lower inward hook and warm brown-beige marbling.
+- **Kore:** intentionally planet-like near-sphere with cool blue-grey plains and a dense but restrained crater field.
+- **Philophrosyne:** compact dwarf-moon-like olive-brown globe with broad weathered terrain, impact bowls and dusty golden rims.
+- **Herse:** homogeneous dull light-red D-type potato fragment; the palette deliberately avoids saturated or multi-coloured patches.
+- **Eirene:** jagged porous Carme-family fragment with a dominant lobe, raised shard, missing notch, heavy cratering and dusty muted-red regolith.
+
+The four supplied screenshots are used as shape, palette and terrain direction rather than pasted directly around the meshes. Fixed shadows, star fields, labels and silhouettes are excluded from the texture maps so Jupiter-system lighting remains physically responsive. Herse and Eirene follow the user-supplied composition, colour and expected-structure guidance. Every one remains labelled as a reconstruction because no close spacecraft surface map exists for these tiny moons.
+
+
+## v9 Eupheme, Pandia and Ersa
+
+Three additional moons now use dedicated reference-derived albedo, height and roughness maps plus individually controlled silhouettes:
+
+- **Eupheme:** warm pale-ochre, nearly spherical and densely cratered, with one dominant physically recessed broken-rim basin.
+- **Pandia:** pale dwarf-moon-like body that transitions from a smooth rounded hemisphere into a clipped, churned and rubble-rich fracture face.
+- **Ersa:** softly rounded lavender-blue-grey moon with smoother weathered plains and only restrained shallow craters.
+
+The screenshots provide palette, terrain and silhouette direction only. Black space, fixed shadows, stars, captions and image outlines are excluded from the seamless maps so the bodies continue to react to the Jupiter-system lights. All three remain clearly described as artistic reconstructions because spacecraft have not mapped these tiny moons in close detail.
