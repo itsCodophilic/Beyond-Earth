@@ -64,6 +64,8 @@ const RESOLVED = Object.freeze({
   Hyperion: { diameterKm: 270.0, aKm: 1481100, periodDays: 21.27661, shape: [1.35, 1.02, 0.82], appearance: "hyperion", family: "Major irregular moon" },
   Iapetus: { diameterKm: 1469.0, aKm: 3560820, periodDays: 79.3215, appearance: "iapetus", family: "Major regular moon" },
   Phoebe: { diameterKm: 213.0, aKm: 12952000, periodDays: 550.31, shape: [1.16, 1.02, 0.92], appearance: "phoebe", family: "Norse irregular moon", retrograde: true },
+  Ymir: { diameterKm: 18.0, aKm: 23100000, periodDays: 1316.0, shape: [1, 1, 1], appearance: "ymir", family: "Norse irregular moon", retrograde: true },
+  Paaliaq: { diameterKm: 22.0, aKm: 15200000, periodDays: 687.0, shape: [1, 1, 1], appearance: "paaliaq", family: "Inuit irregular moon" },
 });
 
 const RESOLVED_MINOR_SURFACE_EVIDENCE = Object.freeze({
@@ -84,6 +86,8 @@ const RESOLVED_MINOR_SURFACE_EVIDENCE = Object.freeze({
   Polydeuces: "Conservative reconstruction from the user-supplied Polydeuces image",
   Hyperion: "Cassini Hyperion close imagery and the user-supplied reference frame",
   Phoebe: "Cassini Phoebe flyby imagery and the user-supplied reference frame",
+  Ymir: "User-supplied silhouette and surface reference, combined with NASA physical and orbital constraints",
+  Paaliaq: "User-supplied rendered surface reference, combined with published orbital and size constraints",
 });
 
 const RESOLVED_MINOR_SURFACE_STRUCTURE = Object.freeze({
@@ -104,6 +108,8 @@ const RESOLVED_MINOR_SURFACE_STRUCTURE = Object.freeze({
   Polydeuces: "Small upright potato-shaped Trojan moon with subdued basins, a rough pebbled surface, and a broader left shoulder",
   Hyperion: "Tall sponge-like moon covered in dense pitting, with large deep-walled basins and a gnawed-away right edge",
   Phoebe: "Dark captured irregular moon with two giant shadowed craters near the crown, many smaller pits, and a brighter sunlit right flank",
+  Ymir: "Asymmetric contact-binary-like rocky body with a high rounded left crown, a saddle-shaped upper neck, a smaller right lobe, and a heavily broken lower surface",
+  Paaliaq: "Compact elongated rocky body with a broad rounded left shoulder, a subdued broken crown, a gently tapered right end, and a rounded underside",
 });
 
 const DIRECT_NAMES = new Set(Object.keys(RESOLVED));
@@ -193,14 +199,14 @@ function createResolvedProfile(name) {
     catalogueName: name,
     family: data.family,
     appearance: data.appearance,
-    color: name === "Titan" ? 0xc98d42 : name === "Iapetus" ? 0x8a8074 : name === "Phoebe" ? 0x514e4a : 0xb8b5ae,
+    color: name === "Titan" ? 0xc98d42 : name === "Iapetus" ? 0x8a8074 : name === "Phoebe" ? 0x514e4a : name === "Ymir" ? 0x8f887e : name === "Paaliaq" ? 0x86766e : 0xb8b5ae,
     diameterKm: data.diameterKm,
-    diameterEstimated: false,
+    diameterEstimated: ["Ymir", "Paaliaq"].includes(name),
     orbitScale,
     semiMajorAxisKm: data.aKm,
-    eccentricity: name === "Hyperion" ? 0.104 : name === "Phoebe" ? 0.163 : 0.006,
-    inclination: THREE.MathUtils.degToRad(name === "Phoebe" ? 175.2 : name === "Iapetus" ? 15.5 : 0.6),
-    inclinationDeg: name === "Phoebe" ? 175.2 : name === "Iapetus" ? 15.5 : 0.6,
+    eccentricity: name === "Hyperion" ? 0.104 : name === "Phoebe" ? 0.163 : name === "Ymir" ? 0.30 : name === "Paaliaq" ? 0.36 : 0.006,
+    inclination: THREE.MathUtils.degToRad(name === "Phoebe" ? 175.2 : name === "Ymir" ? 172.0 : name === "Paaliaq" ? 46.0 : name === "Iapetus" ? 15.5 : 0.6),
+    inclinationDeg: name === "Phoebe" ? 175.2 : name === "Ymir" ? 172.0 : name === "Paaliaq" ? 46.0 : name === "Iapetus" ? 15.5 : 0.6,
     node: seed * Math.PI * 2,
     meanAnomaly: stableSeed(`${name}:phase`) * Math.PI * 2,
     periodDays: data.periodDays,
@@ -209,8 +215,8 @@ function createResolvedProfile(name) {
     seed,
     shape: data.shape ?? [1, 1, 1],
     visualRadius: THREE.MathUtils.clamp(0.06 + 0.58 * Math.pow(data.diameterKm / 5149.5, 0.68), 0.055, 0.64),
-    tidallyLocked: !["Hyperion", "Phoebe"].includes(name),
-    showOrbitGuide: ["Mimas", "Enceladus", "Tethys", "Dione", "Rhea", "Titan", "Hyperion", "Iapetus", "Phoebe"].includes(name),
+    tidallyLocked: !["Hyperion", "Phoebe", "Ymir", "Paaliaq"].includes(name),
+    showOrbitGuide: ["Mimas", "Enceladus", "Tethys", "Dione", "Rhea", "Titan", "Hyperion", "Iapetus", "Phoebe", "Ymir", "Paaliaq"].includes(name),
     instanced: false,
     interactionTier: "direct",
     atmosphere: data.atmosphere,
@@ -244,7 +250,11 @@ function createResolvedProfile(name) {
                                 ? [0.00, -0.16, -0.03]
                                 : name === "Phoebe"
                                   ? [0.02, -0.22, -0.02]
-                                  : name === "Titan"
+                                  : name === "Ymir"
+                                    ? [0.03, -0.08, -0.025]
+                                    : name === "Paaliaq"
+                                      ? [0.05, -0.14, -0.02]
+                                      : name === "Titan"
       ? [0.04, -0.72, -0.02]
       : name === "Mimas"
         ? [-0.14, 0.94, -0.02]
@@ -303,9 +313,17 @@ function createResolvedProfile(name) {
                 ? 0.88
                 : name === "Rhea"
                   ? 0.94
-                  : undefined,
+                  : name === "Ymir"
+                    ? 0.93
+                    : name === "Paaliaq"
+                      ? 0.91
+                      : undefined,
     orbitalSpeed: `${((Math.PI * 2 * data.aKm) / (data.periodDays * 86400)).toFixed(2)} km/s around Saturn`,
-    orbitSummary: `Mean orbit approximately ${(data.aKm / 1000).toLocaleString("en-US", { maximumFractionDigits: 0 })} thousand km from Saturn; period ${data.periodDays.toFixed(data.periodDays < 10 ? 3 : 1)} days.`,
+    orbitSummary: name === "Ymir"
+      ? "Mean orbit approximately 23.1 million km from Saturn; period about 1,316 Earth days."
+      : name === "Paaliaq"
+        ? "Mean orbit approximately 15.2 million km from Saturn; period about 687 Earth days."
+        : `Mean orbit approximately ${(data.aKm / 1000).toLocaleString("en-US", { maximumFractionDigits: 0 })} thousand km from Saturn; period ${data.periodDays.toFixed(data.periodDays < 10 ? 3 : 1)} days.`,
     description: name === "Titan"
       ? "Saturn's largest moon, wrapped in a dense nitrogen atmosphere with methane lakes, rain, dunes, and a subsurface ocean."
       : name === "Enceladus"
@@ -322,7 +340,11 @@ function createResolvedProfile(name) {
             ? "A porous, chaotic tumbler with a sponge-like cratered surface."
             : name === "Mimas"
               ? "A small icy moon dominated by the enormous Herschel impact crater."
-              : `${name} is one of Saturn's resolved regular or ring-associated satellites.`,
+              : name === "Ymir"
+                ? "A small dark captured moon in Saturn's distant Norse group, travelling on an eccentric retrograde orbit."
+                : name === "Paaliaq"
+                  ? "A small reddish-gray irregular moon in Saturn's Inuit group, travelling on a distant eccentric prograde orbit."
+                  : `${name} is one of Saturn's resolved regular or ring-associated satellites.`,
     dataNote: name === "Titan"
       ? "Surface colours use a Cassini/VIMS-style false-colour reconstruction so terrain remains visible beneath a separately rendered atmospheric haze."
       : name === "Mimas"
@@ -337,7 +359,11 @@ function createResolvedProfile(name) {
                 ? "The surface uses NASA Cassini global mosaics; the bright wispy terrain is reconstructed as braided chasmata with raised icy walls."
                 : name === "Rhea"
                   ? "The surface uses NASA's Cassini global map with deterministic crater, basin, and restrained fracture relief."
-                  : "Resolved or constrained by spacecraft observations and established orbital measurements.",
+                  : name === "Ymir"
+                    ? "The supplied reference image drives the silhouette loft and a cleaned seamless colour, height, and roughness wrap. It is a reference-directed reconstruction rather than a claim that Ymir has been globally imaged at this resolution."
+                    : name === "Paaliaq"
+                      ? "The supplied reference image drives the surface palette and a cleaned seamless colour, height, and roughness wrap. The body is sculpted as a compact 3D asteroid rather than extruded from the image silhouette; it remains a reference-directed reconstruction rather than a claim that Paaliaq has been globally imaged at this resolution."
+                      : "Resolved or constrained by spacecraft observations and established orbital measurements.",
   });
 }
 

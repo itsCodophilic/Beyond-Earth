@@ -79,3 +79,29 @@ NASA sources:
 NASA sources:
 `https://science.nasa.gov/resource/map-of-rhea-march-2012-unannotated/`
 `https://science.nasa.gov/saturn/moons/rhea/`
+
+## Ymir
+
+- `irregular-reference/ymir-reference-source.png` preserves the transparent user-supplied visual reference used for this implementation.
+- `ymir-albedo.jpg` is a cleaned and de-lit seamless 2:1 colour wrap derived from an interior surface region of that image. The black/transparent background and fixed photographic lighting are not wrapped onto the mesh.
+- `ymir-height.jpg` and `ymir-roughness.jpg` are restrained derived maps used for local rocky relief and light response.
+- The factory samples the source image's alpha contour into a latitude-by-latitude 3D loft, preserving its high left crown, upper saddle, smaller right lobe, and irregular lower outline.
+- The detailed body is explicitly a reference-directed artistic reconstruction; NASA's available Ymir observations do not provide a resolved global surface map at this level.
+
+NASA physical/orbital overview:
+`https://science.nasa.gov/saturn/moons/ymir/`
+
+NASA Cassini raw-image resource:
+`https://science.nasa.gov/resource/ymir/`
+
+
+## Paaliaq
+
+- `irregular-reference/paaliaq-reference-source.png` preserves the cleaned user-supplied visual reference used for this implementation.
+- `paaliaq-albedo.jpg` is a seamless 2:1 rocky colour wrap derived from that frame, with the watermark strip and background excluded from the final body texture.
+- `paaliaq-height.jpg` and `paaliaq-roughness.jpg` are restrained derived maps used to reinforce the object-scale relief already carried by the geometry.
+- The factory uses a closed volumetric asteroid mesh with a broad rounded left shoulder and a restrained rightward taper. The source silhouette is not extruded, preventing thin spikes or bird-like profiles during rotation.
+- The detailed body is a reference-directed artistic reconstruction; currently available public observations do not provide a resolved global map of Paaliaq at this level.
+
+Reference note:
+User-supplied image, combined with published Paaliaq orbital / size constraints.

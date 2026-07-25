@@ -58,6 +58,34 @@ const SATURNIAN_SURFACE_ASSETS = Object.freeze({
     height: new URL("../../../../assets/textures/saturnian/rhea-height.jpg", import.meta.url).href,
     roughness: new URL("../../../../assets/textures/saturnian/rhea-roughness.jpg", import.meta.url).href,
   }),
+  Ymir: Object.freeze({
+    albedo: new URL(
+      "../../../../assets/textures/saturnian/irregular-reference/ymir-albedo.jpg",
+      import.meta.url,
+    ).href,
+    height: new URL(
+      "../../../../assets/textures/saturnian/irregular-reference/ymir-height.jpg",
+      import.meta.url,
+    ).href,
+    roughness: new URL(
+      "../../../../assets/textures/saturnian/irregular-reference/ymir-roughness.jpg",
+      import.meta.url,
+    ).href,
+  }),
+  Paaliaq: Object.freeze({
+    albedo: new URL(
+      "../../../../assets/textures/saturnian/irregular-reference/paaliaq-albedo.jpg",
+      import.meta.url,
+    ).href,
+    height: new URL(
+      "../../../../assets/textures/saturnian/irregular-reference/paaliaq-height.jpg",
+      import.meta.url,
+    ).href,
+    roughness: new URL(
+      "../../../../assets/textures/saturnian/irregular-reference/paaliaq-roughness.jpg",
+      import.meta.url,
+    ).href,
+  }),
 });
 
 const saturnianTextureLoader = new THREE.TextureLoader();
@@ -2412,7 +2440,348 @@ function createResolvedMinorMoonSurface(profile, quality, config) {
   return moon;
 }
 
+/**
+ * Ymir reference reconstruction
+ * -----------------------------
+ * The supplied PNG contains a transparent, high-detail silhouette rather than
+ * a global spacecraft map. Its alpha contour is sampled below as a compact
+ * latitude loft: every row stores the centre and half-width of the visible
+ * body, so the front/back silhouette follows the reference instead of merely
+ * stretching a generic asteroid sphere. The accompanying 2:1 maps are cleaned,
+ * de-lit and mirrored seamlessly from the same image so Three.js lighting can
+ * still move naturally across the final object.
+ */
+const YMIR_REFERENCE_ASPECT = 0.845703125;
+
+const YMIR_SILHOUETTE_CENTRE = Object.freeze([
+  -0.30130, -0.30593, -0.30816, -0.30954, -0.30873, -0.30690, -0.30522, -0.30358,
+  -0.30249, -0.30072, -0.29851, -0.29519, -0.29036, -0.28244, -0.27447, -0.26430,
+  -0.24312, -0.17809, -0.12320, -0.09141, -0.07390, -0.06352, -0.06189, -0.05961,
+  -0.05456, -0.04567, -0.03426, -0.03133, -0.03079, -0.02965, -0.02862, -0.02452,
+  -0.01810, -0.01356, -0.01354, -0.01245, -0.01026, -0.00755, -0.00495, -0.00402,
+  -0.00312, -0.00136, -0.00083, -0.00064, 0.00154, 0.00336, 0.00317, 0.00487,
+  0.00563, 0.00813, 0.00799, 0.00703, 0.00290, -0.00397, -0.00986, -0.00572,
+  0.00039, 0.00509, 0.01807, 0.02932, 0.03364, 0.03897, 0.04481, 0.04907,
+  0.05518, 0.06238, 0.06912, 0.07680, 0.08081, 0.08037, 0.08094, 0.08469,
+  0.08853, 0.09325, 0.09909, 0.10594, 0.11561, 0.12168, 0.12614, 0.12826,
+  0.13306, 0.14299, 0.14402, 0.13993, 0.13723, 0.14878, 0.15930, 0.15736,
+  0.16087, 0.15899, 0.15614, 0.14705, 0.14054, 0.13329, 0.11138, 0.10980,
+]);
+
+const YMIR_SILHOUETTE_HALF_WIDTH = Object.freeze([
+  0.00000, 0.11270, 0.16225, 0.20534, 0.24258, 0.27414, 0.30170, 0.32749,
+  0.35216, 0.37631, 0.39990, 0.42137, 0.44236, 0.46774, 0.49113, 0.51520,
+  0.55124, 0.63137, 0.70089, 0.74682, 0.77859, 0.80270, 0.81659, 0.82886,
+  0.84267, 0.86096, 0.88093, 0.89297, 0.90230, 0.91045, 0.92001, 0.92990,
+  0.94083, 0.95048, 0.95788, 0.96651, 0.97325, 0.97934, 0.98595, 0.99151,
+  0.99664, 0.99861, 0.99778, 0.99690, 0.99663, 0.99615, 0.99210, 0.98911,
+  0.98808, 0.98775, 0.98551, 0.98171, 0.97479, 0.96498, 0.95421, 0.95153,
+  0.95107, 0.94874, 0.95228, 0.95453, 0.95635, 0.95574, 0.94983, 0.94004,
+  0.93228, 0.93053, 0.92658, 0.92058, 0.91288, 0.89808, 0.88208, 0.86370,
+  0.85360, 0.84535, 0.83661, 0.82490, 0.80946, 0.79694, 0.78410, 0.76695,
+  0.74461, 0.72519, 0.69335, 0.63652, 0.59209, 0.55723, 0.52201, 0.46974,
+  0.41903, 0.36980, 0.32665, 0.27586, 0.22525, 0.17755, 0.11079, 0.00000,
+]);
+
+function sampleYmirSilhouette(values, latitudeT) {
+  const scaled = THREE.MathUtils.clamp(latitudeT, 0, 1) * (values.length - 1);
+  const lower = Math.floor(scaled);
+  const upper = Math.min(values.length - 1, lower + 1);
+  return THREE.MathUtils.lerp(values[lower], values[upper], scaled - lower);
+}
+
+function ymirGeometrySegments(quality) {
+  if (quality === "low") return [88, 60];
+  if (quality === "medium") return [136, 92];
+  return [192, 128];
+}
+
+function createYmirReferenceSurface(profile, quality) {
+  const maps = getSaturnianSurfaceMaps("Ymir");
+  const [widthSegments, heightSegments] = ymirGeometrySegments(quality);
+  const geometry = new THREE.SphereGeometry(1, widthSegments, heightSegments);
+  const positions = geometry.getAttribute("position");
+  const direction = new THREE.Vector3();
+
+  const leftCrown = new THREE.Vector3(-0.38, 0.58, 0.72).normalize();
+  const upperSaddle = new THREE.Vector3(0.28, 0.48, 0.83).normalize();
+  const rightLobe = new THREE.Vector3(0.67, 0.13, 0.73).normalize();
+  const lowerFront = new THREE.Vector3(-0.04, -0.55, 0.84).normalize();
+  const rightBasin = new THREE.Vector3(0.53, -0.05, 0.85).normalize();
+
+  const craterCount = quality === "low" ? 22 : quality === "medium" ? 38 : 58;
+  const craters = createMappedCraterField(profile, craterCount, {
+    minRadius: 0.028,
+    maxRadius: 0.145,
+    minDepth: 0.0035,
+    maxDepth: 0.026,
+    seedOffset: 319.4,
+  });
+  craters.push(
+    { center: rightBasin, radius: 0.245, depth: 0.050, rim: 0.0065 },
+    { center: lowerFront, radius: 0.205, depth: 0.038, rim: 0.0045 },
+    {
+      center: new THREE.Vector3(-0.62, -0.12, 0.78).normalize(),
+      radius: 0.165,
+      depth: 0.026,
+      rim: 0.0035,
+    },
+  );
+
+  for (let index = 0; index < positions.count; index += 1) {
+    direction.fromBufferAttribute(positions, index).normalize();
+
+    const latitudeT = THREE.MathUtils.clamp((1 - direction.y) * 0.5, 0, 1);
+    const sinTheta = Math.sqrt(Math.max(1e-8, 1 - direction.y * direction.y));
+    const longitudeCos = sinTheta > 1e-5 ? direction.x / sinTheta : 0;
+    const longitudeSin = sinTheta > 1e-5 ? direction.z / sinTheta : 0;
+
+    let centreX = sampleYmirSilhouette(YMIR_SILHOUETTE_CENTRE, latitudeT);
+    let halfWidth = sampleYmirSilhouette(YMIR_SILHOUETTE_HALF_WIDTH, latitudeT);
+    let y = (1 - latitudeT * 2) * YMIR_REFERENCE_ASPECT;
+
+    const crownMask = gaussianSurfaceMask(direction, leftCrown, 0.58);
+    const saddleMask = gaussianSurfaceMask(direction, upperSaddle, 0.43);
+    const rightLobeMask = gaussianSurfaceMask(direction, rightLobe, 0.52);
+    const lowerMask = smoothstepValue(-direction.y, -0.04, 0.84);
+    const upperMask = smoothstepValue(direction.y, 0.10, 0.78);
+    const frontness = Math.abs(longitudeSin);
+    const edgePreservation = 0.22 + frontness * 0.78;
+
+    const broad = fbm(direction, 2.25, profile.seed + 71.3);
+    const medium = fbm(direction, 7.8, profile.seed + 113.7);
+    const fine = fbm(direction, 23.0, profile.seed + 181.9);
+    const brokenBand = Math.exp(-Math.pow((direction.y + 0.18) / 0.24, 2));
+
+    let relief = broad * THREE.MathUtils.lerp(0.040, 0.020, upperMask);
+    relief += medium * THREE.MathUtils.lerp(0.017, 0.008, upperMask);
+    relief += fine * THREE.MathUtils.lerp(0.0060, 0.0025, upperMask);
+    relief += brokenBand * medium * 0.011;
+
+    craters.forEach((crater) => {
+      relief += craterSample(
+        direction,
+        crater.center,
+        crater.radius,
+        crater.depth,
+        crater.rim,
+      ).height;
+    });
+
+    relief *= edgePreservation;
+    centreX += broad * 0.009 * (0.35 + lowerMask * 0.65);
+    halfWidth *= Math.max(0.72, 1 + relief);
+
+    // The reference is visibly smoother across the crown and increasingly
+    // broken below the mid-body scarp. Keep this in geometry so the body still
+    // reads correctly even before the image maps finish loading.
+    y += relief * direction.y * 0.42;
+    y += crownMask * 0.018 - saddleMask * 0.024;
+
+    let depth = halfWidth * (0.68 + lowerMask * 0.055);
+    depth *= 1 + crownMask * 0.075 + rightLobeMask * 0.095;
+    depth *= 1 - saddleMask * 0.155;
+    depth *= Math.max(0.70, 1 + relief * 1.32);
+
+    // Slight front/back imbalance prevents the loft from looking like a flat
+    // extruded cut-out while retaining the supplied front silhouette.
+    const rearBias = longitudeSin < 0 ? 0.965 : 1.025;
+    depth *= rearBias;
+
+    positions.setXYZ(
+      index,
+      centreX + longitudeCos * halfWidth,
+      y,
+      longitudeSin * depth,
+    );
+  }
+
+  geometry.deleteAttribute("normal");
+  geometry.computeVertexNormals();
+  smoothSphereUvSeamNormals(geometry);
+  geometry.computeBoundingBox();
+  geometry.computeBoundingSphere();
+
+  const material = new THREE.MeshStandardMaterial({
+    color: 0xffffff,
+    map: maps?.albedoMap ?? null,
+    bumpMap: maps?.heightMap ?? null,
+    bumpScale: quality === "low" ? 0.025 : quality === "medium" ? 0.043 : 0.058,
+    roughness: 0.93,
+    roughnessMap: maps?.roughnessMap ?? null,
+    metalness: 0,
+    envMapIntensity: 0.018,
+    dithering: true,
+  });
+  material.name = "Ymir user-reference seamless mapped surface";
+
+  const moon = new THREE.Mesh(geometry, material);
+  moon.castShadow = false;
+  moon.receiveShadow = false;
+  moon.userData.geometryIncludesShape = true;
+  moon.userData.surfaceEvidence = "User-supplied alpha silhouette and surface image with NASA-constrained physical metadata";
+  moon.userData.surfaceStructure = "Reference-lofted asymmetric body with a rounded left crown, upper saddle, smaller right lobe, and rugged lower scarp";
+  moon.userData.surfaceRoughness = 0.93;
+  moon.userData.surfaceDetailMode = "user-reference-silhouette-loft-with-seamless-derived-wrap";
+  moon.userData.referenceSourceAsset = "assets/textures/saturnian/irregular-reference/ymir-reference-source.png";
+  moon.userData.ymirSurfaceState = { profile, quality, maps };
+  return moon;
+}
+
+/**
+ * Paaliaq reference reconstruction
+ * --------------------------------
+ * The supplied frame is used for surface colour and broad visual proportions,
+ * but not as a literal extruded silhouette. A closed, compact ellipsoid volume
+ * is sculpted instead so Paaliaq remains asteroid-like from every viewing angle.
+ */
+function paaliaqGeometrySegments(quality) {
+  if (quality === "low") return [84, 60];
+  if (quality === "medium") return [132, 92];
+  return [184, 128];
+}
+
+function createPaaliaqReferenceSurface(profile, quality) {
+  const maps = getSaturnianSurfaceMaps("Paaliaq");
+  const [widthSegments, heightSegments] = paaliaqGeometrySegments(quality);
+  const geometry = new THREE.SphereGeometry(1, widthSegments, heightSegments);
+  const positions = geometry.getAttribute("position");
+  const direction = new THREE.Vector3();
+
+  // Paaliaq should read as one compact asteroid-like mass from every angle.
+  // The earlier latitude-loft copied narrow rows from the reference frame and
+  // produced a tall bird-like spike when the moon rotated. This version instead
+  // sculpts a closed ellipsoid volume: broad on the left and gradually tapered
+  // towards the right, matching the reference without extruding its 2D outline.
+  const leftShoulder = new THREE.Vector3(-0.78, 0.16, 0.60).normalize();
+  const upperPlateau = new THREE.Vector3(-0.18, 0.74, 0.64).normalize();
+  const rightSnout = new THREE.Vector3(0.90, -0.04, 0.43).normalize();
+  const lowerBelly = new THREE.Vector3(-0.18, -0.78, 0.52).normalize();
+  const upperRightBasin = new THREE.Vector3(0.34, 0.52, 0.79).normalize();
+  const leftFaceBasin = new THREE.Vector3(-0.54, 0.04, 0.84).normalize();
+
+  const craterCount = quality === "low" ? 20 : quality === "medium" ? 34 : 52;
+  const craters = createMappedCraterField(profile, craterCount, {
+    minRadius: 0.024,
+    maxRadius: 0.118,
+    minDepth: 0.0028,
+    maxDepth: 0.017,
+    seedOffset: 371.8,
+  });
+  craters.push(
+    { center: upperRightBasin, radius: 0.155, depth: 0.018, rim: 0.0033 },
+    { center: leftFaceBasin, radius: 0.128, depth: 0.014, rim: 0.0028 },
+    {
+      center: new THREE.Vector3(0.58, -0.24, 0.78).normalize(),
+      radius: 0.092,
+      depth: 0.010,
+      rim: 0.0022,
+    },
+  );
+
+  for (let index = 0; index < positions.count; index += 1) {
+    direction.fromBufferAttribute(positions, index).normalize();
+
+    const x = direction.x;
+    const rightward = smoothstepValue(x, -0.18, 0.96);
+    const leftward = smoothstepValue(-x, -0.16, 0.98);
+    const leftShoulderMask = gaussianSurfaceMask(direction, leftShoulder, 0.72);
+    const upperPlateauMask = gaussianSurfaceMask(direction, upperPlateau, 0.56);
+    const rightSnoutMask = gaussianSurfaceMask(direction, rightSnout, 0.46);
+    const lowerBellyMask = gaussianSurfaceMask(direction, lowerBelly, 0.60);
+
+    const broad = fbm(direction, 2.15, profile.seed + 61.1);
+    const medium = fbm(direction, 7.4, profile.seed + 91.7);
+    const fine = fbm(direction, 22.0, profile.seed + 153.6);
+    const upperBrokenBand = Math.exp(-Math.pow((direction.y - 0.48) / 0.20, 2));
+    const undersideBand = Math.exp(-Math.pow((direction.y + 0.48) / 0.28, 2));
+
+    let relief = broad * 0.041;
+    relief += medium * 0.014;
+    relief += fine * 0.0048;
+    relief += upperBrokenBand * medium * 0.0070;
+    relief += undersideBand * medium * 0.0045;
+
+    craters.forEach((crater) => {
+      relief += craterSample(
+        direction,
+        crater.center,
+        crater.radius,
+        crater.depth,
+        crater.rim,
+      ).height;
+    });
+
+    // Cross-sections shrink smoothly towards the right-hand tip. The values
+    // are deliberately restrained so no viewing angle can reveal a thin spike.
+    const taper = THREE.MathUtils.lerp(1.04, 0.72, rightward);
+    const leftBulk = 1 + leftward * 0.035 + leftShoulderMask * 0.075;
+    const crownShape = 1 + upperPlateauMask * 0.035;
+    const bellyShape = 1 + lowerBellyMask * 0.045;
+    const snoutShape = 1 - rightSnoutMask * 0.055;
+    const localRadius = Math.max(
+      0.78,
+      (1 + relief) * leftBulk * crownShape * bellyShape * snoutShape,
+    );
+
+    const xAxis = 1.20;
+    const yAxis = 0.82 * taper;
+    const zAxis = 0.74 * THREE.MathUtils.lerp(1.02, 0.78, rightward);
+
+    // A mild centreline bend gives the object the reference's uneven potato
+    // profile without ever copying the image's narrow top contour literally.
+    const centrelineY = -0.055 * x + 0.028 * Math.sin((x + 0.22) * Math.PI);
+    const centrelineZ = 0.025 * Math.sin((x - 0.10) * Math.PI * 1.35);
+
+    let px = direction.x * xAxis * localRadius;
+    let py = direction.y * yAxis * localRadius + centrelineY;
+    let pz = direction.z * zAxis * localRadius + centrelineZ;
+
+    // Keep the left end broad and rounded, while extending only a compact right
+    // snout. These are smooth volumetric adjustments rather than protrusions.
+    px -= leftShoulderMask * 0.045;
+    px += rightSnoutMask * 0.040;
+    py += upperPlateauMask * 0.018;
+    py -= lowerBellyMask * 0.016;
+
+    positions.setXYZ(index, px, py, pz);
+  }
+
+  geometry.deleteAttribute("normal");
+  geometry.computeVertexNormals();
+  smoothSphereUvSeamNormals(geometry);
+  geometry.computeBoundingBox();
+  geometry.computeBoundingSphere();
+
+  const material = new THREE.MeshStandardMaterial({
+    color: 0xffffff,
+    map: maps?.albedoMap ?? null,
+    bumpMap: maps?.heightMap ?? null,
+    bumpScale: quality === "low" ? 0.018 : quality === "medium" ? 0.030 : 0.042,
+    roughness: 0.92,
+    roughnessMap: maps?.roughnessMap ?? null,
+    metalness: 0,
+    envMapIntensity: 0.016,
+    dithering: true,
+  });
+  material.name = "Paaliaq compact reference-sculpted mapped surface";
+
+  const moon = new THREE.Mesh(geometry, material);
+  moon.castShadow = false;
+  moon.receiveShadow = false;
+  moon.userData.geometryIncludesShape = true;
+  moon.userData.surfaceEvidence = "User-supplied surface reference with published Paaliaq orbital and size constraints";
+  moon.userData.surfaceStructure = "Compact elongated irregular body with a broad rounded left shoulder, subdued broken crown, gently tapered right snout, and rounded underside";
+  moon.userData.surfaceRoughness = 0.92;
+  moon.userData.surfaceDetailMode = "user-reference-volumetric-sculpt-with-seamless-derived-wrap";
+  moon.userData.referenceSourceAsset = "assets/textures/saturnian/irregular-reference/paaliaq-reference-source.png";
+  moon.userData.paaliaqSurfaceState = { profile, quality, maps };
+  return moon;
+}
+
 export function createSaturnianMoonSurface(profile, quality = "high") {
+  if (profile.name === "Ymir") return createYmirReferenceSurface(profile, quality);
+  if (profile.name === "Paaliaq") return createPaaliaqReferenceSurface(profile, quality);
   if (profile.name === "Titan") return createTitanSurface(profile, quality);
   if (profile.name === "Iapetus") return createIapetusSurface(profile, quality);
   if (profile.name === "Mimas") return createMimasSurface(profile, quality);
