@@ -194,9 +194,10 @@ const OUTER_SURFACE_DATA = Object.freeze({
     colour: 0xb4aba0,
     albedo: 0.04,
     roughness: 1.0,
-    shape: [1.30, 0.90, 0.78],
+    shape: [1.24, 0.92, 0.80],
+    initialRotation: [0.03, 0.18, -0.08],
     surfaceEvidence: "reference-directed artistic reconstruction with family photometry",
-    structure: "A pale, softly mottled potato-shaped reconstruction with rounded ends, dusty regolith, and restrained impact relief based on the supplied visual reference.",
+    structure: "A pale, softly mottled reconstruction with one rounded main mass and a smaller shoulder-like rock bulging from one end, plus dusty regolith and restrained impact relief.",
     description: "Dia is a tiny prograde member of the Himalia family. Its pale elongated appearance in this experience follows the supplied visual reference; the real moon remains unresolved and its exact terrain is unknown.",
   },
   Pasiphae: {
@@ -240,10 +241,11 @@ const OUTER_SURFACE_DATA = Object.freeze({
     colour: 0x777261,
     albedo: 0.04,
     roughness: 1.0,
-    shape: [0.88, 1.43, 0.82],
+    shape: [1.02, 1.32, 0.84],
+    initialRotation: [0.04, 0.10, -0.14],
     surfaceEvidence: "reference-directed artistic reconstruction with family photometry",
-    structure: "An upright asymmetric two-lobed reconstruction with a broad lower mass, a narrower upper lobe, a shallow waist, olive-grey mineral marbling, and weathered impact regolith.",
-    description: "Aitne is a tiny retrograde member of the Carme family. Its displayed two-lobed silhouette and olive-grey terrain follow the supplied visual reference; no spacecraft has resolved its real shape.",
+    structure: "A bent L-shaped reconstruction whose narrow upper lobe leans sideways over a broader offset lower mass, with an inner notch, olive-grey mineral marbling, and weathered impact regolith.",
+    description: "Aitne is a tiny retrograde member of the Carme family. Its displayed bent, two-lobed silhouette and olive-grey terrain follow the supplied visual reference; no spacecraft has resolved its real shape.",
   },
   Hegemone: {
     appearance: "mixed-dark",
@@ -523,7 +525,8 @@ export const JUPITER_MOON_PROFILES = Object.freeze(JPL_JOVIAN_ORBITS.map((row) =
     visualRadius,
     tidallyLocked: isRegular,
     showOrbitGuide: ORBIT_GUIDE_LEADERS.has(catalogueName),
-    initialRotation: [seed * 0.8 - 0.4, seed * Math.PI * 2, seed * 0.6 - 0.3],
+    initialRotation: outerSurfaceData?.initialRotation
+      ?? [seed * 0.8 - 0.4, seed * Math.PI * 2, seed * 0.6 - 0.3],
     orbitalSpeed: `${orbitalSpeedKmS(semiMajorAxisKm, periodDays).toFixed(2)} km/s around Jupiter`,
     orbitSummary: createOrbitSummary(
       semiMajorAxisKm,

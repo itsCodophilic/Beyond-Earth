@@ -130,6 +130,12 @@ const REFERENCE_VISUAL_STYLES = Object.freeze({
 const THEMISTO_CHIPPED_AXIS = new THREE.Vector3(-0.84, 0.41, 0.35).normalize();
 const THELXINOE_CAVITY_AXIS = new THREE.Vector3(0.86, -0.08, 0.50).normalize();
 const HEGEMONE_CHIPPED_AXIS = new THREE.Vector3(-0.78, 0.24, 0.58).normalize();
+const AITNE_UPPER_LOBE_AXIS = new THREE.Vector3(0.46, 0.88, 0.10).normalize();
+const AITNE_LOWER_LOBE_AXIS = new THREE.Vector3(-0.50, -0.86, 0.12).normalize();
+const AITNE_INNER_NOTCH_AXIS = new THREE.Vector3(-0.94, 0.32, 0.10).normalize();
+const DIA_BULGE_AXIS = new THREE.Vector3(0.96, -0.23, 0.12).normalize();
+const DIA_MAIN_MASS_AXIS = new THREE.Vector3(-0.82, 0.06, 0.56).normalize();
+const DIA_SHOULDER_NOTCH_AXIS = new THREE.Vector3(0.36, 0.92, 0.14).normalize();
 
 /**
  * Converts measured broadband colour indices into a compact material palette.
@@ -485,7 +491,7 @@ const NAMED_SURFACES = Object.freeze({
     colourContrast: 0.64,
   },
   Aitne: {
-    broadRelief: 0.034,
+    broadRelief: 0.030,
     rockRelief: 0.022,
     fineRelief: 0.010,
     craterCount: 7,
@@ -493,10 +499,10 @@ const NAMED_SURFACES = Object.freeze({
     craterDepth: 0.050,
     craterRadiusMin: 0.035,
     craterRadiusMax: 0.13,
-    silhouetteWarp: 0.040,
-    asymmetry: 0.024,
-    bilobeStrength: 0.055,
-    shardStrength: 0.016,
+    silhouetteWarp: 0.018,
+    asymmetry: 0.010,
+    bilobeStrength: 0,
+    shardStrength: 0,
   },
   Hegemone: {
     broadRelief: 0.052,
@@ -567,16 +573,16 @@ const NAMED_SURFACES = Object.freeze({
     roughness: 0.96,
   },
   Dia: {
-    broadRelief: 0.038,
+    broadRelief: 0.032,
     rockRelief: 0.023,
     fineRelief: 0.010,
     craterCount: 8,
     inspectionCraterCount: 12,
     craterDepth: 0.050,
-    silhouetteWarp: 0.032,
-    asymmetry: 0.025,
-    bilobeStrength: 0.008,
-    shardStrength: 0.018,
+    silhouetteWarp: 0.016,
+    asymmetry: 0.010,
+    bilobeStrength: 0,
+    shardStrength: 0,
   },
   Carpo: { craterCount: 7, craterDepth: 0.090, shardStrength: 0.088 },
   Valetudo: { craterCount: 5, craterDepth: 0.092, shardStrength: 0.100 },
@@ -919,16 +925,42 @@ function sampleCallistoBasin(direction) {
 function morphologyWarp(direction, profile, settings) {
   if (profile.family === "Galilean moon") return 0;
 
-  // Aitne's supplied reconstruction is an upright, asymmetric two-lobed body.
-  // The catalogue scale supplies the tall silhouette; these latitude fields
-  // form its broad lower mass, narrower upper lobe, and restrained waist.
+  // Aitne's reference is bent rather than simply vertically stretched. Three
+  // directional fields build the narrow upper arm, offset lower mass and inner
+  // notch that form its readable L-shaped outline.
   if (profile.catalogueName === "Aitne") {
-    const axialPosition = direction.y;
-    const upperLobe = Math.exp(-Math.pow((axialPosition - 0.54) / 0.35, 2)) * 0.085;
-    const lowerLobe = Math.exp(-Math.pow((axialPosition + 0.40) / 0.46, 2)) * 0.145;
-    const waist = Math.exp(-Math.pow((axialPosition - 0.04) / 0.19, 2)) * 0.055;
-    const sideBias = direction.x * 0.018 + direction.z * 0.010;
-    return upperLobe + lowerLobe - waist + sideBias;
+    const upperLobe = Math.pow(
+      Math.max(0, direction.dot(AITNE_UPPER_LOBE_AXIS)),
+      2.35,
+    ) * 0.195;
+    const lowerLobe = Math.pow(
+      Math.max(0, direction.dot(AITNE_LOWER_LOBE_AXIS)),
+      2.10,
+    ) * 0.305;
+    const innerNotch = Math.pow(
+      Math.max(0, direction.dot(AITNE_INNER_NOTCH_AXIS)),
+      4.0,
+    ) * 0.125;
+    return upperLobe + lowerLobe - innerNotch;
+  }
+
+  // Dia's supplied image has a distinct rock-like shoulder protruding from
+  // one end. The broad main mass stays rounded while the narrower directional
+  // bulge and shallow upper notch keep it from reading as a plain ellipsoid.
+  if (profile.catalogueName === "Dia") {
+    const endBulge = Math.pow(
+      Math.max(0, direction.dot(DIA_BULGE_AXIS)),
+      2.15,
+    ) * 0.255;
+    const mainMass = Math.pow(
+      Math.max(0, direction.dot(DIA_MAIN_MASS_AXIS)),
+      2.4,
+    ) * 0.080;
+    const shoulderNotch = Math.pow(
+      Math.max(0, direction.dot(DIA_SHOULDER_NOTCH_AXIS)),
+      3.8,
+    ) * 0.075;
+    return endBulge + mainMass - shoulderNotch;
   }
 
   // The generic irregular warp made Thelxinoe too jagged. Its new reference
@@ -1093,12 +1125,32 @@ function createJovianGeometry(profile, quality, mode = "preview") {
         + volcanicHeight,
     );
 
-    positions.setXYZ(
-      index,
-      direction.x * radialHeight,
-      direction.y * radialHeight,
-      direction.z * radialHeight,
-    );
+    let positionX = direction.x * radialHeight;
+    let positionY = direction.y * radialHeight;
+    let positionZ = direction.z * radialHeight;
+
+    if (profile.catalogueName === "Aitne") {
+      // Radial relief alone can make two lobes, but it cannot convincingly
+      // shift one lobe sideways. Smoothly offset the upper and lower portions
+      // in opposite directions to form the bent reference silhouette without
+      // introducing a seam or a detached second mesh.
+      const upperBend = smoothstep(0.02, 0.88, direction.y);
+      const lowerBend = smoothstep(0.04, 0.84, -direction.y);
+      positionX += upperBend * 0.180 - lowerBend * 0.100;
+      positionZ += upperBend * 0.018;
+    } else if (profile.catalogueName === "Dia") {
+      // Pull the directional shoulder outward and slightly downward so Dia's
+      // protruding rock remains visible in silhouette, not merely as coloured
+      // or bump-mapped surface detail.
+      const shoulder = Math.pow(
+        Math.max(0, direction.dot(DIA_BULGE_AXIS)),
+        2.5,
+      );
+      positionX += shoulder * 0.145;
+      positionY -= shoulder * 0.048;
+    }
+
+    positions.setXYZ(index, positionX, positionY, positionZ);
 
     const colourNoise = fbm3(direction, 7.8, 4, profile.seed + 163) * 0.5 + 0.5;
     const macroMottle = fbm3(direction, 2.7, 3, profile.seed + 229) * 0.5 + 0.5;
