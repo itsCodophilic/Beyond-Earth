@@ -147,12 +147,11 @@ function familyColour(family) {
 }
 
 /**
- * These six distant moons are too small for present-day spacecraft imagery to
- * provide global shape or texture maps. The user supplied a visual reference
- * for each one, so they are promoted from the efficient instanced atlas into
- * individual 3D meshes. Orbital placement still comes from the existing
- * catalogue path; only their presentation, interaction, and estimated sizes
- * are specialized here.
+ * These distant moons are too small for present-day spacecraft imagery to
+ * provide global shape or texture maps. User-supplied visual references promote
+ * them from the efficient instanced atlas into individual 3D meshes. Orbital
+ * placement still comes from the existing catalogue path; only presentation,
+ * interaction, and estimated sizes are specialized here.
  */
 const REFERENCE_IRREGULAR_PROFILES = Object.freeze({
   Tarvos: Object.freeze({
@@ -350,6 +349,118 @@ const REFERENCE_IRREGULAR_PROFILES = Object.freeze({
     surfaceStructure: "Bright eroded wedge-like body with an irregular bitten flank, dense overlapping crater bowls, deep dark floors, and shattered scarps",
     description: "Bergelmir is a tiny retrograde moon in Saturn's Norse group. The reconstruction follows the supplied bright, intensely cratered and eroded silhouette while remaining a closed 3D body.",
     dataNote: "Bergelmir has not been globally resolved at this detail. The displayed colour, terrain, and silhouette are reference-directed rather than measured topography.",
+  }),
+  Bestla: Object.freeze({
+    diameterKm: 7,
+    color: 0x3e4246,
+    shape: [1, 1, 1],
+    visualRadius: 0.064,
+    instanced: false,
+    interactionTier: "direct",
+    initialRotation: [0.04, -0.14, -0.04],
+    surfaceRoughness: 0.99,
+    surfaceEvidence: "User-supplied visual reference; unresolved moon reconstructed as an artistic 3D interpretation",
+    surfaceStructure: "Dark upright porous rubble body with an uneven crown, immense cavern-like impact bowls, pale eroded rims, and dense pitting",
+    description: "Bestla is a tiny retrograde moon in Saturn's Norse group. Its dark porous, skull-like rubble form is rebuilt with deep but fully closed impact cavities for safe inspection from every angle.",
+    dataNote: "Bestla has not been globally resolved at this detail. The displayed colour, terrain, and silhouette are reference-directed rather than measured topography.",
+  }),
+  Farbauti: Object.freeze({
+    diameterKm: 5,
+    color: 0x4b4d50,
+    shape: [1, 1, 1],
+    visualRadius: 0.063,
+    instanced: false,
+    interactionTier: "direct",
+    initialRotation: [0.03, -0.12, -0.05],
+    surfaceRoughness: 0.98,
+    surfaceEvidence: "User-supplied visual reference; unresolved moon reconstructed as an artistic 3D interpretation",
+    surfaceStructure: "Charcoal double-lobed pebble with a restrained waist, uneven shoulders, dusty ripples, and subdued impact pits",
+    description: "Farbauti is a small retrograde member of Saturn's Norse group. The reconstruction follows the supplied almost-black, two-lobed rock while preserving faint terrain detail in sunlight.",
+    dataNote: "Farbauti has not been globally resolved at this detail. The displayed colour, terrain, and silhouette are reference-directed rather than measured topography.",
+  }),
+  Fenrir: Object.freeze({
+    diameterKm: 4,
+    color: 0xa7a9ac,
+    shape: [1, 1, 1],
+    visualRadius: 0.062,
+    instanced: false,
+    interactionTier: "direct",
+    initialRotation: [0.02, -0.08, -0.02],
+    surfaceRoughness: 0.95,
+    surfaceEvidence: "User-supplied visual reference; unresolved moon reconstructed as an artistic 3D interpretation",
+    surfaceStructure: "Near-spherical high-contrast cratered body with bright highlands, dark basins, worn rims, and dense overlapping impacts",
+    description: "Fenrir is a very small retrograde Norse-group moon. Its reference-directed globe combines bright scarred highlands with broad dark basins and dense geometric crater relief.",
+    dataNote: "Fenrir has not been globally resolved at this detail. The displayed colour, terrain, and silhouette are reference-directed rather than measured topography.",
+  }),
+  Fornjot: Object.freeze({
+    diameterKm: 6,
+    color: 0x737579,
+    shape: [1, 1, 1],
+    visualRadius: 0.063,
+    instanced: false,
+    interactionTier: "direct",
+    initialRotation: [0.04, -0.16, -0.04],
+    surfaceRoughness: 0.98,
+    surfaceEvidence: "User-supplied visual reference; unresolved moon reconstructed as an artistic 3D interpretation",
+    surfaceStructure: "Tall graphite block with a broad rounded face, raised upper shoulder, subtle waist, fine wrinkles, and worn pits",
+    description: "Fornjot is a distant retrograde member of Saturn's Norse group. Its tall, shoulder-raised boulder silhouette and densely wrinkled graphite regolith follow the supplied reference.",
+    dataNote: "Fornjot has not been globally resolved at this detail. The displayed colour, terrain, and silhouette are reference-directed rather than measured topography.",
+  }),
+  Hati: Object.freeze({
+    diameterKm: 6,
+    color: 0x808286,
+    shape: [1, 1, 1],
+    visualRadius: 0.063,
+    instanced: false,
+    interactionTier: "direct",
+    initialRotation: [0.03, -0.10, -0.06],
+    surfaceRoughness: 0.97,
+    surfaceEvidence: "User-supplied visual reference; unresolved moon reconstructed as an artistic 3D interpretation",
+    surfaceStructure: "Flattened cool-gray slab with a clipped crown, thick rounded lower mass, dense fine ripples, and shallow crater scars",
+    description: "Hati is a small retrograde moon in Saturn's Norse group. The reconstruction emphasizes the supplied flattened slab-like body and fine, evenly weathered gray terrain.",
+    dataNote: "Hati has not been globally resolved at this detail. The displayed colour, terrain, and silhouette are reference-directed rather than measured topography.",
+  }),
+  Hyrrokkin: Object.freeze({
+    diameterKm: 8,
+    color: 0x7f5148,
+    shape: [1, 1, 1],
+    visualRadius: 0.065,
+    instanced: false,
+    interactionTier: "direct",
+    initialRotation: [0.02, -0.06, -0.02],
+    surfaceRoughness: 0.97,
+    surfaceEvidence: "User-supplied visual reference; unresolved moon reconstructed as an artistic 3D interpretation",
+    surfaceStructure: "Rust-red battered globe with two dominant deep basins, broken scarps, overlapping bowls, and iron-dark crater floors",
+    description: "Hyrrokkin is a retrograde Norse-group moon. Its unusual rusty reference appearance is recreated across a heavily cratered closed globe with two dominant geometric basins.",
+    dataNote: "Hyrrokkin has not been globally resolved at this detail. The displayed colour, terrain, and silhouette are reference-directed rather than measured topography.",
+  }),
+  Kari: Object.freeze({
+    diameterKm: 7,
+    color: 0xc3c4c1,
+    shape: [1, 1, 1],
+    visualRadius: 0.064,
+    instanced: false,
+    interactionTier: "direct",
+    initialRotation: [0.03, -0.10, -0.04],
+    surfaceRoughness: 0.90,
+    surfaceEvidence: "User-supplied visual reference; unresolved moon reconstructed as an artistic 3D interpretation",
+    surfaceStructure: "Pale softly rounded pebble with a broad smooth crown, gently flattened base, faint mottling, and sparse shallow pits",
+    description: "Kari is a small retrograde Norse-group moon. Its supplied pale, gently rounded appearance is translated into a softly weathered 3D pebble rather than a sharply faceted rock.",
+    dataNote: "Kari has not been globally resolved at this detail. The displayed colour, terrain, and silhouette are reference-directed rather than measured topography.",
+  }),
+  Loge: Object.freeze({
+    diameterKm: 6,
+    color: 0xb8b8b4,
+    shape: [1, 1, 1],
+    visualRadius: 0.063,
+    instanced: false,
+    interactionTier: "direct",
+    initialRotation: [0.03, -0.12, -0.04],
+    surfaceRoughness: 0.96,
+    surfaceEvidence: "User-supplied visual reference; unresolved moon reconstructed as an artistic 3D interpretation",
+    surfaceStructure: "Pale asymmetric oval body with a slightly pinched lobe, two major bowl-shaped basins, worn ejecta, and many smaller pits",
+    description: "Loge is a tiny retrograde moon in Saturn's Norse group. The reconstruction follows the supplied pale asymmetric form and its pair of prominent basin-like depressions.",
+    dataNote: "Loge has not been globally resolved at this detail. The displayed colour, terrain, and silhouette are reference-directed rather than measured topography.",
   }),
 });
 

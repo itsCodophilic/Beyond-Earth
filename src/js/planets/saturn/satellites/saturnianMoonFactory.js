@@ -150,6 +150,38 @@ const SATURNIAN_SURFACE_ASSETS = Object.freeze({
     "../../../../assets/textures/saturnian/irregular-reference/bergelmir-albedo.jpg",
     import.meta.url,
   ).href),
+  Bestla: irregularReferenceAsset(new URL(
+    "../../../../assets/textures/saturnian/irregular-reference/bestla-albedo.jpg",
+    import.meta.url,
+  ).href),
+  Farbauti: irregularReferenceAsset(new URL(
+    "../../../../assets/textures/saturnian/irregular-reference/farbauti-albedo.jpg",
+    import.meta.url,
+  ).href),
+  Fenrir: irregularReferenceAsset(new URL(
+    "../../../../assets/textures/saturnian/irregular-reference/fenrir-albedo.jpg",
+    import.meta.url,
+  ).href),
+  Fornjot: irregularReferenceAsset(new URL(
+    "../../../../assets/textures/saturnian/irregular-reference/fornjot-albedo.jpg",
+    import.meta.url,
+  ).href),
+  Hati: irregularReferenceAsset(new URL(
+    "../../../../assets/textures/saturnian/irregular-reference/hati-albedo.jpg",
+    import.meta.url,
+  ).href),
+  Hyrrokkin: irregularReferenceAsset(new URL(
+    "../../../../assets/textures/saturnian/irregular-reference/hyrrokkin-albedo.jpg",
+    import.meta.url,
+  ).href),
+  Kari: irregularReferenceAsset(new URL(
+    "../../../../assets/textures/saturnian/irregular-reference/kari-albedo.jpg",
+    import.meta.url,
+  ).href),
+  Loge: irregularReferenceAsset(new URL(
+    "../../../../assets/textures/saturnian/irregular-reference/loge-albedo.jpg",
+    import.meta.url,
+  ).href),
 });
 
 const saturnianTextureLoader = new THREE.TextureLoader();
@@ -2871,7 +2903,7 @@ function createPaaliaqReferenceSurface(profile, quality) {
 }
 
 /**
- * User-reference reconstructions for six unresolved irregular moons.
+ * User-reference reconstructions for unresolved irregular moons.
  *
  * The supplied pictures are visual concepts rather than spacecraft global
  * maps. Their cleaned colour is therefore used as an artistic albedo wrap,
@@ -2992,6 +3024,70 @@ const IRREGULAR_REFERENCE_MODELS = Object.freeze({
     craterDepth: [0.014, 0.064],
     structure: "Bright eroded wedge-like body with an irregular bitten flank, dense overlapping crater bowls, deep floors, and shattered scarps",
   }),
+  Bestla: Object.freeze({
+    kind: "cavern-rubble",
+    axes: [0.90, 1.12, 0.82],
+    roughness: 0.99,
+    craterCount: 48,
+    craterDepth: [0.014, 0.060],
+    structure: "Dark upright porous rubble body with an uneven crown, three immense cavern-like impact bowls, pale eroded rims, and dense pitting",
+  }),
+  Farbauti: Object.freeze({
+    kind: "dark-contact-pebble",
+    axes: [1.12, 0.88, 0.82],
+    roughness: 0.98,
+    craterCount: 25,
+    craterDepth: [0.008, 0.034],
+    structure: "Charcoal double-lobed pebble with a restrained waist, uneven shoulders, dusty ripples, and subdued impact pits",
+  }),
+  Fenrir: Object.freeze({
+    kind: "mottled-crater-globe",
+    axes: [1.01, 1.00, 0.97],
+    roughness: 0.95,
+    craterCount: 54,
+    craterDepth: [0.010, 0.048],
+    structure: "Near-spherical high-contrast cratered moon with overlapping bright highlands, dark basins, worn rims, and dense small impacts",
+  }),
+  Fornjot: Object.freeze({
+    kind: "raised-shoulder-block",
+    axes: [0.92, 1.16, 0.82],
+    roughness: 0.98,
+    craterCount: 27,
+    craterDepth: [0.009, 0.038],
+    structure: "Tall graphite block with a broad rounded face, raised upper shoulder, subtle waist, fine wrinkles, and worn pits",
+  }),
+  Hati: Object.freeze({
+    kind: "flat-slab",
+    axes: [1.12, 0.98, 0.72],
+    roughness: 0.97,
+    craterCount: 31,
+    craterDepth: [0.009, 0.041],
+    structure: "Flattened cool-gray slab with a clipped crown, thick rounded lower mass, dense fine ripples, and shallow crater scars",
+  }),
+  Hyrrokkin: Object.freeze({
+    kind: "rust-basin-globe",
+    axes: [1.02, 1.00, 0.93],
+    roughness: 0.97,
+    craterCount: 56,
+    craterDepth: [0.012, 0.055],
+    structure: "Rust-red battered globe with two dominant deep basins, broken scarps, overlapping bowls, and iron-dark crater floors",
+  }),
+  Kari: Object.freeze({
+    kind: "pale-rounded-boulder",
+    axes: [1.15, 0.90, 0.96],
+    roughness: 0.90,
+    craterCount: 18,
+    craterDepth: [0.004, 0.021],
+    structure: "Pale softly rounded pebble with a broad smooth crown, gently flattened base, faint mottling, and sparse shallow pits",
+  }),
+  Loge: Object.freeze({
+    kind: "twin-basin-lobe",
+    axes: [1.12, 0.92, 0.86],
+    roughness: 0.96,
+    craterCount: 35,
+    craterDepth: [0.009, 0.043],
+    structure: "Pale asymmetric oval moon with a slightly pinched lobe, two major bowl-shaped basins, worn ejecta, and many smaller pits",
+  }),
 });
 
 function irregularReferenceGeometrySegments(quality) {
@@ -3041,6 +3137,23 @@ function createIrregularReferenceSurface(profile, quality, config) {
   const bebhionnGroove = directionFromLatLon(54, -12);
   const bergelmirBite = directionFromLatLon(8, -38);
   const bergelmirBasin = directionFromLatLon(-12, -22);
+  const bestlaUpperCavity = directionFromLatLon(34, -26);
+  const bestlaLowerCavity = directionFromLatLon(-22, -16);
+  const bestlaSideCavity = directionFromLatLon(4, 34);
+  const farbautiLeftLobe = directionFromLatLon(-8, 150);
+  const farbautiRightLobe = directionFromLatLon(16, 18);
+  const farbautiWaist = directionFromLatLon(8, 84);
+  const fenrirLargeBasin = directionFromLatLon(20, -28);
+  const fenrirDarkBasin = directionFromLatLon(-18, 42);
+  const fornjotShoulder = directionFromLatLon(54, 24);
+  const fornjotNotch = directionFromLatLon(42, 104);
+  const hatiBrokenCrown = directionFromLatLon(52, 118);
+  const hyrrokkinMainBasin = directionFromLatLon(18, -24);
+  const hyrrokkinLowerBasin = directionFromLatLon(-34, -42);
+  const kariCrown = directionFromLatLon(38, -20);
+  const logeLeftBasin = directionFromLatLon(4, -42);
+  const logeRightBasin = directionFromLatLon(12, 28);
+  const logePinch = directionFromLatLon(34, 92);
 
   for (let index = 0; index < positions.count; index += 1) {
     direction.fromBufferAttribute(positions, index).normalize();
@@ -3216,6 +3329,80 @@ function createIrregularReferenceSurface(profile, quality, config) {
       );
       xAxis *= 1 - smoothstepValue(direction.x, 0.12, 0.96) * 0.105;
       yAxis *= 1 + smoothstepValue(direction.y, 0.08, 0.95) * 0.045;
+    } else if (config.kind === "cavern-rubble") {
+      // Bestla's reference suggests enormous cavities. Deep radial bowls
+      // reproduce that silhouette while preserving a sealed manifold.
+      const upperCavity = craterSample(direction, bestlaUpperCavity, 0.33, 0.215, 0.026);
+      const lowerCavity = craterSample(direction, bestlaLowerCavity, 0.29, 0.180, 0.023);
+      const sideCavity = craterSample(direction, bestlaSideCavity, 0.24, 0.135, 0.018);
+      const crownRubble = smoothstepValue(direction.y, 0.20, 0.96)
+        * Math.max(0, medium * 0.70 + fine * 0.30);
+      localRadius = Math.max(
+        0.52,
+        localRadius
+          + upperCavity.height
+          + lowerCavity.height
+          + sideCavity.height
+          + crownRubble * 0.080,
+      );
+      xAxis *= 1 - smoothstepValue(direction.y, 0.18, 0.95) * 0.045;
+    } else if (config.kind === "dark-contact-pebble") {
+      const leftLobe = gaussianSurfaceMask(direction, farbautiLeftLobe, 0.76);
+      const rightLobe = gaussianSurfaceMask(direction, farbautiRightLobe, 0.68);
+      const waist = gaussianSurfaceMask(direction, farbautiWaist, 0.44);
+      localRadius *= 1 + leftLobe * 0.095 + rightLobe * 0.125 - waist * 0.070;
+      yAxis *= 1 - Math.abs(direction.x) * 0.035;
+      zAxis *= 1 - waist * 0.025;
+    } else if (config.kind === "mottled-crater-globe") {
+      const largeBasin = craterSample(direction, fenrirLargeBasin, 0.27, 0.090, 0.018);
+      const darkBasin = craterSample(direction, fenrirDarkBasin, 0.22, 0.070, 0.014);
+      localRadius = Math.max(0.76, localRadius + largeBasin.height + darkBasin.height);
+      xAxis *= 1 + broad * 0.010;
+      yAxis *= 1 - 0.010;
+    } else if (config.kind === "raised-shoulder-block") {
+      const shoulder = gaussianSurfaceMask(direction, fornjotShoulder, 0.64);
+      const notch = gaussianSurfaceMask(direction, fornjotNotch, 0.38);
+      const blockiness = Math.pow(
+        Math.max(Math.abs(direction.x), Math.abs(direction.y), Math.abs(direction.z)),
+        0.62,
+      );
+      localRadius *= 0.965 + blockiness * 0.050 + shoulder * 0.135 - notch * 0.060;
+      xAxis *= 1 + shoulder * 0.045;
+      yAxis *= 1 + shoulder * 0.055;
+    } else if (config.kind === "flat-slab") {
+      const brokenCrown = gaussianSurfaceMask(direction, hatiBrokenCrown, 0.50);
+      const crown = smoothstepValue(direction.y, 0.18, 0.95);
+      const underside = smoothstepValue(-direction.y, 0.18, 0.95);
+      localRadius *= 1
+        - brokenCrown * 0.070
+        - crown * Math.max(0, -medium) * 0.030
+        + underside * 0.025;
+      yAxis *= 1 - crown * 0.035;
+      zAxis *= 1 - 0.035;
+    } else if (config.kind === "rust-basin-globe") {
+      const mainBasin = craterSample(direction, hyrrokkinMainBasin, 0.34, 0.150, 0.025);
+      const lowerBasin = craterSample(direction, hyrrokkinLowerBasin, 0.29, 0.125, 0.020);
+      localRadius = Math.max(0.62, localRadius + mainBasin.height + lowerBasin.height);
+      xAxis *= 1 + broad * 0.012;
+      zAxis *= 1 - 0.015;
+    } else if (config.kind === "pale-rounded-boulder") {
+      const crown = gaussianSurfaceMask(direction, kariCrown, 0.74);
+      const underside = smoothstepValue(-direction.y, 0.20, 0.96);
+      // Lower-frequency relief keeps Kari smooth and softly weathered.
+      localRadius = 1 + (localRadius - 1) * 0.38;
+      localRadius *= 1 + crown * 0.035 - underside * 0.025 - fine * 0.0025;
+      yAxis *= 1 - underside * 0.055;
+      xAxis *= 1 + broad * 0.010;
+    } else if (config.kind === "twin-basin-lobe") {
+      const leftBasin = craterSample(direction, logeLeftBasin, 0.30, 0.115, 0.020);
+      const rightBasin = craterSample(direction, logeRightBasin, 0.25, 0.090, 0.017);
+      const pinch = gaussianSurfaceMask(direction, logePinch, 0.43);
+      localRadius = Math.max(
+        0.64,
+        localRadius + leftBasin.height + rightBasin.height - pinch * 0.065,
+      );
+      xAxis *= 1 + smoothstepValue(-direction.x, 0.08, 0.92) * 0.035;
+      yAxis *= 1 - pinch * 0.030;
     }
 
     localRadius = Math.max(0.60, localRadius);

@@ -155,3 +155,24 @@ Saturn catalogue and family/orbit presentation.
 Reference note:
 Nine user-supplied visual references, combined with the project's existing
 Saturn catalogue and orbital-family presentation.
+
+## Bestla, Farbauti, Fenrir, Fornjot, Hati, Hyrrokkin, Kari, and Loge
+
+- The eight user-supplied pictures are preserved as
+  `irregular-reference/*-reference-source.png`.
+- Each `*-albedo.jpg` is a project-made seamless 2:1, neutrally lit surface
+  wrap derived from the corresponding visual direction. Backgrounds, text,
+  watermarks, silhouettes, and photographed shadows are excluded so Saturn-
+  system sunlight remains responsible for the visible day/night boundary.
+- Closed, seam-normal-welded geometry independently reconstructs the supplied
+  silhouette cues: Bestla's huge but sealed cavern-like bowls, Farbauti's dark
+  double lobes, Fenrir's cratered near-globe, Fornjot's raised shoulder, Hati's
+  flattened slab, Hyrrokkin's rusty basins, Kari's smooth pale pebble, and
+  Loge's asymmetric twin-basin body.
+- These tiny distant moons do not have resolved global maps at this detail.
+  Their surfaces and exact silhouettes are reference-directed artistic
+  reconstructions, not measured topography.
+
+Reference note:
+Eight user-supplied visual references, combined with the project's existing
+Saturn catalogue and orbital-family presentation.
