@@ -1,7 +1,7 @@
 
 1. When click on "Click to know more info" the mouse and the white character moving fadeness is not in sync it likes delayes the when mouse is hover
 2. Satellie carts get overlap over everything
-
+3. Satellite itself gets over another Satellite seems like they are gonna clash
 
 5. All planets accomodate between earth and moon
 

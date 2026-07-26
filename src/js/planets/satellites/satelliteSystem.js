@@ -480,17 +480,95 @@ function createDenseSatelliteInteractionTarget(profile, parentName) {
   return target;
 }
 
+function denseGeometrySeed(value) {
+  let hash = 2166136261;
+  const text = String(value);
+  for (let index = 0; index < text.length; index += 1) {
+    hash ^= text.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0) / 4294967295;
+}
+
+/**
+ * Makes one sealed low-cost rock geometry for an unresolved-moon family.
+ *
+ * Hundreds of provisional moons still share InstancedMesh draw calls, but no
+ * longer share one perfect icosahedron. Four deterministic variants provide
+ * rounded crater rubble, contact-like lobes, flattened slabs, and tapered
+ * shards. Per-moon scale and rotation below add another layer of variation.
+ */
+function createDenseSatelliteGeometry(key, quality) {
+  // High quality uses one extra shared subdivision. This costs only four
+  // reusable geometries for Saturn, while preventing unresolved moons from
+  // looking faceted when a viewer opens one from the moon atlas.
+  const detail = quality === "low" ? 1 : quality === "medium" ? 2 : 3;
+  const geometry = new THREE.IcosahedronGeometry(1, detail);
+  const positions = geometry.getAttribute("position");
+  const point = new THREE.Vector3();
+  const variant = Number(String(key).split(":").at(-1)) || 0;
+  const seed = denseGeometrySeed(key);
+
+  for (let index = 0; index < positions.count; index += 1) {
+    point.fromBufferAttribute(positions, index).normalize();
+    const longitude = Math.atan2(point.z, point.x);
+    const broad = Math.sin(point.x * (3.1 + seed) + point.y * 2.7 + point.z * 4.3);
+    const medium = Math.sin(longitude * (5 + variant) + point.y * 9.0 + seed * 8.0);
+    let radius = 1 + broad * 0.055 + medium * 0.022;
+    let x = point.x;
+    let y = point.y;
+    let z = point.z;
+
+    if (variant === 0) {
+      // A round but battered pebble, useful for the quietest provisional bodies.
+      const shallowBasin = Math.max(0, 1 - Math.hypot(point.x - 0.26, point.y + 0.10) / 0.42);
+      radius -= shallowBasin * shallowBasin * 0.070;
+    } else if (variant === 1) {
+      // Unequal lobes and a pinched waist produce a compact contact-binary cue.
+      const leftLobe = Math.max(0, -point.x) * Math.max(0, 1 - Math.abs(point.y) * 0.55);
+      const rightLobe = Math.max(0, point.x) * Math.max(0, 1 - Math.abs(point.y) * 0.65);
+      const waist = Math.exp(-Math.pow(point.x / 0.24, 2)) * (1 - Math.abs(point.y) * 0.30);
+      radius *= 1 + leftLobe * 0.075 + rightLobe * 0.115 - waist * 0.060;
+    } else if (variant === 2) {
+      // A flattened rubble slab with a chipped crown and real side thickness.
+      y *= 0.80;
+      z *= 0.90;
+      radius *= 1 - Math.max(0, point.y) * Math.max(0, -medium) * 0.055;
+    } else {
+      // A tapered angular shard; radial deformation keeps every triangle sealed.
+      const taper = Math.max(0, point.x) * 0.13;
+      const blockiness = Math.pow(
+        Math.max(Math.abs(point.x), Math.abs(point.y), Math.abs(point.z)),
+        0.62,
+      );
+      radius *= 0.955 + blockiness * 0.070;
+      y *= 1 - taper;
+      z *= 1 - taper * 0.72;
+    }
+
+    positions.setXYZ(index, x * radius, y * radius, z * radius);
+  }
+
+  geometry.deleteAttribute("normal");
+  geometry.computeVertexNormals();
+  geometry.computeBoundingSphere();
+  return geometry;
+}
+
 function createDenseSatelliteFields(profiles, parentRadius, parentName, quality) {
   const grouped = new Map();
   profiles.forEach((profile) => {
-    const key = profile.appearance ?? profile.family ?? "background";
+    const appearance = profile.appearance ?? profile.family ?? "background";
+    // Saturn's unresolved catalogue receives four volumetric families. Other
+    // planet systems keep their existing single-family batching.
+    const variant = parentName === "Saturn" ? (profile.denseVariant ?? 0) : 0;
+    const key = `${appearance}:${variant}`;
     if (!grouped.has(key)) grouped.set(key, []);
     grouped.get(key).push(profile);
   });
 
   return [...grouped.entries()].map(([key, records]) => {
-    const detail = quality === "low" ? 0 : 1;
-    const geometry = new THREE.IcosahedronGeometry(1, detail);
+    const geometry = createDenseSatelliteGeometry(key, quality);
     const material = new THREE.MeshStandardMaterial({
       color: 0xffffff,
       vertexColors: true,
@@ -555,11 +633,16 @@ function updateDenseSatelliteField(
     // inclination, but compresses the enormous irregular-moon distances into a
     // readable cinematic map. The ordinary close view always eases back to 1.
     denseMoonDummy.position.copy(orbitPoint).multiplyScalar(orbitPresentationScale);
+    // Atlas mode enlarges the complete distant catalog so every moon can be
+    // discovered. Once one moon is selected, restore that inspected instance
+    // to its normal authored radius immediately; otherwise the camera arrives
+    // before the overview boost has eased away and the rock fills the screen.
+    const bodyVisualBoost = record.target === focusedBody ? 1 : visualBoost;
     if (record.target) {
       record.target.position.copy(denseMoonDummy.position);
       record.target.userData.visualRadius = Number(
         record.target.userData.baseVisualRadius ?? profile.visualRadius ?? 0.02,
-      ) * visualBoost;
+      ) * bodyVisualBoost;
     }
     denseMoonDummy.rotation.set(
       (profile.seed ?? 0) * 0.7,
@@ -570,7 +653,7 @@ function updateDenseSatelliteField(
     // Most recently discovered Saturnian moons are only a fraction of a pixel
     // at system scale. A restrained overview-only boost keeps every catalogue
     // entry visible without replacing the efficient instanced representation.
-    const radiusScale = (profile.visualRadius ?? 0.02) * visualBoost;
+    const radiusScale = (profile.visualRadius ?? 0.02) * bodyVisualBoost;
     denseMoonDummy.scale.set(radiusScale * shape[0], radiusScale * shape[1], radiusScale * shape[2]);
     denseMoonDummy.updateMatrix();
     field.mesh.setMatrixAt(index, denseMoonDummy.matrix);

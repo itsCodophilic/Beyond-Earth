@@ -176,3 +176,31 @@ Saturn catalogue and orbital-family presentation.
 Reference note:
 Eight user-supplied visual references, combined with the project's existing
 Saturn catalogue and orbital-family presentation.
+
+## Skoll through Geirrod reference set
+
+- Nineteen user-supplied visual references cover Skoll, Surtur, Jarnsaxa,
+  Greip, Tarqeq, Gridr, Angrboda, Skrymir, Gerd, S/2004 S26, Eggther,
+  S/2004 S29, Beli, S/2004 S27, Gunnlod, Thiazzi, S/2004 S17, Alvaldi, and
+  Geirrod. Preserved copies use the `*-reference-source.png` suffix.
+- The runtime does not wrap those photographs directly. Corresponding
+  `*-albedo.jpg` files are project-made, seamless 2:1, neutrally illuminated
+  maps. Backgrounds, labels, stock watermarks, fixed shadows, silhouettes, and
+  empty-space gaps are excluded so the scene's Sun creates the real day/night
+  boundary.
+- Every named body uses a sealed volumetric sculpt with its own axes, crater
+  population, relief, and defining silhouette. Tarqeq's memorable face-like
+  reading is produced geologically by paired brow ridges and eye grooves, a
+  central ridge, cheek bulges, and a shallow lower basin; no human face is
+  painted onto its texture.
+- The remaining unresolved Saturnian catalogue stays performance-friendly in
+  InstancedMesh fields. Four deterministic closed geometry families—battered
+  pebble, contact-lobed rock, rubble slab, and tapered shard—replace the former
+  single generic icosahedron while retaining low draw-call cost.
+- These distant moons have not been globally resolved at the displayed
+  resolution. Their colours, small-scale terrain, and exact shapes are
+  reference-directed artistic reconstructions, not measured global maps.
+
+Reference note:
+Nineteen user-supplied visual references, combined with the project's Saturn
+catalogue and the existing family/orbit presentation.

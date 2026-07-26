@@ -26,6 +26,10 @@ function irregularReferenceAsset(albedo) {
   return Object.freeze({ albedo });
 }
 
+function irregularReferenceAssetSlug(name) {
+  return name.toLowerCase().replaceAll("/", "").replaceAll(" ", "-");
+}
+
 const SATURNIAN_SURFACE_ASSETS = Object.freeze({
   Titan: Object.freeze({
     albedo: new URL("../../../../assets/textures/saturnian/titan-albedo.jpg", import.meta.url).href,
@@ -180,6 +184,82 @@ const SATURNIAN_SURFACE_ASSETS = Object.freeze({
   ).href),
   Loge: irregularReferenceAsset(new URL(
     "../../../../assets/textures/saturnian/irregular-reference/loge-albedo.jpg",
+    import.meta.url,
+  ).href),
+  Skoll: irregularReferenceAsset(new URL(
+    "../../../../assets/textures/saturnian/irregular-reference/skoll-albedo.jpg",
+    import.meta.url,
+  ).href),
+  Surtur: irregularReferenceAsset(new URL(
+    "../../../../assets/textures/saturnian/irregular-reference/surtur-albedo.jpg",
+    import.meta.url,
+  ).href),
+  Jarnsaxa: irregularReferenceAsset(new URL(
+    "../../../../assets/textures/saturnian/irregular-reference/jarnsaxa-albedo.jpg",
+    import.meta.url,
+  ).href),
+  Greip: irregularReferenceAsset(new URL(
+    "../../../../assets/textures/saturnian/irregular-reference/greip-albedo.jpg",
+    import.meta.url,
+  ).href),
+  Tarqeq: irregularReferenceAsset(new URL(
+    "../../../../assets/textures/saturnian/irregular-reference/tarqeq-albedo.jpg",
+    import.meta.url,
+  ).href),
+  Gridr: irregularReferenceAsset(new URL(
+    "../../../../assets/textures/saturnian/irregular-reference/gridr-albedo.jpg",
+    import.meta.url,
+  ).href),
+  Angrboda: irregularReferenceAsset(new URL(
+    "../../../../assets/textures/saturnian/irregular-reference/angrboda-albedo.jpg",
+    import.meta.url,
+  ).href),
+  Skrymir: irregularReferenceAsset(new URL(
+    "../../../../assets/textures/saturnian/irregular-reference/skrymir-albedo.jpg",
+    import.meta.url,
+  ).href),
+  Gerd: irregularReferenceAsset(new URL(
+    "../../../../assets/textures/saturnian/irregular-reference/gerd-albedo.jpg",
+    import.meta.url,
+  ).href),
+  "S/2004 S26": irregularReferenceAsset(new URL(
+    "../../../../assets/textures/saturnian/irregular-reference/s2004-s26-albedo.jpg",
+    import.meta.url,
+  ).href),
+  Eggther: irregularReferenceAsset(new URL(
+    "../../../../assets/textures/saturnian/irregular-reference/eggther-albedo.jpg",
+    import.meta.url,
+  ).href),
+  "S/2004 S29": irregularReferenceAsset(new URL(
+    "../../../../assets/textures/saturnian/irregular-reference/s2004-s29-albedo.jpg",
+    import.meta.url,
+  ).href),
+  Beli: irregularReferenceAsset(new URL(
+    "../../../../assets/textures/saturnian/irregular-reference/beli-albedo.jpg",
+    import.meta.url,
+  ).href),
+  "S/2004 S27": irregularReferenceAsset(new URL(
+    "../../../../assets/textures/saturnian/irregular-reference/s2004-s27-albedo.jpg",
+    import.meta.url,
+  ).href),
+  Gunnlod: irregularReferenceAsset(new URL(
+    "../../../../assets/textures/saturnian/irregular-reference/gunnlod-albedo.jpg",
+    import.meta.url,
+  ).href),
+  Thiazzi: irregularReferenceAsset(new URL(
+    "../../../../assets/textures/saturnian/irregular-reference/thiazzi-albedo.jpg",
+    import.meta.url,
+  ).href),
+  "S/2004 S17": irregularReferenceAsset(new URL(
+    "../../../../assets/textures/saturnian/irregular-reference/s2004-s17-albedo.jpg",
+    import.meta.url,
+  ).href),
+  Alvaldi: irregularReferenceAsset(new URL(
+    "../../../../assets/textures/saturnian/irregular-reference/alvaldi-albedo.jpg",
+    import.meta.url,
+  ).href),
+  Geirrod: irregularReferenceAsset(new URL(
+    "../../../../assets/textures/saturnian/irregular-reference/geirrod-albedo.jpg",
     import.meta.url,
   ).href),
 });
@@ -3088,6 +3168,158 @@ const IRREGULAR_REFERENCE_MODELS = Object.freeze({
     craterDepth: [0.009, 0.043],
     structure: "Pale asymmetric oval moon with a slightly pinched lobe, two major bowl-shaped basins, worn ejecta, and many smaller pits",
   }),
+  Skoll: Object.freeze({
+    kind: "dark-twin-block",
+    axes: [1.08, 1.04, 0.82],
+    roughness: 0.99,
+    craterCount: 25,
+    craterDepth: [0.008, 0.034],
+    structure: "Near-black twin-shouldered block with a deep central furrow, fluted regolith, worn ridges, pits, and shallow impact bowls",
+  }),
+  Surtur: Object.freeze({
+    kind: "leaning-dark-boulder",
+    axes: [0.92, 1.15, 0.82],
+    roughness: 0.98,
+    craterCount: 24,
+    craterDepth: [0.008, 0.033],
+    structure: "Dark leaning boulder with an asymmetric crown, broad worn panels, wrinkled terrain, pale scuffs, and shallow pits",
+  }),
+  Jarnsaxa: Object.freeze({
+    kind: "ivory-rounded-globe",
+    axes: [1.02, 1.00, 0.96],
+    roughness: 0.94,
+    craterCount: 46,
+    craterDepth: [0.008, 0.041],
+    structure: "Warm ivory rounded globe with a subtly polygonal outline, dusty plains, fine fractures, dark battered highlands, and many small craters",
+  }),
+  Greip: Object.freeze({
+    kind: "granular-diamond",
+    axes: [1.04, 1.02, 0.84],
+    roughness: 0.99,
+    craterCount: 38,
+    craterDepth: [0.010, 0.046],
+    structure: "Dark granular diamond-shaped rubble body with a broad side basin, coarse regolith, pebble-like relief, scarps, and dense pitting",
+  }),
+  Tarqeq: Object.freeze({
+    kind: "face-stone",
+    axes: [0.88, 1.15, 0.84],
+    roughness: 0.94,
+    craterCount: 18,
+    craterDepth: [0.006, 0.026],
+    structure: "Warm ochre upright stone with geological brow ridges, closed-eye grooves, a central nose-like ridge, cheek bulges, and a shallow mouth-like basin",
+  }),
+  Gridr: Object.freeze({
+    kind: "rust-contact-rock",
+    axes: [1.26, 0.72, 0.82],
+    roughness: 0.97,
+    craterCount: 46,
+    craterDepth: [0.010, 0.047],
+    structure: "Iron-red elongated contact-like rock with a small blunt head, broad rear mass, dusty scarps, overlapping bowls, and dense shallow craters",
+  }),
+  Angrboda: Object.freeze({
+    kind: "green-wedge",
+    axes: [1.18, 0.82, 0.86],
+    roughness: 0.95,
+    craterCount: 28,
+    craterDepth: [0.008, 0.036],
+    structure: "Gray-green mineral wedge with a tapered snout, raised shoulder, mottled dusty regolith, shallow bowls, and battered ridges",
+  }),
+  Skrymir: Object.freeze({
+    kind: "dark-angular-column",
+    axes: [0.86, 1.17, 0.82],
+    roughness: 0.98,
+    craterCount: 20,
+    craterDepth: [0.007, 0.030],
+    structure: "Dark angular upright column with an asymmetric waist, clipped planes, blue-gray dust, shallow scars, and sparse pits",
+  }),
+  Gerd: Object.freeze({
+    kind: "silver-heart",
+    axes: [1.02, 1.10, 0.86],
+    roughness: 0.92,
+    craterCount: 18,
+    craterDepth: [0.005, 0.025],
+    structure: "Silver-gray heart-like boulder with twin upper lobes, a soft central notch, cloudy mottling, and restrained shallow pitting",
+  }),
+  "S/2004 S26": Object.freeze({
+    kind: "scarred-crater-globe",
+    axes: [1.01, 1.00, 0.97],
+    roughness: 0.98,
+    craterCount: 62,
+    craterDepth: [0.011, 0.054],
+    structure: "Near-round ancient body with a heavily scarred crater field, broad trench-like scarp belt, pitted highlands, and dark compacted floors",
+  }),
+  Eggther: Object.freeze({
+    kind: "broken-bowl",
+    axes: [1.16, 0.75, 0.88],
+    roughness: 0.96,
+    craterCount: 44,
+    craterDepth: [0.012, 0.052],
+    structure: "Pale closed bowl-like body with a scalloped crown, broken-looking but sealed scarps, deep impact bowls, bright rims, and dense small pits",
+  }),
+  "S/2004 S29": Object.freeze({
+    kind: "basin-shard",
+    axes: [1.08, 0.82, 0.84],
+    roughness: 0.97,
+    craterCount: 50,
+    craterDepth: [0.012, 0.056],
+    structure: "Pale irregular basin shard with a blunt end, one dominant shadowed bowl, a battered crown, scattered crater rims, and compact gray regolith",
+  }),
+  Beli: Object.freeze({
+    kind: "dark-waist-lobes",
+    axes: [1.18, 0.88, 0.84],
+    roughness: 0.98,
+    craterCount: 24,
+    craterDepth: [0.008, 0.034],
+    structure: "Dark brown double-lobed body with a broad waist groove, worn fluted terrain, uneven shoulders, dust patches, and shallow pits",
+  }),
+  "S/2004 S27": Object.freeze({
+    kind: "pale-oblate-dome",
+    axes: [1.12, 0.78, 0.98],
+    roughness: 0.88,
+    craterCount: 12,
+    craterDepth: [0.003, 0.014],
+    structure: "Very pale smooth oblate dome with powdery ice regolith, a gently flattened underside, subtle mottling, and sparse shallow pits",
+  }),
+  Gunnlod: Object.freeze({
+    kind: "bright-broken-block",
+    axes: [1.08, 1.00, 0.84],
+    roughness: 0.96,
+    craterCount: 52,
+    craterDepth: [0.012, 0.058],
+    structure: "Bright rounded block with a deeply cut but sealed lower scarp, densely pitted ice-rock, dark crater floors, and chipped pale rims",
+  }),
+  Thiazzi: Object.freeze({
+    kind: "dark-triangular-shard",
+    axes: [1.16, 0.88, 0.78],
+    roughness: 0.98,
+    craterCount: 20,
+    craterDepth: [0.007, 0.030],
+    structure: "Dark triangular shard with clipped planes, a high angular crown, graphite regolith, silvery abrasion, and sparse shallow pits",
+  }),
+  "S/2004 S17": Object.freeze({
+    kind: "quiet-crater-globe",
+    axes: [1.01, 1.00, 0.98],
+    roughness: 0.92,
+    craterCount: 30,
+    craterDepth: [0.006, 0.030],
+    structure: "Quiet near-spherical gray moon with soft dusty mottling, sparse medium craters, numerous tiny pits, and gently worn plains",
+  }),
+  Alvaldi: Object.freeze({
+    kind: "olive-crown-block",
+    axes: [1.10, 0.98, 0.84],
+    roughness: 0.95,
+    craterCount: 24,
+    craterDepth: [0.007, 0.033],
+    structure: "Muted olive block with two raised crown shoulders, a soft notch, dusty mineral mottling, worn ridges, and scattered shallow pits",
+  }),
+  Geirrod: Object.freeze({
+    kind: "pale-battered-wedge",
+    axes: [1.08, 0.92, 0.80],
+    roughness: 0.97,
+    craterCount: 48,
+    craterDepth: [0.012, 0.057],
+    structure: "Pale battered wedge with dense impact pitting, three prominent deep bowls, near-black floors, bright rims, scarps, and rusty stains",
+  }),
 });
 
 function irregularReferenceGeometrySegments(quality) {
@@ -3154,6 +3386,49 @@ function createIrregularReferenceSurface(profile, quality, config) {
   const logeLeftBasin = directionFromLatLon(4, -42);
   const logeRightBasin = directionFromLatLon(12, 28);
   const logePinch = directionFromLatLon(34, 92);
+  const skollLeftShoulder = directionFromLatLon(38, -34);
+  const skollRightShoulder = directionFromLatLon(42, 30);
+  const skollFurrow = directionFromLatLon(20, 0);
+  const surturCrown = directionFromLatLon(58, 24);
+  const surturRecess = directionFromLatLon(-10, -142);
+  const greipBasin = directionFromLatLon(4, -28);
+  // Tarqeq's face-like reading comes only from plausible terrain: paired
+  // grooves, brow ridges, a central ridge, cheeks, and a shallow lower basin.
+  const tarqeqLeftEye = directionFromLatLon(26, -22);
+  const tarqeqRightEye = directionFromLatLon(26, 22);
+  const tarqeqLeftBrow = directionFromLatLon(42, -24);
+  const tarqeqRightBrow = directionFromLatLon(42, 24);
+  const tarqeqNose = directionFromLatLon(4, 0);
+  const tarqeqMouth = directionFromLatLon(-27, 0);
+  const tarqeqLeftCheek = directionFromLatLon(-5, -31);
+  const tarqeqRightCheek = directionFromLatLon(-5, 31);
+  const gridrHead = directionFromLatLon(4, 156);
+  const gridrBody = directionFromLatLon(2, 20);
+  const gridrWaist = directionFromLatLon(2, 92);
+  const angrbodaSnout = directionFromLatLon(8, 162);
+  const angrbodaShoulder = directionFromLatLon(40, 18);
+  const skrymirCrown = directionFromLatLon(58, -16);
+  const skrymirWaist = directionFromLatLon(-4, 84);
+  const gerdLeftLobe = directionFromLatLon(47, -32);
+  const gerdRightLobe = directionFromLatLon(47, 30);
+  const gerdNotch = directionFromLatLon(64, 0);
+  const s26Basin = directionFromLatLon(10, -28);
+  const eggtherBasin = directionFromLatLon(6, -28);
+  const eggtherBrokenCrown = directionFromLatLon(62, 118);
+  const s29Basin = directionFromLatLon(6, -34);
+  const beliLeftLobe = directionFromLatLon(4, 150);
+  const beliRightLobe = directionFromLatLon(12, 18);
+  const beliWaist = directionFromLatLon(8, 86);
+  const s27Dome = directionFromLatLon(58, -8);
+  const gunnlodScarp = directionFromLatLon(-18, 138);
+  const gunnlodBasin = directionFromLatLon(4, -30);
+  const thiazziCrown = directionFromLatLon(50, 16);
+  const alvaldiLeftCrown = directionFromLatLon(50, -34);
+  const alvaldiRightCrown = directionFromLatLon(52, 32);
+  const alvaldiNotch = directionFromLatLon(66, 0);
+  const geirrodBasinA = directionFromLatLon(20, -30);
+  const geirrodBasinB = directionFromLatLon(-16, -20);
+  const geirrodBasinC = directionFromLatLon(2, 26);
 
   for (let index = 0; index < positions.count; index += 1) {
     direction.fromBufferAttribute(positions, index).normalize();
@@ -3403,6 +3678,175 @@ function createIrregularReferenceSurface(profile, quality, config) {
       );
       xAxis *= 1 + smoothstepValue(-direction.x, 0.08, 0.92) * 0.035;
       yAxis *= 1 - pinch * 0.030;
+    } else if (config.kind === "dark-twin-block") {
+      const left = gaussianSurfaceMask(direction, skollLeftShoulder, 0.60);
+      const right = gaussianSurfaceMask(direction, skollRightShoulder, 0.58);
+      const furrow = gaussianSurfaceMask(direction, skollFurrow, 0.27);
+      const fluting = Math.sin(direction.y * 88 + Math.atan2(direction.z, direction.x) * 8)
+        * 0.009;
+      localRadius *= 1 + left * 0.095 + right * 0.105 - furrow * 0.105 + fluting;
+      const blockiness = Math.pow(
+        Math.max(Math.abs(direction.x), Math.abs(direction.y), Math.abs(direction.z)),
+        0.66,
+      );
+      localRadius *= 0.970 + blockiness * 0.042;
+    } else if (config.kind === "leaning-dark-boulder") {
+      const crown = gaussianSurfaceMask(direction, surturCrown, 0.66);
+      const recess = gaussianSurfaceMask(direction, surturRecess, 0.54);
+      const lean = smoothstepValue(direction.x, -0.20, 0.90)
+        * smoothstepValue(direction.y, 0.05, 0.90);
+      localRadius *= 1 + crown * 0.095 + lean * 0.055 - recess * 0.065;
+      xAxis *= 1 + lean * 0.045;
+      zAxis *= 1 - recess * 0.025;
+    } else if (config.kind === "ivory-rounded-globe") {
+      const polygonal = Math.pow(
+        Math.max(Math.abs(direction.x), Math.abs(direction.y), Math.abs(direction.z)),
+        0.72,
+      );
+      // Jarnsaxa stays predominantly round; the weak faceting only breaks the
+      // perfect computer-sphere silhouette at grazing light.
+      localRadius *= 0.984 + polygonal * 0.022;
+      xAxis *= 1 + broad * 0.008;
+      yAxis *= 1 + medium * 0.005;
+    } else if (config.kind === "granular-diamond") {
+      const basin = craterSample(direction, greipBasin, 0.30, 0.105, 0.020);
+      const diamond = Math.pow(
+        Math.abs(direction.x) + Math.abs(direction.y) + Math.abs(direction.z),
+        0.32,
+      );
+      localRadius = Math.max(0.70, localRadius + basin.height);
+      localRadius *= 0.905 + diamond * 0.075 + Math.max(0, fine) * 0.015;
+    } else if (config.kind === "face-stone") {
+      const leftEye = gaussianSurfaceMask(direction, tarqeqLeftEye, 0.20);
+      const rightEye = gaussianSurfaceMask(direction, tarqeqRightEye, 0.20);
+      const leftBrow = gaussianSurfaceMask(direction, tarqeqLeftBrow, 0.22);
+      const rightBrow = gaussianSurfaceMask(direction, tarqeqRightBrow, 0.22);
+      const nose = gaussianSurfaceMask(direction, tarqeqNose, 0.24);
+      const mouth = gaussianSurfaceMask(direction, tarqeqMouth, 0.24);
+      const leftCheek = gaussianSurfaceMask(direction, tarqeqLeftCheek, 0.28);
+      const rightCheek = gaussianSurfaceMask(direction, tarqeqRightCheek, 0.28);
+      localRadius *= 1
+        - leftEye * 0.055
+        - rightEye * 0.055
+        + leftBrow * 0.050
+        + rightBrow * 0.050
+        + nose * 0.105
+        - mouth * 0.060
+        + leftCheek * 0.045
+        + rightCheek * 0.045;
+      yAxis *= 1 - smoothstepValue(-direction.y, 0.32, 0.96) * 0.035;
+    } else if (config.kind === "rust-contact-rock") {
+      const head = gaussianSurfaceMask(direction, gridrHead, 0.62);
+      const body = gaussianSurfaceMask(direction, gridrBody, 0.82);
+      const waist = gaussianSurfaceMask(direction, gridrWaist, 0.40);
+      localRadius *= 1 + head * 0.085 + body * 0.145 - waist * 0.080;
+      yAxis *= 1 - waist * 0.040;
+      zAxis *= 1 - waist * 0.030;
+    } else if (config.kind === "green-wedge") {
+      const snout = gaussianSurfaceMask(direction, angrbodaSnout, 0.58);
+      const shoulder = gaussianSurfaceMask(direction, angrbodaShoulder, 0.67);
+      localRadius *= 1 + snout * 0.060 + shoulder * 0.115;
+      yAxis *= 1 + shoulder * 0.040 - snout * 0.035;
+      zAxis *= 1 - snout * 0.035;
+    } else if (config.kind === "dark-angular-column") {
+      const crown = gaussianSurfaceMask(direction, skrymirCrown, 0.58);
+      const waist = gaussianSurfaceMask(direction, skrymirWaist, 0.48);
+      const blockiness = Math.pow(
+        Math.max(Math.abs(direction.x), Math.abs(direction.y), Math.abs(direction.z)),
+        0.55,
+      );
+      localRadius *= 0.955 + blockiness * 0.060 + crown * 0.090 - waist * 0.060;
+      xAxis *= 1 - waist * 0.035;
+    } else if (config.kind === "silver-heart") {
+      const left = gaussianSurfaceMask(direction, gerdLeftLobe, 0.60);
+      const right = gaussianSurfaceMask(direction, gerdRightLobe, 0.60);
+      const notch = gaussianSurfaceMask(direction, gerdNotch, 0.30);
+      localRadius *= 1 + left * 0.100 + right * 0.100 - notch * 0.090;
+      yAxis *= 1 - smoothstepValue(-direction.y, 0.35, 0.98) * 0.045;
+    } else if (config.kind === "scarred-crater-globe") {
+      const basin = craterSample(direction, s26Basin, 0.30, 0.095, 0.019);
+      const longitude = Math.atan2(direction.z, direction.x);
+      const trenchBand = Math.exp(-Math.pow(direction.y / 0.17, 2))
+        * (0.55 + 0.45 * Math.sin(longitude * 2.5 + medium * 1.8));
+      localRadius = Math.max(0.68, localRadius + basin.height - trenchBand * 0.045);
+      xAxis *= 1 + broad * 0.008;
+    } else if (config.kind === "broken-bowl") {
+      const basin = craterSample(direction, eggtherBasin, 0.37, 0.150, 0.026);
+      const brokenCrown = gaussianSurfaceMask(direction, eggtherBrokenCrown, 0.52);
+      const scallop = smoothstepValue(direction.y, 0.25, 0.96)
+        * Math.max(0, Math.sin(Math.atan2(direction.z, direction.x) * 5 + 0.8));
+      localRadius = Math.max(
+        0.60,
+        localRadius + basin.height - brokenCrown * 0.085 - scallop * 0.045,
+      );
+      yAxis *= 1 - smoothstepValue(-direction.y, 0.30, 0.96) * 0.060;
+    } else if (config.kind === "basin-shard") {
+      const basin = craterSample(direction, s29Basin, 0.38, 0.175, 0.028);
+      const crown = smoothstepValue(direction.y, 0.22, 0.96);
+      localRadius = Math.max(
+        0.58,
+        localRadius + basin.height - crown * Math.max(0, -medium) * 0.055,
+      );
+      zAxis *= 1 - 0.025;
+    } else if (config.kind === "dark-waist-lobes") {
+      const left = gaussianSurfaceMask(direction, beliLeftLobe, 0.72);
+      const right = gaussianSurfaceMask(direction, beliRightLobe, 0.68);
+      const waist = gaussianSurfaceMask(direction, beliWaist, 0.42);
+      const fluting = Math.sin(direction.y * 72 + Math.atan2(direction.z, direction.x) * 7)
+        * 0.007;
+      localRadius *= 1 + left * 0.095 + right * 0.120 - waist * 0.075 + fluting;
+      yAxis *= 1 - waist * 0.035;
+    } else if (config.kind === "pale-oblate-dome") {
+      const dome = gaussianSurfaceMask(direction, s27Dome, 0.78);
+      // Damp procedural roughness to preserve the reference's unusually
+      // smooth powder-covered appearance.
+      localRadius = 1 + (localRadius - 1) * 0.28;
+      localRadius *= 1 + dome * 0.035;
+      yAxis *= 1 - smoothstepValue(-direction.y, 0.15, 0.95) * 0.070;
+    } else if (config.kind === "bright-broken-block") {
+      const scarp = gaussianSurfaceMask(direction, gunnlodScarp, 0.54);
+      const basin = craterSample(direction, gunnlodBasin, 0.32, 0.125, 0.022);
+      const blockiness = Math.pow(
+        Math.max(Math.abs(direction.x), Math.abs(direction.y), Math.abs(direction.z)),
+        0.62,
+      );
+      localRadius = Math.max(0.60, localRadius + basin.height - scarp * 0.130);
+      localRadius *= 0.965 + blockiness * 0.046;
+    } else if (config.kind === "dark-triangular-shard") {
+      const crown = gaussianSurfaceMask(direction, thiazziCrown, 0.64);
+      const upper = smoothstepValue(direction.y, 0.08, 0.94);
+      const sideTaper = smoothstepValue(-direction.x, 0.05, 0.92);
+      const blockiness = Math.pow(
+        Math.max(Math.abs(direction.x), Math.abs(direction.y), Math.abs(direction.z)),
+        0.54,
+      );
+      localRadius *= 0.950 + blockiness * 0.062 + crown * 0.105;
+      xAxis *= 1 - upper * sideTaper * 0.070;
+      zAxis *= 1 - upper * 0.035;
+    } else if (config.kind === "quiet-crater-globe") {
+      localRadius = 1 + (localRadius - 1) * 0.66;
+      xAxis *= 1 + broad * 0.006;
+      yAxis *= 1 - 0.008;
+    } else if (config.kind === "olive-crown-block") {
+      const left = gaussianSurfaceMask(direction, alvaldiLeftCrown, 0.58);
+      const right = gaussianSurfaceMask(direction, alvaldiRightCrown, 0.58);
+      const notch = gaussianSurfaceMask(direction, alvaldiNotch, 0.28);
+      const blockiness = Math.pow(
+        Math.max(Math.abs(direction.x), Math.abs(direction.y), Math.abs(direction.z)),
+        0.62,
+      );
+      localRadius *= 0.962 + blockiness * 0.046 + left * 0.080 + right * 0.100 - notch * 0.075;
+    } else if (config.kind === "pale-battered-wedge") {
+      const basinA = craterSample(direction, geirrodBasinA, 0.31, 0.145, 0.026);
+      const basinB = craterSample(direction, geirrodBasinB, 0.27, 0.125, 0.022);
+      const basinC = craterSample(direction, geirrodBasinC, 0.23, 0.105, 0.019);
+      const taper = smoothstepValue(direction.x, 0.08, 0.94);
+      localRadius = Math.max(
+        0.56,
+        localRadius + basinA.height + basinB.height + basinC.height,
+      );
+      yAxis *= 1 - taper * 0.050;
+      zAxis *= 1 - taper * 0.045;
     }
 
     localRadius = Math.max(0.60, localRadius);
@@ -3441,7 +3885,7 @@ function createIrregularReferenceSurface(profile, quality, config) {
   moon.userData.surfaceStructure = config.structure;
   moon.userData.surfaceRoughness = config.roughness;
   moon.userData.surfaceDetailMode = `user-reference-${config.kind}-volumetric-sculpt`;
-  moon.userData.referenceSourceAsset = `assets/textures/saturnian/irregular-reference/${profile.name.toLowerCase()}-reference-source.png`;
+  moon.userData.referenceSourceAsset = `assets/textures/saturnian/irregular-reference/${irregularReferenceAssetSlug(profile.name)}-reference-source.png`;
   moon.userData.irregularReferenceState = { profile, quality, maps, config };
   return moon;
 }
