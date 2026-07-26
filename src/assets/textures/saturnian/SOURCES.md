@@ -204,3 +204,27 @@ Saturn catalogue and orbital-family presentation.
 Reference note:
 Nineteen user-supplied visual references, combined with the project's Saturn
 catalogue and the existing family/orbit presentation.
+
+## Unresolved provisional-moon reconstruction atlas
+
+- All 218 unresolved provisional entries in the Saturn catalogue receive a
+  deterministic visual profile. The same moon therefore keeps the same
+  surface source, silhouette family, crater population, and roughness on every
+  visit instead of changing randomly between reloads.
+- The profiles reuse 38 existing project-made Saturnian reconstruction
+  albedos across 12 sealed geometry families. The assignment creates visual
+  variety for exploration; it does not claim that an albedo belongs to the
+  provisional moon receiving it.
+- The complete orbiting population remains in lightweight InstancedMesh
+  fields. A smoother, textured terrain mesh is created lazily only when the
+  visitor selects one unresolved moon, preserving the 285-body Saturn atlas
+  and its frame rate.
+- Every affected dossier carries the evidence label “Unresolved telescopic
+  point source · scientifically guided visual reconstruction.” Its story also
+  names the reused artistic source and explicitly says that no resolved real
+  surface image or spacecraft footage is currently available.
+
+Reference note:
+Existing project-made Saturnian reconstruction maps and the provisional-moon
+catalogue. These displays are educational visual reconstructions, not measured
+global maps or resolved photographs of the assigned provisional moons.

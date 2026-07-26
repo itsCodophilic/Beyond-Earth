@@ -3890,7 +3890,170 @@ function createIrregularReferenceSurface(profile, quality, config) {
   return moon;
 }
 
+/**
+ * Builds the inspection-only model for one unresolved provisional moon.
+ *
+ * The orbiting catalogue continues to use four inexpensive InstancedMesh rock
+ * families. Only the selected moon receives this denser, uniquely seeded mesh
+ * and one existing artistic albedo from the Saturn reconstruction library.
+ * The profile/card explicitly states that the reused image is not observed
+ * footage of this provisional moon.
+ */
+export function createSaturnianUnresolvedReconstructionSurface(profile, quality = "high") {
+  const textureSource = profile.reconstructionTextureSource ?? "Ymir";
+  const maps = getSaturnianSurfaceMaps(textureSource);
+  // This mesh exists only while the moon is being inspected, so even the
+  // low-performance tier can afford a smoothly tessellated globe. Using a
+  // UV sphere here also lets the reused 2:1 albedo wrap naturally, instead of
+  // revealing large triangular facets in a cinematic close-up.
+  const widthSegments = quality === "low" ? 48 : quality === "medium" ? 64 : 72;
+  const heightSegments = quality === "low" ? 32 : quality === "medium" ? 40 : 48;
+  const geometry = new THREE.SphereGeometry(1, widthSegments, heightSegments);
+  const positions = geometry.getAttribute("position");
+  const direction = new THREE.Vector3();
+  const shape = profile.shape ?? [1, 1, 1];
+  const variant = Number(profile.reconstructionShapeIndex ?? 0) % 12;
+  const craterCount = Number(profile.reconstructionCraterCount ?? 10);
+  const craters = createCraters(profile, craterCount, 0.052);
+  const broadBasinDirection = new THREE.Vector3(0.72, 0.18, 0.67).normalize();
+  const wedgeImpactDirection = new THREE.Vector3(0.82, -0.12, 0.56).normalize();
+
+  for (let index = 0; index < positions.count; index += 1) {
+    direction.fromBufferAttribute(positions, index).normalize();
+    const broad = fbm(direction, 2.15, profile.seed + 2.7);
+    const fine = fbm(direction, 13.2, profile.seed + 19.4);
+    const longitude = Math.atan2(direction.z, direction.x);
+    let localRadius = 1 + broad * 0.050 + fine * 0.018;
+    let xAxis = shape[0];
+    let yAxis = shape[1];
+    let zAxis = shape[2];
+
+    craters.forEach((crater) => {
+      localRadius += craterSample(
+        direction,
+        crater.center,
+        crater.radius,
+        crater.depth,
+        crater.rim,
+      ).height;
+    });
+
+    if (variant === 0) {
+      localRadius += craterSample(
+        direction,
+        broadBasinDirection,
+        0.42,
+        0.090,
+        0.018,
+      ).height;
+    } else if (variant === 1) {
+      const waist = Math.exp(-Math.pow(direction.x / 0.25, 2))
+        * (1 - Math.abs(direction.y) * 0.25);
+      localRadius *= 1
+        + Math.max(0, -direction.x) * 0.10
+        + Math.max(0, direction.x) * 0.16
+        - waist * 0.085;
+    } else if (variant === 2) {
+      yAxis *= 0.76;
+      zAxis *= 0.90;
+      localRadius *= 1 - Math.max(0, direction.y) * Math.max(0, -broad) * 0.055;
+    } else if (variant === 3) {
+      const taper = THREE.MathUtils.smoothstep(direction.x, 0.05, 0.96);
+      yAxis *= 1 - taper * 0.18;
+      zAxis *= 1 - taper * 0.14;
+      localRadius *= 1 + Math.max(0, -direction.x) * 0.055;
+    } else if (variant === 4) {
+      const upper = THREE.MathUtils.smoothstep(direction.y, -0.18, 0.92);
+      const lower = THREE.MathUtils.smoothstep(-direction.y, 0.12, 0.95);
+      localRadius *= 1 + lower * 0.095 - upper * 0.030;
+      xAxis *= 1 - upper * 0.080;
+      zAxis *= 1 - upper * 0.055;
+    } else if (variant === 5) {
+      const lobeWave = Math.cos(longitude * 3 + profile.seed * 9.0)
+        * Math.pow(Math.max(0, 1 - Math.abs(direction.y)), 1.4);
+      localRadius *= 1 + lobeWave * 0.065;
+    } else if (variant === 6) {
+      const blockiness = Math.pow(
+        Math.max(Math.abs(direction.x), Math.abs(direction.y), Math.abs(direction.z)),
+        0.58,
+      );
+      const ridge = Math.exp(-Math.pow(direction.z / 0.10, 2))
+        * Math.max(0, 1 - Math.abs(direction.y) * 0.50);
+      localRadius *= 0.94 + blockiness * 0.075 + ridge * 0.040;
+    } else if (variant === 7) {
+      xAxis *= 1.12;
+      yAxis *= 0.94;
+      localRadius *= 1 + Math.sin(longitude * 4 + profile.seed * 5.0) * 0.022;
+    } else if (variant === 8) {
+      const leadingFace = THREE.MathUtils.smoothstep(direction.x, 0.0, 0.94);
+      yAxis *= 1 - leadingFace * 0.12;
+      zAxis *= 1 - leadingFace * 0.08;
+      localRadius += craterSample(
+        direction,
+        wedgeImpactDirection,
+        0.50,
+        0.115,
+        0.020,
+      ).height;
+    } else if (variant === 9) {
+      yAxis *= 0.80;
+      const equator = Math.exp(-Math.pow(direction.y / 0.28, 2));
+      localRadius *= 1 + equator * 0.040;
+    } else if (variant === 10) {
+      yAxis *= 1.16;
+      const crown = THREE.MathUtils.smoothstep(direction.y, 0.18, 0.96);
+      localRadius *= 1 + crown * (0.045 + broad * 0.025);
+    } else {
+      const dominantLobe = THREE.MathUtils.smoothstep(direction.x, -0.30, 0.92);
+      const shoulder = Math.max(0, direction.z) * Math.max(0, -direction.x);
+      localRadius *= 0.96 + dominantLobe * 0.075 + shoulder * 0.11;
+    }
+
+    localRadius = Math.max(0.56, localRadius);
+    positions.setXYZ(
+      index,
+      direction.x * xAxis * localRadius,
+      direction.y * yAxis * localRadius,
+      direction.z * zAxis * localRadius,
+    );
+  }
+
+  geometry.deleteAttribute("normal");
+  geometry.computeVertexNormals();
+  smoothSphereUvSeamNormals(geometry);
+  geometry.computeBoundingBox();
+  geometry.computeBoundingSphere();
+
+  const material = new THREE.MeshStandardMaterial({
+    color: 0xffffff,
+    map: maps?.albedoMap ?? null,
+    roughness: Number(profile.surfaceRoughness ?? 0.96),
+    metalness: 0,
+    envMapIntensity: 0.018,
+    emissive: 0x000000,
+    emissiveIntensity: 0,
+    dithering: true,
+  });
+  material.name = `${profile.name} unresolved reconstruction material`;
+
+  const moon = new THREE.Mesh(geometry, material);
+  moon.name = `${profile.name} inspected reconstruction`;
+  moon.castShadow = false;
+  moon.receiveShadow = false;
+  moon.userData.geometryIncludesShape = true;
+  moon.userData.surfaceEvidence = profile.surfaceEvidence;
+  moon.userData.surfaceResolutionStatus = profile.surfaceResolutionStatus;
+  moon.userData.surfaceStructure = profile.surfaceStructure;
+  moon.userData.surfaceRoughness = profile.surfaceRoughness;
+  moon.userData.reconstructionTextureSource = textureSource;
+  moon.userData.surfaceDetailMode = "lazy-unresolved-textured-reconstruction";
+  return moon;
+}
+
 export function createSaturnianMoonSurface(profile, quality = "high") {
+  if (profile.instanced) {
+    return createSaturnianUnresolvedReconstructionSurface(profile, quality);
+  }
   if (profile.name === "Ymir") return createYmirReferenceSurface(profile, quality);
   if (profile.name === "Paaliaq") return createPaaliaqReferenceSurface(profile, quality);
   const irregularReferenceModel = IRREGULAR_REFERENCE_MODELS[profile.name];

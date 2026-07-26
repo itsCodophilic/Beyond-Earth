@@ -438,13 +438,16 @@ function createDenseSatelliteInteractionTarget(profile, parentName) {
   target.name = profile.name;
   target.userData = {
     name: profile.name,
-    detail: `${parentName} satellite · unresolved catalogue body`,
+    detail: `${parentName} satellite · unresolved visual reconstruction`,
     parentPlanet: parentName,
     isSatellite: true,
     isDenseSatellite: true,
     satelliteFamily: profile.family ?? null,
     interactionTier: "background",
-    surfaceEvidence: profile.surfaceEvidence ?? "Unresolved",
+    surfaceEvidence: profile.surfaceEvidence
+      ?? "Unresolved telescopic point source · scientifically guided visual reconstruction",
+    surfaceResolutionStatus: profile.surfaceResolutionStatus
+      ?? "No resolved real surface image is currently available",
     surfaceStructure: profile.surfaceStructure ?? null,
     surfaceRoughness: profile.surfaceRoughness ?? 1,
     estimatedAlbedo: profile.albedo ?? null,
@@ -463,14 +466,18 @@ function createDenseSatelliteInteractionTarget(profile, parentName) {
     focusEase: 0.10,
     focusFov: 30,
     info: {
-      type: "Natural satellite",
+      // Keep the evidence tier visible on the compact focus card instead of
+      // making visitors open the full dossier to discover that this is not
+      // resolved spacecraft imagery.
+      type: "Unresolved satellite reconstruction",
       diameter: `${diameterPrefix}${diameterKm.toLocaleString("en-US", {
         maximumFractionDigits: 2,
       })} km`,
       orbitalSpeed: profile.orbitalSpeed,
       distanceFromEarth: `Varies with ${parentName}'s orbit`,
       sizeComparison,
-      surfaceEvidence: profile.surfaceEvidence ?? "Unresolved telescopic body",
+      surfaceEvidence: profile.surfaceEvidence
+        ?? "Unresolved telescopic point source · scientifically guided visual reconstruction",
       roughness: Number.isFinite(profile.surfaceRoughness)
         ? Number(profile.surfaceRoughness).toFixed(2)
         : "Family reconstruction",
@@ -607,8 +614,48 @@ function createDenseSatelliteFields(profiles, parentRadius, parentName, quality)
     });
     if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
 
-    return { key, mesh, targetsGroup, records: fieldRecords };
+    return {
+      key,
+      mesh,
+      targetsGroup,
+      records: fieldRecords,
+      parentName,
+      quality,
+    };
   });
+}
+
+/**
+ * Hydrates one high-detail reconstruction only when its catalogue anchor is
+ * focused. Orbit view stays instanced; inspection receives real terrain,
+ * sunlight-responsive material, and a reused artistic albedo from the existing
+ * Saturn texture library.
+ */
+function ensureDenseSatelliteInspectionMesh(field, record) {
+  if (field.parentName !== "Saturn" || !record.target) return null;
+  if (record.inspectionMesh) return record.inspectionMesh;
+
+  const inspectionMesh = createSaturnianMoonSurface(
+    record.profile,
+    field.quality ?? "high",
+  );
+  const visualRadius = Number(record.profile.visualRadius ?? 0.02);
+  inspectionMesh.scale.setScalar(visualRadius);
+  inspectionMesh.rotation.set(
+    (record.profile.seed ?? 0) * 0.7,
+    record.angle * (record.profile.retrograde ? -0.37 : 0.37),
+    (record.profile.seed ?? 0) * 0.4,
+  );
+  inspectionMesh.visible = false;
+  inspectionMesh.raycast = () => {};
+  inspectionMesh.userData.ignoreInteraction = true;
+  record.target.add(inspectionMesh);
+  record.target.userData.inspectionSurface = inspectionMesh;
+  record.target.userData.surfaceModel = "saturnian-lazy-scientific-reconstruction";
+  record.target.userData.reconstructionTextureSource =
+    record.profile.reconstructionTextureSource ?? null;
+  record.inspectionMesh = inspectionMesh;
+  return inspectionMesh;
 }
 
 function updateDenseSatelliteField(
@@ -638,6 +685,11 @@ function updateDenseSatelliteField(
     // to its normal authored radius immediately; otherwise the camera arrives
     // before the overview boost has eased away and the rock fills the screen.
     const bodyVisualBoost = record.target === focusedBody ? 1 : visualBoost;
+    const isFocused = record.target === focusedBody;
+    const inspectionMesh = isFocused
+      ? ensureDenseSatelliteInspectionMesh(field, record)
+      : record.inspectionMesh;
+    if (inspectionMesh) inspectionMesh.visible = isFocused;
     if (record.target) {
       record.target.position.copy(denseMoonDummy.position);
       record.target.userData.visualRadius = Number(
@@ -654,7 +706,17 @@ function updateDenseSatelliteField(
     // at system scale. A restrained overview-only boost keeps every catalogue
     // entry visible without replacing the efficient instanced representation.
     const radiusScale = (profile.visualRadius ?? 0.02) * bodyVisualBoost;
-    denseMoonDummy.scale.set(radiusScale * shape[0], radiusScale * shape[1], radiusScale * shape[2]);
+    if (isFocused && inspectionMesh) {
+      // The textured child now owns the selected moon's pixels. Collapse only
+      // this instance to prevent the preview and inspection meshes overlapping.
+      denseMoonDummy.scale.setScalar(0.000001);
+    } else {
+      denseMoonDummy.scale.set(
+        radiusScale * shape[0],
+        radiusScale * shape[1],
+        radiusScale * shape[2],
+      );
+    }
     denseMoonDummy.updateMatrix();
     field.mesh.setMatrixAt(index, denseMoonDummy.matrix);
   });

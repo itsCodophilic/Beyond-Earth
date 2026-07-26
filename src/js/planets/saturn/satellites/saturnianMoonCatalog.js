@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { getSaturnUnresolvedReconstruction } from "./unresolvedMoonReconstruction.js";
 
 const OFFICIAL_BASE_NAMES = Object.freeze([
   "Mimas", "Enceladus", "Tethys", "Dione", "Rhea", "Titan", "Hyperion", "Iapetus",
@@ -733,6 +734,7 @@ const REFERENCE_IRREGULAR_PROFILES = Object.freeze({
 function createBackgroundProfile(name, index) {
   const seed = stableSeed(name);
   const family = familyFor(name, seed);
+  const reconstruction = getSaturnUnresolvedReconstruction(name);
   const retrograde = family.startsWith("Norse");
   const aKm = 7_500_000 + Math.pow(seed, 0.72) * 18_800_000 + (index % 17) * 29_000;
   const periodDays = 200 + Math.pow(aKm / 7_500_000, 1.5) * 330;
@@ -765,15 +767,23 @@ function createBackgroundProfile(name, index) {
     // Four closed low-poly rock families make the unresolved catalogue look
     // volumetric without replacing the efficient InstancedMesh renderer.
     denseVariant: Math.floor(stableSeed(`${name}:dense-shape`) * 4),
+    reconstructionTextureSource: reconstruction.textureSource,
+    reconstructionShapeIndex: reconstruction.shapeIndex,
+    reconstructionShapeKey: reconstruction.shapeKey,
+    reconstructionCraterCount: reconstruction.craterCount,
+    surfaceResolutionStatus: reconstruction.resolutionStatus,
     visualRadius: 0.017 + Math.pow(diameterKm / 8.05, 0.5) * 0.018,
     tidallyLocked: false,
     showOrbitGuide: false,
     instanced: true,
     interactionTier: "background",
     orbitalSpeed: "Slow irregular orbit around Saturn",
+    surfaceEvidence: reconstruction.evidenceLabel,
+    surfaceStructure: reconstruction.structure,
+    surfaceRoughness: reconstruction.roughness,
     orbitSummary: `Compressed visual reconstruction of Saturn's ${family.toLowerCase()} population.`,
-    description: `${name} is a tiny unresolved Saturnian satellite represented as a family-based irregular body. Its exact surface is unknown.`,
-    dataNote: "Officially confirmed satellite; visible shape and colour are a conservative family reconstruction.",
+    description: `${name} is a tiny unresolved Saturnian satellite detected as a telescopic point source. Its interactive terrain is a repeatable evidence-labelled reconstruction, not a photographed surface.`,
+    dataNote: `${reconstruction.resolutionStatus}. The displayed albedo reuses the project's ${reconstruction.textureSource} reconstruction artwork as visual material only; it is not an image of ${name}.`,
     ...(referenceProfile ?? {}),
   });
 }
