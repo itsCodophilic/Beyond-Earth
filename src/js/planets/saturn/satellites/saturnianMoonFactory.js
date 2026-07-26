@@ -22,6 +22,10 @@ const PALETTES = Object.freeze({
  * follow the same resolved-body path used for Jupiter's Galilean moons, while
  * geometry-level relief preserves each moon's defining structure.
  */
+function irregularReferenceAsset(albedo) {
+  return Object.freeze({ albedo });
+}
+
 const SATURNIAN_SURFACE_ASSETS = Object.freeze({
   Titan: Object.freeze({
     albedo: new URL("../../../../assets/textures/saturnian/titan-albedo.jpg", import.meta.url).href,
@@ -86,6 +90,66 @@ const SATURNIAN_SURFACE_ASSETS = Object.freeze({
       import.meta.url,
     ).href,
   }),
+  Tarvos: irregularReferenceAsset(new URL(
+    "../../../../assets/textures/saturnian/irregular-reference/tarvos-albedo.jpg",
+    import.meta.url,
+  ).href),
+  Ijiraq: irregularReferenceAsset(new URL(
+    "../../../../assets/textures/saturnian/irregular-reference/ijiraq-albedo.jpg",
+    import.meta.url,
+  ).href),
+  Suttungr: irregularReferenceAsset(new URL(
+    "../../../../assets/textures/saturnian/irregular-reference/suttungr-albedo.jpg",
+    import.meta.url,
+  ).href),
+  Kiviuq: irregularReferenceAsset(new URL(
+    "../../../../assets/textures/saturnian/irregular-reference/kiviuq-albedo.jpg",
+    import.meta.url,
+  ).href),
+  Mundilfari: irregularReferenceAsset(new URL(
+    "../../../../assets/textures/saturnian/irregular-reference/mundilfari-albedo.jpg",
+    import.meta.url,
+  ).href),
+  Albiorix: irregularReferenceAsset(new URL(
+    "../../../../assets/textures/saturnian/irregular-reference/albiorix-albedo.jpg",
+    import.meta.url,
+  ).href),
+  Skathi: irregularReferenceAsset(new URL(
+    "../../../../assets/textures/saturnian/irregular-reference/skathi-albedo.jpg",
+    import.meta.url,
+  ).href),
+  Erriapus: irregularReferenceAsset(new URL(
+    "../../../../assets/textures/saturnian/irregular-reference/erriapus-albedo.jpg",
+    import.meta.url,
+  ).href),
+  Siarnaq: irregularReferenceAsset(new URL(
+    "../../../../assets/textures/saturnian/irregular-reference/siarnaq-albedo.jpg",
+    import.meta.url,
+  ).href),
+  Thrymr: irregularReferenceAsset(new URL(
+    "../../../../assets/textures/saturnian/irregular-reference/thrymr-albedo.jpg",
+    import.meta.url,
+  ).href),
+  Narvi: irregularReferenceAsset(new URL(
+    "../../../../assets/textures/saturnian/irregular-reference/narvi-albedo.jpg",
+    import.meta.url,
+  ).href),
+  Methone: irregularReferenceAsset(new URL(
+    "../../../../assets/textures/saturnian/irregular-reference/methone-albedo.jpg",
+    import.meta.url,
+  ).href),
+  Aegir: irregularReferenceAsset(new URL(
+    "../../../../assets/textures/saturnian/irregular-reference/aegir-albedo.jpg",
+    import.meta.url,
+  ).href),
+  Bebhionn: irregularReferenceAsset(new URL(
+    "../../../../assets/textures/saturnian/irregular-reference/bebhionn-albedo.jpg",
+    import.meta.url,
+  ).href),
+  Bergelmir: irregularReferenceAsset(new URL(
+    "../../../../assets/textures/saturnian/irregular-reference/bergelmir-albedo.jpg",
+    import.meta.url,
+  ).href),
 });
 
 const saturnianTextureLoader = new THREE.TextureLoader();
@@ -113,8 +177,8 @@ function getSaturnianSurfaceMaps(bodyName) {
   if (!assets) return null;
   return {
     albedoMap: loadSaturnianTexture(bodyName, assets.albedo, { color: true }),
-    heightMap: loadSaturnianTexture(bodyName, assets.height),
-    roughnessMap: loadSaturnianTexture(bodyName, assets.roughness),
+    heightMap: assets.height ? loadSaturnianTexture(bodyName, assets.height) : null,
+    roughnessMap: assets.roughness ? loadSaturnianTexture(bodyName, assets.roughness) : null,
   };
 }
 
@@ -537,50 +601,72 @@ function createMappedMoonMaterial(bodyName, maps, {
 function smoothSphereUvSeamNormals(geometry) {
   const position = geometry.getAttribute("position");
   const uv = geometry.getAttribute("uv");
-  const normal = geometry.getAttribute("normal");
-  if (!position || !uv || !normal) return;
+  if (!position || !uv) return;
 
-  const seamPairs = new Map();
-  const precision = 1000000;
-  for (let index = 0; index < position.count; index += 1) {
-    const u = uv.getX(index);
-    if (u > 1e-4 && u < 1 - 1e-4) continue;
+  const seamPairs = [];
+  const widthSegments = geometry.parameters?.widthSegments;
+  const heightSegments = geometry.parameters?.heightSegments;
+  const expectedVertexCount = Number.isInteger(widthSegments)
+    && Number.isInteger(heightSegments)
+    ? (widthSegments + 1) * (heightSegments + 1)
+    : -1;
 
-    const key = [
-      Math.round(position.getX(index) * precision),
-      Math.round(position.getY(index) * precision),
-      Math.round(position.getZ(index) * precision),
-    ].join(":");
-
-    const pair = seamPairs.get(key) ?? { a: -1, b: -1 };
-    if (u < 0.5) {
-      pair.a = index;
-    } else {
-      pair.b = index;
+  if (expectedVertexCount === position.count) {
+    // SphereGeometry stores one duplicated vertex at u=0 and u=1 for every
+    // latitude row. Pairing by the known grid layout is exact and remains
+    // reliable even after strong crater/silhouette deformation.
+    for (let row = 0; row <= heightSegments; row += 1) {
+      const rowStart = row * (widthSegments + 1);
+      seamPairs.push([rowStart, rowStart + widthSegments]);
     }
-    seamPairs.set(key, pair);
+  } else {
+    // Conservative fallback for sphere-derived geometries whose parameters
+    // were stripped. Pair boundary vertices by their shared UV latitude,
+    // never by their deformed 3D position.
+    const pairsByLatitude = new Map();
+    const precision = 1000000;
+    for (let index = 0; index < position.count; index += 1) {
+      const u = uv.getX(index);
+      if (u > 1e-4 && u < 1 - 1e-4) continue;
+      const key = Math.round(uv.getY(index) * precision);
+      const pair = pairsByLatitude.get(key) ?? [-1, -1];
+      pair[u < 0.5 ? 0 : 1] = index;
+      pairsByLatitude.set(key, pair);
+    }
+    pairsByLatitude.forEach(([a, b]) => {
+      if (a >= 0 && b >= 0) seamPairs.push([a, b]);
+    });
   }
 
-  const averaged = new THREE.Vector3();
-  for (const pair of seamPairs.values()) {
-    if (pair.a < 0 || pair.b < 0) continue;
-    averaged.set(
-      normal.getX(pair.a) + normal.getX(pair.b),
-      normal.getY(pair.a) + normal.getY(pair.b),
-      normal.getZ(pair.a) + normal.getZ(pair.b),
-    ).normalize();
-    normal.setXYZ(pair.a, averaged.x, averaged.y, averaged.z);
-    normal.setXYZ(pair.b, averaged.x, averaged.y, averaged.z);
-
-    const ax = (position.getX(pair.a) + position.getX(pair.b)) * 0.5;
-    const ay = (position.getY(pair.a) + position.getY(pair.b)) * 0.5;
-    const az = (position.getZ(pair.a) + position.getZ(pair.b)) * 0.5;
-    position.setXYZ(pair.a, ax, ay, az);
-    position.setXYZ(pair.b, ax, ay, az);
-  }
-
-  normal.needsUpdate = true;
+  // First make both sides of the UV cut occupy the exact same position. This
+  // seals the volume before normals are regenerated, preventing stars,
+  // orbit lines, or other moons from showing through a sub-pixel opening.
+  seamPairs.forEach(([a, b]) => {
+    const x = (position.getX(a) + position.getX(b)) * 0.5;
+    const y = (position.getY(a) + position.getY(b)) * 0.5;
+    const z = (position.getZ(a) + position.getZ(b)) * 0.5;
+    position.setXYZ(a, x, y, z);
+    position.setXYZ(b, x, y, z);
+  });
   position.needsUpdate = true;
+
+  geometry.deleteAttribute("normal");
+  geometry.computeVertexNormals();
+
+  // The duplicated columns still need a shared normal so the welded line
+  // cannot appear as a false bright/dark lighting crack.
+  const normal = geometry.getAttribute("normal");
+  const averaged = new THREE.Vector3();
+  seamPairs.forEach(([a, b]) => {
+    averaged.set(
+      normal.getX(a) + normal.getX(b),
+      normal.getY(a) + normal.getY(b),
+      normal.getZ(a) + normal.getZ(b),
+    ).normalize();
+    normal.setXYZ(a, averaged.x, averaged.y, averaged.z);
+    normal.setXYZ(b, averaged.x, averaged.y, averaged.z);
+  });
+  normal.needsUpdate = true;
 }
 
 function createMimasSurface(profile, quality) {
@@ -1888,6 +1974,7 @@ function createUploadedReferenceMoonSurface(profile, quality, config) {
 }
 
 function createAdditionalReferenceMoonSurface(profile, quality, config) {
+  const maps = getSaturnianSurfaceMaps(profile.name);
   const source = new THREE.IcosahedronGeometry(1, uploadedReferenceDetail(quality));
   const positions = source.getAttribute("position");
   const colours = new Float32Array(positions.count * 3);
@@ -2051,6 +2138,7 @@ function createAdditionalReferenceMoonSurface(profile, quality, config) {
 
   const material = new THREE.MeshStandardMaterial({
     vertexColors: true,
+    map: config.kind === "methone-reference" ? maps?.albedoMap ?? null : null,
     roughness: config.kind === "methone-reference" ? 0.84 : config.kind === "anthe-reference" ? 0.98 : 0.96,
     metalness: 0,
     envMapIntensity: config.kind === "methone-reference" ? 0.030 : 0.015,
@@ -2067,7 +2155,10 @@ function createAdditionalReferenceMoonSurface(profile, quality, config) {
   moon.userData.surfaceStructure = config.structure;
   moon.userData.surfaceRoughness = material.roughness;
   moon.userData.surfaceDetailMode = `uploaded-reference-${config.kind}`;
-  moon.userData.referenceMinorMoonState = { profile, quality, config };
+  if (config.kind === "methone-reference") {
+    moon.userData.referenceSourceAsset = "assets/textures/saturnian/irregular-reference/methone-reference-source.png";
+  }
+  moon.userData.referenceMinorMoonState = { profile, quality, config, maps };
   return moon;
 }
 
@@ -2779,9 +2870,402 @@ function createPaaliaqReferenceSurface(profile, quality) {
   return moon;
 }
 
+/**
+ * User-reference reconstructions for six unresolved irregular moons.
+ *
+ * The supplied pictures are visual concepts rather than spacecraft global
+ * maps. Their cleaned colour is therefore used as an artistic albedo wrap,
+ * while the actual volume, craters, ridges, and silhouette are rebuilt in
+ * geometry. This keeps the bodies convincingly three-dimensional from every
+ * camera angle and lets Saturn-system sunlight produce the day/night divide.
+ */
+const IRREGULAR_REFERENCE_MODELS = Object.freeze({
+  Tarvos: Object.freeze({
+    kind: "broken-wedge",
+    axes: [1.12, 0.86, 0.88],
+    roughness: 0.95,
+    craterCount: 34,
+    craterDepth: [0.010, 0.040],
+    structure: "Rounded wedge with a broad face, rough broken crown, pitted regolith, and many restrained impact craters",
+  }),
+  Ijiraq: Object.freeze({
+    kind: "flattened-potato",
+    axes: [1.24, 0.72, 0.88],
+    roughness: 0.94,
+    craterCount: 30,
+    craterDepth: [0.009, 0.037],
+    structure: "Flattened elongated potato body with worn bowls, granular plains, and battered cratered margins",
+  }),
+  Suttungr: Object.freeze({
+    kind: "oblate-dome",
+    axes: [1.08, 0.74, 0.92],
+    roughness: 0.96,
+    craterCount: 27,
+    craterDepth: [0.010, 0.040],
+    structure: "Compact oblate cap with a rounded crown, subtly flattened underside, dark mineral patches, and eroded craters",
+  }),
+  Kiviuq: Object.freeze({
+    kind: "offset-heart",
+    axes: [1.00, 1.05, 0.84],
+    roughness: 0.95,
+    craterCount: 34,
+    craterDepth: [0.010, 0.043],
+    structure: "Asymmetric pear-and-heart-shaped mass with uneven upper lobes, a shallow notch, scarred flanks, and small craters",
+  }),
+  Mundilfari: Object.freeze({
+    kind: "twin-shoulder",
+    axes: [0.90, 1.18, 0.80],
+    roughness: 0.98,
+    craterCount: 24,
+    craterDepth: [0.008, 0.034],
+    structure: "Tall rubble body with two unequal crown shoulders, a shallow saddle, dense fluted wrinkles, pits, and worn craters",
+  }),
+  Albiorix: Object.freeze({
+    kind: "contact-lobes",
+    axes: [0.96, 1.06, 0.84],
+    roughness: 0.93,
+    craterCount: 38,
+    craterDepth: [0.010, 0.044],
+    structure: "Asymmetric contact-like body with a massive rounded lower lobe, pinched saddle, raised upper-right lobe, and cratered regolith",
+  }),
+  Skathi: Object.freeze({
+    kind: "broken-egg",
+    axes: [1.02, 1.08, 0.88],
+    roughness: 0.96,
+    craterCount: 34,
+    craterDepth: [0.010, 0.043],
+    structure: "Pale irregular egg-and-wedge body with a battered crown, dusty plains, pits, and worn impact craters",
+  }),
+  Erriapus: Object.freeze({
+    kind: "sloped-boulder",
+    axes: [1.10, 0.92, 0.88],
+    roughness: 0.95,
+    craterCount: 31,
+    craterDepth: [0.009, 0.040],
+    structure: "Sloped compact boulder with a pale rounded crown, broad smoother face, broken flank, pits, and shallow basins",
+  }),
+  Siarnaq: Object.freeze({
+    kind: "cratered-globe",
+    axes: [1.02, 1.00, 0.96],
+    roughness: 0.94,
+    craterCount: 48,
+    craterDepth: [0.009, 0.045],
+    structure: "Large nearly round lavender-gray body with subtly flattened poles, dark cratered highlands, overlapping basins, and dense pitting",
+  }),
+  Thrymr: Object.freeze({
+    kind: "ring-basin-pebble",
+    axes: [1.03, 0.98, 0.94],
+    roughness: 0.94,
+    craterCount: 24,
+    craterDepth: [0.007, 0.031],
+    structure: "Compact pale rounded pebble with restrained facets, fine pits, worn small craters, and one broad ringed basin",
+  }),
+  Narvi: Object.freeze({
+    kind: "basin-block",
+    axes: [1.08, 0.98, 0.90],
+    roughness: 0.97,
+    craterCount: 36,
+    craterDepth: [0.011, 0.048],
+    structure: "Blocky silver-gray boulder with a broken scarp, rounded shoulder, deep front basin, fractured ridges, and many pits",
+  }),
+  Aegir: Object.freeze({
+    kind: "jagged-tower",
+    axes: [0.88, 1.22, 0.80],
+    roughness: 0.99,
+    craterCount: 42,
+    craterDepth: [0.014, 0.060],
+    structure: "Tall jagged rubble shard with a narrower base, broken crown, sharp scarps, deep cavities, and dense pitting",
+  }),
+  Bebhionn: Object.freeze({
+    kind: "squat-boulder",
+    axes: [1.20, 0.78, 0.92],
+    roughness: 0.93,
+    craterCount: 14,
+    craterDepth: [0.004, 0.020],
+    structure: "Squat light-gray rounded block with a broad oval face, flattened underside, shallow crown groove, marbling, and sparse pits",
+  }),
+  Bergelmir: Object.freeze({
+    kind: "eroded-wedge",
+    axes: [0.92, 1.12, 0.78],
+    roughness: 0.98,
+    craterCount: 58,
+    craterDepth: [0.014, 0.064],
+    structure: "Bright eroded wedge-like body with an irregular bitten flank, dense overlapping crater bowls, deep floors, and shattered scarps",
+  }),
+});
+
+function irregularReferenceGeometrySegments(quality) {
+  if (quality === "low") return [64, 44];
+  if (quality === "medium") return [104, 72];
+  return [144, 100];
+}
+
+function createIrregularReferenceSurface(profile, quality, config) {
+  const maps = getSaturnianSurfaceMaps(profile.name);
+  const [widthSegments, heightSegments] = irregularReferenceGeometrySegments(quality);
+  const geometry = new THREE.SphereGeometry(1, widthSegments, heightSegments);
+  const positions = geometry.getAttribute("position");
+  const direction = new THREE.Vector3();
+
+  const craters = createMappedCraterField(profile, config.craterCount, {
+    minRadius: 0.025,
+    maxRadius: 0.145,
+    minDepth: config.craterDepth[0],
+    maxDepth: config.craterDepth[1],
+    seedOffset: 601.7,
+  });
+
+  // Stable feature directions keep the recognizable outline in the initial
+  // inspection view while still producing a closed volume from every angle.
+  const tarvosCrown = directionFromLatLon(58, -18);
+  const tarvosBrokenEdge = directionFromLatLon(42, 132);
+  const kiviuqLeftLobe = directionFromLatLon(38, 142);
+  const kiviuqRightLobe = directionFromLatLon(26, 34);
+  const kiviuqNotch = directionFromLatLon(68, 82);
+  const mundilfariLeftShoulder = directionFromLatLon(54, 148);
+  const mundilfariRightShoulder = directionFromLatLon(60, 28);
+  const mundilfariSaddle = directionFromLatLon(72, 88);
+  const albiorixMainLobe = directionFromLatLon(-28, 148);
+  const albiorixRaisedLobe = directionFromLatLon(48, 24);
+  const albiorixSaddle = directionFromLatLon(20, 82);
+  const skathiCrown = directionFromLatLon(58, -24);
+  const skathiBrokenSide = directionFromLatLon(28, 142);
+  const erriapusCrown = directionFromLatLon(48, -28);
+  const erriapusBrokenFlank = directionFromLatLon(-8, 148);
+  const siarnaqBasin = directionFromLatLon(16, -24);
+  const thrymrBasin = directionFromLatLon(30, -18);
+  const narviBasin = directionFromLatLon(-8, -20);
+  const narviScarp = directionFromLatLon(34, 138);
+  const aegirCavity = directionFromLatLon(-28, -18);
+  const aegirBrokenCrown = directionFromLatLon(62, 118);
+  const bebhionnGroove = directionFromLatLon(54, -12);
+  const bergelmirBite = directionFromLatLon(8, -38);
+  const bergelmirBasin = directionFromLatLon(-12, -22);
+
+  for (let index = 0; index < positions.count; index += 1) {
+    direction.fromBufferAttribute(positions, index).normalize();
+    const broad = fbm(direction, 2.1, profile.seed + 211.3);
+    const medium = fbm(direction, 7.8, profile.seed + 337.1);
+    const fine = fbm(direction, 25.0, profile.seed + 509.4);
+
+    let relief = broad * 0.040 + medium * 0.014 + fine * 0.0045;
+    craters.forEach((crater) => {
+      relief += craterSample(
+        direction,
+        crater.center,
+        crater.radius,
+        crater.depth,
+        crater.rim,
+      ).height;
+    });
+
+    let localRadius = Math.max(0.70, 1 + relief);
+    let xAxis = config.axes[0];
+    let yAxis = config.axes[1];
+    let zAxis = config.axes[2];
+    let centreX = 0;
+    let centreY = 0;
+    let centreZ = 0;
+
+    if (config.kind === "broken-wedge") {
+      const crown = gaussianSurfaceMask(direction, tarvosCrown, 0.56);
+      const brokenEdge = gaussianSurfaceMask(direction, tarvosBrokenEdge, 0.50);
+      const crownJag = Math.max(0, medium * 0.65 + fine * 0.35);
+      localRadius *= 1 + crown * (0.045 + crownJag * 0.075) - brokenEdge * 0.055;
+      xAxis *= 1 - smoothstepValue(direction.y, 0.20, 0.96) * 0.08;
+      yAxis *= 1 + crown * 0.055;
+      centreX = -crown * 0.025;
+    } else if (config.kind === "flattened-potato") {
+      const leftBulk = smoothstepValue(-direction.x, 0.10, 0.92);
+      const rightTaper = smoothstepValue(direction.x, 0.18, 0.96);
+      localRadius *= 1 + leftBulk * 0.045 - rightTaper * 0.055;
+      yAxis *= 1 - Math.abs(direction.x) * 0.035;
+      centreY = broad * 0.018;
+      centreZ = medium * 0.010;
+    } else if (config.kind === "oblate-dome") {
+      const crown = smoothstepValue(direction.y, -0.10, 0.98);
+      const underside = smoothstepValue(-direction.y, 0.18, 0.98);
+      localRadius *= 1 + crown * 0.040 - underside * 0.025;
+      yAxis *= 1 - underside * 0.10;
+      centreY = crown * 0.018;
+    } else if (config.kind === "offset-heart") {
+      const leftLobe = gaussianSurfaceMask(direction, kiviuqLeftLobe, 0.66);
+      const rightLobe = gaussianSurfaceMask(direction, kiviuqRightLobe, 0.62);
+      const notch = gaussianSurfaceMask(direction, kiviuqNotch, 0.34);
+      const upperHalf = smoothstepValue(direction.y, 0.05, 0.92);
+      const silhouetteNotch = upperHalf
+        * (1 - smoothstepValue(Math.abs(direction.x), 0.10, 0.42));
+      const leftSilhouetteLobe = upperHalf * smoothstepValue(-direction.x, -0.05, 0.88);
+      const rightSilhouetteLobe = upperHalf * smoothstepValue(direction.x, -0.05, 0.88);
+      localRadius *= 1
+        + leftLobe * 0.125
+        + rightLobe * 0.180
+        + leftSilhouetteLobe * 0.060
+        + rightSilhouetteLobe * 0.095
+        - notch * 0.135
+        - silhouetteNotch * 0.115;
+      centreX = rightLobe * 0.075
+        + rightSilhouetteLobe * 0.045
+        - leftLobe * 0.030;
+      centreY = leftLobe * 0.030 + rightLobe * 0.018;
+      zAxis *= 1 - (notch + silhouetteNotch) * 0.045;
+    } else if (config.kind === "twin-shoulder") {
+      const leftShoulder = gaussianSurfaceMask(direction, mundilfariLeftShoulder, 0.52);
+      const rightShoulder = gaussianSurfaceMask(direction, mundilfariRightShoulder, 0.48);
+      const saddle = gaussianSurfaceMask(direction, mundilfariSaddle, 0.30);
+      const flankWrinkles = Math.sin(
+        direction.y * 92
+        + Math.atan2(direction.z, direction.x) * 9
+        + medium * 3.4,
+      ) * 0.010;
+      localRadius *= 1
+        + leftShoulder * 0.115
+        + rightShoulder * 0.075
+        - saddle * 0.105
+        + flankWrinkles;
+      centreX = -leftShoulder * 0.035 + rightShoulder * 0.020;
+      yAxis *= 1 + (leftShoulder + rightShoulder) * 0.045;
+    } else if (config.kind === "contact-lobes") {
+      const mainLobe = gaussianSurfaceMask(direction, albiorixMainLobe, 0.82);
+      const raisedLobe = gaussianSurfaceMask(direction, albiorixRaisedLobe, 0.58);
+      const saddle = gaussianSurfaceMask(direction, albiorixSaddle, 0.38);
+      const lowerPrimary = smoothstepValue(-direction.y, -0.05, 0.88)
+        * smoothstepValue(-direction.x, -0.18, 0.90);
+      const upperRight = smoothstepValue(direction.y, 0.05, 0.88)
+        * smoothstepValue(direction.x, -0.08, 0.82);
+      const waistBand = Math.exp(-Math.pow((direction.y - 0.20) / 0.22, 2))
+        * (1 - smoothstepValue(direction.x, 0.32, 0.92));
+      localRadius *= 1
+        + mainLobe * 0.145
+        + lowerPrimary * 0.085
+        + raisedLobe * 0.205
+        + upperRight * 0.100
+        - saddle * 0.115
+        - waistBand * 0.065;
+      // Keep Albiorix a star-shaped closed volume. The former per-vertex
+      // centre offsets folded neighbouring triangles across one another,
+      // exposing the background through apparent cracks during rotation.
+      xAxis *= 1 + upperRight * 0.070 + lowerPrimary * 0.025;
+      yAxis *= 1 + raisedLobe * 0.055 - saddle * 0.025;
+      zAxis *= 1 - (saddle + waistBand) * 0.035;
+    } else if (config.kind === "broken-egg") {
+      const crown = gaussianSurfaceMask(direction, skathiCrown, 0.54);
+      const brokenSide = gaussianSurfaceMask(direction, skathiBrokenSide, 0.48);
+      const top = smoothstepValue(direction.y, 0.12, 0.96);
+      localRadius *= 1
+        + crown * (0.055 + Math.max(0, medium) * 0.055)
+        - brokenSide * 0.075
+        - top * Math.max(0, -fine) * 0.028;
+      xAxis *= 1 - top * 0.045;
+      yAxis *= 1 + crown * 0.035;
+    } else if (config.kind === "sloped-boulder") {
+      const crown = gaussianSurfaceMask(direction, erriapusCrown, 0.62);
+      const brokenFlank = gaussianSurfaceMask(direction, erriapusBrokenFlank, 0.58);
+      const leftBulk = smoothstepValue(-direction.x, 0.05, 0.92);
+      localRadius *= 1 + crown * 0.060 + leftBulk * 0.035 - brokenFlank * 0.080;
+      yAxis *= 1 - smoothstepValue(direction.x, 0.20, 0.96) * 0.065;
+    } else if (config.kind === "cratered-globe") {
+      const basin = craterSample(direction, siarnaqBasin, 0.25, 0.075, 0.014);
+      localRadius = Math.max(0.78, localRadius + basin.height);
+      xAxis *= 1 + broad * 0.012;
+      yAxis *= 1 - 0.018;
+    } else if (config.kind === "ring-basin-pebble") {
+      const basin = craterSample(direction, thrymrBasin, 0.28, 0.068, 0.018);
+      localRadius = Math.max(0.80, localRadius + basin.height);
+      xAxis *= 1 + broad * 0.016;
+      yAxis *= 1 + medium * 0.010;
+    } else if (config.kind === "basin-block") {
+      const basin = craterSample(direction, narviBasin, 0.31, 0.120, 0.020);
+      const scarp = gaussianSurfaceMask(direction, narviScarp, 0.52);
+      localRadius = Math.max(
+        0.70,
+        localRadius + basin.height - scarp * (0.045 + Math.max(0, -medium) * 0.040),
+      );
+      const blockiness = Math.pow(
+        Math.max(Math.abs(direction.x), Math.abs(direction.y), Math.abs(direction.z)),
+        0.56,
+      );
+      localRadius *= 0.965 + blockiness * 0.045;
+    } else if (config.kind === "jagged-tower") {
+      const cavity = craterSample(direction, aegirCavity, 0.29, 0.145, 0.015);
+      const brokenCrown = gaussianSurfaceMask(direction, aegirBrokenCrown, 0.46);
+      const crown = smoothstepValue(direction.y, 0.12, 0.97);
+      const base = smoothstepValue(-direction.y, 0.25, 0.98);
+      localRadius = Math.max(
+        0.64,
+        localRadius
+          + cavity.height
+          + crown * Math.max(0, medium) * 0.075
+          - brokenCrown * 0.070,
+      );
+      xAxis *= 1 - base * 0.13 + crown * 0.045;
+      zAxis *= 1 - base * 0.10;
+    } else if (config.kind === "squat-boulder") {
+      const groove = gaussianSurfaceMask(direction, bebhionnGroove, 0.34);
+      const underside = smoothstepValue(-direction.y, 0.20, 0.98);
+      localRadius *= 1 - groove * 0.042 - underside * 0.025;
+      yAxis *= 1 - underside * 0.075;
+      xAxis *= 1 + broad * 0.014;
+    } else if (config.kind === "eroded-wedge") {
+      const bite = gaussianSurfaceMask(direction, bergelmirBite, 0.54);
+      const basin = craterSample(direction, bergelmirBasin, 0.32, 0.135, 0.020);
+      const brokenFlank = bite * (0.55 + Math.max(0, -medium) * 0.45);
+      localRadius = Math.max(
+        0.56,
+        localRadius + basin.height - brokenFlank * 0.225,
+      );
+      xAxis *= 1 - smoothstepValue(direction.x, 0.12, 0.96) * 0.105;
+      yAxis *= 1 + smoothstepValue(direction.y, 0.08, 0.95) * 0.045;
+    }
+
+    localRadius = Math.max(0.60, localRadius);
+    positions.setXYZ(
+      index,
+      direction.x * xAxis * localRadius + centreX,
+      direction.y * yAxis * localRadius + centreY,
+      direction.z * zAxis * localRadius + centreZ,
+    );
+  }
+
+  geometry.deleteAttribute("normal");
+  geometry.computeVertexNormals();
+  smoothSphereUvSeamNormals(geometry);
+  geometry.computeBoundingBox();
+  geometry.computeBoundingSphere();
+
+  const material = new THREE.MeshStandardMaterial({
+    color: 0xffffff,
+    map: maps?.albedoMap ?? null,
+    roughness: config.roughness,
+    metalness: 0,
+    envMapIntensity: 0.014,
+    emissive: 0x000000,
+    emissiveIntensity: 0,
+    side: THREE.DoubleSide,
+    dithering: true,
+  });
+  material.name = `${profile.name} user-reference volumetric mapped surface`;
+
+  const moon = new THREE.Mesh(geometry, material);
+  moon.castShadow = false;
+  moon.receiveShadow = false;
+  moon.userData.geometryIncludesShape = true;
+  moon.userData.surfaceEvidence = profile.surfaceEvidence;
+  moon.userData.surfaceStructure = config.structure;
+  moon.userData.surfaceRoughness = config.roughness;
+  moon.userData.surfaceDetailMode = `user-reference-${config.kind}-volumetric-sculpt`;
+  moon.userData.referenceSourceAsset = `assets/textures/saturnian/irregular-reference/${profile.name.toLowerCase()}-reference-source.png`;
+  moon.userData.irregularReferenceState = { profile, quality, maps, config };
+  return moon;
+}
+
 export function createSaturnianMoonSurface(profile, quality = "high") {
   if (profile.name === "Ymir") return createYmirReferenceSurface(profile, quality);
   if (profile.name === "Paaliaq") return createPaaliaqReferenceSurface(profile, quality);
+  const irregularReferenceModel = IRREGULAR_REFERENCE_MODELS[profile.name];
+  if (irregularReferenceModel) {
+    return createIrregularReferenceSurface(profile, quality, irregularReferenceModel);
+  }
   if (profile.name === "Titan") return createTitanSurface(profile, quality);
   if (profile.name === "Iapetus") return createIapetusSurface(profile, quality);
   if (profile.name === "Mimas") return createMimasSurface(profile, quality);

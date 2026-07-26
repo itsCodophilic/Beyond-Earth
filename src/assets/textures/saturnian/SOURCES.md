@@ -105,3 +105,53 @@ NASA Cassini raw-image resource:
 
 Reference note:
 User-supplied image, combined with published Paaliaq orbital / size constraints.
+
+## Tarvos, Ijiraq, Suttungr, Kiviuq, Mundilfari, and Albiorix
+
+- Each moon has a preserved `*-reference-source.png` supplied by the user and a
+  cleaned `*-albedo.jpg` created specifically for this project.
+- The albedo maps remove the source backgrounds, watermarks, fixed lighting,
+  and silhouettes. They are neutral, seamless 2:1 colour wraps so the project
+  Sun controls the visible day and night sides.
+- Geometry is not inferred from flat colour alone. The factory separately
+  rebuilds the six supplied silhouettes as closed volumetric meshes: Tarvos's
+  broken wedge, Ijiraq's flattened potato, Suttungr's oblate cap, Kiviuq's
+  offset heart/pear mass, Mundilfari's twin-shouldered upright rock, and
+  Albiorix's pinched asymmetric lobes.
+- Deterministic geometry adds actual crater bowls, raised rims, pitting,
+  large-scale rubble relief, and Mundilfari's fine fluted wrinkles, ensuring
+  the surface remains three-dimensional when dragged and inspected.
+- These distant moons have not been globally imaged at the displayed
+  resolution. All six are clearly treated in the interface and code as
+  reference-directed artistic reconstructions, not measured global maps.
+
+Reference note:
+Six user-supplied visual references, combined with the project's existing
+Saturn catalogue and family/orbit presentation.
+
+## Skathi, Erriapus, Siarnaq, Thrymr, Narvi, Methone, Aegir, Bebhionn, and Bergelmir
+
+- The nine user-supplied pictures are preserved as
+  `irregular-reference/*-reference-source.png`.
+- Each corresponding `*-albedo.jpg` is a project-made, seamless 2:1 colour
+  wrap. Source backgrounds, labels, watermarks, silhouettes, and fixed
+  photographic shadows are excluded so the scene's solar light creates each
+  moon's day/night divide.
+- Closed volumetric geometry separately reconstructs the visible shape cues:
+  Skathi's broken egg-like crown, Erriapus's sloped boulder, Siarnaq's
+  cratered near-globe, Thrymr's subdued ring basin, Narvi's blocky scarp and
+  deep basin, Aegir's jagged upright shard, Bebhionn's squat grooved boulder,
+  and Bergelmir's densely cratered eroded wedge.
+- Methone retains its smooth Cassini-constrained ellipsoidal geometry and now
+  uses the supplied pale surface direction as a neutral ice wrap.
+- Albiorix's earlier large per-vertex lobe offsets were replaced with a
+  closed radial sculpt. This preserves its asymmetric contact-like form
+  without folded triangles or background-visible seams while rotating.
+- Except for Methone's spacecraft-constrained gross shape, these distant
+  irregular moons do not have resolved global maps matching this detail.
+  Their displayed surfaces are explicitly reference-directed artistic
+  reconstructions, not measured topography.
+
+Reference note:
+Nine user-supplied visual references, combined with the project's existing
+Saturn catalogue and orbital-family presentation.

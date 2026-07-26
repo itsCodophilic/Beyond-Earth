@@ -9,3 +9,4 @@
 6. View Things from Nasa Solar System
 
 
+I have shared you list of moon names of saturn as well as their images respectively. As per number i have shared you images as well. Now i wanted you first analyze the image color texture shape now it looks in 3D model object, and then you need to accordingly implement things into the src code, and for color and texture suggested you can use these image itself properly. 

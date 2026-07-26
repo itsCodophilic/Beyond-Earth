@@ -146,6 +146,213 @@ function familyColour(family) {
   return 0xaaa69d;
 }
 
+/**
+ * These six distant moons are too small for present-day spacecraft imagery to
+ * provide global shape or texture maps. The user supplied a visual reference
+ * for each one, so they are promoted from the efficient instanced atlas into
+ * individual 3D meshes. Orbital placement still comes from the existing
+ * catalogue path; only their presentation, interaction, and estimated sizes
+ * are specialized here.
+ */
+const REFERENCE_IRREGULAR_PROFILES = Object.freeze({
+  Tarvos: Object.freeze({
+    diameterKm: 15,
+    color: 0xaeb8ca,
+    shape: [1, 1, 1],
+    visualRadius: 0.071,
+    instanced: false,
+    interactionTier: "direct",
+    initialRotation: [0.05, -0.32, -0.04],
+    surfaceRoughness: 0.95,
+    surfaceEvidence: "User-supplied visual reference; unresolved moon reconstructed as an artistic 3D interpretation",
+    surfaceStructure: "Rounded wedge-shaped rock with a broad pale face, broken dark crown, shallow pits, and scattered impact craters",
+    description: "Tarvos is a distant prograde member of Saturn's Gallic group. This interactive body follows the supplied pale, cratered, broken-crown reference while remaining an explicitly artistic reconstruction.",
+    dataNote: "Tarvos has not been globally resolved at this detail. The displayed colour, terrain, and silhouette are reference-directed rather than measured topography.",
+  }),
+  Ijiraq: Object.freeze({
+    diameterKm: 12,
+    color: 0xaab6d0,
+    shape: [1, 1, 1],
+    visualRadius: 0.068,
+    instanced: false,
+    interactionTier: "direct",
+    initialRotation: [0.03, -0.26, -0.10],
+    surfaceRoughness: 0.94,
+    surfaceEvidence: "User-supplied visual reference; unresolved moon reconstructed as an artistic 3D interpretation",
+    surfaceStructure: "Flattened elongated potato-shaped body with a cold blue-gray regolith, worn bowls, granular plains, and cratered margins",
+    description: "Ijiraq is a small prograde member of Saturn's Inuit group. Its flattened blue-gray, pitted form is rebuilt from the supplied visual direction for close interactive inspection.",
+    dataNote: "Ijiraq has not been globally resolved at this detail. The displayed colour, terrain, and silhouette are reference-directed rather than measured topography.",
+  }),
+  Suttungr: Object.freeze({
+    diameterKm: 7,
+    color: 0xb9aa91,
+    shape: [1, 1, 1],
+    visualRadius: 0.064,
+    instanced: false,
+    interactionTier: "direct",
+    initialRotation: [0.02, -0.18, -0.02],
+    surfaceRoughness: 0.96,
+    surfaceEvidence: "User-supplied visual reference; unresolved moon reconstructed as an artistic 3D interpretation",
+    surfaceStructure: "Compact oblate dome with a rounded ivory crown, flatter underside, dark regolith stains, fine pitting, and worn craters",
+    description: "Suttungr is a tiny retrograde member of Saturn's Norse group. The reconstruction emphasizes the supplied compact cap-like silhouette and pale, ancient cratered regolith.",
+    dataNote: "Suttungr has not been globally resolved at this detail. The displayed colour, terrain, and silhouette are reference-directed rather than measured topography.",
+  }),
+  Kiviuq: Object.freeze({
+    diameterKm: 16,
+    color: 0xa8aaa0,
+    shape: [1, 1, 1],
+    visualRadius: 0.072,
+    instanced: false,
+    interactionTier: "direct",
+    initialRotation: [0.06, -0.04, -0.06],
+    surfaceRoughness: 0.95,
+    surfaceEvidence: "User-supplied visual reference; unresolved moon reconstructed as an artistic 3D interpretation",
+    surfaceStructure: "Offset pear-and-heart-shaped mass with an upper notch, uneven lobes, pale gray-green stone, scars, grooves, and small craters",
+    description: "Kiviuq is a prograde irregular moon in Saturn's Inuit group. Its asymmetric pear-like volume and scarred gray-green terrain are reconstructed from the supplied reference.",
+    dataNote: "Kiviuq has not been globally resolved at this detail. The displayed colour, terrain, and silhouette are reference-directed rather than measured topography.",
+  }),
+  Mundilfari: Object.freeze({
+    diameterKm: 7,
+    color: 0x656565,
+    shape: [1, 1, 1],
+    visualRadius: 0.064,
+    instanced: false,
+    interactionTier: "direct",
+    initialRotation: [0.04, -0.22, 0.03],
+    surfaceRoughness: 0.98,
+    surfaceEvidence: "User-supplied visual reference; unresolved moon reconstructed as an artistic 3D interpretation",
+    surfaceStructure: "Tall graphite-gray rubble body with two unequal crown shoulders, a shallow saddle, dense fluted wrinkles, pits, and worn craters",
+    description: "Mundilfari is a small retrograde moon in Saturn's Norse group. Its upright twin-shouldered silhouette and densely wrinkled dark regolith follow the supplied visual reference.",
+    dataNote: "Mundilfari has not been globally resolved at this detail. The displayed colour, terrain, and silhouette are reference-directed rather than measured topography.",
+  }),
+  Albiorix: Object.freeze({
+    diameterKm: 32,
+    color: 0xc4a88f,
+    shape: [1, 1, 1],
+    visualRadius: 0.080,
+    instanced: false,
+    interactionTier: "direct",
+    initialRotation: [0.05, -0.02, -0.08],
+    surfaceRoughness: 0.93,
+    surfaceEvidence: "User-supplied visual reference; unresolved moon reconstructed as an artistic 3D interpretation",
+    surfaceStructure: "Warm beige asymmetric contact-like body with a massive rounded lower lobe, a pinched saddle, raised upper-right lobe, and cratered regolith",
+    description: "Albiorix is the largest named member of Saturn's Gallic group. The interactive reconstruction uses the supplied warm, two-lobed reference to create a distinctly asymmetric 3D body.",
+    dataNote: "Albiorix has not been globally resolved at this detail. The displayed colour, terrain, and silhouette are reference-directed rather than measured topography.",
+  }),
+  Skathi: Object.freeze({
+    diameterKm: 8,
+    color: 0xc2b59f,
+    shape: [1, 1, 1],
+    visualRadius: 0.065,
+    instanced: false,
+    interactionTier: "direct",
+    initialRotation: [0.04, -0.12, -0.05],
+    surfaceRoughness: 0.96,
+    surfaceEvidence: "User-supplied visual reference; unresolved moon reconstructed as an artistic 3D interpretation",
+    surfaceStructure: "Pale irregular egg-and-wedge body with a battered crown, dusty plains, small pits, and worn impact craters",
+    description: "Skathi is a small retrograde member of Saturn's Norse group. Its pale broken-crown silhouette and cratered dusty regolith follow the supplied visual reference.",
+    dataNote: "Skathi has not been globally resolved at this detail. The displayed colour, terrain, and silhouette are reference-directed rather than measured topography.",
+  }),
+  Erriapus: Object.freeze({
+    diameterKm: 10,
+    color: 0xb2aa95,
+    shape: [1, 1, 1],
+    visualRadius: 0.067,
+    instanced: false,
+    interactionTier: "direct",
+    initialRotation: [0.03, -0.10, -0.08],
+    surfaceRoughness: 0.95,
+    surfaceEvidence: "User-supplied visual reference; unresolved moon reconstructed as an artistic 3D interpretation",
+    surfaceStructure: "Sloped compact boulder with a pale rounded crown, broad smoother face, broken charcoal flank, pits, and shallow basins",
+    description: "Erriapus is a distant prograde moon in Saturn's Gallic group. Its pale sloped boulder form and contrasting fractured highlands are reconstructed from the supplied image.",
+    dataNote: "Erriapus has not been globally resolved at this detail. The displayed colour, terrain, and silhouette are reference-directed rather than measured topography.",
+  }),
+  Siarnaq: Object.freeze({
+    diameterKm: 40,
+    color: 0xb9b2c2,
+    shape: [1, 1, 1],
+    visualRadius: 0.084,
+    instanced: false,
+    interactionTier: "direct",
+    initialRotation: [0.02, -0.18, -0.02],
+    surfaceRoughness: 0.94,
+    surfaceEvidence: "User-supplied visual reference; unresolved moon reconstructed as an artistic 3D interpretation",
+    surfaceStructure: "Large nearly round lavender-gray irregular moon with a subtly flattened pole, dark cratered highlands, overlapping basins, and dense pitting",
+    description: "Siarnaq is one of Saturn's larger Inuit-group irregular moons. The reconstruction emphasizes the supplied cool lavender-gray surface and densely cratered, nearly spherical body.",
+    dataNote: "Siarnaq has not been globally resolved at this detail. The displayed colour, terrain, and silhouette are reference-directed rather than measured topography.",
+  }),
+  Thrymr: Object.freeze({
+    diameterKm: 7,
+    color: 0xb9bcae,
+    shape: [1, 1, 1],
+    visualRadius: 0.064,
+    instanced: false,
+    interactionTier: "direct",
+    initialRotation: [0.04, -0.20, -0.03],
+    surfaceRoughness: 0.94,
+    surfaceEvidence: "User-supplied visual reference; unresolved moon reconstructed as an artistic 3D interpretation",
+    surfaceStructure: "Compact pale gray-green rounded body with restrained facets, fine pits, worn small craters, and one broad ringed basin",
+    description: "Thrymr is a tiny retrograde member of Saturn's Norse group. Its compact pale form and subtle circular basin marking follow the supplied reference.",
+    dataNote: "Thrymr has not been globally resolved at this detail. The displayed colour, terrain, and silhouette are reference-directed rather than measured topography.",
+  }),
+  Narvi: Object.freeze({
+    diameterKm: 7,
+    color: 0xa7abb2,
+    shape: [1, 1, 1],
+    visualRadius: 0.064,
+    instanced: false,
+    interactionTier: "direct",
+    initialRotation: [0.03, -0.06, -0.04],
+    surfaceRoughness: 0.97,
+    surfaceEvidence: "User-supplied visual reference; unresolved moon reconstructed as an artistic 3D interpretation",
+    surfaceStructure: "Blocky silver-gray boulder with a broken left scarp, rounded right shoulder, deep front-facing basin, fractured ridges, and many pits",
+    description: "Narvi is a small retrograde moon in Saturn's Norse group. Its blocky battered volume and prominent dark basin are rebuilt from the supplied visual direction.",
+    dataNote: "Narvi has not been globally resolved at this detail. The displayed colour, terrain, and silhouette are reference-directed rather than measured topography.",
+  }),
+  Aegir: Object.freeze({
+    diameterKm: 6,
+    color: 0x82766e,
+    shape: [1, 1, 1],
+    visualRadius: 0.063,
+    instanced: false,
+    interactionTier: "direct",
+    initialRotation: [0.05, -0.04, -0.10],
+    surfaceRoughness: 0.99,
+    surfaceEvidence: "User-supplied visual reference; unresolved moon reconstructed as an artistic 3D interpretation",
+    surfaceStructure: "Tall jagged rubble shard with a narrower base, broken crown, sharp scarps, deep cavities, coarse beige-gray rock, and dense pitting",
+    description: "Aegir is a tiny retrograde moon in Saturn's Norse group. Its steep jagged outline and deeply eroded rubble surface follow the supplied reference.",
+    dataNote: "Aegir has not been globally resolved at this detail. The displayed colour, terrain, and silhouette are reference-directed rather than measured topography.",
+  }),
+  Bebhionn: Object.freeze({
+    diameterKm: 6,
+    color: 0xb8b6b2,
+    shape: [1, 1, 1],
+    visualRadius: 0.063,
+    instanced: false,
+    interactionTier: "direct",
+    initialRotation: [0.03, -0.08, -0.02],
+    surfaceRoughness: 0.93,
+    surfaceEvidence: "User-supplied visual reference; unresolved moon reconstructed as an artistic 3D interpretation",
+    surfaceStructure: "Squat light-gray rounded block with a broad oval face, flattened underside, shallow crown groove, subdued marbling, and sparse pits",
+    description: "Bebhionn is a small prograde member of Saturn's Gallic group. Its low rounded boulder form and restrained gray marbling are reconstructed from the supplied reference.",
+    dataNote: "Bebhionn has not been globally resolved at this detail. The displayed colour, terrain, and silhouette are reference-directed rather than measured topography.",
+  }),
+  Bergelmir: Object.freeze({
+    diameterKm: 6,
+    color: 0xc3c5c7,
+    shape: [1, 1, 1],
+    visualRadius: 0.063,
+    instanced: false,
+    interactionTier: "direct",
+    initialRotation: [0.02, -0.05, -0.08],
+    surfaceRoughness: 0.98,
+    surfaceEvidence: "User-supplied visual reference; unresolved moon reconstructed as an artistic 3D interpretation",
+    surfaceStructure: "Bright eroded wedge-like body with an irregular bitten flank, dense overlapping crater bowls, deep dark floors, and shattered scarps",
+    description: "Bergelmir is a tiny retrograde moon in Saturn's Norse group. The reconstruction follows the supplied bright, intensely cratered and eroded silhouette while remaining a closed 3D body.",
+    dataNote: "Bergelmir has not been globally resolved at this detail. The displayed colour, terrain, and silhouette are reference-directed rather than measured topography.",
+  }),
+});
+
 function createBackgroundProfile(name, index) {
   const seed = stableSeed(name);
   const family = familyFor(name, seed);
@@ -156,6 +363,7 @@ function createBackgroundProfile(name, index) {
   const inclinationDeg = retrograde
     ? 145 + stableSeed(`${name}:inc`) * 30
     : 32 + stableSeed(`${name}:inc`) * 18;
+  const referenceProfile = REFERENCE_IRREGULAR_PROFILES[name];
 
   return Object.freeze({
     name,
@@ -186,6 +394,7 @@ function createBackgroundProfile(name, index) {
     orbitSummary: `Compressed visual reconstruction of Saturn's ${family.toLowerCase()} population.`,
     description: `${name} is a tiny unresolved Saturnian satellite represented as a family-based irregular body. Its exact surface is unknown.`,
     dataNote: "Officially confirmed satellite; visible shape and colour are a conservative family reconstruction.",
+    ...(referenceProfile ?? {}),
   });
 }
 
@@ -340,6 +549,8 @@ function createResolvedProfile(name) {
             ? "A porous, chaotic tumbler with a sponge-like cratered surface."
             : name === "Mimas"
               ? "A small icy moon dominated by the enormous Herschel impact crater."
+              : name === "Methone"
+                ? "An exceptionally smooth, pale ring moon whose egg-like shape appears softly polished by fine icy material in Saturn's arc environment."
               : name === "Ymir"
                 ? "A small dark captured moon in Saturn's distant Norse group, travelling on an eccentric retrograde orbit."
                 : name === "Paaliaq"
@@ -359,6 +570,8 @@ function createResolvedProfile(name) {
                 ? "The surface uses NASA Cassini global mosaics; the bright wispy terrain is reconstructed as braided chasmata with raised icy walls."
                 : name === "Rhea"
                   ? "The surface uses NASA's Cassini global map with deterministic crater, basin, and restrained fracture relief."
+                  : name === "Methone"
+                    ? "Cassini constrains Methone's unusually smooth ellipsoidal shape. The supplied pale reference guides a neutral seamless ice wrap while sunlight, not baked photographic shadow, forms its day and night sides."
                   : name === "Ymir"
                     ? "The supplied reference image drives the silhouette loft and a cleaned seamless colour, height, and roughness wrap. It is a reference-directed reconstruction rather than a claim that Ymir has been globally imaged at this resolution."
                     : name === "Paaliaq"
