@@ -1292,7 +1292,7 @@ body.is-hovering-celestial #universe {
   backdrop-filter: blur(8px);
   opacity: 0;
   transform: translateY(3px) scale(0.96);
-  transition: opacity 90ms ease, transform 90ms ease;
+  transition: opacity 42ms ease-out, transform 58ms ease-out;
   white-space: nowrap;
 }
 
@@ -1866,6 +1866,15 @@ body.is-hovering-planet-orbit #universe {
   border-color: rgba(126, 255, 210, 0.66);
   background: rgba(9, 54, 56, 0.82);
   box-shadow: 0 0 17px rgba(80, 255, 201, 0.17);
+  transform: translateY(-1px);
+}
+
+.satellite-atlas-directory__moon.is-orbit-preview {
+  border-color: rgba(126, 255, 210, 0.78);
+  background: rgba(9, 62, 62, 0.90);
+  box-shadow:
+    inset 0 0 14px rgba(86, 255, 208, 0.06),
+    0 0 20px rgba(80, 255, 201, 0.22);
   transform: translateY(-1px);
 }
 

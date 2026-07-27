@@ -515,6 +515,19 @@ export function createCelestialDetailsPanel() {
     }
   }
 
+  // Pointer events can arrive much faster than the browser paints. Reading the
+  // position of every character for every raw event creates a small queue, so
+  // the glowing letters appear to follow an older cursor position. Keep only
+  // the newest pointer sample and update once per animation frame instead.
+  let cosmicPointerFrame = null;
+  let pendingCosmicPointer = null;
+
+  function cancelCosmicPointerFrame() {
+    if (cosmicPointerFrame) cancelAnimationFrame(cosmicPointerFrame);
+    cosmicPointerFrame = null;
+    pendingCosmicPointer = null;
+  }
+
   function populate(details) {
     title.textContent = details.name;
     classification.textContent = details.classification;
@@ -582,6 +595,7 @@ export function createCelestialDetailsPanel() {
     if (revealFrame) cancelAnimationFrame(revealFrame);
     revealFrame = null;
     open = false;
+    cancelCosmicPointerFrame();
     resetCosmicText();
     activeCosmicTarget = null;
     layer.classList.remove("is-open", "is-card-visible");
@@ -616,11 +630,31 @@ export function createCelestialDetailsPanel() {
   const handleCosmicPointer = (event) => {
     const target = getCosmicTargetFromPointerEvent(event);
     if (!target) {
+      cancelCosmicPointerFrame();
       resetCosmicText();
       activeCosmicTarget = null;
       return;
     }
-    animateCosmicText(target, event.clientX, event.clientY, performance.now());
+
+    pendingCosmicPointer = {
+      target,
+      clientX: event.clientX,
+      clientY: event.clientY,
+    };
+    if (cosmicPointerFrame) return;
+
+    cosmicPointerFrame = requestAnimationFrame((now) => {
+      cosmicPointerFrame = null;
+      const pointerSample = pendingCosmicPointer;
+      pendingCosmicPointer = null;
+      if (!pointerSample) return;
+      animateCosmicText(
+        pointerSample.target,
+        pointerSample.clientX,
+        pointerSample.clientY,
+        now,
+      );
+    });
   };
 
   // Capture the pointer before any nested modal control can stop bubbling.
@@ -630,6 +664,7 @@ export function createCelestialDetailsPanel() {
   card?.addEventListener("pointermove", handleCosmicPointer, { passive: true, capture: true });
 
   card?.addEventListener("pointerleave", () => {
+    cancelCosmicPointerFrame();
     resetCosmicText();
     activeCosmicTarget = null;
   });

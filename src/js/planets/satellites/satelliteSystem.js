@@ -610,6 +610,9 @@ function createDenseSatelliteFields(profiles, parentRadius, parentName, quality)
         target,
         angle: profile.meanAnomaly ?? ((index / Math.max(1, records.length)) * Math.PI * 2),
         semiMajorVisualRadius: parentRadius * profile.orbitScale,
+        // A stable presentation lane separates enlarged catalogue previews in
+        // atlas mode. It does not alter the moon's scientific orbit metadata.
+        presentationLane: Math.floor(denseGeometrySeed(profile.name) * 13) - 6,
       };
     });
     if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
@@ -620,6 +623,7 @@ function createDenseSatelliteFields(profiles, parentRadius, parentName, quality)
       targetsGroup,
       records: fieldRecords,
       parentName,
+      parentRadius,
       quality,
     };
   });
@@ -685,6 +689,15 @@ function updateDenseSatelliteField(
     // to its normal authored radius immediately; otherwise the camera arrives
     // before the overview boost has eased away and the rock fills the screen.
     const bodyVisualBoost = record.target === focusedBody ? 1 : visualBoost;
+    const overviewMix = THREE.MathUtils.smoothstep(visualBoost, 1.08, 2.2);
+    if (overviewMix > 0 && record.presentationLane) {
+      denseMoonDummy.position.y += (
+        record.presentationLane
+        * Number(field.parentRadius ?? 1)
+        * 0.025
+        * overviewMix
+      );
+    }
     const isFocused = record.target === focusedBody;
     const inspectionMesh = isFocused
       ? ensureDenseSatelliteInspectionMesh(field, record)
@@ -1470,6 +1483,18 @@ export function updateMajorSatelliteSystems(
           profile.eccentricity,
           pivot.rotation.y,
         ) * system.orbitPresentationScale;
+        // Full-catalogue mode deliberately enlarges sub-pixel moons. Give each
+        // one a stable vertical presentation lane so those enlarged previews
+        // cannot occupy the same 3D volume and appear to collide.
+        const presentationLane = Math.floor(denseGeometrySeed(profile.name) * 13) - 6;
+        const targetPresentationY = overviewActive
+          ? presentationLane * parentRadius * 0.025
+          : 0;
+        moon.position.y = THREE.MathUtils.lerp(
+          moon.position.y,
+          targetPresentationY,
+          overviewActive ? 0.20 : 0.26,
+        );
         if (hitTarget) hitTarget.position.copy(moon.position);
       }
     });
