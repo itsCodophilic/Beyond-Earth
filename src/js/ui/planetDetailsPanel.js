@@ -88,7 +88,8 @@ const PLANET_DETAILS = Object.freeze({
     rotation: "About 10.7 hours",
     axialTilt: "About 26.7°",
     gravity: "10.44 m/s² · about 1.06× Earth's gravity",
-    lore: "Saturn is distinguished by its vast ring system, built from countless particles of ice and rock. Beneath the rings is a fast-spinning hydrogen-helium giant, accompanied by a diverse family of moons including hazy Titan and ocean-bearing Enceladus.",
+    rings: "Seven main ring groups run outward as D, C, B, A, F, G, and E. The bright A, B, and C rings contain vast numbers of smaller ringlets, while the 4,700 km-wide Cassini Division separates the B and A rings. Every visible band is formed by independently orbiting particles of mostly water ice with rock and dust mixed in.",
+    lore: "Saturn is distinguished by its vast particle ring system. The D, C, B, A, F, G, and E groups range from dense bright bands to enormous diffuse ice clouds; beneath them is a fast-spinning hydrogen-helium giant accompanied by moons including hazy Titan and ocean-bearing Enceladus.",
     scienceUrl: "https://science.nasa.gov/saturn/facts/",
   }),
   Uranus: Object.freeze({
@@ -227,6 +228,7 @@ function resolveDetails(bodyOrName, context = {}) {
     surface: info.surfaceEvidence
       ? `${info.surfaceEvidence}${info.roughness ? ` · model roughness ${info.roughness}` : ""}`
       : null,
+    rings: planet?.rings ?? info.rings,
     lore: planet?.lore
       ?? override.lore
       ?? info.description
@@ -240,7 +242,7 @@ function resolveDetails(bodyOrName, context = {}) {
   [
     "massRelative", "sizeRelative", "diameter", "distance", "orbital",
     "relationValue", "atmosphere", "temperature", "rotation", "axialTilt",
-    "gravity", "surface",
+    "gravity", "surface", "rings",
   ].forEach((key) => {
     details[key] = cleanValue(details[key]);
   });
@@ -306,7 +308,7 @@ export function createCelestialDetailsPanel() {
           <summary>
             <span>
               <strong data-cosmic-text>Explore scientific details</strong>
-              <small data-cosmic-text>Atmosphere, climate, rotation, gravity, surface evidence, and story</small>
+              <small data-cosmic-text>Atmosphere, climate, rotation, gravity, rings, surface evidence, and story</small>
             </span>
             <span class="planet-details__summary-icon" aria-hidden="true"></span>
           </summary>
@@ -335,6 +337,10 @@ export function createCelestialDetailsPanel() {
             <div class="planet-details__advanced-item" data-planet-field="surface">
               <span data-cosmic-text>Surface evidence</span>
               <p id="planet-details-surface" data-cosmic-text></p>
+            </div>
+            <div class="planet-details__advanced-item planet-details__advanced-item--rings" data-planet-field="rings">
+              <span data-cosmic-text>Ring system</span>
+              <p id="planet-details-rings" data-cosmic-text></p>
             </div>
             <div class="planet-details__advanced-item planet-details__advanced-item--lore" data-planet-field="lore">
               <span data-cosmic-text>Celestial story</span>
@@ -379,6 +385,7 @@ export function createCelestialDetailsPanel() {
     axialTilt: layer.querySelector("#planet-details-tilt"),
     gravity: layer.querySelector("#planet-details-gravity"),
     surface: layer.querySelector("#planet-details-surface"),
+    rings: layer.querySelector("#planet-details-rings"),
     lore: layer.querySelector("#planet-details-lore"),
   });
 

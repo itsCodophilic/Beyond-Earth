@@ -18,13 +18,14 @@ export const saturn = {
   orbitSpeed: 0.08, spinSpeed: 0.017, axialTilt: 0.47, angle: 3.1,
   orbitEccentricity: 0.0539, orbitRotation: 4.16, orbitInclination: 0.043,
   bump: 0.01, orbitColor: 0xd9bd84,
-  detail: "Ringed giant | about 9× Earth diameter", focusScale: 0.82,
+  detail: "Ringed giant | seven main ring groups | about 9× Earth diameter", focusScale: 0.82,
   minFocusDistance: scale.focusDistance * 0.88, focusDistance: scale.focusDistance, focusEase: 0.07, focusFov: 34,
   info: {
     type: "Planet", diameter: "116,460 km", orbitalSpeed: "9.69 km/s",
     distanceFromEarth: "≈ 1.2 billion km at closest approach",
     sizeComparison: getPlanetSizeComparison("Saturn"),
-    description: "A pale gas giant encircled by countless shards of ice and rock forming the Solar System's grandest rings.",
+    rings: "Seven main groups extend outward as D, C, B, A, F, G, and E. A, B, and C form the bright main system; the 4,700 km-wide Cassini Division separates B from A.",
+    description: "A pale gas giant encircled by seven main ring groups made from countless independently orbiting particles of water ice, rock, and dust.",
   },
 };
 

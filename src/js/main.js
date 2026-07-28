@@ -639,6 +639,31 @@ import { createCelestialDetailsPanel } from './ui/planetDetailsPanel.js';
   const asteroidHoverName = asteroidHoverTooltip.querySelector("#asteroid-hover-name");
   const celestialHoverAction = asteroidHoverTooltip.querySelector("#celestial-hover-action");
 
+  let saturnRingHoverCard = document.querySelector("#saturn-ring-hover-card");
+  if (!saturnRingHoverCard) {
+    saturnRingHoverCard = document.createElement("aside");
+    saturnRingHoverCard.id = "saturn-ring-hover-card";
+    saturnRingHoverCard.className = "saturn-ring-hover-card";
+    saturnRingHoverCard.setAttribute("aria-hidden", "true");
+    saturnRingHoverCard.innerHTML = `
+      <span class="saturn-ring-hover-card__eyebrow">Saturn ring system</span>
+      <div class="saturn-ring-hover-card__heading">
+        <strong id="saturn-ring-hover-name">Ring group</strong>
+        <small id="saturn-ring-hover-order">1 of 7 from Saturn outward</small>
+      </div>
+      <span class="saturn-ring-hover-card__character" id="saturn-ring-hover-character">Particle ring</span>
+      <p id="saturn-ring-hover-description"></p>
+      <span class="saturn-ring-hover-card__range" id="saturn-ring-hover-range"></span>
+      <span class="saturn-ring-hover-card__motion">Independent ice, rock, and dust particles · inner particles orbit faster</span>
+    `;
+    document.body.append(saturnRingHoverCard);
+  }
+  const saturnRingHoverName = saturnRingHoverCard.querySelector("#saturn-ring-hover-name");
+  const saturnRingHoverOrder = saturnRingHoverCard.querySelector("#saturn-ring-hover-order");
+  const saturnRingHoverCharacter = saturnRingHoverCard.querySelector("#saturn-ring-hover-character");
+  const saturnRingHoverDescription = saturnRingHoverCard.querySelector("#saturn-ring-hover-description");
+  const saturnRingHoverRange = saturnRingHoverCard.querySelector("#saturn-ring-hover-range");
+
   // Planetary orbit guides double as a discovery map. Hovering one freezes
   // celestial motion, brightens that exact path, and reveals the planet name
   // even when the planet itself is still a sub-pixel point in deep space.
@@ -2483,6 +2508,10 @@ import { createCelestialDetailsPanel } from './ui/planetDetailsPanel.js';
     );
   }
 
+  function isSaturnRingBody(body) {
+    return Boolean(body?.userData?.isSaturnRing);
+  }
+
   function getAsteroidEncounterIntensity() {
     return THREE.MathUtils.clamp(Number(asteroidBelt?.encounterIntensity ?? 0), 0, 1);
   }
@@ -2612,6 +2641,10 @@ import { createCelestialDetailsPanel } from './ui/planetDetailsPanel.js';
 
   function isPointerStillOnHoveredBody(body) {
     if (!body) return false;
+    if (isSaturnRingBody(body)) {
+      raycaster.setFromCamera(pointer, camera);
+      return raycaster.intersectObject(body, false).length > 0;
+    }
     const worldPosition = body.getWorldPosition(pointerWorldPosition);
     const projected = pointerProjectedPosition.copy(worldPosition).project(camera);
     if (projected.z < -1 || projected.z > 1) return false;
@@ -3512,12 +3545,20 @@ import { createCelestialDetailsPanel } from './ui/planetDetailsPanel.js';
   }
 
   function clearCelestialHover() {
+    const previousBody = hoveredCelestialBody;
+    previousBody?.userData?.setHovered?.(false);
     hoveredCelestialBody = null;
     asteroidHoverLocator.visible = false;
     asteroidHoverLocator.material.opacity = 0;
     asteroidHoverTooltip.classList.remove("is-visible");
     asteroidHoverTooltip.setAttribute("aria-hidden", "true");
-    document.body.classList.remove("is-hovering-asteroid", "is-hovering-celestial");
+    saturnRingHoverCard.classList.remove("is-visible");
+    saturnRingHoverCard.setAttribute("aria-hidden", "true");
+    document.body.classList.remove(
+      "is-hovering-asteroid",
+      "is-hovering-celestial",
+      "is-hovering-saturn-ring",
+    );
   }
 
   function setCelestialHover(body) {
@@ -3527,7 +3568,34 @@ import { createCelestialDetailsPanel } from './ui/planetDetailsPanel.js';
       return;
     }
 
+    if (hoveredCelestialBody && hoveredCelestialBody !== body) {
+      hoveredCelestialBody.userData?.setHovered?.(false);
+    }
     hoveredCelestialBody = body;
+
+    if (isSaturnRingBody(body)) {
+      const ringData = body.userData?.ringData ?? {};
+      body.userData?.setHovered?.(true);
+      saturnRingHoverName.textContent = body.userData?.name ?? "Saturn ring";
+      saturnRingHoverOrder.textContent = ringData.order ?? "Saturn ring group";
+      saturnRingHoverCharacter.textContent = ringData.character ?? "Particle ring";
+      saturnRingHoverDescription.textContent = ringData.description
+        ?? body.userData?.info?.description
+        ?? "A flowing band of independently orbiting ring particles.";
+      saturnRingHoverRange.textContent = ringData.radialRange ?? "";
+      asteroidHoverTooltip.classList.remove("is-visible");
+      asteroidHoverTooltip.setAttribute("aria-hidden", "true");
+      asteroidHoverLocator.visible = false;
+      asteroidHoverLocator.material.opacity = 0;
+      saturnRingHoverCard.classList.add("is-visible");
+      saturnRingHoverCard.setAttribute("aria-hidden", "false");
+      document.body.classList.remove("is-hovering-asteroid");
+      document.body.classList.add("is-hovering-celestial", "is-hovering-saturn-ring");
+      return;
+    }
+
+    saturnRingHoverCard.classList.remove("is-visible");
+    saturnRingHoverCard.setAttribute("aria-hidden", "true");
     const bodyType = body.userData?.info?.type ?? (isAsteroidBody(body) ? "Asteroid" : "Celestial body");
     asteroidHoverName.textContent = body.userData?.name ?? body.name ?? bodyType;
     if (celestialHoverAction) {
@@ -3620,6 +3688,12 @@ import { createCelestialDetailsPanel } from './ui/planetDetailsPanel.js';
       return;
     }
 
+    const directSaturnRing = hitBodies.find(isSaturnRingBody);
+    if (directSaturnRing) {
+      setCelestialHover(directSaturnRing);
+      return;
+    }
+
     const directAsteroid = hitBodies.find((body) => (
       isAsteroidBody(body) && projectedBodyRadiusPixels(body) >= 0.22
     ));
@@ -3683,7 +3757,23 @@ import { createCelestialDetailsPanel } from './ui/planetDetailsPanel.js';
   }
 
   function updateCelestialHoverVisual() {
-    if (!hoveredCelestialBody || !asteroidHoverLocator.visible) return;
+    if (!hoveredCelestialBody) return;
+
+    if (isSaturnRingBody(hoveredCelestialBody)) {
+      if (!isPointerStillOnHoveredBody(hoveredCelestialBody)) {
+        clearCelestialHover();
+        if (lastPointerType !== "touch" && !isDragging) scheduleCelestialHover();
+        return;
+      }
+      const pointerX = (pointer.x * 0.5 + 0.5) * innerWidth;
+      const pointerY = (-pointer.y * 0.5 + 0.5) * innerHeight;
+      const cardWidth = Math.min(330, Math.max(260, innerWidth - 24));
+      saturnRingHoverCard.style.left = `${THREE.MathUtils.clamp(pointerX + 20, 12, innerWidth - cardWidth - 12)}px`;
+      saturnRingHoverCard.style.top = `${THREE.MathUtils.clamp(pointerY - 34, 12, innerHeight - 246)}px`;
+      return;
+    }
+
+    if (!asteroidHoverLocator.visible) return;
 
     // Bodies continue moving and the Sun can shrink even while the pointer is
     // stationary. Release a stale selection as soon as its live silhouette no
@@ -3774,6 +3864,9 @@ import { createCelestialDetailsPanel } from './ui/planetDetailsPanel.js';
       overviewParentName: satelliteOverviewParentName,
     });
     if (nearbyDenseSatellite) return nearbyDenseSatellite;
+
+    const directSaturnRing = bodies.find(isSaturnRingBody);
+    if (directSaturnRing) return directSaturnRing.userData?.parentPlanetObject ?? null;
 
     // Once the green locator is visible, the click is unambiguous even if a
     // revolving body travels a few pixels between hover detection and pointerup.

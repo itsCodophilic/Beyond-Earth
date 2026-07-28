@@ -1037,7 +1037,7 @@ function createRingBand({
  * - Jupiter: extremely faint dusty rings
  * - Neptune: dim rings with brighter fragmented arcs
  */
-function addGiantPlanetRings(planet, config, textures, segmentScale = 1) {
+function addGiantPlanetRings(planet, config, textures, segmentScale = 1, hoverTargets = []) {
   const group = new THREE.Group();
   group.name = `${config.name} ring system`;
   const ringSegments = getSegmentCount(320, segmentScale, 128);
@@ -1050,6 +1050,7 @@ function addGiantPlanetRings(planet, config, textures, segmentScale = 1) {
       planet,
       radius: config.radius,
       quality: segmentScale < 0.7 ? "low" : segmentScale < 0.9 ? "medium" : "high",
+      hoverTargets,
     });
   }
 
@@ -1316,7 +1317,7 @@ export function createPlanet({
     mesh.userData.visualLayers.clouds = addVenusClouds(mesh, config, textures, segmentScale);
   }
   if (["Jupiter", "Saturn", "Uranus", "Neptune"].includes(config.name)) {
-    mesh.userData.visualLayers.ringSystem = addGiantPlanetRings(mesh, config, textures, segmentScale);
+    mesh.userData.visualLayers.ringSystem = addGiantPlanetRings(mesh, config, textures, segmentScale, hoverTargets);
     const ringBoundsMultiplier = {
       Jupiter: 1.92,
       Saturn: 2.58,

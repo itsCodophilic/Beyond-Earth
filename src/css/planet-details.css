@@ -297,6 +297,7 @@
   display: none;
 }
 
+.planet-details__advanced-item--rings,
 .planet-details__advanced-item--lore {
   grid-column: 1 / -1;
   background:
@@ -443,7 +444,8 @@ body.is-planet-details-open .satellite-name-layer,
 body.is-planet-details-open .body-card,
 body.is-planet-details-open .body-card-restore,
 body.is-planet-details-open .planet-orbit-hover-tooltip,
-body.is-planet-details-open .asteroid-hover-tooltip {
+body.is-planet-details-open .asteroid-hover-tooltip,
+body.is-planet-details-open .saturn-ring-hover-card {
   opacity: 0 !important;
   pointer-events: none !important;
   transition: opacity 180ms ease !important;
@@ -501,6 +503,7 @@ body.is-planet-details-open .asteroid-hover-tooltip {
     grid-template-columns: 1fr;
   }
 
+  .planet-details__advanced-item--rings,
   .planet-details__advanced-item--lore {
     grid-column: auto;
   }

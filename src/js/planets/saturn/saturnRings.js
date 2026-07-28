@@ -9,12 +9,12 @@
  * Physical reference values used by the simulation:
  * - Saturn equatorial radius: 60,268 km
  * - Saturn GM: 37,931,207.7 km^3/s^2
- * - Main ring particles move from about 23.8 km/s at the D-ring inner edge to
- *   about 16.4 km/s near the F ring.
+ * - Particles move from about 23.8 km/s at the D-ring inner edge to roughly
+ *   8.9 km/s across the broad rendered core of the diffuse E ring.
  *
- * Time is uniformly compressed so the real 4.9-14.9 hour particle orbits are
- * visible in a browser while preserving their scientifically correct relative
- * speeds: inner particles always overtake outer particles smoothly.
+ * Time is uniformly compressed so the orbital flow remains visible in a
+ * browser while preserving the scientifically correct relative relationship:
+ * inner particles always overtake outer particles smoothly.
  */
 import * as THREE from "three";
 
@@ -24,9 +24,9 @@ const SATURN_GM_KM3_S2 = 37_931_207.7;
 const PHYSICAL_SECONDS_PER_SCENE_SECOND = 900;
 
 const QUALITY_PROFILES = {
-  low: { grainCount: 48_000, chunkCount: 460 },
-  medium: { grainCount: 82_000, chunkCount: 820 },
-  high: { grainCount: 132_000, chunkCount: 1_360 },
+  low: { grainCount: 52_000, chunkCount: 480 },
+  medium: { grainCount: 92_000, chunkCount: 860 },
+  high: { grainCount: 148_000, chunkCount: 1_440 },
 };
 
 /**
@@ -36,64 +36,123 @@ const QUALITY_PROFILES = {
  */
 const RING_REGIONS = [
   {
-    name: "D ring",
+    name: "D Ring",
     innerKm: 66_900,
     outerKm: 74_510,
-    particleShare: 0.045,
-    chunkShare: 0.018,
-    lanes: 24,
-    opacity: 0.34,
-    thicknessScale: 0.00125,
+    hoverInnerKm: 66_900,
+    hoverOuterKm: 74_510,
+    particleShare: 0.038,
+    chunkShare: 0.016,
+    lanes: 26,
+    opacity: 0.31,
+    thicknessScale: 0.00135,
+    sizeScale: 0.88,
     iceFraction: 0.972,
     palette: [0xbba991, 0xd6c7ad, 0x8e806f],
+    character: "Faint innermost ring",
+    description: "The D Ring is Saturn's faint, dusty innermost ring group. Its extremely sparse ice-rich grains orbit independently just above the planet's upper atmosphere.",
   },
   {
-    name: "C ring",
+    name: "C Ring",
     innerKm: 74_658,
     outerKm: 92_000,
-    particleShare: 0.165,
-    chunkShare: 0.105,
-    lanes: 62,
-    opacity: 0.54,
-    thicknessScale: 0.00135,
+    hoverInnerKm: 74_658,
+    hoverOuterKm: 92_000,
+    particleShare: 0.142,
+    chunkShare: 0.104,
+    lanes: 66,
+    opacity: 0.52,
+    thicknessScale: 0.00140,
+    sizeScale: 0.96,
     iceFraction: 0.982,
     palette: [0xc9b798, 0xead8b8, 0x9f8d75],
+    character: "Translucent main ring",
+    description: "The C Ring is a broad, comparatively translucent part of Saturn's main visible system. It contains many narrow ringlets and gaps, including the Maxwell Gap.",
   },
   {
-    name: "B ring",
+    name: "B Ring",
     innerKm: 92_000,
     outerKm: 117_580,
-    particleShare: 0.485,
-    chunkShare: 0.505,
-    lanes: 118,
-    opacity: 0.88,
+    hoverInnerKm: 92_000,
+    hoverOuterKm: 117_580,
+    particleShare: 0.410,
+    chunkShare: 0.500,
+    lanes: 124,
+    opacity: 0.90,
     thicknessScale: 0.00105,
+    sizeScale: 1.08,
     iceFraction: 0.994,
     palette: [0xf8edcf, 0xe8d7b5, 0xfff8e2],
+    character: "Brightest and densest ring",
+    description: "The B Ring is the brightest, widest, and optically densest portion of the main rings. Its outer edge borders the Cassini Division.",
   },
   {
-    name: "A ring",
+    name: "A Ring",
     innerKm: 122_170,
     outerKm: 136_775,
-    particleShare: 0.265,
+    hoverInnerKm: 122_170,
+    hoverOuterKm: 136_775,
+    particleShare: 0.225,
     chunkShare: 0.335,
-    lanes: 86,
-    opacity: 0.76,
-    thicknessScale: 0.00115,
+    lanes: 90,
+    opacity: 0.77,
+    thicknessScale: 0.00118,
+    sizeScale: 1.02,
     iceFraction: 0.989,
     palette: [0xe7d4af, 0xf5e8ca, 0xc8b18d],
+    character: "Outer bright main ring",
+    description: "The A Ring is the outermost of Saturn's three bright main rings. The Encke and Keeler gaps carve narrow dark lanes through its independently orbiting particles.",
   },
   {
-    name: "F ring",
+    name: "F Ring",
     innerKm: 139_780,
     outerKm: 140_660,
-    particleShare: 0.040,
-    chunkShare: 0.037,
-    lanes: 5,
-    opacity: 0.68,
-    thicknessScale: 0.00225,
+    hoverInnerKm: 139_720,
+    hoverOuterKm: 140_720,
+    particleShare: 0.035,
+    chunkShare: 0.034,
+    lanes: 7,
+    opacity: 0.70,
+    thicknessScale: 0.00235,
+    sizeScale: 0.92,
     iceFraction: 0.988,
     palette: [0xfff5dc, 0xe3d4b9, 0xc7b699],
+    character: "Narrow shepherded ring",
+    description: "The narrow F Ring marks the outer boundary of the main ring system. Prometheus and Pandora help sculpt its strands, clumps, and changing structure.",
+  },
+  {
+    name: "G Ring",
+    innerKm: 166_000,
+    outerKm: 175_000,
+    hoverInnerKm: 167_000,
+    hoverOuterKm: 173_400,
+    particleShare: 0.050,
+    chunkShare: 0.010,
+    lanes: 28,
+    opacity: 0.30,
+    thicknessScale: 0.0048,
+    sizeScale: 0.92,
+    iceFraction: 0.975,
+    palette: [0xbab7ac, 0xd4d1c4, 0x8f8d85],
+    character: "Faint dusty outer ring",
+    description: "The G Ring is a broad, very faint dusty ring. The tiny moon Aegaeon travels within a brighter arc near its inner region and supplies some of its debris.",
+  },
+  {
+    name: "E Ring",
+    innerKm: 180_000,
+    outerKm: 480_000,
+    hoverInnerKm: 190_000,
+    hoverOuterKm: 315_000,
+    particleShare: 0.100,
+    chunkShare: 0.001,
+    lanes: 206,
+    opacity: 0.165,
+    thicknessScale: 0.030,
+    sizeScale: 0.82,
+    iceFraction: 0.995,
+    palette: [0xd8e2e5, 0xf4fbff, 0xbecbd0],
+    character: "Enormous diffuse ice ring",
+    description: "The E Ring is an immense, diffuse cloud of microscopic water-ice particles. Plumes from Enceladus continually feed its brightest central region, while its faint halo extends much farther outward.",
   },
 ];
 
@@ -204,6 +263,8 @@ function createGrainMaterial(pixelRatio) {
     uniforms: {
       uTime: { value: 0 },
       uPixelRatio: { value: pixelRatio },
+      uHoveredRegion: { value: -10 },
+      uHoverStrength: { value: 0 },
     },
     vertexShader: `
       attribute float aRadius;
@@ -212,13 +273,19 @@ function createGrainMaterial(pixelRatio) {
       attribute float aAngularSpeed;
       attribute float aSize;
       attribute float aAlpha;
+      attribute float aRegionIndex;
       attribute vec3 aColour;
 
       uniform float uTime;
       uniform float uPixelRatio;
+      uniform float uHoveredRegion;
+      uniform float uHoverStrength;
 
       varying vec3 vColour;
       varying float vAlpha;
+      varying float vHighlight;
+      varying float vHoverStrength;
+      varying float vHighlightBoost;
 
       void main() {
         float angle = mod(aAngle + uTime * aAngularSpeed, 6.28318530718);
@@ -232,19 +299,29 @@ function createGrainMaterial(pixelRatio) {
         gl_Position = projectionMatrix * mvPosition;
 
         float distanceScale = 34.0 / max(1.0, -mvPosition.z);
+        float regionMatch = 1.0 - step(0.36, abs(aRegionIndex - uHoveredRegion));
+        float highlighted = regionMatch * uHoverStrength;
+        float faintness = 1.0 - clamp(aAlpha, 0.0, 1.0);
+        float sizeBoost = 0.58 + faintness * 1.52;
         gl_PointSize = clamp(
-          aSize * uPixelRatio * distanceScale,
+          aSize * (1.0 + highlighted * sizeBoost) * uPixelRatio * distanceScale,
           0.42 * uPixelRatio,
-          5.8 * uPixelRatio
+          10.8 * uPixelRatio
         );
 
         vColour = aColour;
         vAlpha = aAlpha;
+        vHighlight = regionMatch;
+        vHoverStrength = uHoverStrength;
+        vHighlightBoost = 1.0 + faintness * 2.05;
       }
     `,
     fragmentShader: `
       varying vec3 vColour;
       varying float vAlpha;
+      varying float vHighlight;
+      varying float vHoverStrength;
+      varying float vHighlightBoost;
 
       void main() {
         vec2 centred = gl_PointCoord - vec2(0.5);
@@ -253,8 +330,13 @@ function createGrainMaterial(pixelRatio) {
 
         float softEdge = 1.0 - smoothstep(0.34, 0.5, distanceFromCentre);
         float icyCore = 1.0 - smoothstep(0.0, 0.42, distanceFromCentre);
-        vec3 colour = vColour * (0.92 + icyCore * 0.18);
-        gl_FragColor = vec4(colour, softEdge * vAlpha);
+        float selected = vHighlight * vHoverStrength;
+        float otherDim = 1.0 - (1.0 - vHighlight) * vHoverStrength * 0.58;
+        vec3 highlightColour = vec3(0.88, 0.98, 1.0);
+        vec3 colour = mix(vColour, highlightColour, selected * min(0.68, 0.38 + (vHighlightBoost - 1.0) * 0.10));
+        colour *= (0.92 + icyCore * 0.18) * otherDim * (1.0 + selected * (0.34 + (vHighlightBoost - 1.0) * 0.40));
+        float alpha = softEdge * vAlpha * otherDim * (1.0 + selected * (0.22 + (vHighlightBoost - 1.0) * 0.92));
+        gl_FragColor = vec4(colour, alpha);
       }
     `,
     transparent: true,
@@ -273,6 +355,7 @@ function createGrainField(radius, count, random, pixelRatio) {
   const angularSpeeds = new Float32Array(count);
   const sizes = new Float32Array(count);
   const alphas = new Float32Array(count);
+  const regionIndices = new Float32Array(count);
   const colours = new Float32Array(count * 3);
   const regionCounts = getRegionCounts(count, "particleShare");
   const colour = new THREE.Color();
@@ -294,11 +377,12 @@ function createGrainField(radius, count, random, pixelRatio) {
       // Tiny grains dominate. A small tail receives a larger sprite so nearby
       // views resolve pebbles and small boulders without millions of draw calls.
       const sizeSelector = random();
-      if (sizeSelector < 0.965) sizes[index] = 0.72 + random() * 0.58;
-      else if (sizeSelector < 0.997) sizes[index] = 1.35 + random() * 0.95;
-      else sizes[index] = 2.35 + random() * 1.55;
+      if (sizeSelector < 0.965) sizes[index] = (0.72 + random() * 0.58) * region.sizeScale;
+      else if (sizeSelector < 0.997) sizes[index] = (1.35 + random() * 0.95) * region.sizeScale;
+      else sizes[index] = (2.35 + random() * 1.55) * region.sizeScale;
 
       alphas[index] = region.opacity * (0.70 + random() * 0.30);
+      regionIndices[index] = regionIndex;
       chooseParticleColour(region, random, colour);
       colours[i3] = colour.r;
       colours[i3 + 1] = colour.g;
@@ -321,6 +405,7 @@ function createGrainField(radius, count, random, pixelRatio) {
   geometry.setAttribute("aAngularSpeed", new THREE.BufferAttribute(angularSpeeds, 1));
   geometry.setAttribute("aSize", new THREE.BufferAttribute(sizes, 1));
   geometry.setAttribute("aAlpha", new THREE.BufferAttribute(alphas, 1));
+  geometry.setAttribute("aRegionIndex", new THREE.BufferAttribute(regionIndices, 1));
   geometry.setAttribute("aColour", new THREE.BufferAttribute(colours, 3));
 
   const material = createGrainMaterial(pixelRatio);
@@ -344,6 +429,8 @@ function createChunkMaterial() {
   return new THREE.ShaderMaterial({
     uniforms: {
       uTime: { value: 0 },
+      uHoveredRegion: { value: -10 },
+      uHoverStrength: { value: 0 },
     },
     vertexShader: `
       attribute float aRadius;
@@ -354,11 +441,16 @@ function createChunkMaterial() {
       attribute vec3 aColour;
       attribute vec3 aSpinPhase;
       attribute vec3 aSpinRate;
+      attribute float aRegionIndex;
 
       uniform float uTime;
+      uniform float uHoveredRegion;
+      uniform float uHoverStrength;
 
       varying vec3 vColour;
       varying vec3 vViewNormal;
+      varying float vHighlight;
+      varying float vHoverStrength;
 
       mat3 rotateX(float angle) {
         float c = cos(angle);
@@ -398,6 +490,8 @@ function createChunkMaterial() {
         vec3 transformedNormal = orbitalRotation * spinRotation * normal;
         vViewNormal = normalize(normalMatrix * transformedNormal);
         vColour = aColour;
+        vHighlight = 1.0 - step(0.36, abs(aRegionIndex - uHoveredRegion));
+        vHoverStrength = uHoverStrength;
 
         vec4 mvPosition = modelViewMatrix * vec4(transformedPosition, 1.0);
         gl_Position = projectionMatrix * mvPosition;
@@ -406,13 +500,18 @@ function createChunkMaterial() {
     fragmentShader: `
       varying vec3 vColour;
       varying vec3 vViewNormal;
+      varying float vHighlight;
+      varying float vHoverStrength;
 
       void main() {
         vec3 lightDirection = normalize(vec3(0.42, 0.72, 0.55));
         float diffuse = max(dot(normalize(vViewNormal), lightDirection), 0.0);
         float backFill = max(dot(normalize(vViewNormal), -lightDirection), 0.0);
         float lighting = 0.30 + diffuse * 0.76 + backFill * 0.08;
-        gl_FragColor = vec4(vColour * lighting, 1.0);
+        float selected = vHighlight * vHoverStrength;
+        float otherDim = 1.0 - (1.0 - vHighlight) * vHoverStrength * 0.42;
+        vec3 colour = mix(vColour, vec3(0.86, 0.97, 1.0), selected * 0.52);
+        gl_FragColor = vec4(colour * lighting * otherDim * (1.0 + selected * 0.32), 1.0);
       }
     `,
     transparent: false,
@@ -436,6 +535,7 @@ function createChunkField(radius, count, random) {
   const colours = new Float32Array(count * 3);
   const spinPhases = new Float32Array(count * 3);
   const spinRates = new Float32Array(count * 3);
+  const regionIndices = new Float32Array(count);
   const regionCounts = getRegionCounts(count, "chunkShare");
   const colour = new THREE.Color();
 
@@ -452,6 +552,7 @@ function createChunkField(radius, count, random) {
       angles[index] = random() * TAU;
       heights[index] = (random() - 0.5) * 2 * heightSpread;
       angularSpeeds[index] = getAngularSpeed(radiusKm);
+      regionIndices[index] = regionIndex;
 
       // Most instanced bodies are car/house-scale visual representatives. A
       // very small fraction are enlarged mountain-class clumps for close views.
@@ -460,6 +561,7 @@ function createChunkField(radius, count, random) {
       if (sizeSelector < 0.925) baseSize = radius * (0.0010 + random() * 0.0017);
       else if (sizeSelector < 0.992) baseSize = radius * (0.0029 + random() * 0.0035);
       else baseSize = radius * (0.0070 + random() * 0.0085);
+      baseSize *= region.sizeScale;
 
       scales[i3] = baseSize * (0.70 + random() * 0.70);
       scales[i3 + 1] = baseSize * (0.52 + random() * 0.72);
@@ -490,6 +592,7 @@ function createChunkField(radius, count, random) {
   geometry.setAttribute("aColour", new THREE.InstancedBufferAttribute(colours, 3));
   geometry.setAttribute("aSpinPhase", new THREE.InstancedBufferAttribute(spinPhases, 3));
   geometry.setAttribute("aSpinRate", new THREE.InstancedBufferAttribute(spinRates, 3));
+  geometry.setAttribute("aRegionIndex", new THREE.InstancedBufferAttribute(regionIndices, 1));
 
   const material = createChunkMaterial();
   const chunks = new THREE.Mesh(geometry, material);
@@ -499,31 +602,178 @@ function createChunkField(radius, count, random) {
   return chunks;
 }
 
+
+function formatKilometres(value) {
+  return `${Math.round(value).toLocaleString("en-US")} km`;
+}
+
+function createHoverOverlayMaterial(baseOpacity = 0.18) {
+  return new THREE.ShaderMaterial({
+    uniforms: {
+      uOpacity: { value: 0 },
+      uBaseOpacity: { value: baseOpacity },
+    },
+    vertexShader: `
+      varying vec2 vUv;
+      void main() {
+        vUv = uv;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }
+    `,
+    fragmentShader: `
+      varying vec2 vUv;
+      uniform float uOpacity;
+      uniform float uBaseOpacity;
+      void main() {
+        float innerFade = smoothstep(0.0, 0.16, vUv.y);
+        float outerFade = 1.0 - smoothstep(0.84, 1.0, vUv.y);
+        float band = innerFade * outerFade;
+        float shimmer = 0.82 + 0.18 * sin(vUv.x * 50.265482 + vUv.y * 18.0);
+        vec3 colour = mix(vec3(0.58, 0.70, 0.76), vec3(0.90, 0.97, 1.0), vUv.y);
+        gl_FragColor = vec4(colour, band * shimmer * uBaseOpacity * uOpacity);
+      }
+    `,
+    transparent: true,
+    depthTest: true,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+    side: THREE.DoubleSide,
+    toneMapped: false,
+  });
+}
+
+function createRingHoverOverlays({ group, radius }) {
+  const overlays = new Map();
+  RING_REGIONS.forEach((region, regionIndex) => {
+    if (!["G Ring", "E Ring"].includes(region.name)) return;
+    const overlayInnerKm = region.hoverInnerKm ?? region.innerKm;
+    const overlayOuterKm = region.hoverOuterKm ?? region.outerKm;
+    const innerRadius = radius * (overlayInnerKm / SATURN_EQUATORIAL_RADIUS_KM);
+    const outerRadius = radius * (overlayOuterKm / SATURN_EQUATORIAL_RADIUS_KM);
+    const overlay = new THREE.Mesh(
+      new THREE.RingGeometry(innerRadius, outerRadius, region.name === "E Ring" ? 320 : 256, 1),
+      createHoverOverlayMaterial(region.name === "E Ring" ? 0.24 : 0.19),
+    );
+    overlay.name = `${region.name} hover overlay`;
+    overlay.rotation.x = Math.PI * 0.5;
+    overlay.visible = false;
+    overlay.renderOrder = 4;
+    group.add(overlay);
+    overlays.set(regionIndex, overlay);
+  });
+  return overlays;
+}
+
+/**
+ * Invisible annuli are used only as precise pointer hit areas. They never write
+ * colour or depth, so the visible ring system remains entirely particle-based.
+ */
+function createRingInteractionTargets({ group, planet, radius }) {
+  return RING_REGIONS.map((region, regionIndex) => {
+    const interactionInnerKm = region.hoverInnerKm ?? region.innerKm;
+    const interactionOuterKm = region.hoverOuterKm ?? region.outerKm;
+    const exactInner = radius * (interactionInnerKm / SATURN_EQUATORIAL_RADIUS_KM);
+    const exactOuter = radius * (interactionOuterKm / SATURN_EQUATORIAL_RADIUS_KM);
+    const minimumHitWidth = radius * (
+      region.name === "F Ring" ? 0.045
+        : region.name === "G Ring" ? 0.014
+          : region.name === "E Ring" ? 0.020
+            : 0.018
+    );
+    const radialPadding = Math.max(0, (minimumHitWidth - (exactOuter - exactInner)) * 0.5);
+    const hitInner = Math.max(radius * 1.01, exactInner - radialPadding);
+    const hitOuter = exactOuter + radialPadding;
+
+    const target = new THREE.Mesh(
+      new THREE.RingGeometry(hitInner, hitOuter, 256, 1),
+      new THREE.MeshBasicMaterial({
+        transparent: true,
+        opacity: 0,
+        colorWrite: false,
+        depthWrite: false,
+        depthTest: false,
+        side: THREE.DoubleSide,
+      }),
+    );
+    target.name = `${region.name} interaction field`;
+    target.rotation.x = Math.PI * 0.5;
+    target.renderOrder = -100;
+    target.userData = {
+      name: region.name,
+      isSaturnRing: true,
+      ringIndex: regionIndex,
+      parentPlanetObject: planet,
+      info: {
+        type: "Saturn ring group",
+        description: region.description,
+      },
+      ringData: {
+        order: `${regionIndex + 1} of ${RING_REGIONS.length} from Saturn outward`,
+        character: region.character,
+        radialRange: `${formatKilometres(region.innerKm)} – ${formatKilometres(region.outerKm)} from Saturn's centre`,
+        description: region.description,
+      },
+      setHovered(active) {
+        group.userData.setHoveredRegion?.(active ? regionIndex : -1);
+      },
+    };
+    group.add(target);
+    return target;
+  });
+}
+
 /**
  * Creates Saturn's rings entirely from moving celestial particles. No
  * RingGeometry or textured solid annulus is used for Saturn.
  */
-export function createSaturnRingSystem({ planet, radius, quality = "high" }) {
+export function createSaturnRingSystem({
+  planet,
+  radius,
+  quality = "high",
+  hoverTargets = [],
+}) {
   const profile = QUALITY_PROFILES[quality] ?? QUALITY_PROFILES.high;
   const random = createDeterministicRandom();
   const pixelRatio = Math.min(globalThis.devicePixelRatio ?? 1, 2);
 
   const group = new THREE.Group();
-  group.name = "Saturn particle-resolved ring system";
+  group.name = "Saturn particle-resolved seven-group ring system";
 
   const grains = createGrainField(radius, profile.grainCount, random, pixelRatio);
   const chunks = createChunkField(radius, profile.chunkCount, random);
   group.add(grains, chunks);
 
+  const hoverOverlays = createRingHoverOverlays({ group, radius });
+
   group.userData.animatedMaterials = [grains.material, chunks.material];
+  group.userData.hoverOverlays = hoverOverlays;
+  group.userData.hoveredRegionIndex = -1;
+  group.userData.targetHoveredRegionIndex = -1;
+  group.userData.hoverStrength = 0;
+  group.userData.setHoveredRegion = (regionIndex) => {
+    const nextIndex = Number.isInteger(regionIndex) && regionIndex >= 0
+      ? regionIndex
+      : -1;
+    if (nextIndex >= 0 && group.userData.hoveredRegionIndex !== nextIndex) {
+      group.userData.hoveredRegionIndex = nextIndex;
+      group.userData.hoverStrength = Math.min(group.userData.hoverStrength, 0.34);
+    }
+    group.userData.targetHoveredRegionIndex = nextIndex;
+  };
+
+  const interactionTargets = createRingInteractionTargets({ group, planet, radius });
+  group.userData.interactionTargets = interactionTargets;
+  hoverTargets.push(...interactionTargets);
+
   group.userData.physicalModel = {
     saturnEquatorialRadiusKm: SATURN_EQUATORIAL_RADIUS_KM,
     saturnGMKm3S2: SATURN_GM_KM3_S2,
     physicalSecondsPerSceneSecond: PHYSICAL_SECONDS_PER_SCENE_SECOND,
-    innerParticleSpeedKmS: Math.sqrt(SATURN_GM_KM3_S2 / 66_900),
-    outerParticleSpeedKmS: Math.sqrt(SATURN_GM_KM3_S2 / 140_220),
+    innerParticleSpeedKmS: Math.sqrt(SATURN_GM_KM3_S2 / RING_REGIONS[0].innerKm),
+    outerParticleSpeedKmS: Math.sqrt(SATURN_GM_KM3_S2 / RING_REGIONS[RING_REGIONS.length - 1].outerKm),
     grainCount: profile.grainCount,
     chunkCount: profile.chunkCount,
+    ringGroups: RING_REGIONS.map(({ name, innerKm, outerKm }) => ({ name, innerKm, outerKm })),
   };
 
   planet.add(group);
@@ -532,7 +782,34 @@ export function createSaturnRingSystem({ planet, radius, quality = "high" }) {
 
 export function updateSaturnRingSystem(system, time) {
   if (!system?.userData?.animatedMaterials) return;
+
+  const targetIndex = system.userData.targetHoveredRegionIndex ?? -1;
+  const targetStrength = targetIndex >= 0 ? 1 : 0;
+  system.userData.hoverStrength = THREE.MathUtils.lerp(
+    system.userData.hoverStrength ?? 0,
+    targetStrength,
+    targetStrength > 0 ? 0.18 : 0.12,
+  );
+  if (targetIndex < 0 && system.userData.hoverStrength < 0.012) {
+    system.userData.hoverStrength = 0;
+    system.userData.hoveredRegionIndex = -1;
+  }
+
   system.userData.animatedMaterials.forEach((material) => {
     if (material?.uniforms?.uTime) material.uniforms.uTime.value = time;
+    if (material?.uniforms?.uHoveredRegion) {
+      material.uniforms.uHoveredRegion.value = system.userData.hoveredRegionIndex ?? -10;
+    }
+    if (material?.uniforms?.uHoverStrength) {
+      material.uniforms.uHoverStrength.value = system.userData.hoverStrength ?? 0;
+    }
+  });
+
+  system.userData.hoverOverlays?.forEach((overlay, regionIndex) => {
+    const visible = targetIndex === regionIndex && (system.userData.hoverStrength ?? 0) > 0.02;
+    overlay.visible = visible;
+    if (overlay.material?.uniforms?.uOpacity) {
+      overlay.material.uniforms.uOpacity.value = visible ? (system.userData.hoverStrength ?? 0) : 0;
+    }
   });
 }
