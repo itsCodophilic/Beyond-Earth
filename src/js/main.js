@@ -1132,6 +1132,8 @@ import { createCelestialDetailsPanel } from './ui/planetDetailsPanel.js';
   let pointerDownPosition = { x: 0, y: 0 };
   let pointerDownCelestialBody = null;
   let pointerDownPlanetOrbit = null;
+  let pendingCelestialDetailsContext = null;
+  let pendingCelestialDetailsTargetName = null;
   let dragDistance = 0;
   // focusedBody is null during free flight or references the clicked Mesh.
   let focusedBody = null;
@@ -4450,9 +4452,29 @@ import { createCelestialDetailsPanel } from './ui/planetDetailsPanel.js';
     };
   }
 
+  function queueCelestialDetailsContext(bodyName, context = null) {
+    pendingCelestialDetailsTargetName = bodyName ?? null;
+    pendingCelestialDetailsContext = context ? { ...context } : null;
+  }
+
+  function consumeQueuedCelestialDetailsContext(body) {
+    const bodyName = body?.userData?.name ?? body?.name ?? null;
+    if (!bodyName || bodyName !== pendingCelestialDetailsTargetName || !pendingCelestialDetailsContext) {
+      return null;
+    }
+    const context = { ...pendingCelestialDetailsContext };
+    pendingCelestialDetailsTargetName = null;
+    pendingCelestialDetailsContext = null;
+    return context;
+  }
+
   function openCelestialDetails(body = focusedBody) {
     if (!body || focusExitTransition || !celestialDetailsPanel?.hasDetailsFor(body)) return false;
-    return celestialDetailsPanel.show(body, getCelestialDetailsContext(body));
+    const queuedContext = consumeQueuedCelestialDetailsContext(body);
+    return celestialDetailsPanel.show(body, {
+      ...getCelestialDetailsContext(body),
+      ...(queuedContext ?? {}),
+    });
   }
 
   /*
@@ -4476,9 +4498,14 @@ import { createCelestialDetailsPanel } from './ui/planetDetailsPanel.js';
     }
 
     if (!body) {
+      queueCelestialDetailsContext(null);
       celestialDetailsPanel?.hide({ restoreFocus: false });
       navigateBackFromFocusedBody();
       return;
+    }
+
+    if ((body.userData?.name ?? body.name ?? null) !== pendingCelestialDetailsTargetName) {
+      queueCelestialDetailsContext(null);
     }
 
     // After a deep zoom-out, the old local-system UI is intentionally dormant.
@@ -4968,6 +4995,15 @@ import { createCelestialDetailsPanel } from './ui/planetDetailsPanel.js';
     // Prefer the press-time target in dense populations. Fall back to a fresh
     // visibility-aware scan only when the press began on empty space.
     const body = pointerDownCelestialBody ?? getBodyAtPointer();
+    const ringSelection = isSaturnRingBody(hoveredCelestialBody)
+      ? hoveredCelestialBody
+      : null;
+    if (ringSelection?.userData?.parentPlanetObject) {
+      queueCelestialDetailsContext(ringSelection.userData.parentPlanetObject.userData?.name ?? ringSelection.userData.parentPlanetObject.name, {
+        highlightSection: "rings",
+        openAdvanced: true,
+      });
+    }
     const orbit = body
       ? null
       : pointerDownPlanetOrbit ?? findPlanetOrbitAtPointer()?.orbit ?? null;

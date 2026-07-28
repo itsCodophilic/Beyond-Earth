@@ -398,6 +398,7 @@ export function createCelestialDetailsPanel() {
   let lastRippleAt = -Infinity;
   let lastRippleX = -Infinity;
   let lastRippleY = -Infinity;
+  let contextHighlightTimer = null;
 
   function getFocusableElements() {
     return Array.from(layer.querySelectorAll(
@@ -540,6 +541,30 @@ export function createCelestialDetailsPanel() {
     pendingCosmicPointer = null;
   }
 
+  function clearContextHighlight() {
+    if (contextHighlightTimer) clearTimeout(contextHighlightTimer);
+    contextHighlightTimer = null;
+    layer.querySelectorAll('.planet-details__advanced-item.is-context-highlight').forEach((row) => {
+      row.classList.remove('is-context-highlight');
+    });
+  }
+
+  function highlightContextSection(sectionKey, options = {}) {
+    clearContextHighlight();
+    if (!sectionKey) return;
+    const row = layer.querySelector(`[data-planet-field="${sectionKey}"]`);
+    if (!(row instanceof HTMLElement) || row.hidden) return;
+    if (options.openAdvanced !== false) advanced.open = true;
+    requestAnimationFrame(() => {
+      row.classList.add('is-context-highlight');
+      row.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      contextHighlightTimer = setTimeout(() => {
+        row.classList.remove('is-context-highlight');
+        contextHighlightTimer = null;
+      }, 2600);
+    });
+  }
+
   function populate(details) {
     title.textContent = details.name;
     classification.textContent = details.classification;
@@ -577,6 +602,7 @@ export function createCelestialDetailsPanel() {
     revealFrame = null;
     previouslyFocused = document.activeElement;
     activeBodyName = details.name;
+    clearContextHighlight();
 
     // Unhide the non-interactive layer before preparing glyph spans. The
     // backdrop and card remain transparent until their reveal classes are
@@ -595,6 +621,9 @@ export function createCelestialDetailsPanel() {
       revealFrame = requestAnimationFrame(() => {
         layer.classList.add("is-card-visible");
         card?.focus({ preventScroll: true });
+        highlightContextSection(context.highlightSection, {
+          openAdvanced: context.openAdvanced !== false,
+        });
         revealFrame = null;
       });
     });
@@ -606,6 +635,7 @@ export function createCelestialDetailsPanel() {
     if (closeTimer) clearTimeout(closeTimer);
     if (revealFrame) cancelAnimationFrame(revealFrame);
     revealFrame = null;
+    clearContextHighlight();
     open = false;
     cancelCosmicPointerFrame();
     resetCosmicText();
