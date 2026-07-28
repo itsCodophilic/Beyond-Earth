@@ -555,13 +555,27 @@ export function createCelestialDetailsPanel() {
     const row = layer.querySelector(`[data-planet-field="${sectionKey}"]`);
     if (!(row instanceof HTMLElement) || row.hidden) return;
     if (options.openAdvanced !== false) advanced.open = true;
+
+    // Wait until the expanded Advanced details layout has been painted, then
+    // centre the selected row inside the dossier's own scroll container. Using
+    // card.scrollTo avoids moving the page behind the fixed modal.
     requestAnimationFrame(() => {
-      row.classList.add('is-context-highlight');
-      row.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-      contextHighlightTimer = setTimeout(() => {
-        row.classList.remove('is-context-highlight');
-        contextHighlightTimer = null;
-      }, 2600);
+      requestAnimationFrame(() => {
+        row.classList.add('is-context-highlight');
+        const cardRect = card.getBoundingClientRect();
+        const rowRect = row.getBoundingClientRect();
+        const centredScrollTop = card.scrollTop
+          + (rowRect.top - cardRect.top)
+          - (card.clientHeight - rowRect.height) * 0.5;
+        card.scrollTo({
+          top: Math.max(0, centredScrollTop),
+          behavior: 'smooth',
+        });
+        contextHighlightTimer = setTimeout(() => {
+          row.classList.remove('is-context-highlight');
+          contextHighlightTimer = null;
+        }, 2600);
+      });
     });
   }
 
