@@ -351,8 +351,8 @@
   display: none;
 }
 
-/* A restrained version of the Beyond Earth character-field interaction
-   applies to the dossier heading, core values, and expanded scientific details. */
+/* The celestial dossier uses the same character-field interaction as the
+   Beyond Earth card: identical response radius, easing, glow, and ripple. */
 .planet-details__cosmic-token {
   display: inline-block;
   white-space: nowrap;
@@ -365,9 +365,7 @@
 }
 
 [data-cosmic-text].is-cosmic-active {
-  text-shadow:
-    0 0 6px rgba(120, 235, 255, 0.10),
-    0 0 14px rgba(155, 99, 255, 0.055);
+  text-shadow: inherit;
 }
 
 .planet-details__cosmic-character {
@@ -384,50 +382,55 @@
     scale(var(--cosmic-character-scale));
   transform-origin: center 70%;
   transition:
-    transform 58ms cubic-bezier(0.16, 1, 0.3, 1),
-    color 72ms ease-out,
-    text-shadow 72ms ease-out,
-    filter 72ms ease-out;
-  will-change: transform, filter;
-  backface-visibility: hidden;
+    transform 150ms cubic-bezier(0.16, 1, 0.3, 1),
+    color 150ms ease,
+    text-shadow 150ms ease;
+  will-change: transform;
 }
 
 .planet-details__cosmic-character.is-reacting {
-  z-index: 3;
-  color: inherit;
-  filter:
-    brightness(1.10)
-    drop-shadow(0 0 2px rgba(255, 255, 255, 0.36))
-    drop-shadow(0 0 4px rgba(101, 232, 255, 0.32));
+  color: #fbfeff;
   text-shadow:
-    0 0 2px rgba(255, 255, 255, 0.42),
-    0 0 7px rgba(90, 229, 255, 0.38),
-    0 0 12px rgba(161, 92, 255, 0.16);
+    0 0 5px rgba(255, 255, 255, 0.72),
+    0 0 15px rgba(113, 232, 255, 0.68),
+    0 0 28px rgba(159, 99, 255, 0.3);
 }
 
 .planet-details__cosmic-character.is-rippling {
-  /* The ripple animates light only. Transform belongs to the live pointer
-     response, otherwise a delayed ripple keyframe temporarily traps a glyph at
-     an old cursor position. */
-  animation: planetDetailsCharacterRipple 360ms var(--cosmic-ripple-delay, 0ms) ease-out both;
+  animation:
+    planetDetailsCharacterRipple
+    620ms
+    var(--cosmic-ripple-delay, 0ms)
+    cubic-bezier(0.16, 1, 0.3, 1)
+    both;
 }
 
 @keyframes planetDetailsCharacterRipple {
   0%, 100% {
-    text-shadow:
-      0 0 2px rgba(255, 255, 255, 0.34),
-      0 0 7px rgba(90, 229, 255, 0.28);
+    transform:
+      translate3d(var(--cosmic-character-x), var(--cosmic-character-y), 0)
+      rotate(var(--cosmic-character-turn))
+      scale(var(--cosmic-character-scale));
   }
   42% {
-    text-shadow:
-      0 0 3px rgba(255, 255, 255, 0.84),
-      0 0 10px rgba(90, 229, 255, 0.72),
-      0 0 17px rgba(161, 92, 255, 0.30);
+    transform:
+      translate3d(
+        var(--cosmic-character-x),
+        calc(var(--cosmic-character-y) - var(--cosmic-ripple-lift, 1px)),
+        0
+      )
+      rotate(calc(var(--cosmic-character-turn) - 0.7deg))
+      scale(var(--cosmic-character-scale));
   }
-  74% {
-    text-shadow:
-      0 0 2px rgba(255, 255, 255, 0.52),
-      0 0 8px rgba(90, 229, 255, 0.42);
+  70% {
+    transform:
+      translate3d(
+        var(--cosmic-character-x),
+        calc(var(--cosmic-character-y) + var(--cosmic-ripple-settle, 0.3px)),
+        0
+      )
+      rotate(calc(var(--cosmic-character-turn) + 0.25deg))
+      scale(var(--cosmic-character-scale));
   }
 }
 

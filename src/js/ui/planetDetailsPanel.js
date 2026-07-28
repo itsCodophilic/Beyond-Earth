@@ -469,7 +469,9 @@ export function createCelestialDetailsPanel() {
     activeCosmicTarget = target;
     target.classList.add("is-cosmic-active");
     const pointerTravel = Math.hypot(clientX - lastRippleX, clientY - lastRippleY);
-    const shouldRipple = targetChanged || pointerTravel > 20 || now - lastRippleAt > 440;
+    // Match the Beyond Earth panel exactly: nearby characters periodically
+    // receive one soft, distance-staggered wave as the pointer travels.
+    const shouldRipple = targetChanged || pointerTravel > 20 || now - lastRippleAt > 420;
     const rippleGlyphs = [];
 
     target.querySelectorAll(".planet-details__cosmic-character").forEach((glyph) => {
@@ -477,14 +479,17 @@ export function createCelestialDetailsPanel() {
       const deltaX = clientX - (rect.left + rect.width / 2);
       const deltaY = clientY - (rect.top + rect.height / 2);
       const distance = Math.hypot(deltaX, deltaY);
-      const influence = Math.max(0, 1 - distance / 54);
-      const rippleInfluence = Math.max(0, 1 - distance / 88);
+      // These radii and movement multipliers are intentionally identical to
+      // the Beyond Earth character field so every information card responds
+      // with the same local, letter-by-letter interaction.
+      const influence = Math.max(0, 1 - distance / 46);
+      const rippleInfluence = Math.max(0, 1 - distance / 78);
 
       if (shouldRipple && rippleInfluence > 0) {
-        const rippleLift = 0.20 + rippleInfluence * 0.70;
+        const rippleLift = 0.45 + rippleInfluence * 1.55;
         glyph.style.setProperty("--cosmic-ripple-lift", `${rippleLift}px`);
-        glyph.style.setProperty("--cosmic-ripple-settle", `${rippleLift * 0.22}px`);
-        glyph.style.setProperty("--cosmic-ripple-delay", `${Math.round(distance * 1.65)}ms`);
+        glyph.style.setProperty("--cosmic-ripple-settle", `${rippleLift * 0.28}px`);
+        glyph.style.setProperty("--cosmic-ripple-delay", `${Math.round(distance * 2.15)}ms`);
         rippleGlyphs.push(glyph);
       }
 
@@ -497,11 +502,11 @@ export function createCelestialDetailsPanel() {
         return;
       }
 
-      glyph.style.setProperty("--cosmic-character-x", `${deltaX * influence * 0.022}px`);
-      glyph.style.setProperty("--cosmic-character-y", `${deltaY * influence * 0.028 - influence * 1.8}px`);
-      glyph.style.setProperty("--cosmic-character-turn", `${deltaX * influence * 0.035}deg`);
-      glyph.style.setProperty("--cosmic-character-scale", String(1 + influence * 0.085));
-      glyph.classList.toggle("is-reacting", influence > 0.12);
+      glyph.style.setProperty("--cosmic-character-x", `${deltaX * influence * 0.045}px`);
+      glyph.style.setProperty("--cosmic-character-y", `${deltaY * influence * 0.06 - influence * 3}px`);
+      glyph.style.setProperty("--cosmic-character-turn", `${deltaX * influence * 0.09}deg`);
+      glyph.style.setProperty("--cosmic-character-scale", String(1 + influence * 0.16));
+      glyph.classList.toggle("is-reacting", influence > 0.08);
     });
 
     if (shouldRipple && rippleGlyphs.length) {
