@@ -10,6 +10,7 @@ import * as THREE from "three";
 import { makeNoiseTexture } from "../graphics/proceduralTextures.js";
 import { createOrbitLine } from "./orbits.js";
 import { createSaturnSurfaceMaterial } from "../planets/saturn/saturn.js";
+import { createSaturnRingSystem, updateSaturnRingSystem } from "../planets/saturn/saturnRings.js";
 
 const GAS_PROFILES = {
   Jupiter: {
@@ -1043,36 +1044,13 @@ function addGiantPlanetRings(planet, config, textures, segmentScale = 1) {
   const torusSegments = getSegmentCount(360, segmentScale, 160);
 
   if (config.name === "Saturn") {
-    const r = config.radius;
-    const saturnTexture = textures.saturnRing ?? null;
-
-    const bands = [
-      // D and C rings: inner, transparent and smoky.
-      { innerRadius: r * 1.16, outerRadius: r * 1.30, color: 0x8d7963, opacity: 0.24 },
-      { innerRadius: r * 1.31, outerRadius: r * 1.49, color: 0xbca783, opacity: 0.47 },
-      // B ring: brightest and densest section.
-      { innerRadius: r * 1.51, outerRadius: r * 1.73, color: 0xf0dfba, opacity: 0.91, texture: saturnTexture },
-      // Cassini division is represented by the empty space between these bands.
-      { innerRadius: r * 1.79, outerRadius: r * 1.96, color: 0xd6bf96, opacity: 0.76, texture: saturnTexture },
-      // F ring: narrow outer filament.
-      { innerRadius: r * 2.04, outerRadius: r * 2.065, color: 0xf2e6cc, opacity: 0.56 },
-    ];
-
-    bands.forEach((profile, index) => {
-      const band = createRingBand({ ...profile, segments: ringSegments });
-      band.name = `Saturn ring band ${index + 1}`;
-      group.add(band);
+    // Saturn is deliberately not built from RingGeometry. Its visible rings are
+    // a GPU-animated flow of independently orbiting ice, rock, and dust pieces.
+    return createSaturnRingSystem({
+      planet,
+      radius: config.radius,
+      quality: segmentScale < 0.7 ? "low" : segmentScale < 0.9 ? "medium" : "high",
     });
-
-    // A second extremely thin ring provides a crisp outer glint.
-    const outerGlint = createRingBand({
-      innerRadius: r * 2.09,
-      outerRadius: r * 2.105,
-      color: 0xfff7df,
-      opacity: 0.28,
-      segments: ringSegments,
-    });
-    group.add(outerGlint);
   }
 
   if (config.name === "Jupiter") {
@@ -1394,7 +1372,10 @@ export function updatePlanetVisuals(planet, time, motionScale = 1) {
     });
   }
   if (layers.atmosphere) layers.atmosphere.rotation.y -= 0.00018 * motionScale;
-  if (layers.ringSystem) layers.ringSystem.rotation.y += 0.000012 * motionScale;
+  if (layers.ringSystem) {
+    if (planet.name === "Saturn") updateSaturnRingSystem(layers.ringSystem, time);
+    else layers.ringSystem.rotation.y += 0.000012 * motionScale;
+  }
   if (layers.dustArcs) layers.dustArcs.rotation.z += 0.000085 * motionScale;
 }
 
