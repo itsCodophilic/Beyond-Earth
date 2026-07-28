@@ -21,6 +21,7 @@ import { createEarthVisualSystem, updateEarthVisualSystem } from './planets/eart
 import { createMarsVisualSystem, updateMarsVisualSystem } from './planets/mars/marsVisuals.js';
 import { createJupiterVisualSystem, updateJupiterVisualSystem } from './planets/jupiter/jupiterVisuals.js';
 import { createSaturnVisualSystem, updateSaturnVisualSystem } from './planets/saturn/saturnVisuals.js';
+import { createUranusVisualSystem, updateUranusVisualSystem } from './planets/uranus/uranusVisuals.js';
 import { PLANET_CONFIGS } from './planets/index.js';
 import {
   createMajorSatelliteSystems,
@@ -1365,6 +1366,8 @@ import { createCelestialDetailsPanel } from './ui/planetDetailsPanel.js';
   const jupiterRadius = jupiter.userData.visualRadius ?? 5.2;
   const saturn = planets.find((planet) => planet.name === "Saturn");
   const saturnRadius = saturn.userData.visualRadius ?? 4.7;
+  const uranus = planets.find((planet) => planet.name === "Uranus");
+  const uranusRadius = uranus.userData.visualRadius ?? 3.9;
 
   // Earth uses NASA Blue Marble visible-light imagery, a filtered MODIS cloud
   // shell, a sunlight-aware atmospheric limb, and nightside-only city lights.
@@ -1391,6 +1394,12 @@ import { createCelestialDetailsPanel } from './ui/planetDetailsPanel.js';
   const saturnVisualSystem = createSaturnVisualSystem({
     saturn,
     radius: saturnRadius,
+    quality: creationQuality,
+  });
+
+  const uranusVisualSystem = createUranusVisualSystem({
+    uranus,
+    radius: uranusRadius,
     quality: creationQuality,
   });
 
@@ -5410,6 +5419,7 @@ import { createCelestialDetailsPanel } from './ui/planetDetailsPanel.js';
       frameMotionScale,
     );
     updateSaturnVisualSystem(saturnVisualSystem, frameMotionScale);
+    updateUranusVisualSystem(uranusVisualSystem, frameMotionScale, deltaTime);
     moonPivot.rotation.y += 0.011 * frameMotionScale;
     // A small oscillation suggests lunar libration while the pivot maintains tidal lock.
     moon.rotation.y = Math.sin(simulationTime * 0.35) * 0.04;

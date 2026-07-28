@@ -42,18 +42,18 @@ const GAS_PROFILES = {
     atmosphereOpacity: 0.042,
   },
   Uranus: {
-    cream: new THREE.Color(0x8fdde4),
-    lightBand: new THREE.Color(0xc8f6f4),
-    darkBand: new THREE.Color(0x5599a4),
-    accent: new THREE.Color(0xa8edf0),
-    polar: new THREE.Color(0xd8ffff),
-    polarLight: new THREE.Color(0xf0ffff),
-    bandFrequency: 18,
-    fineFrequency: 58,
-    turbulence: 0.026,
-    textureStrength: 0.48,
-    atmosphereColor: 0xa8ffff,
-    atmosphereOpacity: 0.12,
+    cream: new THREE.Color(0x9fdee1),
+    lightBand: new THREE.Color(0xdaf6f4),
+    darkBand: new THREE.Color(0x6fa7ad),
+    accent: new THREE.Color(0xb9eff0),
+    polar: new THREE.Color(0xdffefe),
+    polarLight: new THREE.Color(0xf5ffff),
+    bandFrequency: 8,
+    fineFrequency: 22,
+    turbulence: 0.010,
+    textureStrength: 0.0,
+    atmosphereColor: 0xd8fcff,
+    atmosphereOpacity: 0.16,
   },
   Neptune: {
     cream: new THREE.Color(0x1757c8),
@@ -610,13 +610,45 @@ function createGasMaterial(config, texture) {
         }
 
         if (uPlanetKind == 3) {
-          float collar = smoothstep(0.61, 0.78, abs(dir.y)) * (1.0 - smoothstep(0.83, 0.96, abs(dir.y)));
-          procedural = mix(procedural, vec3(0.75, 0.98, 0.98), collar * 0.22);
+          // Force Uranus toward a calm, almost featureless visible-light look.
+          float lat01 = dir.y * 0.5 + 0.5;
+          vec3 southTeal = vec3(0.66, 0.85, 0.87);
+          vec3 midTeal = vec3(0.71, 0.89, 0.90);
+          vec3 northTeal = vec3(0.78, 0.95, 0.95);
+          vec3 smoothBase = mix(southTeal, midTeal, smoothstep(0.06, 0.46, lat01));
+          smoothBase = mix(smoothBase, northTeal, smoothstep(0.56, 0.94, lat01));
+          procedural = smoothBase;
+
+          float equatorialZone = 1.0 - smoothstep(0.08, 0.30, abs(dir.y));
+          procedural = mix(procedural, vec3(0.65, 0.84, 0.86), equatorialZone * 0.08);
+
+          float softNorthBand = smoothstep(0.12, 0.24, dir.y) * (1.0 - smoothstep(0.34, 0.52, dir.y));
+          float softSouthBand = smoothstep(0.18, 0.30, -dir.y) * (1.0 - smoothstep(0.42, 0.60, -dir.y));
+          procedural = mix(procedural, vec3(0.79, 0.96, 0.96), softNorthBand * 0.08);
+          procedural = mix(procedural, vec3(0.68, 0.87, 0.88), softSouthBand * 0.05);
+
+          float northCap = smoothstep(0.12, 0.68, dir.y);
+          float northCapCore = smoothstep(0.28, 0.88, dir.y);
+          procedural = mix(procedural, vec3(0.84, 0.98, 0.98), northCap * 0.24);
+          procedural = mix(procedural, vec3(0.95, 1.0, 1.0), northCapCore * 0.12);
+
+          float collar = smoothstep(0.06, 0.18, dir.y) * (1.0 - smoothstep(0.30, 0.44, dir.y));
+          procedural = mix(procedural, vec3(0.80, 0.97, 0.97), collar * 0.12);
+
+          float whisperCloud = ellipseMask(dir, -0.34 + uTime * 0.0006, 0.24, 0.22, 0.055, 0.01);
+          procedural = mix(procedural, vec3(0.91, 1.0, 1.0), whisperCloud * 0.04);
         }
 
-        vec3 textureColor = texture2D(uMap, vec2(fract(vUv.x + uTime * 0.0008), vUv.y)).rgb;
+        vec2 textureUv = vec2(fract(vUv.x + uTime * 0.0008), vUv.y);
+        vec3 textureColor = texture2D(uMap, textureUv).rgb;
+        if (uPlanetKind == 3) {
+          // Uranus ignores high-frequency texture detail in visible light.
+          textureColor = procedural;
+        }
         vec3 color = mix(procedural, textureColor, uTextureStrength);
-        color *= 0.88 + broad * 0.18 + fine * 0.07;
+        color *= uPlanetKind == 3
+          ? 0.985
+          : (0.88 + broad * 0.18 + fine * 0.07);
 
         vec3 normal = normalize(vWorldNormal);
         vec3 lightDir = normalize(-vWorldPosition);
@@ -626,7 +658,7 @@ function createGasMaterial(config, texture) {
         float diffuse = 0.16 + max(ndl, 0.0) * 0.9;
         color *= mix(0.075, diffuse, terminator);
         float rim = pow(1.0 - max(dot(normal, viewDir), 0.0), 3.0);
-        color += mix(uAccent, uPolarLight, polar) * rim * (uPlanetKind == 4 ? 0.12 : 0.085);
+        color += mix(uAccent, uPolarLight, polar) * rim * (uPlanetKind == 4 ? 0.12 : uPlanetKind == 3 ? 0.11 : 0.085);
         gl_FragColor = vec4(max(color, vec3(0.0)), 1.0);
       }
     `,
@@ -681,7 +713,13 @@ function addRealisticAtmosphere(planet, config, segmentScale = 1) {
     const profile = GAS_PROFILES[config.name];
     color = profile.atmosphereColor;
     opacity = profile.atmosphereOpacity;
-    scale = config.name === "Jupiter" ? 1.014 : config.name === "Neptune" ? 1.024 : 1.018;
+    scale = config.name === "Jupiter"
+      ? 1.014
+      : config.name === "Neptune"
+        ? 1.024
+        : config.name === "Uranus"
+          ? 1.026
+          : 1.018;
   } else if (config.name === "Mars") { color = 0xe38d53; opacity = 0.082; scale = 1.018; }
   else if (config.name === "Mercury") { return null; }
   else return null;
@@ -1072,28 +1110,30 @@ function addGiantPlanetRings(planet, config, textures, segmentScale = 1, hoverTa
     const r = config.radius;
 
     /*
-     * Uranus is nearly sideways, so perfectly flat RingGeometry can vanish when
-     * viewed edge-on. These rings use very thin TorusGeometry instead, giving
-     * every ring a small physical thickness while preserving its narrow shape.
+     * Uranus has dark, narrow, sharply separated rings rather than Saturn-like
+     * bright sheets. A thin torus keeps them visible even when the planet is
+     * viewed nearly edge-on, while the colours remain charcoal-grey and muted.
      */
     const ringProfiles = [
-      [1.42, 0.010, 0x6e929a, 0.42],
-      [1.51, 0.012, 0x91bec5, 0.48],
-      [1.60, 0.010, 0x607f87, 0.38],
-      [1.71, 0.015, 0xbfe3e7, 0.56],
-      [1.83, 0.011, 0x7199a1, 0.41],
-      [1.96, 0.014, 0xd2eef0, 0.52],
-      [2.11, 0.013, 0x8ebdc3, 0.45],
+      [1.42, 0.0075, 0x485a5f, 0.20],
+      [1.48, 0.0070, 0x5a6d71, 0.16],
+      [1.55, 0.0080, 0x3e4d52, 0.18],
+      [1.63, 0.0075, 0x73868b, 0.22],
+      [1.71, 0.0095, 0x9bb0b3, 0.30],
+      [1.80, 0.0070, 0x56696e, 0.18],
+      [1.89, 0.0080, 0x6e8287, 0.20],
+      [1.99, 0.0078, 0x83979b, 0.22],
+      [2.10, 0.0105, 0xaebfc2, 0.34],
     ];
 
     ringProfiles.forEach(([radiusScale, tubeScale, color, opacity], index) => {
       const material = new THREE.MeshStandardMaterial({
         color,
-        emissive: new THREE.Color(color).multiplyScalar(0.16),
-        emissiveIntensity: 0.42,
+        emissive: new THREE.Color(color).multiplyScalar(0.035),
+        emissiveIntensity: 0.22,
         transparent: true,
         opacity,
-        roughness: 0.72,
+        roughness: 0.90,
         metalness: 0,
         side: THREE.DoubleSide,
         depthWrite: false,
@@ -1102,28 +1142,26 @@ function addGiantPlanetRings(planet, config, textures, segmentScale = 1, hoverTa
       const ring = new THREE.Mesh(
         new THREE.TorusGeometry(
           r * radiusScale,
-          Math.max(0.012, r * tubeScale),
+          Math.max(0.0085, r * tubeScale),
           8,
           torusSegments,
         ),
         material,
       );
-      ring.name = `Uranus three-dimensional ring ${index + 1}`;
+      ring.name = `Uranus narrow ring ${index + 1}`;
       ring.rotation.x = Math.PI * 0.5;
       group.add(ring);
     });
 
-    // A faint, broad dust sheet helps the narrow rings remain readable during
-    // scroll-driven camera changes without making Uranus look like Saturn.
     const dustSheet = createRingBand({
-      innerRadius: r * 1.38,
-      outerRadius: r * 2.18,
-      color: 0x87b6bd,
-      opacity: 0.035,
+      innerRadius: r * 1.40,
+      outerRadius: r * 2.14,
+      color: 0x718488,
+      opacity: 0.012,
       roughness: 1,
       segments: ringSegments,
     });
-    dustSheet.name = "Uranus faint ring dust sheet";
+    dustSheet.name = "Uranus extremely faint dust component";
     group.add(dustSheet);
   }
 

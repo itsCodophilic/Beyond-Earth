@@ -7,13 +7,13 @@ export const uranus = {
   physicalDiameterKm: scale.diameterKm, diameterEarths: scale.diameterEarths, volumeEarths: scale.volumeEarths,
   orbitSpeed: 0.055, spinSpeed: 0.011, axialTilt: 1.71, angle: 4.8,
   orbitEccentricity: 0.0473, orbitRotation: 5.05, orbitInclination: 0.013,
-  bump: 0.005, orbitColor: 0x9ee9f2,
-  detail: "Ice giant | sideways axial tilt", focusScale: 1,
+  bump: 0.004, orbitColor: 0x9ee9f2,
+  detail: "Ice giant | hydrogen, helium, and methane atmosphere", focusScale: 1,
   minFocusDistance: scale.focusDistance * 0.88, focusDistance: scale.focusDistance, focusEase: 0.07, focusFov: 34,
   info: {
     type: "Planet", diameter: "50,724 km", orbitalSpeed: "6.81 km/s",
     distanceFromEarth: "≈ 2.6 billion km at closest approach",
     sizeComparison: getPlanetSizeComparison("Uranus"),
-    description: "A serene blue-green ice giant rotating almost on its side, surrounded by faint rings and distant moons.",
+    description: "A pale methane-rich ice giant with a hydrogen-helium atmosphere, deep water-ammonia-methane interior, a broad bright polar hood, dark narrow rings, and off-axis auroras shaped by its strongly tilted magnetic field.",
   },
 };
