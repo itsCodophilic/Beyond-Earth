@@ -17,9 +17,13 @@ const PALETTES = Object.freeze({
 
 
 /**
- * Ariel uses the supplied spacecraft-style reference as a true mapped surface.
- * The disk photograph was illumination-normalised, reprojected to a seamless
- * 2:1 global map, and converted into matching relief/roughness data maps.
+ * Reference-mapped major moons use dedicated, complete 2:1 surface maps.
+ *
+ * Their supplied disk images are never placed directly on a sphere. Doing so
+ * would also wrap the black picture background and collapse the photographed
+ * limb into a pinched UV seam. Each reference is first converted into a global
+ * albedo plus matching height/roughness maps with continuous longitude edges
+ * and pole-safe rows.
  */
 const URANIAN_SURFACE_ASSETS = Object.freeze({
   Ariel: Object.freeze({
@@ -33,6 +37,34 @@ const URANIAN_SURFACE_ASSETS = Object.freeze({
     ).href,
     roughness: new URL(
       "../../../../assets/textures/uranian/major-moons/ariel-roughness.jpg",
+      import.meta.url,
+    ).href,
+  }),
+  Titania: Object.freeze({
+    albedo: new URL(
+      "../../../../assets/textures/uranian/major-moons/titania-albedo-v2.jpg",
+      import.meta.url,
+    ).href,
+    height: new URL(
+      "../../../../assets/textures/uranian/major-moons/titania-height-v2.jpg",
+      import.meta.url,
+    ).href,
+    roughness: new URL(
+      "../../../../assets/textures/uranian/major-moons/titania-roughness-v2.jpg",
+      import.meta.url,
+    ).href,
+  }),
+  Oberon: Object.freeze({
+    albedo: new URL(
+      "../../../../assets/textures/uranian/major-moons/oberon-albedo-v1.jpg",
+      import.meta.url,
+    ).href,
+    height: new URL(
+      "../../../../assets/textures/uranian/major-moons/oberon-height-v1.jpg",
+      import.meta.url,
+    ).href,
+    roughness: new URL(
+      "../../../../assets/textures/uranian/major-moons/oberon-roughness-v1.jpg",
       import.meta.url,
     ).href,
   }),
@@ -118,6 +150,18 @@ function arielGeometrySegments(quality) {
   if (quality === "low") return [72, 46];
   if (quality === "medium") return [128, 80];
   return [192, 120];
+}
+
+function titaniaGeometrySegments(quality) {
+  if (quality === "low") return [84, 52];
+  if (quality === "medium") return [144, 90];
+  return [208, 132];
+}
+
+function oberonGeometrySegments(quality) {
+  if (quality === "low") return [84, 52];
+  if (quality === "medium") return [144, 90];
+  return [208, 132];
 }
 
 function createArielReferenceSurface(profile, quality) {
@@ -240,8 +284,202 @@ function fractureMask(direction, fractures, seed) {
   return mask;
 }
 
+/**
+ * Builds Titania as a physically continuous icy-rock sphere.
+ *
+ * The colour comes from the two user-supplied Titania references, reconstructed
+ * into a seamless global texture. Large terrain is also sculpted into the mesh:
+ * crater bowls move vertices inward, rims move them outward, and long fault
+ * valleys cross the surface. The bitmap displacement is intentionally subtle
+ * so it adds fine relief without inflating bright markings into mountains.
+ */
+function createTitaniaReferenceSurface(profile, quality) {
+  const maps = getUranianSurfaceMaps("Titania");
+  const [widthSegments, heightSegments] = titaniaGeometrySegments(quality);
+  const geometry = new THREE.SphereGeometry(1, widthSegments, heightSegments);
+  const positions = geometry.getAttribute("position");
+  const direction = new THREE.Vector3();
+
+  const craterField = Array.from({ length: 38 }, (_, index) => ({
+    center: randomDirection(profile.seed + 18.7, index),
+    radius: 0.040 + random01(profile.seed, index, 31) * 0.145,
+    depth: 0.0035 + random01(profile.seed, index, 32) * 0.0090,
+    rim: 0.0010 + random01(profile.seed, index, 33) * 0.0028,
+  }));
+  const fractureField = makeFractures(profile, 17);
+
+  for (let index = 0; index < positions.count; index += 1) {
+    direction.fromBufferAttribute(positions, index).normalize();
+    const broad = fbm(direction, 1.65, 4, profile.seed + 14.2);
+    const medium = fbm(direction, 6.2, 4, profile.seed + 47.9);
+    const fine = fbm(direction, 21.0, 3, profile.seed + 83.4);
+    let height = broad * 0.0028 + medium * 0.0012 + fine * 0.00055;
+
+    craterField.forEach((crater) => {
+      height += sampleCrater(direction, crater).height;
+    });
+
+    // Titania is crossed by broad fault systems and graben. A small physical
+    // depression lets these valleys catch the real Uranus-system sunlight.
+    const faultValley = fractureMask(direction, fractureField, profile.seed);
+    height -= faultValley * 0.0034;
+
+    const radius = Math.max(0.965, 1 + height);
+    positions.setXYZ(
+      index,
+      direction.x * radius,
+      direction.y * radius,
+      direction.z * radius,
+    );
+  }
+
+  positions.needsUpdate = true;
+  geometry.deleteAttribute("normal");
+  geometry.computeVertexNormals();
+  geometry.computeBoundingSphere();
+
+  const displacementScale = quality === "low"
+    ? 0.0025
+    : quality === "medium"
+      ? 0.0042
+      : 0.0060;
+  const material = new THREE.MeshStandardMaterial({
+    color: 0xffffff,
+    map: maps?.albedoMap ?? null,
+    bumpMap: maps?.heightMap ?? null,
+    bumpScale: quality === "low" ? 0.018 : quality === "medium" ? 0.025 : 0.032,
+    displacementMap: maps?.heightMap ?? null,
+    displacementScale,
+    displacementBias: -displacementScale * 0.50,
+    roughness: 0.94,
+    roughnessMap: maps?.roughnessMap ?? null,
+    metalness: 0,
+    envMapIntensity: 0.016,
+    dithering: true,
+  });
+  material.name = "Titania two-reference seamless icy-rock surface";
+
+  const moon = new THREE.Mesh(geometry, material);
+  moon.name = "Titania reference-derived continuous 3D surface";
+  moon.castShadow = false;
+  moon.receiveShadow = false;
+  moon.userData.geometryIncludesShape = true;
+  moon.userData.surfaceDetailMode =
+    "two-reference-global-albedo-plus-physical-craters-and-fault-valleys";
+  moon.userData.referenceTextureSource =
+    "Two user-supplied Titania images reconstructed as a seamless global map";
+  moon.userData.surfaceTextureCoverage =
+    "Continuous 360-degree longitude coverage with blended seam and pole-safe texture rows.";
+  moon.userData.reconstructionTextureSource =
+    "User references converted into albedo, height, and roughness maps; no black disk background is used.";
+  return moon;
+}
+
+/**
+ * Builds Oberon as an old, impact-dominated ice-rock moon.
+ *
+ * The two supplied disk views determine its darker grey-mauve colour, bright
+ * icy ejecta, and dark crater-floor markings. They are reconstructed into one
+ * complete global map before use, so their black backgrounds never reach the
+ * sphere. Physical geometry supplies overlapping crater bowls and rims,
+ * subdued ancient faults, and a small mountain that can break the limb.
+ */
+function createOberonReferenceSurface(profile, quality) {
+  const maps = getUranianSurfaceMaps("Oberon");
+  const [widthSegments, heightSegments] = oberonGeometrySegments(quality);
+  const geometry = new THREE.SphereGeometry(1, widthSegments, heightSegments);
+  const positions = geometry.getAttribute("position");
+  const direction = new THREE.Vector3();
+
+  // Oberon's ancient surface has a denser and slightly deeper impact field
+  // than Titania. The range includes many softened small craters and a handful
+  // of broad basins without turning its nearly spherical silhouette to rubble.
+  const craterField = Array.from({ length: 54 }, (_, index) => ({
+    center: randomDirection(profile.seed + 31.6, index),
+    radius: 0.030 + random01(profile.seed, index, 41) * 0.155,
+    depth: 0.0032 + random01(profile.seed, index, 42) * 0.0105,
+    rim: 0.0010 + random01(profile.seed, index, 43) * 0.0032,
+  }));
+  const fractureField = makeFractures(profile, 7);
+  const limbMountainDirection = new THREE.Vector3(-0.81, -0.34, 0.48).normalize();
+
+  for (let index = 0; index < positions.count; index += 1) {
+    direction.fromBufferAttribute(positions, index).normalize();
+    const broad = fbm(direction, 1.55, 4, profile.seed + 12.4);
+    const medium = fbm(direction, 6.8, 4, profile.seed + 52.7);
+    const fine = fbm(direction, 23.0, 3, profile.seed + 91.8);
+    let height = broad * 0.0032 + medium * 0.00145 + fine * 0.00068;
+
+    craterField.forEach((crater) => {
+      height += sampleCrater(direction, crater).height;
+    });
+
+    // Oberon shows little recent internal activity, so faults remain subdued
+    // beneath the dominant impact terrain.
+    height -= fractureMask(direction, fractureField, profile.seed + 6.3) * 0.0018;
+
+    // NASA notes a prominent mountain on Oberon's limb. A localised, restrained
+    // rise gives the silhouette that identity without exaggerating the body.
+    const mountainAngle = Math.acos(
+      THREE.MathUtils.clamp(direction.dot(limbMountainDirection), -1, 1),
+    );
+    height += 0.0065 * Math.exp(-Math.pow(mountainAngle / 0.085, 2));
+
+    const radius = Math.max(0.960, 1 + height);
+    positions.setXYZ(
+      index,
+      direction.x * radius,
+      direction.y * radius,
+      direction.z * radius,
+    );
+  }
+
+  positions.needsUpdate = true;
+  geometry.deleteAttribute("normal");
+  geometry.computeVertexNormals();
+  geometry.computeBoundingSphere();
+
+  const displacementScale = quality === "low"
+    ? 0.0028
+    : quality === "medium"
+      ? 0.0046
+      : 0.0065;
+  const material = new THREE.MeshStandardMaterial({
+    color: 0xffffff,
+    map: maps?.albedoMap ?? null,
+    bumpMap: maps?.heightMap ?? null,
+    bumpScale: quality === "low" ? 0.019 : quality === "medium" ? 0.027 : 0.035,
+    displacementMap: maps?.heightMap ?? null,
+    displacementScale,
+    displacementBias: -displacementScale * 0.50,
+    roughness: 0.97,
+    roughnessMap: maps?.roughnessMap ?? null,
+    metalness: 0,
+    envMapIntensity: 0.014,
+    dithering: true,
+  });
+  material.name = "Oberon two-reference seamless ancient icy-rock surface";
+
+  const moon = new THREE.Mesh(geometry, material);
+  moon.name = "Oberon reference-derived continuous 3D surface";
+  moon.castShadow = false;
+  moon.receiveShadow = false;
+  moon.userData.geometryIncludesShape = true;
+  moon.userData.surfaceDetailMode =
+    "two-reference-global-albedo-plus-dense-physical-impact-terrain";
+  moon.userData.referenceTextureSource =
+    "Two user-supplied Oberon images reconstructed as a seamless global map";
+  moon.userData.surfaceTextureCoverage =
+    "Continuous 360-degree longitude coverage with blended seam and pole-safe texture rows.";
+  moon.userData.reconstructionTextureSource =
+    "User references converted into albedo, height, and roughness maps; no black disk background is used.";
+  return moon;
+}
+
 export function createUranianMoonSurface(profile, quality = "high") {
   if (profile.name === "Ariel") return createArielReferenceSurface(profile, quality);
+  if (profile.name === "Titania") return createTitaniaReferenceSurface(profile, quality);
+  if (profile.name === "Oberon") return createOberonReferenceSurface(profile, quality);
   const settings = settingsFor(profile);
   const detail = quality === "low"
     ? Math.max(3, settings.detail - 2)
