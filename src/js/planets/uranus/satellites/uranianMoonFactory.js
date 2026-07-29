@@ -15,6 +15,59 @@ const PALETTES = Object.freeze({
   "outer-reddish": [0x5c4e49, 0x7d6961, 0x2b2523, 0x8e685b],
 });
 
+
+/**
+ * Ariel uses the supplied spacecraft-style reference as a true mapped surface.
+ * The disk photograph was illumination-normalised, reprojected to a seamless
+ * 2:1 global map, and converted into matching relief/roughness data maps.
+ */
+const URANIAN_SURFACE_ASSETS = Object.freeze({
+  Ariel: Object.freeze({
+    albedo: new URL(
+      "../../../../assets/textures/uranian/major-moons/ariel-albedo.jpg",
+      import.meta.url,
+    ).href,
+    height: new URL(
+      "../../../../assets/textures/uranian/major-moons/ariel-height.jpg",
+      import.meta.url,
+    ).href,
+    roughness: new URL(
+      "../../../../assets/textures/uranian/major-moons/ariel-roughness.jpg",
+      import.meta.url,
+    ).href,
+  }),
+});
+
+const uranianTextureLoader = new THREE.TextureLoader();
+const uranianTextureCache = new Map();
+
+function loadUranianTexture(bodyName, url, { color = false } = {}) {
+  if (uranianTextureCache.has(url)) return uranianTextureCache.get(url);
+
+  const texture = uranianTextureLoader.load(url);
+  texture.name = `${bodyName} ${color ? "reference albedo" : "surface data"} map`;
+  texture.wrapS = THREE.RepeatWrapping;
+  texture.wrapT = THREE.ClampToEdgeWrapping;
+  texture.minFilter = THREE.LinearMipmapLinearFilter;
+  texture.magFilter = THREE.LinearFilter;
+  texture.generateMipmaps = true;
+  texture.anisotropy = 8;
+  texture.colorSpace = color ? THREE.SRGBColorSpace : THREE.NoColorSpace;
+  texture.userData.persistentUranianTexture = true;
+  uranianTextureCache.set(url, texture);
+  return texture;
+}
+
+function getUranianSurfaceMaps(bodyName) {
+  const assets = URANIAN_SURFACE_ASSETS[bodyName];
+  if (!assets) return null;
+  return {
+    albedoMap: loadUranianTexture(bodyName, assets.albedo, { color: true }),
+    heightMap: loadUranianTexture(bodyName, assets.height),
+    roughnessMap: loadUranianTexture(bodyName, assets.roughness),
+  };
+}
+
 function hash3(x, y, z, seed) {
   const value = Math.sin(x * 127.1 + y * 311.7 + z * 74.7 + seed * 97.13) * 43758.5453123;
   return (value - Math.floor(value)) * 2 - 1;
@@ -59,6 +112,71 @@ function fbm(direction, frequency, octaves, seed) {
     scale *= 2.03;
   }
   return value / Math.max(0.0001, total);
+}
+
+function arielGeometrySegments(quality) {
+  if (quality === "low") return [72, 46];
+  if (quality === "medium") return [128, 80];
+  return [192, 120];
+}
+
+function createArielReferenceSurface(profile, quality) {
+  const maps = getUranianSurfaceMaps("Ariel");
+  const [widthSegments, heightSegments] = arielGeometrySegments(quality);
+  const geometry = new THREE.SphereGeometry(1, widthSegments, heightSegments);
+  const positions = geometry.getAttribute("position");
+  const direction = new THREE.Vector3();
+
+  // Ariel is nearly spherical, but a perfectly mathematical sphere reads as a
+  // flat texture. Millimetric-looking macro relief gives the silhouette and
+  // terminator a natural icy-body irregularity without turning it into an
+  // asteroid or exaggerating the moon's geology.
+  for (let index = 0; index < positions.count; index += 1) {
+    direction.fromBufferAttribute(positions, index).normalize();
+    const broad = fbm(direction, 1.75, 4, profile.seed + 21.4);
+    const medium = fbm(direction, 5.8, 3, profile.seed + 54.2);
+    const radius = 1 + broad * 0.0036 + medium * 0.0013;
+    positions.setXYZ(
+      index,
+      direction.x * radius,
+      direction.y * radius,
+      direction.z * radius,
+    );
+  }
+  positions.needsUpdate = true;
+  geometry.deleteAttribute("normal");
+  geometry.computeVertexNormals();
+  geometry.computeBoundingSphere();
+
+  const displacementScale = quality === "low" ? 0.006 : quality === "medium" ? 0.010 : 0.014;
+  const material = new THREE.MeshStandardMaterial({
+    color: 0xffffff,
+    map: maps?.albedoMap ?? null,
+    bumpMap: maps?.heightMap ?? null,
+    bumpScale: quality === "low" ? 0.034 : quality === "medium" ? 0.046 : 0.058,
+    displacementMap: maps?.heightMap ?? null,
+    displacementScale,
+    displacementBias: -displacementScale * 0.48,
+    roughness: 0.96,
+    roughnessMap: maps?.roughnessMap ?? null,
+    metalness: 0,
+    envMapIntensity: 0.018,
+    dithering: true,
+  });
+  material.name = "Ariel user-reference mapped icy surface";
+
+  const moon = new THREE.Mesh(geometry, material);
+  moon.name = "Ariel reference-derived 3D surface";
+  moon.castShadow = false;
+  moon.receiveShadow = false;
+  moon.userData.geometryIncludesShape = true;
+  moon.userData.surfaceDetailMode = "reference-derived-global-albedo-and-relief";
+  moon.userData.referenceTextureSource = "User-supplied Ariel image";
+  moon.userData.surfaceTextureCoverage =
+    "Supplied hemisphere reprojected directly; unseen hemisphere reconstructed seamlessly from the same terrain evidence.";
+  moon.userData.reconstructionTextureSource =
+    "User-supplied Ariel image converted into albedo, height, and roughness maps.";
+  return moon;
 }
 
 function random01(seed, index, channel = 0) {
@@ -123,6 +241,7 @@ function fractureMask(direction, fractures, seed) {
 }
 
 export function createUranianMoonSurface(profile, quality = "high") {
+  if (profile.name === "Ariel") return createArielReferenceSurface(profile, quality);
   const settings = settingsFor(profile);
   const detail = quality === "low"
     ? Math.max(3, settings.detail - 2)

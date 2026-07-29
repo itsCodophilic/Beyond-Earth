@@ -148,6 +148,16 @@ export const URANUS_MOON_PROFILES = Object.freeze(RAW.map((row) => {
         ? "Inner regular moon"
         : "Outer irregular moon",
     appearance,
+    surfaceEvidence: name === "Ariel"
+      ? "Spacecraft-style reference image supplied for this implementation"
+      : direct
+        ? "Resolved-body-informed procedural reconstruction"
+        : "Unresolved conservative reconstruction",
+    surfaceStructure: name === "Ariel"
+      ? "Bright ice-rock crust with long graben, intersecting canyon systems, cratered plains, scarps, and resurfaced terrain"
+      : null,
+    surfaceRoughness: name === "Ariel" ? 0.96 : null,
+    albedo: name === "Ariel" ? 0.39 : null,
     color: tier === "major"
       ? 0x929a9b
       : appearance === "outer-reddish" || appearance === "caliban" || appearance === "sycorax"
@@ -169,6 +179,7 @@ export const URANUS_MOON_PROFILES = Object.freeze(RAW.map((row) => {
     speed: (retrograde ? -1 : 1) * THREE.MathUtils.clamp(0.020 / Math.sqrt(periodDays), 0.00045, 0.020),
     seed,
     shape,
+    initialRotation: name === "Ariel" ? [0.04, -0.18, -0.03] : undefined,
     visualRadius: visualRadiusFor(diameterKm, tier),
     tidallyLocked: tier !== "outer",
     showOrbitGuide: ORBIT_GUIDES.has(name),
@@ -177,9 +188,11 @@ export const URANUS_MOON_PROFILES = Object.freeze(RAW.map((row) => {
     orbitalSpeed: `${orbitalSpeedKmS(semiMajorAxisKm, periodDays).toFixed(2)} km/s around Uranus`,
     orbitSummary: `Mean orbit ${(semiMajorAxisKm / 1_000_000).toFixed(semiMajorAxisKm < 1_000_000 ? 3 : 2)} million km from Uranus; period ${periodDays < 20 ? periodDays.toFixed(3) : periodDays.toFixed(0)} days; ${retrograde ? "retrograde" : "prograde"}.`,
     description: describeMoon(name, tier),
-    dataNote: direct
-      ? "Resolved or notable body rendered with an individual procedural surface."
-      : "Orbit is represented from measured mean elements; unresolved surface and size are conservative estimates.",
+    dataNote: name === "Ariel"
+      ? "The supplied Ariel image is wrapped as a seamless global albedo map and paired with derived height and roughness maps for real lighting-responsive 3D relief. The unseen hemisphere is reconstructed from the same terrain evidence rather than left blank or mirrored as a hard seam."
+      : direct
+        ? "Resolved or notable body rendered with an individual procedural surface."
+        : "Orbit is represented from measured mean elements; unresolved surface and size are conservative estimates.",
   });
 }));
 
