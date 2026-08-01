@@ -37,6 +37,19 @@ PROFILES = {
     "rosalind": SurfaceProfile(67.0, 0.90, (0.98, 0.99, 1.00), 0.989),
     "cupid": SurfaceProfile(58.0, 0.92, (0.97, 0.99, 1.00), 0.991),
     "belinda": SurfaceProfile(71.0, 0.88, (0.98, 1.00, 1.01), 0.987),
+    # Final ten Uranian moons.  Their supplied images are artistic references,
+    # so these restrained means and tints preserve each visual identity without
+    # copying photographed illumination or implying observed global geography.
+    "portia": SurfaceProfile(76.0, 0.82, (0.99, 1.00, 1.01), 0.986),
+    "perdita": SurfaceProfile(61.0, 0.88, (0.97, 1.00, 1.01), 0.989),
+    "francisco": SurfaceProfile(67.0, 0.90, (0.97, 1.00, 1.03), 0.988),
+    "s2023-u1": SurfaceProfile(49.0, 0.80, (0.94, 0.99, 1.05), 0.992),
+    "stephano": SurfaceProfile(60.0, 0.90, (0.98, 1.00, 1.01), 0.989),
+    "trinculo": SurfaceProfile(73.0, 0.82, (1.12, 0.98, 0.84), 0.985),
+    "margaret": SurfaceProfile(46.0, 0.90, (0.98, 0.99, 1.00), 0.993),
+    "prospero": SurfaceProfile(74.0, 0.86, (1.00, 1.01, 1.01), 0.989),
+    "setebos": SurfaceProfile(64.0, 0.87, (1.09, 0.96, 0.94), 0.988),
+    "ferdinand": SurfaceProfile(59.0, 0.89, (0.98, 1.00, 1.03), 0.990),
 }
 
 

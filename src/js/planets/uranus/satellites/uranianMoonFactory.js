@@ -174,9 +174,19 @@ const URANIAN_SURFACE_ASSETS = Object.freeze({
   Cressida: minorSurfaceAssets("cressida"),
   Desdemona: minorSurfaceAssets("desdemona"),
   Juliet: minorSurfaceAssets("juliet"),
+  Portia: minorSurfaceAssets("portia"),
   Rosalind: minorSurfaceAssets("rosalind"),
   Cupid: minorSurfaceAssets("cupid"),
   Belinda: minorSurfaceAssets("belinda"),
+  Perdita: minorSurfaceAssets("perdita"),
+  Francisco: minorSurfaceAssets("francisco"),
+  "S/2023 U1": minorSurfaceAssets("s2023-u1"),
+  Stephano: minorSurfaceAssets("stephano"),
+  Trinculo: minorSurfaceAssets("trinculo"),
+  Margaret: minorSurfaceAssets("margaret"),
+  Prospero: minorSurfaceAssets("prospero"),
+  Setebos: minorSurfaceAssets("setebos"),
+  Ferdinand: minorSurfaceAssets("ferdinand"),
   Mab: Object.freeze({
     albedo: new URL(
       "../../../../assets/textures/uranian/minor-moons/mab-albedo-v1.jpg",
@@ -781,6 +791,146 @@ const MINOR_RECONSTRUCTION_SETTINGS = Object.freeze({
     roughness: 0.987,
     rotation: [-0.04, 0.20, 0.02],
   }),
+  Portia: Object.freeze({
+    shape: [1.12, 0.98, 0.90],
+    broad: 0.038,
+    medium: 0.014,
+    fine: 0.0038,
+    craterCount: 30,
+    craterDepth: 0.021,
+    craterRadiusMin: 0.021,
+    craterRadiusRange: 0.090,
+    bumpScale: 0.059,
+    displacement: 0.010,
+    roughness: 0.986,
+    rotation: [0.11, -0.30, 0.05],
+  }),
+  Perdita: Object.freeze({
+    shape: [1.28, 0.88, 0.80],
+    broad: 0.047,
+    medium: 0.016,
+    fine: 0.0041,
+    craterCount: 24,
+    craterDepth: 0.024,
+    craterRadiusMin: 0.023,
+    craterRadiusRange: 0.105,
+    bumpScale: 0.063,
+    displacement: 0.012,
+    roughness: 0.989,
+    rotation: [-0.10, 0.44, 0.08],
+  }),
+  Francisco: Object.freeze({
+    shape: [1.38, 0.91, 0.82],
+    broad: 0.048,
+    medium: 0.018,
+    fine: 0.0046,
+    craterCount: 23,
+    craterDepth: 0.025,
+    craterRadiusMin: 0.023,
+    craterRadiusRange: 0.105,
+    bumpScale: 0.066,
+    displacement: 0.012,
+    roughness: 0.988,
+    rotation: [0.14, -0.48, -0.09],
+  }),
+  "S/2023 U1": Object.freeze({
+    shape: [1.30, 0.83, 0.74],
+    broad: 0.044,
+    medium: 0.015,
+    fine: 0.0038,
+    craterCount: 18,
+    craterDepth: 0.020,
+    craterRadiusMin: 0.020,
+    craterRadiusRange: 0.085,
+    bumpScale: 0.054,
+    displacement: 0.009,
+    roughness: 0.992,
+    rotation: [-0.12, 0.36, 0.07],
+  }),
+  Stephano: Object.freeze({
+    shape: [1.34, 0.90, 0.81],
+    broad: 0.052,
+    medium: 0.019,
+    fine: 0.0048,
+    craterCount: 25,
+    craterDepth: 0.026,
+    craterRadiusMin: 0.024,
+    craterRadiusRange: 0.110,
+    bumpScale: 0.067,
+    displacement: 0.013,
+    roughness: 0.989,
+    rotation: [0.10, -0.39, 0.11],
+  }),
+  Trinculo: Object.freeze({
+    shape: [1.04, 1.00, 0.96],
+    broad: 0.020,
+    medium: 0.011,
+    fine: 0.0034,
+    craterCount: 38,
+    craterDepth: 0.018,
+    craterRadiusMin: 0.017,
+    craterRadiusRange: 0.073,
+    bumpScale: 0.052,
+    displacement: 0.009,
+    roughness: 0.985,
+    rotation: [-0.04, 0.23, -0.02],
+  }),
+  Margaret: Object.freeze({
+    shape: [1.22, 0.88, 0.78],
+    broad: 0.060,
+    medium: 0.022,
+    fine: 0.0054,
+    craterCount: 20,
+    craterDepth: 0.028,
+    craterRadiusMin: 0.025,
+    craterRadiusRange: 0.115,
+    bumpScale: 0.072,
+    displacement: 0.014,
+    roughness: 0.993,
+    rotation: [0.18, -0.31, 0.12],
+  }),
+  Prospero: Object.freeze({
+    shape: [1.17, 0.94, 0.85],
+    broad: 0.054,
+    medium: 0.020,
+    fine: 0.0048,
+    craterCount: 27,
+    craterDepth: 0.027,
+    craterRadiusMin: 0.025,
+    craterRadiusRange: 0.115,
+    bumpScale: 0.068,
+    displacement: 0.013,
+    roughness: 0.989,
+    rotation: [-0.15, 0.42, 0.06],
+  }),
+  Setebos: Object.freeze({
+    shape: [1.05, 1.01, 0.96],
+    broad: 0.025,
+    medium: 0.013,
+    fine: 0.0037,
+    craterCount: 46,
+    craterDepth: 0.021,
+    craterRadiusMin: 0.018,
+    craterRadiusRange: 0.084,
+    bumpScale: 0.058,
+    displacement: 0.010,
+    roughness: 0.988,
+    rotation: [0.05, -0.27, -0.03],
+  }),
+  Ferdinand: Object.freeze({
+    shape: [1.20, 0.93, 0.84],
+    broad: 0.055,
+    medium: 0.020,
+    fine: 0.0049,
+    craterCount: 24,
+    craterDepth: 0.027,
+    craterRadiusMin: 0.024,
+    craterRadiusRange: 0.110,
+    bumpScale: 0.068,
+    displacement: 0.013,
+    roughness: 0.990,
+    rotation: [-0.10, 0.47, -0.08],
+  }),
   Mab: Object.freeze({
     shape: [1.13, 1.00, 0.89],
     broad: 0.052,
@@ -842,12 +992,22 @@ function createMinorReferenceSurface(profile, quality) {
       depth: 0.052,
       rim: 0.009,
     });
+  } else if (profile.name === "Perdita") {
+    // The reference's broad worn hollow is modeled as genuine concave relief,
+    // not a dark painted patch in the albedo texture.
+    craterField.push({
+      center: new THREE.Vector3(-0.10, -0.28, 0.95).normalize(),
+      radius: 0.27,
+      depth: 0.042,
+      rim: 0.006,
+    });
   }
 
   // Fixed directions live outside the vertex loop so the Rosalind shape does
   // not allocate temporary vectors thousands of times during page startup.
   const rosalindBulgeA = new THREE.Vector3(-0.72, 0.62, 0.30).normalize();
   const rosalindBulgeB = new THREE.Vector3(-0.54, -0.68, 0.49).normalize();
+  const ferdinandShoulder = new THREE.Vector3(0.50, 0.42, -0.76).normalize();
 
   for (let index = 0; index < positions.count; index += 1) {
     direction.fromBufferAttribute(positions, index).normalize();
@@ -885,6 +1045,11 @@ function createMinorReferenceSurface(profile, quality) {
       // the long axis; this one-sided erosion narrows the battered leading end.
       height -= Math.max(0, -direction.x - 0.18) ** 1.7 * 0.075;
       height += Math.max(0, direction.y * 0.52 - direction.z * 0.34) ** 2 * 0.018;
+    } else if (profile.name === "Portia") {
+      // Portia is compact but not spherical: a broad shoulder and gently worn
+      // opposing facet preserve the reference's softly angular silhouette.
+      height += Math.max(0, direction.x * 0.70 + direction.y * 0.45) ** 2 * 0.026;
+      height -= Math.max(0, -direction.x * 0.62 + direction.z * 0.50) ** 2 * 0.015;
     } else if (profile.name === "Rosalind") {
       // Broad connected masses are sculpted into one closed surface. Separate
       // overlapping meshes would expose moving cracks during rotation.
@@ -906,6 +1071,60 @@ function createMinorReferenceSurface(profile, quality) {
       // Belinda remains almost round; very shallow corrugation is enough to
       // catch sunlight across its fine mature regolith.
       height += Math.sin((direction.x * 0.42 + direction.y * 0.78) * 38) * 0.0015;
+    } else if (profile.name === "Perdita") {
+      // Shape scaling establishes the pear-like body; narrowing the negative
+      // end and swelling the opposite shoulder makes that taper asymmetric.
+      height -= Math.max(0, -direction.x - 0.12) ** 1.7 * 0.065;
+      height += Math.max(0, direction.x * 0.78 + direction.y * 0.22) ** 2 * 0.030;
+    } else if (profile.name === "Francisco") {
+      // Two connected unequal masses share one continuous skin. The axial
+      // lobes and shallow waist avoid both a generic ellipsoid and mesh cracks.
+      const axial = Math.abs(direction.x);
+      const waist = Math.exp(-Math.pow(direction.x / 0.30, 2));
+      height += Math.pow(axial, 1.48) * 0.055 - waist * 0.038;
+      height += Math.max(0, direction.x) ** 2 * 0.032;
+    } else if (profile.name === "S/2023 U1") {
+      // The discovery remains unresolved, so only a subdued elongated lozenge
+      // is used: one end is slightly blunter than its gently eroded opposite.
+      height += Math.max(0, direction.x) ** 2 * 0.018;
+      height -= Math.max(0, -direction.x - 0.20) ** 1.6 * 0.038;
+    } else if (profile.name === "Stephano") {
+      // Broad peanut-like shoulders are made from one watertight deformation,
+      // keeping the rotating silhouette free from overlapping-object seams.
+      const axial = Math.abs(direction.x);
+      const waist = Math.exp(-Math.pow(direction.x / 0.27, 2));
+      height += Math.pow(axial, 1.42) * 0.062 - waist * 0.047;
+      height += Math.max(0, -direction.x) ** 2 * 0.020;
+    } else if (profile.name === "Trinculo") {
+      // Its supplied concept is the roundest of this group. Very shallow
+      // undulation prevents a perfect ball without forcing an asteroid shape.
+      height += Math.sin((direction.y * 0.66 + direction.z * 0.48) * 31) * 0.0014;
+    } else if (profile.name === "Margaret") {
+      // Low gravity keeps Margaret irregular. Opposing worn facets and one
+      // shoulder create a rounded diamond-like rubble-body outline.
+      height += Math.max(0, direction.y * 0.70 - direction.x * 0.42) ** 2 * 0.032;
+      height -= Math.max(0, -direction.y * 0.62 + direction.z * 0.48) ** 2 * 0.025;
+      height -= Math.max(0, direction.x * 0.58 + direction.z * 0.52) ** 2 * 0.014;
+    } else if (profile.name === "Prospero") {
+      // A rounded wedge reads as blocky without introducing hard planar seams.
+      // The sixth-power terms flatten broad areas while noise breaks the edges.
+      const blockiness = Math.pow(Math.abs(direction.x), 6)
+        + Math.pow(Math.abs(direction.y), 6)
+        + Math.pow(Math.abs(direction.z), 6);
+      height += blockiness * 0.018;
+      height -= Math.max(0, -direction.x * 0.64 - direction.y * 0.44) ** 2 * 0.024;
+    } else if (profile.name === "Setebos") {
+      // Setebos remains nearly spherical; fine corrugation only roughens the
+      // terminator while its dense physical crater field supplies the identity.
+      height += Math.sin((direction.x * 0.51 + direction.z * 0.71) * 36) * 0.0016;
+    } else if (profile.name === "Ferdinand") {
+      // A localized connected shoulder breaks the rounded main mass. It is a
+      // Gaussian rise in the same geometry rather than a separate attached rock.
+      const shoulderAngle = Math.acos(THREE.MathUtils.clamp(
+        direction.dot(ferdinandShoulder), -1, 1,
+      ));
+      height += 0.078 * Math.exp(-Math.pow(shoulderAngle / 0.25, 2));
+      height -= Math.max(0, -direction.y * 0.58 + direction.z * 0.44) ** 2 * 0.016;
     }
 
     const radius = Math.max(0.76, 1 + height);

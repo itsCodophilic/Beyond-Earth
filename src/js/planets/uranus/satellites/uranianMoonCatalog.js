@@ -60,13 +60,23 @@ const DIRECT_SURFACE_NAMES = new Set([
   "Cressida",
   "Desdemona",
   "Juliet",
+  "Portia",
   "Rosalind",
   "Cupid",
   "Belinda",
+  "Perdita",
   "Mab",
   "Puck",
+  "Francisco",
   "Caliban",
+  "S/2023 U1",
+  "Stephano",
+  "Trinculo",
   "Sycorax",
+  "Margaret",
+  "Prospero",
+  "Setebos",
+  "Ferdinand",
 ]);
 
 const ORBIT_GUIDES = new Set([
@@ -81,13 +91,22 @@ const ORBIT_GUIDES = new Set([
   "Cressida",
   "Desdemona",
   "Juliet",
+  "Portia",
   "Rosalind",
   "Cupid",
   "Belinda",
+  "Perdita",
   "Mab",
   "Puck",
+  "Francisco",
   "Caliban",
+  "Stephano",
+  "Trinculo",
   "Sycorax",
+  "Margaret",
+  "Prospero",
+  "Setebos",
+  "Ferdinand",
   "S/2023 U1",
   "S/2025 U1",
 ]);
@@ -98,29 +117,59 @@ const MINOR_REFERENCE_NAMES = new Set([
   "Cressida",
   "Desdemona",
   "Juliet",
+  "Portia",
   "Rosalind",
   "Cupid",
   "Belinda",
+  "Perdita",
   "Mab",
+  "Francisco",
   "Caliban",
+  "S/2023 U1",
+  "Stephano",
+  "Trinculo",
+  "Margaret",
+  "Prospero",
+  "Setebos",
+  "Ferdinand",
 ]);
 
 const MINOR_REFERENCE_STRUCTURES = Object.freeze({
   Cressida: "Compact pale-grey low-gravity ice-rock body with a subtly asymmetric potato-like silhouette, granular regolith, shallow craters, and a worn opposing facet",
   Desdemona: "Nearly spherical dark grey ice-rock body with densely overlapping small craters, subdued grooves, fine corrugation, and mature impact-weathered regolith",
   Juliet: "Strongly elongated and tapered tan-grey ice-rock body with an uneven leading end, battered ridges, shallow craters, and a distinctly asteroid-like silhouette",
+  Portia: "Compact pale-grey inner moon with a softly angular potato-like outline, granular regolith, shallow impact pits, and one battered asymmetric shoulder",
   Rosalind: "Rounded charcoal-grey body whose single watertight surface carries broad boulder-like masses, granular regolith, shallow impact pits, and worn connecting ridges",
   Cupid: "Tiny dark contact-binary-like body with two unequal lobes, a pinched waist, fine craters, and a continuous low-albedo ice-rock skin",
   Belinda: "Compact nearly spherical grey inner moon with dense fine grooves, small impact craters, subdued streaking, and a mature weathered ice-rock surface",
+  Perdita: "Dark elongated pear-like inner moon with a tapered end, broad worn depression, subdued grooves, and densely weathered low-albedo regolith",
+  Francisco: "Cold grey distant irregular moon with two connected unequal masses, a broad waist, dense corrugation, shallow impacts, and a single sealed ice-rock surface",
+  "S/2023 U1": "Tiny cool blue-grey captured moon with an elongated lozenge-like outline, subdued mottling, sparse pale flecks, and extremely fine impact wear",
+  Stephano: "Charcoal-grey irregular moon with a broad peanut-like silhouette, unequal shoulders, dense grooves, and an old cratered captured-body surface",
+  Trinculo: "Unusually round reference-guided reconstruction with muted warm ochre-grey mottling, shallow old craters, and fine dusty regolith",
+  Margaret: "Very dark compact rubble-rich irregular moon with a rounded diamond-like outline, coarse grains, shallow depressions, and subdued ridges",
+  Prospero: "Pale blocky irregular moon with a rounded wedge-like silhouette, granular frost-dusted rock, shallow craters, and darker worn facets",
+  Setebos: "Nearly spherical muted mauve-grey irregular moon with densely overlapping impacts, ancient reddish regolith, and low-contrast cratered terrain",
+  Ferdinand: "Cold grey irregular moon with a rounded main mass, one asymmetric protruding shoulder, granular impact wear, and a darker fractured region",
 });
 
 const MINOR_REFERENCE_NOTES = Object.freeze({
   Cressida: "Cressida has not been resolved into a factual global surface map. The supplied image guides its compact pale-grey character; the website uses a seamless low-albedo material and a separately sculpted asymmetric watertight mesh, so every crater and limb shadow responds to the real scene light rather than painted illumination.",
   Desdemona: "Desdemona remains unresolved as a globe. The supplied round cratered concept guides only its dark grey-green regolith character. Dense fine impacts and restrained grooves are reconstructed across a seamless material and near-spherical 3D surface without claiming observed geography.",
   Juliet: "Juliet has no resolved global map. The supplied elongated concept guides the warm-grey palette and asteroid-like silhouette; its tapered leading end, battered ridges, and impact relief are built into one closed mesh, while photographed background, lighting, and stock marks are excluded.",
+  Portia: "Portia is not resolved into a factual global map. The supplied pale compact concept guides only this reconstruction's palette and battered small-body character; one watertight asymmetric mesh and seamless maps keep the photographed black background and lighting out of the model.",
   Rosalind: "Rosalind is unresolved at global scale. The supplied concept guides its charcoal regolith and raised-mass character. Those broad bulges are sculpted into one sealed surface instead of overlapping pieces, preventing gaps or moving cracks during rotation.",
   Cupid: "Hubble discovered Cupid as an extremely faint point source, not a resolved body. The supplied contact-binary concept therefore guides only this model's two-lobed identity. The pinched waist and unequal lobes form one watertight mesh beneath a conservative seamless dark regolith reconstruction.",
   Belinda: "Belinda has not been imaged as a resolved global globe. The supplied round concept guides its dense fine-crater and groove character; a near-spherical watertight mesh and seamless low-albedo maps provide lighting-responsive depth without presenting invented markings as observations.",
+  Perdita: "Perdita remains unresolved as a globe. Its supplied pear-like concept guides only silhouette and regolith character; the tapered body, broad depression, craters, and lighting-responsive relief are rebuilt as one continuous conservative surface.",
+  Francisco: "Francisco has not been resolved into global terrain. The supplied lobed concept guides its connected double-mass silhouette and cold-grey surface character, reproduced as a single watertight mesh so no overlapping parts expose moving cracks.",
+  "S/2023 U1": "S/2023 U1 was discovered as a faint moving point source rather than a resolved disk. The supplied concept is treated as artistic guidance only; the tiny elongated body and seamless cool dark regolith do not claim observed geography.",
+  Stephano: "Stephano is unresolved at global scale. The supplied lobed image guides its broad peanut-like outline and grooved charcoal character, reconstructed in one sealed skin with no copied star field or baked lighting.",
+  Trinculo: "Trinculo's supplied round warm-toned concept is not spacecraft surface evidence. It guides this conservative model's unusual roundness and muted ochre-grey palette while seamless maps and real crater relief respond to scene lighting.",
+  Margaret: "Margaret is an unresolved distant irregular moon. The supplied dark rubble-body concept guides only its compact faceted silhouette and coarse regolith character; exact markings are not presented as observations.",
+  Prospero: "Prospero lacks a resolved global surface map. The supplied pale blocky concept guides its rounded wedge silhouette and frost-dusted battered character after all text, background, and photographed illumination are excluded.",
+  Setebos: "Setebos is unresolved as a globe. The supplied round cratered concept guides its muted mauve-grey palette and impact density, rendered through seamless material maps and a nearly spherical watertight surface without claiming factual crater locations.",
+  Ferdinand: "Ferdinand remains unresolved at global scale. Its supplied irregular concept guides the rounded main mass, asymmetric shoulder, and cold-grey regolith; one continuous mesh prevents gaps while preserving real terminator lighting.",
 });
 
 function stableSeed(name) {
@@ -196,13 +245,22 @@ function describeMoon(name, tier) {
     Cressida: "A small dark inner moon orbiting within Uranus's densely packed ring-moon region, reconstructed here as a compact battered ice-rock body.",
     Desdemona: "A tightly orbiting inner moon in Uranus's crowded Portia group, represented as a dark, old, finely cratered ice-rock world.",
     Juliet: "An inner Portia-group moon reconstructed with a distinctly elongated, tapered silhouette and impact-worn low-albedo regolith.",
+    Portia: "The largest member of its tightly packed inner-moon group, represented as a compact battered ice-rock body near Uranus's rings.",
     Rosalind: "A small inner moon between Portia and Cupid, modeled as a connected irregular ice-rock body with broad worn surface masses.",
     Cupid: "One of the smallest known inner Uranian moons, discovered by Hubble and moving through an exceptionally crowded, dynamically unstable region.",
     Belinda: "A compact inner Uranian moon whose orbit lies extremely close to Cupid's, within the densely packed Portia-group system.",
+    Perdita: "A tiny inner moon recovered in Voyager 2 imagery, moving through the dynamically crowded region between Belinda and Puck.",
     Mab: "A tiny dark moon embedded in Uranus's dusty mu ring, likely replenishing that ring when impacts eject surface material.",
     Puck: "A dark inner moon with an irregular, heavily cratered surface observed by Voyager 2.",
+    Francisco: "The innermost of Uranus's known distant irregular moons, travelling backward on an inclined captured-body orbit.",
     Caliban: "A small reddish retrograde irregular moon, likely a captured outer Solar System body.",
+    Stephano: "A small retrograde irregular moon belonging to the distant Caliban orbital grouping.",
+    Trinculo: "A tiny distant retrograde irregular moon following a highly inclined captured-body orbit.",
     Sycorax: "The largest known irregular moon of Uranus, dark and mildly red on a distant retrograde orbit.",
+    Margaret: "Uranus's unusual prograde irregular moon, moving on an extremely eccentric and inclined distant orbit.",
+    Prospero: "A distant retrograde irregular moon, likely a fragment of an older captured parent body.",
+    Setebos: "A distant reddish retrograde irregular moon moving through the outer Uranian satellite system.",
+    Ferdinand: "The outermost known Uranian moon in this catalogue, following a distant eccentric retrograde orbit.",
     "S/2025 U1": "A tiny inner moon discovered in 2025 with JWST, orbiting among Uranus's tightly packed ring moons.",
     "S/2023 U1": "A faint distant irregular moon discovered in deep surveys and travelling on a retrograde orbit.",
   };
@@ -301,6 +359,26 @@ export const URANUS_MOON_PROFILES = Object.freeze(RAW.map((row) => {
         ? 0.991
       : name === "Belinda"
         ? 0.987
+      : name === "Portia"
+        ? 0.986
+      : name === "Perdita"
+        ? 0.989
+      : name === "Francisco"
+        ? 0.988
+      : name === "S/2023 U1"
+        ? 0.992
+      : name === "Stephano"
+        ? 0.989
+      : name === "Trinculo"
+        ? 0.985
+      : name === "Margaret"
+        ? 0.993
+      : name === "Prospero"
+        ? 0.989
+      : name === "Setebos"
+        ? 0.988
+      : name === "Ferdinand"
+        ? 0.990
       : name === "S/2025 U1"
         ? 0.985
       : name === "Bianca"
