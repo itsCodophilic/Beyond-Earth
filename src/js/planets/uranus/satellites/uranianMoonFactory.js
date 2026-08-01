@@ -15,6 +15,23 @@ const PALETTES = Object.freeze({
   "outer-reddish": [0x5c4e49, 0x7d6961, 0x2b2523, 0x8e685b],
 });
 
+function minorSurfaceAssets(slug) {
+  return Object.freeze({
+    albedo: new URL(
+      `../../../../assets/textures/uranian/minor-moons/${slug}-albedo-v1.jpg`,
+      import.meta.url,
+    ).href,
+    height: new URL(
+      `../../../../assets/textures/uranian/minor-moons/${slug}-height-v1.jpg`,
+      import.meta.url,
+    ).href,
+    roughness: new URL(
+      `../../../../assets/textures/uranian/minor-moons/${slug}-roughness-v1.jpg`,
+      import.meta.url,
+    ).href,
+  });
+}
+
 
 /**
  * Reference-mapped major moons use carefully prepared surface evidence.
@@ -154,6 +171,12 @@ const URANIAN_SURFACE_ASSETS = Object.freeze({
       import.meta.url,
     ).href,
   }),
+  Cressida: minorSurfaceAssets("cressida"),
+  Desdemona: minorSurfaceAssets("desdemona"),
+  Juliet: minorSurfaceAssets("juliet"),
+  Rosalind: minorSurfaceAssets("rosalind"),
+  Cupid: minorSurfaceAssets("cupid"),
+  Belinda: minorSurfaceAssets("belinda"),
   Mab: Object.freeze({
     albedo: new URL(
       "../../../../assets/textures/uranian/minor-moons/mab-albedo-v1.jpg",
@@ -674,6 +697,90 @@ const MINOR_RECONSTRUCTION_SETTINGS = Object.freeze({
     roughness: 0.982,
     rotation: [-0.08, 0.36, 0.05],
   }),
+  Cressida: Object.freeze({
+    shape: [1.10, 1.00, 0.93],
+    broad: 0.036,
+    medium: 0.014,
+    fine: 0.0040,
+    craterCount: 28,
+    craterDepth: 0.022,
+    craterRadiusMin: 0.024,
+    craterRadiusRange: 0.098,
+    bumpScale: 0.060,
+    displacement: 0.011,
+    roughness: 0.985,
+    rotation: [0.10, -0.34, 0.04],
+  }),
+  Desdemona: Object.freeze({
+    shape: [1.04, 1.02, 0.96],
+    broad: 0.018,
+    medium: 0.010,
+    fine: 0.0032,
+    craterCount: 40,
+    craterDepth: 0.018,
+    craterRadiusMin: 0.017,
+    craterRadiusRange: 0.075,
+    bumpScale: 0.054,
+    displacement: 0.009,
+    roughness: 0.988,
+    rotation: [-0.05, 0.24, -0.02],
+  }),
+  Juliet: Object.freeze({
+    shape: [1.38, 0.80, 0.73],
+    broad: 0.052,
+    medium: 0.017,
+    fine: 0.0044,
+    craterCount: 25,
+    craterDepth: 0.023,
+    craterRadiusMin: 0.024,
+    craterRadiusRange: 0.105,
+    bumpScale: 0.062,
+    displacement: 0.012,
+    roughness: 0.984,
+    rotation: [0.16, -0.40, 0.10],
+  }),
+  Rosalind: Object.freeze({
+    shape: [1.08, 0.99, 0.93],
+    broad: 0.040,
+    medium: 0.014,
+    fine: 0.0040,
+    craterCount: 24,
+    craterDepth: 0.020,
+    craterRadiusMin: 0.022,
+    craterRadiusRange: 0.090,
+    bumpScale: 0.058,
+    displacement: 0.010,
+    roughness: 0.989,
+    rotation: [-0.14, 0.31, 0.07],
+  }),
+  Cupid: Object.freeze({
+    shape: [1.42, 0.91, 0.86],
+    broad: 0.030,
+    medium: 0.013,
+    fine: 0.0037,
+    craterCount: 20,
+    craterDepth: 0.020,
+    craterRadiusMin: 0.020,
+    craterRadiusRange: 0.090,
+    bumpScale: 0.054,
+    displacement: 0.009,
+    roughness: 0.991,
+    rotation: [0.08, -0.52, -0.08],
+  }),
+  Belinda: Object.freeze({
+    shape: [1.03, 1.00, 0.97],
+    broad: 0.018,
+    medium: 0.010,
+    fine: 0.0032,
+    craterCount: 42,
+    craterDepth: 0.017,
+    craterRadiusMin: 0.016,
+    craterRadiusRange: 0.068,
+    bumpScale: 0.052,
+    displacement: 0.009,
+    roughness: 0.987,
+    rotation: [-0.04, 0.20, 0.02],
+  }),
   Mab: Object.freeze({
     shape: [1.13, 1.00, 0.89],
     broad: 0.052,
@@ -720,7 +827,8 @@ function createMinorReferenceSurface(profile, quality) {
 
   const craterField = Array.from({ length: settings.craterCount }, (_, index) => ({
     center: randomDirection(profile.seed + 37.4, index),
-    radius: 0.035 + random01(profile.seed, index, 61) * 0.135,
+    radius: (settings.craterRadiusMin ?? 0.035)
+      + random01(profile.seed, index, 61) * (settings.craterRadiusRange ?? 0.135),
     depth: settings.craterDepth * (0.42 + random01(profile.seed, index, 62) * 0.58),
     rim: settings.craterDepth * (0.10 + random01(profile.seed, index, 63) * 0.10),
   }));
@@ -735,6 +843,11 @@ function createMinorReferenceSurface(profile, quality) {
       rim: 0.009,
     });
   }
+
+  // Fixed directions live outside the vertex loop so the Rosalind shape does
+  // not allocate temporary vectors thousands of times during page startup.
+  const rosalindBulgeA = new THREE.Vector3(-0.72, 0.62, 0.30).normalize();
+  const rosalindBulgeB = new THREE.Vector3(-0.54, -0.68, 0.49).normalize();
 
   for (let index = 0; index < positions.count; index += 1) {
     direction.fromBufferAttribute(positions, index).normalize();
@@ -758,6 +871,41 @@ function createMinorReferenceSurface(profile, quality) {
       // Uranus's regular inner family.
       height += Math.max(0, direction.y * 0.62 - direction.x * 0.48) ** 2 * 0.030;
       height -= Math.max(0, -direction.y * 0.70 - direction.z * 0.35) ** 2 * 0.018;
+    } else if (profile.name === "Cressida") {
+      // Cressida reads as a compact low-gravity potato rather than a perfect
+      // sphere: one broad shoulder and an opposite worn facet break its limb.
+      height += Math.max(0, direction.x * 0.78 + direction.y * 0.30) ** 2 * 0.020;
+      height -= Math.max(0, -direction.z * 0.72 - direction.y * 0.24) ** 2 * 0.012;
+    } else if (profile.name === "Desdemona") {
+      // Keep the silhouette round while shallow global grooves roughen the
+      // terminator. The tiny amplitude prevents a basketball-like ribbed body.
+      height += Math.sin((direction.y * 0.74 + direction.z * 0.36) * 34) * 0.0018;
+    } else if (profile.name === "Juliet") {
+      // Juliet's reference is distinctly long and tapered. Shape scaling makes
+      // the long axis; this one-sided erosion narrows the battered leading end.
+      height -= Math.max(0, -direction.x - 0.18) ** 1.7 * 0.075;
+      height += Math.max(0, direction.y * 0.52 - direction.z * 0.34) ** 2 * 0.018;
+    } else if (profile.name === "Rosalind") {
+      // Broad connected masses are sculpted into one closed surface. Separate
+      // overlapping meshes would expose moving cracks during rotation.
+      const bulgeA = Math.exp(-Math.pow(Math.acos(THREE.MathUtils.clamp(
+        direction.dot(rosalindBulgeA), -1, 1,
+      )) / 0.28, 2));
+      const bulgeB = Math.exp(-Math.pow(Math.acos(THREE.MathUtils.clamp(
+        direction.dot(rosalindBulgeB), -1, 1,
+      )) / 0.25, 2));
+      height += bulgeA * 0.085 + bulgeB * 0.066;
+    } else if (profile.name === "Cupid") {
+      // Cupid is modeled as a contact-binary-like single skin: unequal end
+      // lobes plus a pinched equatorial waist, never two intersecting objects.
+      const axial = Math.abs(direction.x);
+      const waist = Math.exp(-Math.pow(direction.x / 0.24, 2));
+      height += Math.pow(axial, 1.55) * 0.070 - waist * 0.085;
+      height += Math.max(0, direction.x) ** 2 * 0.022;
+    } else if (profile.name === "Belinda") {
+      // Belinda remains almost round; very shallow corrugation is enough to
+      // catch sunlight across its fine mature regolith.
+      height += Math.sin((direction.x * 0.42 + direction.y * 0.78) * 38) * 0.0015;
     }
 
     const radius = Math.max(0.76, 1 + height);

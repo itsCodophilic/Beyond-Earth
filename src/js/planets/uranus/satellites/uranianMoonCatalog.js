@@ -57,6 +57,12 @@ const DIRECT_SURFACE_NAMES = new Set([
   "Ophelia",
   "S/2025 U1",
   "Bianca",
+  "Cressida",
+  "Desdemona",
+  "Juliet",
+  "Rosalind",
+  "Cupid",
+  "Belinda",
   "Mab",
   "Puck",
   "Caliban",
@@ -72,6 +78,12 @@ const ORBIT_GUIDES = new Set([
   "Cordelia",
   "Ophelia",
   "Bianca",
+  "Cressida",
+  "Desdemona",
+  "Juliet",
+  "Rosalind",
+  "Cupid",
+  "Belinda",
   "Mab",
   "Puck",
   "Caliban",
@@ -79,6 +91,37 @@ const ORBIT_GUIDES = new Set([
   "S/2023 U1",
   "S/2025 U1",
 ]);
+
+const MINOR_REFERENCE_NAMES = new Set([
+  "S/2025 U1",
+  "Bianca",
+  "Cressida",
+  "Desdemona",
+  "Juliet",
+  "Rosalind",
+  "Cupid",
+  "Belinda",
+  "Mab",
+  "Caliban",
+]);
+
+const MINOR_REFERENCE_STRUCTURES = Object.freeze({
+  Cressida: "Compact pale-grey low-gravity ice-rock body with a subtly asymmetric potato-like silhouette, granular regolith, shallow craters, and a worn opposing facet",
+  Desdemona: "Nearly spherical dark grey ice-rock body with densely overlapping small craters, subdued grooves, fine corrugation, and mature impact-weathered regolith",
+  Juliet: "Strongly elongated and tapered tan-grey ice-rock body with an uneven leading end, battered ridges, shallow craters, and a distinctly asteroid-like silhouette",
+  Rosalind: "Rounded charcoal-grey body whose single watertight surface carries broad boulder-like masses, granular regolith, shallow impact pits, and worn connecting ridges",
+  Cupid: "Tiny dark contact-binary-like body with two unequal lobes, a pinched waist, fine craters, and a continuous low-albedo ice-rock skin",
+  Belinda: "Compact nearly spherical grey inner moon with dense fine grooves, small impact craters, subdued streaking, and a mature weathered ice-rock surface",
+});
+
+const MINOR_REFERENCE_NOTES = Object.freeze({
+  Cressida: "Cressida has not been resolved into a factual global surface map. The supplied image guides its compact pale-grey character; the website uses a seamless low-albedo material and a separately sculpted asymmetric watertight mesh, so every crater and limb shadow responds to the real scene light rather than painted illumination.",
+  Desdemona: "Desdemona remains unresolved as a globe. The supplied round cratered concept guides only its dark grey-green regolith character. Dense fine impacts and restrained grooves are reconstructed across a seamless material and near-spherical 3D surface without claiming observed geography.",
+  Juliet: "Juliet has no resolved global map. The supplied elongated concept guides the warm-grey palette and asteroid-like silhouette; its tapered leading end, battered ridges, and impact relief are built into one closed mesh, while photographed background, lighting, and stock marks are excluded.",
+  Rosalind: "Rosalind is unresolved at global scale. The supplied concept guides its charcoal regolith and raised-mass character. Those broad bulges are sculpted into one sealed surface instead of overlapping pieces, preventing gaps or moving cracks during rotation.",
+  Cupid: "Hubble discovered Cupid as an extremely faint point source, not a resolved body. The supplied contact-binary concept therefore guides only this model's two-lobed identity. The pinched waist and unequal lobes form one watertight mesh beneath a conservative seamless dark regolith reconstruction.",
+  Belinda: "Belinda has not been imaged as a resolved global globe. The supplied round concept guides its dense fine-crater and groove character; a near-spherical watertight mesh and seamless low-albedo maps provide lighting-responsive depth without presenting invented markings as observations.",
+});
 
 function stableSeed(name) {
   let hash = 2166136261;
@@ -150,6 +193,12 @@ function describeMoon(name, tier) {
     Cordelia: "A tiny inner shepherd moon orbiting just inside Uranus's epsilon ring, helping keep the narrow ring edge sharply confined.",
     Ophelia: "A small inner shepherd moon orbiting just outside Uranus's epsilon ring and working with Cordelia to confine its particles.",
     Bianca: "A compact inner Uranian moon whose very dark carbon-rich ice-rock surface remains unresolved beyond its size and orbit.",
+    Cressida: "A small dark inner moon orbiting within Uranus's densely packed ring-moon region, reconstructed here as a compact battered ice-rock body.",
+    Desdemona: "A tightly orbiting inner moon in Uranus's crowded Portia group, represented as a dark, old, finely cratered ice-rock world.",
+    Juliet: "An inner Portia-group moon reconstructed with a distinctly elongated, tapered silhouette and impact-worn low-albedo regolith.",
+    Rosalind: "A small inner moon between Portia and Cupid, modeled as a connected irregular ice-rock body with broad worn surface masses.",
+    Cupid: "One of the smallest known inner Uranian moons, discovered by Hubble and moving through an exceptionally crowded, dynamically unstable region.",
+    Belinda: "A compact inner Uranian moon whose orbit lies extremely close to Cupid's, within the densely packed Portia-group system.",
     Mab: "A tiny dark moon embedded in Uranus's dusty mu ring, likely replenishing that ring when impacts eject surface material.",
     Puck: "A dark inner moon with an irregular, heavily cratered surface observed by Voyager 2.",
     Caliban: "A small reddish retrograde irregular moon, likely a captured outer Solar System body.",
@@ -202,7 +251,7 @@ export const URANUS_MOON_PROFILES = Object.freeze(RAW.map((row) => {
         ? "Unresolved conservative reconstruction; supplied small-body image used only as artistic shape and regolith guidance"
       : name === "Ophelia"
         ? "Unresolved conservative reconstruction; unrelated supplied Io image excluded from the Uranian surface"
-      : ["S/2025 U1", "Bianca", "Mab", "Caliban"].includes(name)
+      : MINOR_REFERENCE_NAMES.has(name)
         ? "Unresolved reference-guided reconstruction; supplied image contributes artistic palette and terrain character only"
       : referenceMapped
         ? `${referenceCount} user-supplied surface reference${referenceCount === "Two" ? "s" : ""} converted into a continuous global texture`
@@ -219,6 +268,8 @@ export const URANUS_MOON_PROFILES = Object.freeze(RAW.map((row) => {
         ? "Elongated, subtly bilobed low-gravity ice-rock body with dark granular regolith, shallow impact pits, microcraters, and restrained fractured patches"
       : name === "Ophelia"
         ? "Compact asymmetric dark ice-rock body with a rounded potato-like silhouette, shallow impact pits, fine grooves, rubbly patches, and sparse pale icy flecks"
+      : MINOR_REFERENCE_STRUCTURES[name]
+        ? MINOR_REFERENCE_STRUCTURES[name]
       : name === "S/2025 U1"
         ? "Conservative charcoal ice-rock reconstruction with a near-round low-gravity silhouette, shallow impact terrain, muted grooves, and no claimed observed geography"
       : name === "Bianca"
@@ -240,6 +291,16 @@ export const URANUS_MOON_PROFILES = Object.freeze(RAW.map((row) => {
         ? 0.975
       : name === "Cordelia" || name === "Ophelia"
         ? 0.985
+      : ["Cressida", "Juliet"].includes(name)
+        ? 0.984
+      : name === "Desdemona"
+        ? 0.988
+      : name === "Rosalind"
+        ? 0.989
+      : name === "Cupid"
+        ? 0.991
+      : name === "Belinda"
+        ? 0.987
       : name === "S/2025 U1"
         ? 0.985
       : name === "Bianca"
@@ -271,6 +332,8 @@ export const URANUS_MOON_PROFILES = Object.freeze(RAW.map((row) => {
         ? null
       : name === "Caliban"
         ? 0.04
+      : MINOR_REFERENCE_STRUCTURES[name]
+        ? null
       : name === "Titania"
         ? 0.27
         : name === "Oberon"
@@ -338,6 +401,8 @@ export const URANUS_MOON_PROFILES = Object.freeze(RAW.map((row) => {
         ? "Mab is observed as a tiny dark source within Uranus's mu ring rather than as a resolved globe. The supplied concept guides the cratered silhouette and broad depression, rebuilt as real watertight geometry and seamless material relief. The photographed text, logo, black sky, and exact invented markings are excluded."
       : name === "Caliban"
         ? "Caliban is a distant retrograde irregular moon whose approximately 72 km diameter is inferred from brightness using an assumed very low albedo. The supplied reddish disk guides palette and broad mottling only; the complete elongated cratered body is a seamless conservative reconstruction, not a claim of resolved terrain."
+      : MINOR_REFERENCE_NOTES[name]
+        ? MINOR_REFERENCE_NOTES[name]
       : name === "Titania"
         ? "Both supplied Titania images guide a complete 2:1 global albedo map. Its longitude edges and poles are blended continuously, while separate height and roughness maps plus physically sculpted craters and fault valleys make the moon respond naturally to sunlight without gaps or black-background leakage."
       : name === "Oberon"
