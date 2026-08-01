@@ -10,3 +10,23 @@
 
 
 I have shared you list of moon names of saturn as well as their images respectively. As per number i have shared you images as well. Now i wanted you first analyze the image color texture shape now it looks in 3D model object, and then you need to accordingly implement things into the src code, and for color and texture suggested you can use these image itself properly. 
+
+
+Inner moons:
+Cressida
+Desdemona
+Juliet
+Portia
+Rosalind
+Cupid
+Belinda
+Perdita
+Outer irregular moons:
+Francisco
+S/2023 U1
+Stephano
+Trinculo
+Margaret
+Prospero
+Setebos
+Ferdinand

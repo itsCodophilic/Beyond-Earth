@@ -126,6 +126,62 @@ const URANIAN_SURFACE_ASSETS = Object.freeze({
       import.meta.url,
     ).href,
   }),
+  "S/2025 U1": Object.freeze({
+    albedo: new URL(
+      "../../../../assets/textures/uranian/minor-moons/s2025-u1-albedo-v1.jpg",
+      import.meta.url,
+    ).href,
+    height: new URL(
+      "../../../../assets/textures/uranian/minor-moons/s2025-u1-height-v1.jpg",
+      import.meta.url,
+    ).href,
+    roughness: new URL(
+      "../../../../assets/textures/uranian/minor-moons/s2025-u1-roughness-v1.jpg",
+      import.meta.url,
+    ).href,
+  }),
+  Bianca: Object.freeze({
+    albedo: new URL(
+      "../../../../assets/textures/uranian/minor-moons/bianca-albedo-v1.jpg",
+      import.meta.url,
+    ).href,
+    height: new URL(
+      "../../../../assets/textures/uranian/minor-moons/bianca-height-v1.jpg",
+      import.meta.url,
+    ).href,
+    roughness: new URL(
+      "../../../../assets/textures/uranian/minor-moons/bianca-roughness-v1.jpg",
+      import.meta.url,
+    ).href,
+  }),
+  Mab: Object.freeze({
+    albedo: new URL(
+      "../../../../assets/textures/uranian/minor-moons/mab-albedo-v1.jpg",
+      import.meta.url,
+    ).href,
+    height: new URL(
+      "../../../../assets/textures/uranian/minor-moons/mab-height-v1.jpg",
+      import.meta.url,
+    ).href,
+    roughness: new URL(
+      "../../../../assets/textures/uranian/minor-moons/mab-roughness-v1.jpg",
+      import.meta.url,
+    ).href,
+  }),
+  Caliban: Object.freeze({
+    albedo: new URL(
+      "../../../../assets/textures/uranian/minor-moons/caliban-albedo-v1.jpg",
+      import.meta.url,
+    ).href,
+    height: new URL(
+      "../../../../assets/textures/uranian/minor-moons/caliban-height-v1.jpg",
+      import.meta.url,
+    ).href,
+    roughness: new URL(
+      "../../../../assets/textures/uranian/minor-moons/caliban-roughness-v1.jpg",
+      import.meta.url,
+    ).href,
+  }),
 });
 
 const uranianTextureLoader = new THREE.TextureLoader();
@@ -238,6 +294,12 @@ function shepherdGeometrySegments(quality) {
   if (quality === "low") return [72, 46];
   if (quality === "medium") return [120, 76];
   return [176, 112];
+}
+
+function minorMoonGeometrySegments(quality) {
+  if (quality === "low") return [64, 40];
+  if (quality === "medium") return [104, 66];
+  return [152, 96];
 }
 
 function createArielReferenceSurface(profile, quality) {
@@ -587,6 +649,166 @@ function createShepherdMoonSurface(profile, quality) {
   return moon;
 }
 
+const MINOR_RECONSTRUCTION_SETTINGS = Object.freeze({
+  "S/2025 U1": Object.freeze({
+    shape: [1.10, 1.01, 0.93],
+    broad: 0.030,
+    medium: 0.013,
+    fine: 0.0038,
+    craterCount: 25,
+    craterDepth: 0.024,
+    bumpScale: 0.060,
+    displacement: 0.012,
+    roughness: 0.985,
+    rotation: [0.10, -0.28, 0.03],
+  }),
+  Bianca: Object.freeze({
+    shape: [1.18, 0.97, 0.88],
+    broad: 0.045,
+    medium: 0.016,
+    fine: 0.0042,
+    craterCount: 18,
+    craterDepth: 0.021,
+    bumpScale: 0.057,
+    displacement: 0.011,
+    roughness: 0.982,
+    rotation: [-0.08, 0.36, 0.05],
+  }),
+  Mab: Object.freeze({
+    shape: [1.13, 1.00, 0.89],
+    broad: 0.052,
+    medium: 0.019,
+    fine: 0.0050,
+    craterCount: 24,
+    craterDepth: 0.030,
+    bumpScale: 0.072,
+    displacement: 0.014,
+    roughness: 0.988,
+    rotation: [0.14, -0.48, -0.04],
+  }),
+  Caliban: Object.freeze({
+    shape: [1.20, 0.93, 0.84],
+    broad: 0.060,
+    medium: 0.021,
+    fine: 0.0052,
+    craterCount: 21,
+    craterDepth: 0.027,
+    bumpScale: 0.068,
+    displacement: 0.013,
+    roughness: 0.986,
+    rotation: [-0.12, 0.30, 0.08],
+  }),
+});
+
+/**
+ * Builds individually shaped, watertight models for unresolved small moons.
+ *
+ * The supplied images guide palette and terrain character only. None of these
+ * bodies has a resolved 360-degree spacecraft map, so a single closed sphere
+ * is deformed conservatively and covered by seamless reconstruction maps. This
+ * avoids photographic black backgrounds, UV-star pinching, flat disk caps,
+ * gaps, and the false implication that invented markings are observed terrain.
+ */
+function createMinorReferenceSurface(profile, quality) {
+  const settings = MINOR_RECONSTRUCTION_SETTINGS[profile.name];
+  const maps = getUranianSurfaceMaps(profile.name);
+  const [widthSegments, heightSegments] = minorMoonGeometrySegments(quality);
+  const geometry = new THREE.SphereGeometry(1, widthSegments, heightSegments);
+  const positions = geometry.getAttribute("position");
+  const direction = new THREE.Vector3();
+  const shape = settings.shape;
+
+  const craterField = Array.from({ length: settings.craterCount }, (_, index) => ({
+    center: randomDirection(profile.seed + 37.4, index),
+    radius: 0.035 + random01(profile.seed, index, 61) * 0.135,
+    depth: settings.craterDepth * (0.42 + random01(profile.seed, index, 62) * 0.58),
+    rim: settings.craterDepth * (0.10 + random01(profile.seed, index, 63) * 0.10),
+  }));
+
+  // Mab's reference is defined by a deep central depression. Reproduce that
+  // identity as a real bowl and rim in geometry instead of painting a black dot.
+  if (profile.name === "Mab") {
+    craterField.push({
+      center: new THREE.Vector3(0.72, 0.18, 0.67).normalize(),
+      radius: 0.30,
+      depth: 0.052,
+      rim: 0.009,
+    });
+  }
+
+  for (let index = 0; index < positions.count; index += 1) {
+    direction.fromBufferAttribute(positions, index).normalize();
+    const broad = fbm(direction, 1.30, 4, profile.seed + 14.7);
+    const medium = fbm(direction, 5.9, 4, profile.seed + 55.1);
+    const fine = fbm(direction, 21.0, 3, profile.seed + 91.3);
+    let height = broad * settings.broad
+      + medium * settings.medium
+      + fine * settings.fine;
+
+    craterField.forEach((crater) => {
+      height += sampleCrater(direction, crater).height;
+    });
+
+    if (profile.name === "Bianca") {
+      // The reference has one softly swollen end and a shallow opposite facet.
+      height += Math.max(0, direction.x * 0.82 + direction.y * 0.18) ** 2 * 0.022;
+      height -= Math.max(0, -direction.z * 0.75 + direction.y * 0.10) ** 2 * 0.012;
+    } else if (profile.name === "Caliban") {
+      // A captured irregular moon should not share the smoother silhouettes of
+      // Uranus's regular inner family.
+      height += Math.max(0, direction.y * 0.62 - direction.x * 0.48) ** 2 * 0.030;
+      height -= Math.max(0, -direction.y * 0.70 - direction.z * 0.35) ** 2 * 0.018;
+    }
+
+    const radius = Math.max(0.76, 1 + height);
+    positions.setXYZ(
+      index,
+      direction.x * radius * shape[0],
+      direction.y * radius * shape[1],
+      direction.z * radius * shape[2],
+    );
+  }
+
+  positions.needsUpdate = true;
+  geometry.deleteAttribute("normal");
+  geometry.computeVertexNormals();
+  geometry.computeBoundingSphere();
+
+  const qualityFactor = quality === "low" ? 0.56 : quality === "medium" ? 0.78 : 1;
+  const displacementScale = settings.displacement * qualityFactor;
+  const material = new THREE.MeshStandardMaterial({
+    color: 0xffffff,
+    map: maps?.albedoMap ?? null,
+    bumpMap: maps?.heightMap ?? null,
+    bumpScale: settings.bumpScale * qualityFactor,
+    displacementMap: maps?.heightMap ?? null,
+    displacementScale,
+    displacementBias: -displacementScale * 0.50,
+    roughness: settings.roughness,
+    roughnessMap: maps?.roughnessMap ?? null,
+    metalness: 0,
+    envMapIntensity: 0.010,
+    dithering: true,
+  });
+  material.name = `${profile.name} unresolved reference-guided ice-rock material`;
+
+  const moon = new THREE.Mesh(geometry, material);
+  moon.name = `${profile.name} continuous realistic 3D reconstruction`;
+  moon.rotation.set(...settings.rotation);
+  moon.castShadow = false;
+  moon.receiveShadow = false;
+  moon.userData.geometryIncludesShape = true;
+  moon.userData.surfaceDetailMode =
+    "unresolved-reference-guided-watertight-3d-reconstruction";
+  moon.userData.referenceTextureSource =
+    "User-supplied image used as artistic palette, silhouette, and terrain-character guidance";
+  moon.userData.surfaceTextureCoverage =
+    "Complete seamless 360-degree material with no photographed sky, labels, watermark, flat cap, or exposed under-layer.";
+  moon.userData.reconstructionTextureSource =
+    "Conservative individual geometry with separate albedo, height, and roughness maps; markings are not claimed as observed geography.";
+  return moon;
+}
+
 function fractureMask(direction, fractures, seed) {
   let mask = 0;
   fractures.forEach((feature) => {
@@ -803,6 +1025,9 @@ export function createUranianMoonSurface(profile, quality = "high") {
   if (profile.name === "Oberon") return createOberonReferenceSurface(profile, quality);
   if (["Cordelia", "Ophelia"].includes(profile.name)) {
     return createShepherdMoonSurface(profile, quality);
+  }
+  if (MINOR_RECONSTRUCTION_SETTINGS[profile.name]) {
+    return createMinorReferenceSurface(profile, quality);
   }
   const settings = settingsFor(profile);
   const detail = quality === "low"

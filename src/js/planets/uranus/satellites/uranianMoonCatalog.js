@@ -55,6 +55,9 @@ const DIRECT_SURFACE_NAMES = new Set([
   "Oberon",
   "Cordelia",
   "Ophelia",
+  "S/2025 U1",
+  "Bianca",
+  "Mab",
   "Puck",
   "Caliban",
   "Sycorax",
@@ -68,6 +71,8 @@ const ORBIT_GUIDES = new Set([
   "Oberon",
   "Cordelia",
   "Ophelia",
+  "Bianca",
+  "Mab",
   "Puck",
   "Caliban",
   "Sycorax",
@@ -144,6 +149,8 @@ function describeMoon(name, tier) {
     Oberon: "A dark, ancient outer major moon marked by large craters, reddish material, and bright impact ejecta.",
     Cordelia: "A tiny inner shepherd moon orbiting just inside Uranus's epsilon ring, helping keep the narrow ring edge sharply confined.",
     Ophelia: "A small inner shepherd moon orbiting just outside Uranus's epsilon ring and working with Cordelia to confine its particles.",
+    Bianca: "A compact inner Uranian moon whose very dark carbon-rich ice-rock surface remains unresolved beyond its size and orbit.",
+    Mab: "A tiny dark moon embedded in Uranus's dusty mu ring, likely replenishing that ring when impacts eject surface material.",
     Puck: "A dark inner moon with an irregular, heavily cratered surface observed by Voyager 2.",
     Caliban: "A small reddish retrograde irregular moon, likely a captured outer Solar System body.",
     Sycorax: "The largest known irregular moon of Uranus, dark and mildly red on a distant retrograde orbit.",
@@ -195,6 +202,8 @@ export const URANUS_MOON_PROFILES = Object.freeze(RAW.map((row) => {
         ? "Unresolved conservative reconstruction; supplied small-body image used only as artistic shape and regolith guidance"
       : name === "Ophelia"
         ? "Unresolved conservative reconstruction; unrelated supplied Io image excluded from the Uranian surface"
+      : ["S/2025 U1", "Bianca", "Mab", "Caliban"].includes(name)
+        ? "Unresolved reference-guided reconstruction; supplied image contributes artistic palette and terrain character only"
       : referenceMapped
         ? `${referenceCount} user-supplied surface reference${referenceCount === "Two" ? "s" : ""} converted into a continuous global texture`
       : direct
@@ -210,6 +219,14 @@ export const URANUS_MOON_PROFILES = Object.freeze(RAW.map((row) => {
         ? "Elongated, subtly bilobed low-gravity ice-rock body with dark granular regolith, shallow impact pits, microcraters, and restrained fractured patches"
       : name === "Ophelia"
         ? "Compact asymmetric dark ice-rock body with a rounded potato-like silhouette, shallow impact pits, fine grooves, rubbly patches, and sparse pale icy flecks"
+      : name === "S/2025 U1"
+        ? "Conservative charcoal ice-rock reconstruction with a near-round low-gravity silhouette, shallow impact terrain, muted grooves, and no claimed observed geography"
+      : name === "Bianca"
+        ? "Dark carbon-rich ice-rock reconstruction with a softly elongated asymmetric outline, battered regolith, shallow craters, and a restrained cool grey-green cast"
+      : name === "Mab"
+        ? "Tiny dark ice-rock reconstruction with an irregular rounded outline, densely battered regolith, a broad impact depression, and brighter local ejecta"
+      : name === "Caliban"
+        ? "Low-albedo reddish captured-body reconstruction with an irregular elongated silhouette, ancient cratered regolith, subdued facets, and asymmetric impact wear"
       : name === "Titania"
         ? "Brown-grey ice-rock crust with dense impact terrain, bright ejecta marks, broad chasmata, graben, and fault scarps"
         : name === "Oberon"
@@ -223,6 +240,14 @@ export const URANUS_MOON_PROFILES = Object.freeze(RAW.map((row) => {
         ? 0.975
       : name === "Cordelia" || name === "Ophelia"
         ? 0.985
+      : name === "S/2025 U1"
+        ? 0.985
+      : name === "Bianca"
+        ? 0.982
+      : name === "Mab"
+        ? 0.988
+      : name === "Caliban"
+        ? 0.986
       : name === "Titania"
         ? 0.94
         : name === "Oberon"
@@ -238,6 +263,14 @@ export const URANUS_MOON_PROFILES = Object.freeze(RAW.map((row) => {
         ? 0.08
       : name === "Ophelia"
         ? 0.07
+      : name === "S/2025 U1"
+        ? null
+      : name === "Bianca"
+        ? null
+      : name === "Mab"
+        ? null
+      : name === "Caliban"
+        ? 0.04
       : name === "Titania"
         ? 0.27
         : name === "Oberon"
@@ -297,6 +330,14 @@ export const URANUS_MOON_PROFILES = Object.freeze(RAW.map((row) => {
         ? "Cordelia has not been resolved well enough for a factual global surface map. This explicitly labeled reconstruction uses its measured small-moon identity and epsilon-ring shepherd role, a watertight elongated 3D form, and non-specific dark icy-rock regolith. The supplied small-body image guides only the general battered silhouette and surface character—not claimed geography."
       : name === "Ophelia"
         ? "Ophelia has not been resolved well enough for a factual global surface map. This explicitly labeled reconstruction uses a compact irregular 3D form and non-specific low-albedo icy-rock regolith. The supplied pink volcanic image depicts Jupiter's moon Io, so it is deliberately excluded rather than presented as Ophelia evidence."
+      : name === "S/2025 U1"
+        ? "S/2025 U1 was discovered by JWST as a faint point source, not a resolved disk. The supplied cratered image therefore guides only this watertight model's charcoal palette and impact-worn character. Its seamless global material and conservative near-round silhouette are explicitly reconstructed, with no markings presented as observed geography."
+      : name === "Bianca"
+        ? "Voyager 2 established Bianca's presence and orbit but did not provide a factual global surface map; NASA notes that even its size and albedo have not been measured directly. The supplied image guides a muted cool grey-green palette and softly asymmetric outline, while a seamless albedo, height, and roughness set creates physically lit dark carbon-rich regolith without importing the pictured star field."
+      : name === "Mab"
+        ? "Mab is observed as a tiny dark source within Uranus's mu ring rather than as a resolved globe. The supplied concept guides the cratered silhouette and broad depression, rebuilt as real watertight geometry and seamless material relief. The photographed text, logo, black sky, and exact invented markings are excluded."
+      : name === "Caliban"
+        ? "Caliban is a distant retrograde irregular moon whose approximately 72 km diameter is inferred from brightness using an assumed very low albedo. The supplied reddish disk guides palette and broad mottling only; the complete elongated cratered body is a seamless conservative reconstruction, not a claim of resolved terrain."
       : name === "Titania"
         ? "Both supplied Titania images guide a complete 2:1 global albedo map. Its longitude edges and poles are blended continuously, while separate height and roughness maps plus physically sculpted craters and fault valleys make the moon respond naturally to sunlight without gaps or black-background leakage."
       : name === "Oberon"
