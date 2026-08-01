@@ -50,6 +50,14 @@ PROFILES = {
     "prospero": SurfaceProfile(74.0, 0.86, (1.00, 1.01, 1.01), 0.989),
     "setebos": SurfaceProfile(64.0, 0.87, (1.09, 0.96, 0.94), 0.988),
     "ferdinand": SurfaceProfile(59.0, 0.89, (0.98, 1.00, 1.03), 0.990),
+    # Reworked Uranian moons.  Their new seamless sources deliberately carry
+    # the user's palette and terrain cues without keeping the photographed
+    # disk, star field, labels, or baked illumination.
+    "bianca": SurfaceProfile(72.0, 0.82, (0.94, 1.01, 0.99), 0.986),
+    "puck": SurfaceProfile(67.0, 0.92, (0.99, 1.00, 1.01), 0.989),
+    "mab": SurfaceProfile(74.0, 0.92, (0.99, 1.00, 1.02), 0.990),
+    "caliban": SurfaceProfile(68.0, 0.78, (1.08, 0.95, 0.93), 0.987),
+    "sycorax": SurfaceProfile(63.0, 0.88, (1.07, 1.01, 0.83), 0.990),
 }
 
 

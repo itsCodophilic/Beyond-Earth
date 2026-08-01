@@ -122,9 +122,11 @@ const MINOR_REFERENCE_NAMES = new Set([
   "Cupid",
   "Belinda",
   "Perdita",
+  "Puck",
   "Mab",
   "Francisco",
   "Caliban",
+  "Sycorax",
   "S/2023 U1",
   "Stephano",
   "Trinculo",
@@ -135,6 +137,7 @@ const MINOR_REFERENCE_NAMES = new Set([
 ]);
 
 const MINOR_REFERENCE_STRUCTURES = Object.freeze({
+  Bianca: "Broadly rounded grey-green inner moon with a softly asymmetric shoulder, worn facet, subdued mottling, shallow impacts, and fine carbon-rich ice-rock regolith",
   Cressida: "Compact pale-grey low-gravity ice-rock body with a subtly asymmetric potato-like silhouette, granular regolith, shallow craters, and a worn opposing facet",
   Desdemona: "Nearly spherical dark grey ice-rock body with densely overlapping small craters, subdued grooves, fine corrugation, and mature impact-weathered regolith",
   Juliet: "Strongly elongated and tapered tan-grey ice-rock body with an uneven leading end, battered ridges, shallow craters, and a distinctly asteroid-like silhouette",
@@ -143,10 +146,14 @@ const MINOR_REFERENCE_STRUCTURES = Object.freeze({
   Cupid: "Tiny dark contact-binary-like body with two unequal lobes, a pinched waist, fine craters, and a continuous low-albedo ice-rock skin",
   Belinda: "Compact nearly spherical grey inner moon with dense fine grooves, small impact craters, subdued streaking, and a mature weathered ice-rock surface",
   Perdita: "Dark elongated pear-like inner moon with a tapered end, broad worn depression, subdued grooves, and densely weathered low-albedo regolith",
+  Puck: "Near-round charcoal-grey inner moon with densely overlapping physical craters, eroded basin rims, granular ejecta, battered facets, and ancient impact-saturated regolith",
+  Mab: "Small irregular pale-grey moon with densely fractured ice-rock regolith, one dominant deep impact bowl, rough ridges, numerous pits, and asymmetric battered relief",
   Francisco: "Cold grey distant irregular moon with two connected unequal masses, a broad waist, dense corrugation, shallow impacts, and a single sealed ice-rock surface",
   "S/2023 U1": "Tiny cool blue-grey captured moon with an elongated lozenge-like outline, subdued mottling, sparse pale flecks, and extremely fine impact wear",
+  Caliban: "Softly spherical low-albedo captured moon with dusty salmon, muted pink-orange, and mauve-grey mottling, understated craters, and a mature weathered surface",
   Stephano: "Charcoal-grey irregular moon with a broad peanut-like silhouette, unequal shoulders, dense grooves, and an old cratered captured-body surface",
   Trinculo: "Unusually round reference-guided reconstruction with muted warm ochre-grey mottling, shallow old craters, and fine dusty regolith",
+  Sycorax: "Elongated ochre-brown captured moon with gently tapered ends, muted olive mineral patches, shallow impact basins, corrugated weathering, and dark stains",
   Margaret: "Very dark compact rubble-rich irregular moon with a rounded diamond-like outline, coarse grains, shallow depressions, and subdued ridges",
   Prospero: "Pale blocky irregular moon with a rounded wedge-like silhouette, granular frost-dusted rock, shallow craters, and darker worn facets",
   Setebos: "Nearly spherical muted mauve-grey irregular moon with densely overlapping impacts, ancient reddish regolith, and low-contrast cratered terrain",
@@ -154,6 +161,7 @@ const MINOR_REFERENCE_STRUCTURES = Object.freeze({
 });
 
 const MINOR_REFERENCE_NOTES = Object.freeze({
+  Bianca: "Bianca has no resolved factual global surface map. The supplied grey-green concept guides only palette and softly rounded character; a seamless material and separately sculpted watertight surface remove its star field and baked illumination.",
   Cressida: "Cressida has not been resolved into a factual global surface map. The supplied image guides its compact pale-grey character; the website uses a seamless low-albedo material and a separately sculpted asymmetric watertight mesh, so every crater and limb shadow responds to the real scene light rather than painted illumination.",
   Desdemona: "Desdemona remains unresolved as a globe. The supplied round cratered concept guides only its dark grey-green regolith character. Dense fine impacts and restrained grooves are reconstructed across a seamless material and near-spherical 3D surface without claiming observed geography.",
   Juliet: "Juliet has no resolved global map. The supplied elongated concept guides the warm-grey palette and asteroid-like silhouette; its tapered leading end, battered ridges, and impact relief are built into one closed mesh, while photographed background, lighting, and stock marks are excluded.",
@@ -162,10 +170,14 @@ const MINOR_REFERENCE_NOTES = Object.freeze({
   Cupid: "Hubble discovered Cupid as an extremely faint point source, not a resolved body. The supplied contact-binary concept therefore guides only this model's two-lobed identity. The pinched waist and unequal lobes form one watertight mesh beneath a conservative seamless dark regolith reconstruction.",
   Belinda: "Belinda has not been imaged as a resolved global globe. The supplied round concept guides its dense fine-crater and groove character; a near-spherical watertight mesh and seamless low-albedo maps provide lighting-responsive depth without presenting invented markings as observations.",
   Perdita: "Perdita remains unresolved as a globe. Its supplied pear-like concept guides only silhouette and regolith character; the tapered body, broad depression, craters, and lighting-responsive relief are rebuilt as one continuous conservative surface.",
+  Puck: "Voyager 2 resolved Puck only at limited detail, not as a complete color globe. The supplied cratered concept guides this reconstruction's dense impact character; several large basins and smaller craters are cut into one closed surface beneath seamless neutral-grey maps.",
+  Mab: "Mab is observed as a tiny dark source rather than a resolved global globe. Its supplied cratered concept guides only the irregular outline and dominant-basin identity; the bowl, rim, and smaller impacts are rebuilt as watertight geometry beneath a seamless pale ice-rock material.",
   Francisco: "Francisco has not been resolved into global terrain. The supplied lobed concept guides its connected double-mass silhouette and cold-grey surface character, reproduced as a single watertight mesh so no overlapping parts expose moving cracks.",
   "S/2023 U1": "S/2023 U1 was discovered as a faint moving point source rather than a resolved disk. The supplied concept is treated as artistic guidance only; the tiny elongated body and seamless cool dark regolith do not claim observed geography.",
+  Caliban: "Caliban remains unresolved at global scale. The supplied pink-orange disk guides only its softly spherical outline and muted salmon-mauve palette; seamless maps remove the photographed sky, blur, and baked lighting while restrained relief preserves a calm planetary limb.",
   Stephano: "Stephano is unresolved at global scale. The supplied lobed image guides its broad peanut-like outline and grooved charcoal character, reconstructed in one sealed skin with no copied star field or baked lighting.",
   Trinculo: "Trinculo's supplied round warm-toned concept is not spacecraft surface evidence. It guides this conservative model's unusual roundness and muted ochre-grey palette while seamless maps and real crater relief respond to scene lighting.",
+  Sycorax: "Sycorax has no resolved factual global map. The supplied elongated concept guides its ochre-brown palette, tapered silhouette, and weathered captured-body character; its circular source-image swirl and stars are deliberately excluded from the seamless reconstruction.",
   Margaret: "Margaret is an unresolved distant irregular moon. The supplied dark rubble-body concept guides only its compact faceted silhouette and coarse regolith character; exact markings are not presented as observations.",
   Prospero: "Prospero lacks a resolved global surface map. The supplied pale blocky concept guides its rounded wedge silhouette and frost-dusted battered character after all text, background, and photographed illumination are excluded.",
   Setebos: "Setebos is unresolved as a globe. The supplied round cratered concept guides its muted mauve-grey palette and impact density, rendered through seamless material maps and a nearly spherical watertight surface without claiming factual crater locations.",
@@ -363,6 +375,8 @@ export const URANUS_MOON_PROFILES = Object.freeze(RAW.map((row) => {
         ? 0.986
       : name === "Perdita"
         ? 0.989
+      : name === "Puck"
+        ? 0.989
       : name === "Francisco"
         ? 0.988
       : name === "S/2023 U1"
@@ -371,6 +385,8 @@ export const URANUS_MOON_PROFILES = Object.freeze(RAW.map((row) => {
         ? 0.989
       : name === "Trinculo"
         ? 0.985
+      : name === "Sycorax"
+        ? 0.990
       : name === "Margaret"
         ? 0.993
       : name === "Prospero"
@@ -382,11 +398,11 @@ export const URANUS_MOON_PROFILES = Object.freeze(RAW.map((row) => {
       : name === "S/2025 U1"
         ? 0.985
       : name === "Bianca"
-        ? 0.982
-      : name === "Mab"
-        ? 0.988
-      : name === "Caliban"
         ? 0.986
+      : name === "Mab"
+        ? 0.990
+      : name === "Caliban"
+        ? 0.987
       : name === "Titania"
         ? 0.94
         : name === "Oberon"
@@ -478,7 +494,7 @@ export const URANUS_MOON_PROFILES = Object.freeze(RAW.map((row) => {
       : name === "Mab"
         ? "Mab is observed as a tiny dark source within Uranus's mu ring rather than as a resolved globe. The supplied concept guides the cratered silhouette and broad depression, rebuilt as real watertight geometry and seamless material relief. The photographed text, logo, black sky, and exact invented markings are excluded."
       : name === "Caliban"
-        ? "Caliban is a distant retrograde irregular moon whose approximately 72 km diameter is inferred from brightness using an assumed very low albedo. The supplied reddish disk guides palette and broad mottling only; the complete elongated cratered body is a seamless conservative reconstruction, not a claim of resolved terrain."
+        ? "Caliban is a distant retrograde irregular moon whose approximately 72 km diameter is inferred from brightness using an assumed very low albedo. The supplied reddish disk guides its softly spherical outline and salmon-mauve mottling only; the seamless conservative reconstruction removes photographed blur and lighting and does not claim resolved terrain."
       : MINOR_REFERENCE_NOTES[name]
         ? MINOR_REFERENCE_NOTES[name]
       : name === "Titania"

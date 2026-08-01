@@ -157,20 +157,7 @@ const URANIAN_SURFACE_ASSETS = Object.freeze({
       import.meta.url,
     ).href,
   }),
-  Bianca: Object.freeze({
-    albedo: new URL(
-      "../../../../assets/textures/uranian/minor-moons/bianca-albedo-v1.jpg",
-      import.meta.url,
-    ).href,
-    height: new URL(
-      "../../../../assets/textures/uranian/minor-moons/bianca-height-v1.jpg",
-      import.meta.url,
-    ).href,
-    roughness: new URL(
-      "../../../../assets/textures/uranian/minor-moons/bianca-roughness-v1.jpg",
-      import.meta.url,
-    ).href,
-  }),
+  Bianca: minorSurfaceAssets("bianca"),
   Cressida: minorSurfaceAssets("cressida"),
   Desdemona: minorSurfaceAssets("desdemona"),
   Juliet: minorSurfaceAssets("juliet"),
@@ -187,34 +174,10 @@ const URANIAN_SURFACE_ASSETS = Object.freeze({
   Prospero: minorSurfaceAssets("prospero"),
   Setebos: minorSurfaceAssets("setebos"),
   Ferdinand: minorSurfaceAssets("ferdinand"),
-  Mab: Object.freeze({
-    albedo: new URL(
-      "../../../../assets/textures/uranian/minor-moons/mab-albedo-v1.jpg",
-      import.meta.url,
-    ).href,
-    height: new URL(
-      "../../../../assets/textures/uranian/minor-moons/mab-height-v1.jpg",
-      import.meta.url,
-    ).href,
-    roughness: new URL(
-      "../../../../assets/textures/uranian/minor-moons/mab-roughness-v1.jpg",
-      import.meta.url,
-    ).href,
-  }),
-  Caliban: Object.freeze({
-    albedo: new URL(
-      "../../../../assets/textures/uranian/minor-moons/caliban-albedo-v1.jpg",
-      import.meta.url,
-    ).href,
-    height: new URL(
-      "../../../../assets/textures/uranian/minor-moons/caliban-height-v1.jpg",
-      import.meta.url,
-    ).href,
-    roughness: new URL(
-      "../../../../assets/textures/uranian/minor-moons/caliban-roughness-v1.jpg",
-      import.meta.url,
-    ).href,
-  }),
+  Puck: minorSurfaceAssets("puck"),
+  Mab: minorSurfaceAssets("mab"),
+  Caliban: minorSurfaceAssets("caliban"),
+  Sycorax: minorSurfaceAssets("sycorax"),
 });
 
 const uranianTextureLoader = new THREE.TextureLoader();
@@ -696,16 +659,18 @@ const MINOR_RECONSTRUCTION_SETTINGS = Object.freeze({
     rotation: [0.10, -0.28, 0.03],
   }),
   Bianca: Object.freeze({
-    shape: [1.18, 0.97, 0.88],
-    broad: 0.045,
-    medium: 0.016,
-    fine: 0.0042,
-    craterCount: 18,
-    craterDepth: 0.021,
-    bumpScale: 0.057,
-    displacement: 0.011,
-    roughness: 0.982,
-    rotation: [-0.08, 0.36, 0.05],
+    shape: [1.08, 1.01, 0.95],
+    broad: 0.029,
+    medium: 0.013,
+    fine: 0.0038,
+    craterCount: 24,
+    craterDepth: 0.019,
+    craterRadiusMin: 0.020,
+    craterRadiusRange: 0.086,
+    bumpScale: 0.052,
+    displacement: 0.009,
+    roughness: 0.986,
+    rotation: [-0.07, 0.31, 0.04],
   }),
   Cressida: Object.freeze({
     shape: [1.10, 1.00, 0.93],
@@ -931,29 +896,61 @@ const MINOR_RECONSTRUCTION_SETTINGS = Object.freeze({
     roughness: 0.990,
     rotation: [-0.10, 0.47, -0.08],
   }),
+  Puck: Object.freeze({
+    shape: [1.05, 1.01, 0.97],
+    broad: 0.034,
+    medium: 0.017,
+    fine: 0.0048,
+    craterCount: 58,
+    craterDepth: 0.026,
+    craterRadiusMin: 0.018,
+    craterRadiusRange: 0.105,
+    bumpScale: 0.068,
+    displacement: 0.012,
+    roughness: 0.989,
+    rotation: [0.10, -0.28, 0.02],
+  }),
   Mab: Object.freeze({
-    shape: [1.13, 1.00, 0.89],
-    broad: 0.052,
-    medium: 0.019,
-    fine: 0.0050,
-    craterCount: 24,
-    craterDepth: 0.030,
-    bumpScale: 0.072,
+    shape: [1.15, 1.00, 0.89],
+    broad: 0.050,
+    medium: 0.020,
+    fine: 0.0052,
+    craterCount: 32,
+    craterDepth: 0.029,
+    craterRadiusMin: 0.020,
+    craterRadiusRange: 0.112,
+    bumpScale: 0.074,
     displacement: 0.014,
-    roughness: 0.988,
+    roughness: 0.990,
     rotation: [0.14, -0.48, -0.04],
   }),
   Caliban: Object.freeze({
-    shape: [1.20, 0.93, 0.84],
-    broad: 0.060,
-    medium: 0.021,
-    fine: 0.0052,
-    craterCount: 21,
-    craterDepth: 0.027,
-    bumpScale: 0.068,
-    displacement: 0.013,
-    roughness: 0.986,
-    rotation: [-0.12, 0.30, 0.08],
+    shape: [1.03, 1.00, 0.97],
+    broad: 0.018,
+    medium: 0.010,
+    fine: 0.0034,
+    craterCount: 30,
+    craterDepth: 0.017,
+    craterRadiusMin: 0.018,
+    craterRadiusRange: 0.074,
+    bumpScale: 0.048,
+    displacement: 0.008,
+    roughness: 0.987,
+    rotation: [-0.07, 0.24, 0.04],
+  }),
+  Sycorax: Object.freeze({
+    shape: [1.34, 0.86, 0.76],
+    broad: 0.046,
+    medium: 0.018,
+    fine: 0.0045,
+    craterCount: 28,
+    craterDepth: 0.024,
+    craterRadiusMin: 0.021,
+    craterRadiusRange: 0.102,
+    bumpScale: 0.064,
+    displacement: 0.012,
+    roughness: 0.990,
+    rotation: [0.16, -0.38, 0.10],
   }),
 });
 
@@ -988,10 +985,33 @@ function createMinorReferenceSurface(profile, quality) {
   if (profile.name === "Mab") {
     craterField.push({
       center: new THREE.Vector3(0.72, 0.18, 0.67).normalize(),
-      radius: 0.30,
-      depth: 0.052,
-      rim: 0.009,
+      radius: 0.31,
+      depth: 0.062,
+      rim: 0.012,
     });
+  } else if (profile.name === "Puck") {
+    // Puck's battered identity comes from several overlapping large impacts,
+    // all cut into the closed surface instead of painted as dark circles.
+    craterField.push(
+      {
+        center: new THREE.Vector3(0.68, 0.38, 0.63).normalize(),
+        radius: 0.25,
+        depth: 0.048,
+        rim: 0.010,
+      },
+      {
+        center: new THREE.Vector3(-0.58, 0.22, 0.78).normalize(),
+        radius: 0.21,
+        depth: 0.040,
+        rim: 0.008,
+      },
+      {
+        center: new THREE.Vector3(0.18, -0.72, 0.67).normalize(),
+        radius: 0.18,
+        depth: 0.034,
+        rim: 0.007,
+      },
+    );
   } else if (profile.name === "Perdita") {
     // The reference's broad worn hollow is modeled as genuine concave relief,
     // not a dark painted patch in the albedo texture.
@@ -1023,14 +1043,14 @@ function createMinorReferenceSurface(profile, quality) {
     });
 
     if (profile.name === "Bianca") {
-      // The reference has one softly swollen end and a shallow opposite facet.
-      height += Math.max(0, direction.x * 0.82 + direction.y * 0.18) ** 2 * 0.022;
-      height -= Math.max(0, -direction.z * 0.75 + direction.y * 0.10) ** 2 * 0.012;
+      // Bianca is broadly rounded, with only a soft shoulder and a worn facet.
+      // Restraint here avoids turning its reference into a generic asteroid.
+      height += Math.max(0, direction.x * 0.82 + direction.y * 0.18) ** 2 * 0.014;
+      height -= Math.max(0, -direction.z * 0.75 + direction.y * 0.10) ** 2 * 0.008;
     } else if (profile.name === "Caliban") {
-      // A captured irregular moon should not share the smoother silhouettes of
-      // Uranus's regular inner family.
-      height += Math.max(0, direction.y * 0.62 - direction.x * 0.48) ** 2 * 0.030;
-      height -= Math.max(0, -direction.y * 0.70 - direction.z * 0.35) ** 2 * 0.018;
+      // The supplied disk reads as a small spherical world. Keep its limb calm
+      // and let low-amplitude relief plus the salmon-mauve albedo carry it.
+      height += Math.sin((direction.x * 0.54 + direction.y * 0.62) * 29) * 0.0013;
     } else if (profile.name === "Cressida") {
       // Cressida reads as a compact low-gravity potato rather than a perfect
       // sphere: one broad shoulder and an opposite worn facet break its limb.
@@ -1125,6 +1145,13 @@ function createMinorReferenceSurface(profile, quality) {
       ));
       height += 0.078 * Math.exp(-Math.pow(shoulderAngle / 0.25, 2));
       height -= Math.max(0, -direction.y * 0.58 + direction.z * 0.44) ** 2 * 0.016;
+    } else if (profile.name === "Sycorax") {
+      // Sycorax is an elongated captured body. Shape scaling supplies the long
+      // axis while an eroded end and shallow opposing shoulder prevent a plain
+      // ellipsoid without introducing the circular texture swirl in its source.
+      height -= Math.max(0, -direction.x - 0.16) ** 1.7 * 0.048;
+      height += Math.max(0, direction.x * 0.70 + direction.y * 0.30) ** 2 * 0.025;
+      height -= Math.max(0, -direction.y * 0.58 + direction.z * 0.44) ** 2 * 0.012;
     }
 
     const radius = Math.max(0.76, 1 + height);
