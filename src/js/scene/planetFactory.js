@@ -1114,16 +1114,21 @@ function addGiantPlanetRings(planet, config, textures, segmentScale = 1, hoverTa
      * bright sheets. A thin torus keeps them visible even when the planet is
      * viewed nearly edge-on, while the colours remain charcoal-grey and muted.
      */
+    // Radii are the measured ring-centre distances divided by Uranus's
+    // 25,559 km equatorial radius. Most importantly, the epsilon ring sits at
+    // 2.001 radii between Cordelia (1.947) and Ophelia (2.103), rather than
+    // sharing Ophelia's visual orbit as the older approximation did.
     const ringProfiles = [
-      [1.42, 0.0075, 0x485a5f, 0.20],
-      [1.48, 0.0070, 0x5a6d71, 0.16],
-      [1.55, 0.0080, 0x3e4d52, 0.18],
-      [1.63, 0.0075, 0x73868b, 0.22],
-      [1.71, 0.0095, 0x9bb0b3, 0.30],
-      [1.80, 0.0070, 0x56696e, 0.18],
-      [1.89, 0.0080, 0x6e8287, 0.20],
-      [1.99, 0.0078, 0x83979b, 0.22],
-      [2.10, 0.0105, 0xaebfc2, 0.34],
+      [1.637, 0.0045, 0x485a5f, 0.16], // Six
+      [1.652, 0.0045, 0x5a6d71, 0.15], // Five
+      [1.665, 0.0045, 0x3e4d52, 0.16], // Four
+      [1.750, 0.0050, 0x73868b, 0.20], // Alpha
+      [1.786, 0.0050, 0x9bb0b3, 0.23], // Beta
+      [1.846, 0.0042, 0x56696e, 0.15], // Eta
+      [1.863, 0.0045, 0x6e8287, 0.18], // Gamma
+      [1.890, 0.0050, 0x83979b, 0.20], // Delta
+      [1.957, 0.0040, 0x667a7f, 0.14], // Lambda
+      [2.001, 0.0085, 0xaebfc2, 0.34], // Epsilon
     ];
 
     ringProfiles.forEach(([radiusScale, tubeScale, color, opacity], index) => {
@@ -1154,8 +1159,8 @@ function addGiantPlanetRings(planet, config, textures, segmentScale = 1, hoverTa
     });
 
     const dustSheet = createRingBand({
-      innerRadius: r * 1.40,
-      outerRadius: r * 2.14,
+      innerRadius: r * 1.56,
+      outerRadius: r * 2.035,
       color: 0x718488,
       opacity: 0.012,
       roughness: 1,

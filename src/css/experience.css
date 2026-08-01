@@ -1435,7 +1435,10 @@ body.is-hovering-planet-orbit #universe {
     inset 0 0 34px rgba(91, 225, 255, 0.08),
     0 0 31px rgba(72, 218, 255, 0.28),
     0 17px 42px rgba(0, 0, 0, 0.48);
-  transform: translateY(-2px) scale(1.015);
+  /* Expand around the pointer instead of moving upward beneath it. Moving the
+     hit box on hover could repeatedly enter/leave at the lower edge and make
+     the complete card appear to flicker. */
+  transform: translateY(0) scale(1.015);
 }
 
 .celestial-selection-card__path {

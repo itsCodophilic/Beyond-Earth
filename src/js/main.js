@@ -715,9 +715,18 @@ import { createCelestialDetailsPanel } from './ui/planetDetailsPanel.js';
   const celestialSelectionCardName = celestialSelectionCard.querySelector("#celestial-selection-card-name");
   const celestialSelectionCardType = celestialSelectionCard.querySelector("#celestial-selection-card-type");
   const celestialSelectionCardSatelliteRank = celestialSelectionCard.querySelector("#celestial-selection-card-satellite-rank");
+  // The focused body and camera both ease through 3D space. Keep a separate,
+  // pixel-snapped UI position so tiny sub-pixel camera changes do not make the
+  // glass card shimmer while the body itself remains visually stationary.
+  const celestialSelectionCardPosition = {
+    body: null,
+    left: 0,
+    top: 0,
+    initialized: false,
+  };
 
-  // Jupiter and Saturn contain far more moons than can share a close planetary
-  // portrait. This companion control opens a presentation-only orbital atlas:
+  // Large moon systems cannot share one close planetary portrait without
+  // becoming unreadable. This control opens a presentation-only orbital atlas:
   // every catalogue body remains rendered, while extreme irregular orbits are
   // compressed just enough to fit in one cinematic frame.
   let satelliteSystemOverview = document.querySelector("#satellite-system-overview");
@@ -907,7 +916,7 @@ import { createCelestialDetailsPanel } from './ui/planetDetailsPanel.js';
     const system = majorSatelliteSystems.find(
       (candidate) => candidate.parentName === parentName,
     );
-    if (!system || !["Jupiter", "Saturn"].includes(parentName)) return;
+    if (!system || !["Jupiter", "Saturn", "Uranus"].includes(parentName)) return;
 
     if (satelliteOverviewParentName === parentName) {
       closeSatelliteAtlas();
@@ -925,8 +934,13 @@ import { createCelestialDetailsPanel } from './ui/planetDetailsPanel.js';
     const parentRadius = Number(system.parent.userData?.visualRadius ?? 1);
     // The planet is deliberately a compact central reference in atlas mode.
     // Six-to-seven planet radii leave enough negative space to read the full
-    // irregular population without making Jupiter or Saturn dominate the shot.
-    const atlasRadius = parentRadius * (parentName === "Saturn" ? 7.20 : 6.80);
+    // irregular population without making the parent planet dominate the shot.
+    const atlasRadius = parentName === "Uranus"
+      ? Math.max(
+        parentRadius * 9.30,
+        Number(system.maximumOrbitRadius ?? 0) * 1.04,
+      )
+      : parentRadius * (parentName === "Saturn" ? 7.20 : 6.80);
     const atlasHalfFov = THREE.MathUtils.degToRad(
       Number(focusedBody.userData?.focusFov ?? camera.fov ?? 34) * 0.5,
     );
@@ -1184,8 +1198,8 @@ import { createCelestialDetailsPanel } from './ui/planetDetailsPanel.js';
   let focusZoomTarget = 1;
   let focusZoomCurrent = 1;
   let focusPinchDistance = null;
-  // Null in ordinary inspection; set to Jupiter or Saturn while the complete
-  // catalogue atlas is active.
+  // Null in ordinary inspection; set to the parent of the complete catalogue
+  // atlas while its alternate system-wide shot is active.
   let satelliteOverviewParentName = null;
   // Empty-space exploration moves the complete camera rig through the 3D
   // scene. Separate camera/focus offsets let a clicked region become centred
@@ -3084,28 +3098,49 @@ import { createCelestialDetailsPanel } from './ui/planetDetailsPanel.js';
       || celestialDetailsPanel?.isOpen()
     ) {
       celestialSelectionCard.classList.remove("is-visible");
-      celestialSelectionCard.setAttribute("aria-hidden", "true");
+      if (celestialSelectionCard.getAttribute("aria-hidden") !== "true") {
+        celestialSelectionCard.setAttribute("aria-hidden", "true");
+      }
+      celestialSelectionCardPosition.body = null;
+      celestialSelectionCardPosition.initialized = false;
       return;
     }
 
     const visibleBodyName = bodyName ?? "Celestial body";
     const parentName = body.userData?.parentPlanet;
-    celestialSelectionCardName.textContent = visibleBodyName;
-    celestialSelectionCardType.textContent = parentName
+    const visibleBodyType = parentName
       ? `${getCelestialSelectionType(body)} · ${parentName} system`
       : getCelestialSelectionType(body);
+    if (celestialSelectionCardName.textContent !== visibleBodyName) {
+      celestialSelectionCardName.textContent = visibleBodyName;
+    }
+    if (celestialSelectionCardType.textContent !== visibleBodyType) {
+      celestialSelectionCardType.textContent = visibleBodyType;
+    }
     const satelliteRank = getSatelliteRankInfo(body);
     if (celestialSelectionCardSatelliteRank) {
-      celestialSelectionCardSatelliteRank.hidden = !satelliteRank;
-      celestialSelectionCardSatelliteRank.textContent = satelliteRank?.compactText ?? "";
+      const rankText = satelliteRank?.compactText ?? "";
+      if (celestialSelectionCardSatelliteRank.hidden === Boolean(satelliteRank)) {
+        celestialSelectionCardSatelliteRank.hidden = !satelliteRank;
+      }
+      if (celestialSelectionCardSatelliteRank.textContent !== rankText) {
+        celestialSelectionCardSatelliteRank.textContent = rankText;
+      }
     }
-    celestialSelectionCard.setAttribute("aria-label", `Open detailed information for ${visibleBodyName}`);
+    const selectionLabel = `Open detailed information for ${visibleBodyName}`;
+    if (celestialSelectionCard.getAttribute("aria-label") !== selectionLabel) {
+      celestialSelectionCard.setAttribute("aria-label", selectionLabel);
+    }
 
     body.getWorldPosition(planetSystemWorldPosition);
     planetSystemProjectedPosition.copy(planetSystemWorldPosition).project(camera);
     if (planetSystemProjectedPosition.z < -1 || planetSystemProjectedPosition.z > 1) {
       celestialSelectionCard.classList.remove("is-visible");
-      celestialSelectionCard.setAttribute("aria-hidden", "true");
+      if (celestialSelectionCard.getAttribute("aria-hidden") !== "true") {
+        celestialSelectionCard.setAttribute("aria-hidden", "true");
+      }
+      celestialSelectionCardPosition.body = null;
+      celestialSelectionCardPosition.initialized = false;
       return;
     }
 
@@ -3117,10 +3152,37 @@ import { createCelestialDetailsPanel } from './ui/planetDetailsPanel.js';
     const preferredLeft = placeRight
       ? screenX + Math.max(18, radiusPixels + 12)
       : screenX - cardWidth - Math.max(18, radiusPixels + 12);
-    celestialSelectionCard.style.left = `${THREE.MathUtils.clamp(preferredLeft, 12, innerWidth - cardWidth - 12)}px`;
-    celestialSelectionCard.style.top = `${THREE.MathUtils.clamp(screenY - 46, 18, innerHeight - 126)}px`;
-    celestialSelectionCard.classList.add("is-visible");
-    celestialSelectionCard.setAttribute("aria-hidden", "false");
+    const desiredLeft = THREE.MathUtils.clamp(preferredLeft, 12, innerWidth - cardWidth - 12);
+    const desiredTop = THREE.MathUtils.clamp(screenY - 46, 18, innerHeight - 126);
+    if (!celestialSelectionCardPosition.initialized || celestialSelectionCardPosition.body !== body) {
+      celestialSelectionCardPosition.body = body;
+      celestialSelectionCardPosition.left = desiredLeft;
+      celestialSelectionCardPosition.top = desiredTop;
+      celestialSelectionCardPosition.initialized = true;
+    } else {
+      celestialSelectionCardPosition.left = THREE.MathUtils.lerp(
+        celestialSelectionCardPosition.left,
+        desiredLeft,
+        0.20,
+      );
+      celestialSelectionCardPosition.top = THREE.MathUtils.lerp(
+        celestialSelectionCardPosition.top,
+        desiredTop,
+        0.20,
+      );
+    }
+    const stableLeft = Math.round(celestialSelectionCardPosition.left);
+    const stableTop = Math.round(celestialSelectionCardPosition.top);
+    const leftValue = `${stableLeft}px`;
+    const topValue = `${stableTop}px`;
+    if (celestialSelectionCard.style.left !== leftValue) celestialSelectionCard.style.left = leftValue;
+    if (celestialSelectionCard.style.top !== topValue) celestialSelectionCard.style.top = topValue;
+    if (!celestialSelectionCard.classList.contains("is-visible")) {
+      celestialSelectionCard.classList.add("is-visible");
+    }
+    if (celestialSelectionCard.getAttribute("aria-hidden") !== "false") {
+      celestialSelectionCard.setAttribute("aria-hidden", "false");
+    }
   }
 
   /**
@@ -3128,8 +3190,8 @@ import { createCelestialDetailsPanel } from './ui/planetDetailsPanel.js';
    *
    * We deliberately expose the full catalogue as an alternate camera shot
    * instead of replacing the normal close inspection. This lets the viewer
-   * study Jupiter's clouds or Saturn's rings, then pull back to count the whole
-   * satellite population without losing focus.
+   * study Jupiter's clouds, Saturn's rings, or Uranus's atmosphere, then pull
+   * back to count the whole satellite population without losing focus.
    */
   function updateSatelliteSystemOverviewControl() {
     const parentName = focusedBody?.userData?.name ?? focusedBody?.name ?? null;
@@ -3139,7 +3201,7 @@ import { createCelestialDetailsPanel } from './ui/planetDetailsPanel.js';
     const atlasActive = satelliteOverviewParentName === parentName;
     const canOpen = Boolean(
       system
-      && ["Jupiter", "Saturn"].includes(parentName)
+      && ["Jupiter", "Saturn", "Uranus"].includes(parentName)
       && !atlasActive
       && !focusedUiSuppressedByWideView
       && !focusExitTransition

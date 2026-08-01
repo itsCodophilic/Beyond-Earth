@@ -17,15 +17,31 @@ const PALETTES = Object.freeze({
 
 
 /**
- * Reference-mapped major moons use dedicated, complete 2:1 surface maps.
+ * Reference-mapped major moons use carefully prepared surface evidence.
  *
  * Their supplied disk images are never placed directly on a sphere. Doing so
  * would also wrap the black picture background and collapse the photographed
  * limb into a pinched UV seam. Each reference is first converted into a global
  * albedo plus matching height/roughness maps with continuous longitude edges
- * and pole-safe rows.
+ * and pole-safe rows. For Umbriel, only local terrain detail and palette
+ * evidence are extracted from its single disk; baked limb lighting is removed
+ * before that evidence is synthesized into one seamless cratered globe.
  */
 const URANIAN_SURFACE_ASSETS = Object.freeze({
+  Miranda: Object.freeze({
+    albedo: new URL(
+      "../../../../assets/textures/uranian/major-moons/miranda-albedo-v1.jpg",
+      import.meta.url,
+    ).href,
+    height: new URL(
+      "../../../../assets/textures/uranian/major-moons/miranda-height-v1.jpg",
+      import.meta.url,
+    ).href,
+    roughness: new URL(
+      "../../../../assets/textures/uranian/major-moons/miranda-roughness-v1.jpg",
+      import.meta.url,
+    ).href,
+  }),
   Ariel: Object.freeze({
     albedo: new URL(
       "../../../../assets/textures/uranian/major-moons/ariel-albedo.jpg",
@@ -37,6 +53,20 @@ const URANIAN_SURFACE_ASSETS = Object.freeze({
     ).href,
     roughness: new URL(
       "../../../../assets/textures/uranian/major-moons/ariel-roughness.jpg",
+      import.meta.url,
+    ).href,
+  }),
+  Umbriel: Object.freeze({
+    albedo: new URL(
+      "../../../../assets/textures/uranian/major-moons/umbriel-albedo-v4.jpg",
+      import.meta.url,
+    ).href,
+    height: new URL(
+      "../../../../assets/textures/uranian/major-moons/umbriel-height-v4.jpg",
+      import.meta.url,
+    ).href,
+    roughness: new URL(
+      "../../../../assets/textures/uranian/major-moons/umbriel-roughness-v4.jpg",
       import.meta.url,
     ).href,
   }),
@@ -65,6 +95,34 @@ const URANIAN_SURFACE_ASSETS = Object.freeze({
     ).href,
     roughness: new URL(
       "../../../../assets/textures/uranian/major-moons/oberon-roughness-v1.jpg",
+      import.meta.url,
+    ).href,
+  }),
+  Cordelia: Object.freeze({
+    albedo: new URL(
+      "../../../../assets/textures/uranian/inner-moons/cordelia-albedo-v1.jpg",
+      import.meta.url,
+    ).href,
+    height: new URL(
+      "../../../../assets/textures/uranian/inner-moons/cordelia-height-v1.jpg",
+      import.meta.url,
+    ).href,
+    roughness: new URL(
+      "../../../../assets/textures/uranian/inner-moons/cordelia-roughness-v1.jpg",
+      import.meta.url,
+    ).href,
+  }),
+  Ophelia: Object.freeze({
+    albedo: new URL(
+      "../../../../assets/textures/uranian/inner-moons/ophelia-albedo-v1.jpg",
+      import.meta.url,
+    ).href,
+    height: new URL(
+      "../../../../assets/textures/uranian/inner-moons/ophelia-height-v1.jpg",
+      import.meta.url,
+    ).href,
+    roughness: new URL(
+      "../../../../assets/textures/uranian/inner-moons/ophelia-roughness-v1.jpg",
       import.meta.url,
     ).href,
   }),
@@ -152,6 +210,18 @@ function arielGeometrySegments(quality) {
   return [192, 120];
 }
 
+function mirandaGeometrySegments(quality) {
+  if (quality === "low") return [88, 56];
+  if (quality === "medium") return [152, 96];
+  return [224, 144];
+}
+
+function umbrielGeometrySegments(quality) {
+  if (quality === "low") return [84, 52];
+  if (quality === "medium") return [144, 90];
+  return [208, 132];
+}
+
 function titaniaGeometrySegments(quality) {
   if (quality === "low") return [84, 52];
   if (quality === "medium") return [144, 90];
@@ -162,6 +232,12 @@ function oberonGeometrySegments(quality) {
   if (quality === "low") return [84, 52];
   if (quality === "medium") return [144, 90];
   return [208, 132];
+}
+
+function shepherdGeometrySegments(quality) {
+  if (quality === "low") return [72, 46];
+  if (quality === "medium") return [120, 76];
+  return [176, 112];
 }
 
 function createArielReferenceSurface(profile, quality) {
@@ -266,6 +342,249 @@ function makeFractures(profile, count) {
     width: 0.010 + random01(profile.seed, index, 6) * 0.022,
     offset: random01(profile.seed, index, 7) * Math.PI * 2,
   }));
+}
+
+/**
+ * Builds Miranda as one continuous, high-resolution tectonic moon.
+ *
+ * The texture carries the supplied reference's coronae, parallel ridges,
+ * fault blocks, scarps, and older cratered plains across a sphere-safe 2:1
+ * map. Matching relief lets those formations react to the real scene light
+ * instead of behaving like a photograph painted onto a smooth ball.
+ */
+function createMirandaReferenceSurface(profile, quality) {
+  const maps = getUranianSurfaceMaps("Miranda");
+  const [widthSegments, heightSegments] = mirandaGeometrySegments(quality);
+  const geometry = new THREE.SphereGeometry(1, widthSegments, heightSegments);
+  const positions = geometry.getAttribute("position");
+  const direction = new THREE.Vector3();
+  const shape = profile.shape ?? [1, 1, 1];
+
+  // Miranda is globally round but its tectonic blocks create a subtly battered
+  // silhouette. Keep this deformation restrained; the map-derived relief does
+  // the close-up work without turning the moon into a low-gravity asteroid.
+  for (let index = 0; index < positions.count; index += 1) {
+    direction.fromBufferAttribute(positions, index).normalize();
+    const broad = fbm(direction, 1.65, 4, profile.seed + 12.7);
+    const block = fbm(direction, 5.6, 3, profile.seed + 48.9);
+    const radius = 1 + broad * 0.0042 + block * 0.0018;
+    positions.setXYZ(
+      index,
+      direction.x * radius * shape[0],
+      direction.y * radius * shape[1],
+      direction.z * radius * shape[2],
+    );
+  }
+
+  positions.needsUpdate = true;
+  geometry.deleteAttribute("normal");
+  geometry.computeVertexNormals();
+  geometry.computeBoundingSphere();
+
+  const displacementScale = quality === "low" ? 0.006 : quality === "medium" ? 0.010 : 0.014;
+  const material = new THREE.MeshStandardMaterial({
+    color: 0xffffff,
+    map: maps?.albedoMap ?? null,
+    bumpMap: maps?.heightMap ?? null,
+    bumpScale: quality === "low" ? 0.032 : quality === "medium" ? 0.044 : 0.056,
+    displacementMap: maps?.heightMap ?? null,
+    displacementScale,
+    displacementBias: -displacementScale * 0.5,
+    roughness: 0.95,
+    roughnessMap: maps?.roughnessMap ?? null,
+    metalness: 0,
+    envMapIntensity: 0.012,
+    dithering: true,
+  });
+  material.name = "Miranda seamless tectonic ice-rock material";
+
+  const moon = new THREE.Mesh(geometry, material);
+  moon.name = "Miranda continuous realistic 3D surface";
+  moon.castShadow = false;
+  moon.receiveShadow = false;
+  moon.userData.geometryIncludesShape = true;
+  moon.userData.surfaceDetailMode =
+    "single-seamless-reference-guided-coronae-scarps-and-impact-terrain";
+  moon.userData.referenceTextureSource =
+    "User-supplied Miranda image used as geological and color evidence";
+  moon.userData.surfaceTextureCoverage =
+    "Complete 360-degree terrain with blended longitude, pole-safe rows, and no circular photograph projection.";
+  moon.userData.reconstructionTextureSource =
+    "Reference-guided seamless albedo with matched multi-scale height and roughness maps.";
+  return moon;
+}
+
+/**
+ * Builds one continuous Umbriel globe from the supplied surface evidence.
+ *
+ * Large-scale disk lighting is removed before texture generation. Only the
+ * reference's local crater/groove detail and neutral-grey palette are carried
+ * into seamless global material maps. That means there is no photographic cap
+ * to slide over the sphere, no hidden second surface, and no radial UV smear.
+ */
+function createUmbrielReferenceSurface(profile, quality) {
+  const maps = getUranianSurfaceMaps("Umbriel");
+  const [widthSegments, heightSegments] = umbrielGeometrySegments(quality);
+  const geometry = new THREE.SphereGeometry(1, widthSegments, heightSegments);
+  const positions = geometry.getAttribute("position");
+  const direction = new THREE.Vector3();
+
+  // Umbriel is a round differentiated moon rather than a rubble-pile rock.
+  // Only restrained broad undulation is applied to the silhouette; crater
+  // bowls and rims come from the matching displacement and bump maps below.
+  for (let index = 0; index < positions.count; index += 1) {
+    direction.fromBufferAttribute(positions, index).normalize();
+    const broad = fbm(direction, 1.8, 4, profile.seed + 17.2);
+    const medium = fbm(direction, 6.7, 3, profile.seed + 58.6);
+    const radius = 1 + broad * 0.0028 + medium * 0.0012;
+    positions.setXYZ(
+      index,
+      direction.x * radius,
+      direction.y * radius,
+      direction.z * radius,
+    );
+  }
+
+  positions.needsUpdate = true;
+  geometry.deleteAttribute("normal");
+  geometry.computeVertexNormals();
+  geometry.computeBoundingSphere();
+
+  const displacementScale = quality === "low" ? 0.0045 : quality === "medium" ? 0.0075 : 0.0105;
+  const material = new THREE.MeshStandardMaterial({
+    color: 0xffffff,
+    map: maps?.albedoMap ?? null,
+    bumpMap: maps?.heightMap ?? null,
+    bumpScale: quality === "low" ? 0.030 : quality === "medium" ? 0.045 : 0.060,
+    displacementMap: maps?.heightMap ?? null,
+    displacementScale,
+    displacementBias: -displacementScale * 0.5,
+    roughness: 0.975,
+    roughnessMap: maps?.roughnessMap ?? null,
+    metalness: 0,
+    envMapIntensity: 0.010,
+    dithering: true,
+  });
+  material.name = "Umbriel seamless image-derived crater material";
+
+  const moon = new THREE.Mesh(geometry, material);
+  moon.name = "Umbriel continuous realistic 3D surface";
+  moon.castShadow = false;
+  moon.receiveShadow = false;
+  moon.userData.geometryIncludesShape = true;
+  moon.userData.surfaceDetailMode =
+    "single-seamless-image-derived-albedo-relief-and-roughness-surface";
+  moon.userData.referenceTextureSource =
+    "User-supplied Umbriel image used as local terrain and palette evidence";
+  moon.userData.surfaceTextureCoverage =
+    "Complete 360-degree terrain with no photographic cap, exposed under-layer, or radial projection stretch.";
+  moon.userData.reconstructionTextureSource =
+    "Observed local crater detail combined with latitude-aware spherical impact terrain; photographed sky and baked limb shading excluded.";
+  return moon;
+}
+
+/**
+ * Builds Cordelia and Ophelia as complete low-gravity 3D shepherd moons.
+ *
+ * Voyager resolved their positions and ring-shepherding roles, but not global
+ * surface geography. Consequently the geometry below is deliberately
+ * conservative: measured scale ordering and plausible irregular silhouettes
+ * are combined with non-specific cratered ice-rock regolith. No unrelated
+ * moon photograph is projected onto either body.
+ */
+function createShepherdMoonSurface(profile, quality) {
+  const maps = getUranianSurfaceMaps(profile.name);
+  const [widthSegments, heightSegments] = shepherdGeometrySegments(quality);
+  const geometry = new THREE.SphereGeometry(1, widthSegments, heightSegments);
+  const positions = geometry.getAttribute("position");
+  const direction = new THREE.Vector3();
+  const shape = profile.shape ?? [1, 1, 1];
+  const isCordelia = profile.name === "Cordelia";
+
+  // Small moons cannot relax into perfect spheres. Broad, low-frequency
+  // deformation creates a real potato-like silhouette; fine relief is kept
+  // much smaller so it reads as regolith rather than animated noise.
+  const craterField = Array.from({ length: isCordelia ? 22 : 18 }, (_, index) => ({
+    center: randomDirection(profile.seed + 24.8, index),
+    radius: 0.040 + random01(profile.seed, index, 51) * (isCordelia ? 0.145 : 0.125),
+    depth: 0.006 + random01(profile.seed, index, 52) * (isCordelia ? 0.018 : 0.014),
+    rim: 0.0012 + random01(profile.seed, index, 53) * 0.0034,
+  }));
+
+  for (let index = 0; index < positions.count; index += 1) {
+    direction.fromBufferAttribute(positions, index).normalize();
+    const broad = fbm(direction, isCordelia ? 1.36 : 1.52, 4, profile.seed + 18.2);
+    const medium = fbm(direction, 5.4, 4, profile.seed + 61.7);
+    const fine = fbm(direction, 19.0, 3, profile.seed + 93.1);
+    let height = broad * (isCordelia ? 0.060 : 0.046)
+      + medium * (isCordelia ? 0.020 : 0.016)
+      + fine * 0.0045;
+
+    craterField.forEach((crater) => {
+      height += sampleCrater(direction, crater).height;
+    });
+
+    if (isCordelia) {
+      // The artistic reference suggests an elongated, subtly bilobed body.
+      // A broad waist and unequal end lobes create that volume without opening
+      // seams or subtracting holes from the watertight surface.
+      const waist = Math.exp(-Math.pow((direction.x + 0.04) / 0.30, 2));
+      const positiveLobe = Math.pow(Math.max(0, direction.x), 2.2);
+      const negativeLobe = Math.pow(Math.max(0, -direction.x), 2.0);
+      height += positiveLobe * 0.040 + negativeLobe * 0.020 - waist * 0.026;
+    } else {
+      // Ophelia remains a compact asymmetric potato rather than sharing
+      // Cordelia's elongated silhouette.
+      height += Math.max(0, direction.x * 0.72 + direction.y * 0.30) ** 2 * 0.018;
+      height -= Math.max(0, -direction.z * 0.78 + direction.y * 0.18) ** 2 * 0.012;
+    }
+
+    const radius = Math.max(0.82, 1 + height);
+    positions.setXYZ(
+      index,
+      direction.x * radius * shape[0],
+      direction.y * radius * shape[1],
+      direction.z * radius * shape[2],
+    );
+  }
+
+  positions.needsUpdate = true;
+  geometry.deleteAttribute("normal");
+  geometry.computeVertexNormals();
+  geometry.computeBoundingSphere();
+
+  const displacementScale = quality === "low" ? 0.006 : quality === "medium" ? 0.010 : 0.014;
+  const material = new THREE.MeshStandardMaterial({
+    color: 0xffffff,
+    map: maps?.albedoMap ?? null,
+    bumpMap: maps?.heightMap ?? null,
+    bumpScale: quality === "low" ? 0.040 : quality === "medium" ? 0.055 : 0.072,
+    displacementMap: maps?.heightMap ?? null,
+    displacementScale,
+    displacementBias: -displacementScale * 0.50,
+    roughness: 0.985,
+    roughnessMap: maps?.roughnessMap ?? null,
+    metalness: 0,
+    envMapIntensity: 0.010,
+    dithering: true,
+  });
+  material.name = `${profile.name} unresolved shepherd moon ice-rock material`;
+
+  const moon = new THREE.Mesh(geometry, material);
+  moon.name = `${profile.name} continuous realistic 3D shepherd surface`;
+  moon.castShadow = false;
+  moon.receiveShadow = false;
+  moon.userData.geometryIncludesShape = true;
+  moon.userData.surfaceDetailMode =
+    "scientifically-conservative-unresolved-3d-shepherd-moon-reconstruction";
+  moon.userData.referenceTextureSource = isCordelia
+    ? "User-supplied small-body image used only as artistic shape and regolith guidance"
+    : "No unrelated photograph used; supplied Io image deliberately excluded";
+  moon.userData.surfaceTextureCoverage =
+    "Complete seamless 360-degree low-albedo regolith with pole-safe texture rows.";
+  moon.userData.reconstructionTextureSource =
+    "Non-specific cratered ice-rock material, separate albedo/height/roughness maps, and watertight procedural macro geometry.";
+  return moon;
 }
 
 function fractureMask(direction, fractures, seed) {
@@ -477,9 +796,14 @@ function createOberonReferenceSurface(profile, quality) {
 }
 
 export function createUranianMoonSurface(profile, quality = "high") {
+  if (profile.name === "Miranda") return createMirandaReferenceSurface(profile, quality);
   if (profile.name === "Ariel") return createArielReferenceSurface(profile, quality);
+  if (profile.name === "Umbriel") return createUmbrielReferenceSurface(profile, quality);
   if (profile.name === "Titania") return createTitaniaReferenceSurface(profile, quality);
   if (profile.name === "Oberon") return createOberonReferenceSurface(profile, quality);
+  if (["Cordelia", "Ophelia"].includes(profile.name)) {
+    return createShepherdMoonSurface(profile, quality);
+  }
   const settings = settingsFor(profile);
   const detail = quality === "low"
     ? Math.max(3, settings.detail - 2)

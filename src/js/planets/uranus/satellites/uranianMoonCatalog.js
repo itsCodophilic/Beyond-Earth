@@ -53,6 +53,8 @@ const DIRECT_SURFACE_NAMES = new Set([
   "Umbriel",
   "Titania",
   "Oberon",
+  "Cordelia",
+  "Ophelia",
   "Puck",
   "Caliban",
   "Sycorax",
@@ -64,6 +66,8 @@ const ORBIT_GUIDES = new Set([
   "Umbriel",
   "Titania",
   "Oberon",
+  "Cordelia",
+  "Ophelia",
   "Puck",
   "Caliban",
   "Sycorax",
@@ -81,17 +85,48 @@ function stableSeed(name) {
 }
 
 function compressedOrbitScale(semiMajorAxisKm) {
-  // Preserve tight ring-moon spacing and the vast irregular-moon halo.
-  if (semiMajorAxisKm < 700_000) {
-    return 1.08 + 2.95 * Math.pow(semiMajorAxisKm / 583_511, 0.72);
+  // Uranus's regular moons and narrow rings occupy the same compact region, so
+  // compressing them independently makes moons appear inside the planet or
+  // intersect the rings. Use the measured semimajor axis in Uranus equatorial
+  // radii throughout the regular system. The distant captured moons begin a
+  // separate cinematic compression only beyond that region; atlas mode applies
+  // one final uniform scale and therefore preserves every moon's ordering.
+  const uranusEquatorialRadiusKm = 25_559;
+  if (semiMajorAxisKm <= 100_000) {
+    return semiMajorAxisKm / uranusEquatorialRadiusKm;
   }
-  return 4.10 + 3.55 * Math.pow(semiMajorAxisKm / 20_421_400, 0.34);
+
+  // Beyond Mab, the real system quickly expands to hundreds of Uranus radii.
+  // Continue monotonically from the true near-ring scale while compressing
+  // that large empty space enough for one cinematic atlas view.
+  const innerSystemEdge = 100_000 / uranusEquatorialRadiusKm;
+  if (semiMajorAxisKm < 700_000) {
+    const regularProgress = THREE.MathUtils.clamp(
+      (semiMajorAxisKm - 100_000) / (583_511 - 100_000),
+      0,
+      1,
+    );
+    return innerSystemEdge + (6.0 - innerSystemEdge) * Math.pow(regularProgress, 0.72);
+  }
+  const outerProgress = THREE.MathUtils.clamp(
+    (semiMajorAxisKm - 700_000) / (20_421_400 - 700_000),
+    0,
+    1,
+  );
+  return 6.15 + 2.60 * Math.pow(outerProgress, 0.34);
 }
 
-function visualRadiusFor(diameterKm, tier) {
+function visualRadiusFor(diameterKm, tier, name) {
   if (tier === "major") {
     return THREE.MathUtils.clamp(0.17 + 0.47 * Math.pow(diameterKm / 1577.8, 0.72), 0.18, 0.64);
   }
+  // Cordelia passes only about 272 km inside the Lambda ring. Its ordinary
+  // small-moon visibility exaggeration was wider than that real clearance and
+  // made the moon cut through the ring. Keep the shepherd compact enough to
+  // clear Lambda even at its widest modeled axis; close focus still fills the
+  // screen through camera framing and its separate hit target remains usable.
+  if (name === "Cordelia") return 0.0045;
+  if (name === "Ophelia") return 0.022;
   if (diameterKm >= 120) return 0.105;
   return THREE.MathUtils.clamp(0.028 + 0.070 * Math.pow(diameterKm / 150, 0.52), 0.028, 0.095);
 }
@@ -107,6 +142,8 @@ function describeMoon(name, tier) {
     Umbriel: "The darkest major Uranian moon, preserving an old cratered surface and the bright-ringed feature Wunda.",
     Titania: "Uranus's largest moon, fractured by broad valleys and fault systems across an ice-rock crust.",
     Oberon: "A dark, ancient outer major moon marked by large craters, reddish material, and bright impact ejecta.",
+    Cordelia: "A tiny inner shepherd moon orbiting just inside Uranus's epsilon ring, helping keep the narrow ring edge sharply confined.",
+    Ophelia: "A small inner shepherd moon orbiting just outside Uranus's epsilon ring and working with Cordelia to confine its particles.",
     Puck: "A dark inner moon with an irregular, heavily cratered surface observed by Voyager 2.",
     Caliban: "A small reddish retrograde irregular moon, likely a captured outer Solar System body.",
     Sycorax: "The largest known irregular moon of Uranus, dark and mildly red on a distant retrograde orbit.",
@@ -137,8 +174,8 @@ export const URANUS_MOON_PROFILES = Object.freeze(RAW.map((row) => {
   const retrograde = inclinationDeg > 90;
   const seed = stableSeed(name);
   const direct = DIRECT_SURFACE_NAMES.has(name);
-  const referenceMapped = ["Ariel", "Titania", "Oberon"].includes(name);
-  const referenceCount = name === "Ariel" ? "One" : "Two";
+  const referenceMapped = ["Miranda", "Ariel", "Umbriel", "Titania", "Oberon"].includes(name);
+  const referenceCount = ["Miranda", "Ariel", "Umbriel"].includes(name) ? "One" : "Two";
 
   return Object.freeze({
     name,
@@ -150,27 +187,57 @@ export const URANUS_MOON_PROFILES = Object.freeze(RAW.map((row) => {
         ? "Inner regular moon"
         : "Outer irregular moon",
     appearance,
-    surfaceEvidence: referenceMapped
-      ? `${referenceCount} user-supplied surface reference${referenceCount === "Two" ? "s" : ""} converted into a continuous global texture`
+    surfaceEvidence: name === "Miranda"
+      ? "One user-supplied observation converted into seamless global tectonic terrain without disk stretching"
+      : name === "Umbriel"
+      ? "One user-supplied observation converted into seamless global terrain without disk or limb stretching"
+      : name === "Cordelia"
+        ? "Unresolved conservative reconstruction; supplied small-body image used only as artistic shape and regolith guidance"
+      : name === "Ophelia"
+        ? "Unresolved conservative reconstruction; unrelated supplied Io image excluded from the Uranian surface"
+      : referenceMapped
+        ? `${referenceCount} user-supplied surface reference${referenceCount === "Two" ? "s" : ""} converted into a continuous global texture`
       : direct
         ? "Resolved-body-informed procedural reconstruction"
         : "Unresolved conservative reconstruction",
-    surfaceStructure: name === "Ariel"
+    surfaceStructure: name === "Miranda"
+      ? "Pale ice-rock patchwork of polygonal coronae, chevron ridges, parallel grooves, deep troughs, gigantic fault scarps, resurfaced plains, and older cratered terrain"
+      : name === "Ariel"
       ? "Bright ice-rock crust with long graben, intersecting canyon systems, cratered plains, scarps, and resurfaced terrain"
+      : name === "Umbriel"
+        ? "Very dark ancient ice-rock crust with densely overlapping impact craters, muted relief, bright-ringed Wunda, and broad ray-like ejecta markings"
+      : name === "Cordelia"
+        ? "Elongated, subtly bilobed low-gravity ice-rock body with dark granular regolith, shallow impact pits, microcraters, and restrained fractured patches"
+      : name === "Ophelia"
+        ? "Compact asymmetric dark ice-rock body with a rounded potato-like silhouette, shallow impact pits, fine grooves, rubbly patches, and sparse pale icy flecks"
       : name === "Titania"
         ? "Brown-grey ice-rock crust with dense impact terrain, bright ejecta marks, broad chasmata, graben, and fault scarps"
         : name === "Oberon"
           ? "Ancient grey-mauve ice-rock crust dominated by overlapping craters, bright icy ejecta, dark crater floors, subdued scarps, and a prominent limb mountain"
         : null,
-    surfaceRoughness: name === "Ariel"
+    surfaceRoughness: name === "Miranda"
+      ? 0.95
+      : name === "Ariel"
       ? 0.96
+      : name === "Umbriel"
+        ? 0.975
+      : name === "Cordelia" || name === "Ophelia"
+        ? 0.985
       : name === "Titania"
         ? 0.94
         : name === "Oberon"
           ? 0.97
           : null,
-    albedo: name === "Ariel"
+    albedo: name === "Miranda"
+      ? 0.32
+      : name === "Ariel"
       ? 0.39
+      : name === "Umbriel"
+        ? 0.19
+      : name === "Cordelia"
+        ? 0.08
+      : name === "Ophelia"
+        ? 0.07
       : name === "Titania"
         ? 0.27
         : name === "Oberon"
@@ -197,14 +264,22 @@ export const URANUS_MOON_PROFILES = Object.freeze(RAW.map((row) => {
     speed: (retrograde ? -1 : 1) * THREE.MathUtils.clamp(0.020 / Math.sqrt(periodDays), 0.00045, 0.020),
     seed,
     shape,
-    initialRotation: name === "Ariel"
+    initialRotation: name === "Miranda"
+      ? [0.03, -0.16, 0.01]
+      : name === "Ariel"
       ? [0.04, -0.18, -0.03]
+      : name === "Umbriel"
+        ? [0.02, -0.10, 0.015]
+      : name === "Cordelia"
+        ? [0.14, -0.34, 0.08]
+      : name === "Ophelia"
+        ? [-0.10, 0.28, -0.06]
       : name === "Titania"
         ? [0.03, -0.24, -0.02]
         : name === "Oberon"
           ? [-0.02, 0.30, 0.04]
         : undefined,
-    visualRadius: visualRadiusFor(diameterKm, tier),
+    visualRadius: visualRadiusFor(diameterKm, tier, name),
     tidallyLocked: tier !== "outer",
     showOrbitGuide: ORBIT_GUIDES.has(name),
     instanced: !direct,
@@ -212,8 +287,16 @@ export const URANUS_MOON_PROFILES = Object.freeze(RAW.map((row) => {
     orbitalSpeed: `${orbitalSpeedKmS(semiMajorAxisKm, periodDays).toFixed(2)} km/s around Uranus`,
     orbitSummary: `Mean orbit ${(semiMajorAxisKm / 1_000_000).toFixed(semiMajorAxisKm < 1_000_000 ? 3 : 2)} million km from Uranus; period ${periodDays < 20 ? periodDays.toFixed(3) : periodDays.toFixed(0)} days; ${retrograde ? "retrograde" : "prograde"}.`,
     description: describeMoon(name, tier),
-    dataNote: name === "Ariel"
+    dataNote: name === "Miranda"
+      ? "The supplied Miranda disk contributes its pale icy-grey palette and distinctive corona, ridge, scarp, trough, and crater character after circular projection and baked lighting are removed. One seamless 2:1 albedo map and matching multi-scale height and roughness maps create a continuous lighting-responsive surface without UV pinching, radial smearing, or an exposed fallback layer."
+      : name === "Ariel"
       ? "The supplied Ariel image is wrapped as a seamless global albedo map and paired with derived height and roughness maps for real lighting-responsive 3D relief. The unseen hemisphere is reconstructed from the same terrain evidence rather than left blank or mirrored as a hard seam."
+      : name === "Umbriel"
+        ? "The supplied Umbriel disk contributes its observed crater detail and neutral-grey palette after photographed sky, limb shading, and disk projection are removed. A single seamless global albedo, height, and roughness surface then combines that evidence with latitude-aware impact terrain, avoiding the sliding cap, oversized ring craters, UV pinching, and radial smearing of earlier versions."
+      : name === "Cordelia"
+        ? "Cordelia has not been resolved well enough for a factual global surface map. This explicitly labeled reconstruction uses its measured small-moon identity and epsilon-ring shepherd role, a watertight elongated 3D form, and non-specific dark icy-rock regolith. The supplied small-body image guides only the general battered silhouette and surface character—not claimed geography."
+      : name === "Ophelia"
+        ? "Ophelia has not been resolved well enough for a factual global surface map. This explicitly labeled reconstruction uses a compact irregular 3D form and non-specific low-albedo icy-rock regolith. The supplied pink volcanic image depicts Jupiter's moon Io, so it is deliberately excluded rather than presented as Ophelia evidence."
       : name === "Titania"
         ? "Both supplied Titania images guide a complete 2:1 global albedo map. Its longitude edges and poles are blended continuously, while separate height and roughness maps plus physically sculpted craters and fault valleys make the moon respond naturally to sunlight without gaps or black-background leakage."
       : name === "Oberon"

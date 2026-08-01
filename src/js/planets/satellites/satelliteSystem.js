@@ -162,7 +162,7 @@ function createOrbitLines(
   } = {},
 ) {
   const positions = [];
-  // The complete Jupiter/Saturn atlas contains hundreds of paths. A lower
+  // Complete giant-planet atlases can contain hundreds of paths. A lower
   // segment budget keeps them smooth at atlas scale while retaining one draw
   // call and avoiding hundreds of individual LineLoop objects.
   const segments = includeEveryOrbit
@@ -794,7 +794,7 @@ export function createMajorSatelliteSystems({
     root.add(createOrbitLines(moonProfiles, parentRadius, quality));
     let atlasOrbitGuides = null;
     let atlasOrbitHighlight = null;
-    if (parentName === "Jupiter" || parentName === "Saturn") {
+    if (["Jupiter", "Saturn", "Uranus"].includes(parentName)) {
       atlasOrbitGuides = createOrbitLines(
         moonProfiles,
         parentRadius,
@@ -802,7 +802,11 @@ export function createMajorSatelliteSystems({
         {
           includeEveryOrbit: true,
           name: "Complete satellite atlas orbit guides",
-          color: parentName === "Saturn" ? 0x9dbfff : 0x91e9ff,
+          color: parentName === "Saturn"
+            ? 0x9dbfff
+            : parentName === "Uranus"
+              ? 0x9ffcff
+              : 0x91e9ff,
           opacity: parentName === "Saturn" ? 0.055 : 0.065,
         },
       );
@@ -815,7 +819,11 @@ export function createMajorSatelliteSystems({
       atlasOrbitHighlight = new THREE.LineLoop(
         new THREE.BufferGeometry(),
         new THREE.LineBasicMaterial({
-          color: parentName === "Saturn" ? 0xb9d6ff : 0x8ff8ff,
+          color: parentName === "Saturn"
+            ? 0xb9d6ff
+            : parentName === "Uranus"
+              ? 0xb5ffff
+              : 0x8ff8ff,
           transparent: true,
           opacity: 0.92,
           blending: THREE.AdditiveBlending,
@@ -1389,7 +1397,19 @@ export function updateMajorSatelliteSystems(
     system.root.position.copy(system.parent.position);
     const overviewActive = overviewParentName === system.parentName;
     const parentRadius = Number(system.parent.userData?.visualRadius ?? 1);
-    const overviewRadiusMultiplier = system.parentName === "Saturn" ? 7.20 : 6.80;
+    // Uranus's innermost moons shepherd its narrow rings, so atlas mode must
+    // never apply a second uniform shrink that pulls those measured orbits
+    // back through the ring plane. Widen only the atlas camera framing to fit
+    // the most eccentric distant moon while leaving every Uranian orbit at its
+    // catalogue-derived display radius.
+    const overviewRadiusMultiplier = system.parentName === "Saturn"
+      ? 7.20
+      : system.parentName === "Uranus"
+        ? Math.max(
+          9.30,
+          (Number(system.maximumOrbitRadius ?? 0) / Math.max(0.001, parentRadius)) * 1.04,
+        )
+        : 6.80;
     const overviewMaximumRadius = parentRadius * overviewRadiusMultiplier;
     const targetOrbitScale = overviewActive
       ? Math.min(1, overviewMaximumRadius / Math.max(0.001, system.maximumOrbitRadius))
