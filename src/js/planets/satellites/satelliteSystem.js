@@ -1,5 +1,8 @@
 import * as THREE from "three";
-import { makeNoiseTexture } from "../../graphics/proceduralTextures.js";
+import {
+  makeGlowTexture,
+  makeNoiseTexture,
+} from "../../graphics/proceduralTextures.js";
 import { getMoonVisualRadius, getSizeComparisonText } from "../../config/celestialScale.js";
 import {
   PHOBOS_PROFILE,
@@ -58,6 +61,38 @@ const moonWorldPosition = new THREE.Vector3();
 const projectedParentPosition = new THREE.Vector3();
 const projectedMoonPosition = new THREE.Vector3();
 const sharedSatelliteResources = new Map();
+let sharedSatelliteGlintTexture = null;
+
+/**
+ * Returns one soft point texture shared by every distant Uranian moon marker.
+ *
+ * The marker is not a replacement moon and never appears during close
+ * inspection. It is a tiny screen-space suggestion of reflected sunlight used
+ * only while the real mesh would otherwise occupy less than a useful pixel.
+ */
+function getSharedSatelliteGlintTexture() {
+  if (!sharedSatelliteGlintTexture) {
+    sharedSatelliteGlintTexture = makeGlowTexture();
+    sharedSatelliteGlintTexture.name = "Distant satellite sunlight glint";
+  }
+  return sharedSatelliteGlintTexture;
+}
+
+function createUranianDistantVisibilityMaterial() {
+  const material = new THREE.SpriteMaterial({
+    map: getSharedSatelliteGlintTexture(),
+    color: 0xd9ffff,
+    transparent: true,
+    opacity: 0,
+    blending: THREE.AdditiveBlending,
+    depthTest: true,
+    depthWrite: false,
+    sizeAttenuation: false,
+    toneMapped: false,
+  });
+  material.name = "Uranian distant moon reflected-light glint";
+  return material;
+}
 
 /**
  * Planet letters used inside IAU provisional natural-satellite designations.
@@ -791,6 +826,12 @@ export function createMajorSatelliteSystems({
         ? JUPITER_IAU_RECOGNIZED_COUNT
         : moonProfiles.length,
     };
+    // Uranus's 24 small moons become sub-pixel objects in the complete system
+    // portrait. One shared material lets their restrained location glints fade
+    // together without changing any moon surface, sunlight, or close-up model.
+    const distantMoonGlintMaterial = parentName === "Uranus"
+      ? createUranianDistantVisibilityMaterial()
+      : null;
     root.add(createOrbitLines(moonProfiles, parentRadius, quality));
     let atlasOrbitGuides = null;
     let atlasOrbitHighlight = null;
@@ -885,6 +926,23 @@ export function createMajorSatelliteSystems({
 
       pivot.add(moon);
       if (hitTarget) pivot.add(hitTarget);
+      let distantVisibilityGlint = null;
+      if (
+        distantMoonGlintMaterial
+        && Number(moon.userData?.visualRadius ?? 0) <= 0.115
+      ) {
+        distantVisibilityGlint = new THREE.Sprite(distantMoonGlintMaterial);
+        distantVisibilityGlint.name = `${profile.name} distant sunlight glint`;
+        // sizeAttenuation=false makes this a stable ~3–4 px cue rather than a
+        // second enlarged moon. The soft outer pixels disappear into space.
+        distantVisibilityGlint.scale.set(0.0105, 0.0105, 1);
+        distantVisibilityGlint.position.copy(moon.position);
+        distantVisibilityGlint.visible = false;
+        distantVisibilityGlint.renderOrder = 3;
+        distantVisibilityGlint.raycast = () => {};
+        distantVisibilityGlint.userData.ignoreInteraction = true;
+        pivot.add(distantVisibilityGlint);
+      }
       orbitPlane.add(pivot);
       orbitNode.add(orbitPlane);
       root.add(orbitNode);
@@ -908,6 +966,7 @@ export function createMajorSatelliteSystems({
         baseMoonScale: moon.scale.clone(),
         baseHitTargetScale: hitTarget?.scale.clone() ?? null,
         baseVisualRadius: Number(moon.userData?.visualRadius ?? 0),
+        distantVisibilityGlint,
       };
       moons.push(hydratedSatellite);
       return hydratedSatellite;
@@ -950,6 +1009,7 @@ export function createMajorSatelliteSystems({
       pendingDirectSatellites,
       atlasOrbitGuides,
       atlasOrbitHighlight,
+      distantMoonGlintMaterial,
       // Presentation-only values animate between the natural close-up layout
       // and the complete catalogue map. They never alter orbital metadata.
       orbitPresentationScale: 1,
@@ -1157,6 +1217,7 @@ export function findNearestDenseSatelliteAtPointer({
     const focusedInSystem = focusedBody === system.parent
       || focusedBody?.userData?.parentPlanet === system.parentName;
     const overviewActive = overviewParentName === system.parentName;
+
     if (!focusedInSystem && !overviewActive && systemRadiusPixels < 28) return;
 
     projectedParentPosition.copy(parentWorldPosition).project(camera);
@@ -1247,6 +1308,23 @@ export function updateMajorSatelliteVisibility({
       || focusedBody?.userData?.parentPlanet === system.parentName;
     const overviewActive = overviewParentName === system.parentName;
 
+    // Tiny Uranian moons are physically present but become smaller than one
+    // pixel in the broad portrait. Fade in a neutral reflected-light glint only
+    // across that middle-distance window. It fades at close range, disappears
+    // in the explicit atlas (where real meshes are enlarged), and never appears
+    // while an individual moon is being inspected.
+    let distantMoonGlintOpacity = 0;
+    if (system.parentName === "Uranus" && system.distantMoonGlintMaterial) {
+      const focusedOnUranianMoon = focusedBody?.userData?.parentPlanet === "Uranus";
+      const systemReadable = THREE.MathUtils.smoothstep(systemRadiusPixels, 18, 52);
+      const planetReadable = THREE.MathUtils.smoothstep(parentRadiusPixels, 0.65, 3.4);
+      const closeRangeFade = 1 - THREE.MathUtils.smoothstep(parentRadiusPixels, 86, 150);
+      distantMoonGlintOpacity = (!overviewActive && !focusedOnUranianMoon)
+        ? 0.82 * systemReadable * planetReadable * closeRangeFade
+        : 0;
+      system.distantMoonGlintMaterial.opacity = distantMoonGlintOpacity;
+    }
+
     const orbitGuides = system.root.children.find(
       (child) => child.name === "Major satellite orbit guides",
     );
@@ -1269,7 +1347,7 @@ export function updateMajorSatelliteVisibility({
           && systemRadiusPixels >= (system.parentName === "Saturn" ? 34 : 72));
     });
 
-    system.moons.forEach(({ moon, hitTarget }) => {
+    system.moons.forEach(({ moon, hitTarget, distantVisibilityGlint }) => {
       const held = moon === focusedBody || moon === hoveredBody;
       if (system.parentName !== "Jupiter") {
         moon.getWorldPosition(moonWorldPosition);
@@ -1282,6 +1360,11 @@ export function updateMajorSatelliteVisibility({
           || radiusPixels >= 0.11;
         if (moon.visible !== visible) moon.visible = visible;
         if (hitTarget && hitTarget.visible !== visible) hitTarget.visible = visible;
+        if (distantVisibilityGlint) {
+          distantVisibilityGlint.visible = visible
+            && !held
+            && distantMoonGlintOpacity > 0.018;
+        }
         return;
       }
 
@@ -1461,6 +1544,7 @@ export function updateMajorSatelliteSystems(
       baseMoonScale,
       baseHitTargetScale,
       baseVisualRadius,
+      distantVisibilityGlint,
     }, index) => {
       const isFocused = moon === focusedBody;
       const isHeld = moon === hoveredBody || isFocused;
@@ -1516,6 +1600,7 @@ export function updateMajorSatelliteSystems(
           overviewActive ? 0.20 : 0.26,
         );
         if (hitTarget) hitTarget.position.copy(moon.position);
+        if (distantVisibilityGlint) distantVisibilityGlint.position.copy(moon.position);
       }
     });
   });
