@@ -832,7 +832,17 @@ export function createMajorSatelliteSystems({
     const distantMoonGlintMaterial = parentName === "Uranus"
       ? createUranianDistantVisibilityMaterial()
       : null;
-    root.add(createOrbitLines(moonProfiles, parentRadius, quality));
+    root.add(createOrbitLines(
+      moonProfiles,
+      parentRadius,
+      quality,
+      parentName === "Uranus"
+        ? {
+          color: 0x6f8894,
+          opacity: 0.038,
+        }
+        : {},
+    ));
     let atlasOrbitGuides = null;
     let atlasOrbitHighlight = null;
     if (["Jupiter", "Saturn", "Uranus"].includes(parentName)) {
@@ -846,9 +856,9 @@ export function createMajorSatelliteSystems({
           color: parentName === "Saturn"
             ? 0x9dbfff
             : parentName === "Uranus"
-              ? 0x9ffcff
+              ? 0x67899a
               : 0x91e9ff,
-          opacity: parentName === "Saturn" ? 0.055 : 0.065,
+          opacity: parentName === "Saturn" ? 0.055 : parentName === "Uranus" ? 0.028 : 0.065,
         },
       );
       atlasOrbitGuides.visible = false;

@@ -701,6 +701,7 @@ function createRingInteractionTargets({ group, planet, radius }) {
     target.userData = {
       name: region.name,
       isSaturnRing: true,
+      isPlanetRing: true,
       ringIndex: regionIndex,
       parentPlanetObject: planet,
       info: {

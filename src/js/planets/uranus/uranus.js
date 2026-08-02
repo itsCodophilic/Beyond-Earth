@@ -14,6 +14,7 @@ export const uranus = {
     type: "Planet", diameter: "50,724 km", orbitalSpeed: "6.81 km/s",
     distanceFromEarth: "≈ 2.6 billion km at closest approach",
     sizeComparison: getPlanetSizeComparison("Uranus"),
+    rings: "Thirteen known rings extend outward as Zeta, 6, 5, 4, Alpha, Beta, Eta, Gamma, Delta, Lambda, Epsilon, Nu, and Mu. The narrow inner rings are dark grey; Nu is reddish and Mu is blue from fine water-ice dust.",
     description: "A pale methane-rich ice giant with a hydrogen-helium atmosphere, deep water-ammonia-methane interior, a broad bright polar hood, dark narrow rings, and off-axis auroras shaped by its strongly tilted magnetic field.",
   },
 };

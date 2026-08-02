@@ -647,7 +647,7 @@ import { createCelestialDetailsPanel } from './ui/planetDetailsPanel.js';
     saturnRingHoverCard.className = "saturn-ring-hover-card";
     saturnRingHoverCard.setAttribute("aria-hidden", "true");
     saturnRingHoverCard.innerHTML = `
-      <span class="saturn-ring-hover-card__eyebrow">Saturn ring system</span>
+      <span class="saturn-ring-hover-card__eyebrow" id="planet-ring-hover-system">Planetary ring system</span>
       <div class="saturn-ring-hover-card__heading">
         <strong id="saturn-ring-hover-name">Ring group</strong>
         <small id="saturn-ring-hover-order">1 of 7 from Saturn outward</small>
@@ -655,10 +655,12 @@ import { createCelestialDetailsPanel } from './ui/planetDetailsPanel.js';
       <span class="saturn-ring-hover-card__character" id="saturn-ring-hover-character">Particle ring</span>
       <p id="saturn-ring-hover-description"></p>
       <span class="saturn-ring-hover-card__range" id="saturn-ring-hover-range"></span>
-      <span class="saturn-ring-hover-card__motion">Independent ice, rock, and dust particles · inner particles orbit faster</span>
+      <span class="saturn-ring-hover-card__motion" id="planet-ring-hover-motion">Independent orbiting particles</span>
     `;
     document.body.append(saturnRingHoverCard);
   }
+  const saturnRingHoverSystem = saturnRingHoverCard.querySelector("#planet-ring-hover-system");
+  const saturnRingHoverMotion = saturnRingHoverCard.querySelector("#planet-ring-hover-motion");
   const saturnRingHoverName = saturnRingHoverCard.querySelector("#saturn-ring-hover-name");
   const saturnRingHoverOrder = saturnRingHoverCard.querySelector("#saturn-ring-hover-order");
   const saturnRingHoverCharacter = saturnRingHoverCard.querySelector("#saturn-ring-hover-character");
@@ -2533,8 +2535,12 @@ import { createCelestialDetailsPanel } from './ui/planetDetailsPanel.js';
     );
   }
 
+  function isPlanetRingBody(body) {
+    return Boolean(body?.userData?.isPlanetRing || body?.userData?.isSaturnRing || body?.userData?.isUranusRing);
+  }
+
   function isSaturnRingBody(body) {
-    return Boolean(body?.userData?.isSaturnRing);
+    return isPlanetRingBody(body);
   }
 
   function getAsteroidEncounterIntensity() {
@@ -3649,7 +3655,9 @@ import { createCelestialDetailsPanel } from './ui/planetDetailsPanel.js';
     if (isSaturnRingBody(body)) {
       const ringData = body.userData?.ringData ?? {};
       body.userData?.setHovered?.(true);
-      saturnRingHoverName.textContent = body.userData?.name ?? "Saturn ring";
+      saturnRingHoverSystem.textContent = ringData.systemName ?? (body.userData?.isUranusRing ? "Uranus ring system" : "Saturn ring system");
+      saturnRingHoverMotion.textContent = ringData.motion ?? "Independent ice, rock, and dust particles · inner particles orbit faster";
+      saturnRingHoverName.textContent = body.userData?.name ?? "Planetary ring";
       saturnRingHoverOrder.textContent = ringData.order ?? "Saturn ring group";
       saturnRingHoverCharacter.textContent = ringData.character ?? "Particle ring";
       saturnRingHoverDescription.textContent = ringData.description
@@ -5273,6 +5281,7 @@ import { createCelestialDetailsPanel } from './ui/planetDetailsPanel.js';
           planet,
           simulationTime,
           celestialMotionScale * planetVisualDelta * 60,
+          camera,
         );
       }
     });

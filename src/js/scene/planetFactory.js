@@ -11,6 +11,7 @@ import { makeNoiseTexture } from "../graphics/proceduralTextures.js";
 import { createOrbitLine } from "./orbits.js";
 import { createSaturnSurfaceMaterial } from "../planets/saturn/saturn.js";
 import { createSaturnRingSystem, updateSaturnRingSystem } from "../planets/saturn/saturnRings.js";
+import { createUranusRingSystem, updateUranusRingSystem } from "../planets/uranus/uranusRings.js";
 
 const GAS_PROFILES = {
   Jupiter: {
@@ -1107,67 +1108,12 @@ function addGiantPlanetRings(planet, config, textures, segmentScale = 1, hoverTa
   }
 
   if (config.name === "Uranus") {
-    const r = config.radius;
-
-    /*
-     * Uranus has dark, narrow, sharply separated rings rather than Saturn-like
-     * bright sheets. A thin torus keeps them visible even when the planet is
-     * viewed nearly edge-on, while the colours remain charcoal-grey and muted.
-     */
-    // Radii are the measured ring-centre distances divided by Uranus's
-    // 25,559 km equatorial radius. Most importantly, the epsilon ring sits at
-    // 2.001 radii between Cordelia (1.947) and Ophelia (2.103), rather than
-    // sharing Ophelia's visual orbit as the older approximation did.
-    const ringProfiles = [
-      [1.637, 0.0045, 0x485a5f, 0.16], // Six
-      [1.652, 0.0045, 0x5a6d71, 0.15], // Five
-      [1.665, 0.0045, 0x3e4d52, 0.16], // Four
-      [1.750, 0.0050, 0x73868b, 0.20], // Alpha
-      [1.786, 0.0050, 0x9bb0b3, 0.23], // Beta
-      [1.846, 0.0042, 0x56696e, 0.15], // Eta
-      [1.863, 0.0045, 0x6e8287, 0.18], // Gamma
-      [1.890, 0.0050, 0x83979b, 0.20], // Delta
-      [1.957, 0.0040, 0x667a7f, 0.14], // Lambda
-      [2.001, 0.0085, 0xaebfc2, 0.34], // Epsilon
-    ];
-
-    ringProfiles.forEach(([radiusScale, tubeScale, color, opacity], index) => {
-      const material = new THREE.MeshStandardMaterial({
-        color,
-        emissive: new THREE.Color(color).multiplyScalar(0.035),
-        emissiveIntensity: 0.22,
-        transparent: true,
-        opacity,
-        roughness: 0.90,
-        metalness: 0,
-        side: THREE.DoubleSide,
-        depthWrite: false,
-      });
-
-      const ring = new THREE.Mesh(
-        new THREE.TorusGeometry(
-          r * radiusScale,
-          Math.max(0.0085, r * tubeScale),
-          8,
-          torusSegments,
-        ),
-        material,
-      );
-      ring.name = `Uranus narrow ring ${index + 1}`;
-      ring.rotation.x = Math.PI * 0.5;
-      group.add(ring);
+    return createUranusRingSystem({
+      planet,
+      radius: config.radius,
+      quality: segmentScale < 0.7 ? "low" : segmentScale < 0.9 ? "medium" : "high",
+      hoverTargets,
     });
-
-    const dustSheet = createRingBand({
-      innerRadius: r * 1.56,
-      outerRadius: r * 2.035,
-      color: 0x718488,
-      opacity: 0.012,
-      roughness: 1,
-      segments: ringSegments,
-    });
-    dustSheet.name = "Uranus extremely faint dust component";
-    group.add(dustSheet);
   }
 
   if (config.name === "Neptune") {
@@ -1401,7 +1347,7 @@ export function createPlanet({
 }
 
 /** Updates visual layers that move independently from a planet's solid body. */
-export function updatePlanetVisuals(planet, time, motionScale = 1) {
+export function updatePlanetVisuals(planet, time, motionScale = 1, camera = null) {
   if (planet.material?.uniforms?.uTime) planet.material.uniforms.uTime.value = time;
   const layers = planet.userData.visualLayers ?? {};
   if (layers.clouds) {
@@ -1418,6 +1364,7 @@ export function updatePlanetVisuals(planet, time, motionScale = 1) {
   if (layers.atmosphere) layers.atmosphere.rotation.y -= 0.00018 * motionScale;
   if (layers.ringSystem) {
     if (planet.name === "Saturn") updateSaturnRingSystem(layers.ringSystem, time);
+    if (planet.name === "Uranus") updateUranusRingSystem(layers.ringSystem, time, camera);
     else layers.ringSystem.rotation.y += 0.000012 * motionScale;
   }
   if (layers.dustArcs) layers.dustArcs.rotation.z += 0.000085 * motionScale;
