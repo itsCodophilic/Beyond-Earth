@@ -27,7 +27,8 @@ export const TEXTURE_URLS = {
   saturn: "https://threejs.org/examples/textures/planets/saturn.jpg",
   saturnRing: "https://threejs.org/examples/textures/planets/saturnringcolor.jpg",
   uranus: "https://threejs.org/examples/textures/planets/uranus.jpg",
-  neptune: "https://threejs.org/examples/textures/planets/neptune.jpg",
+  // Neptune is drawn by a seamless 3D atmosphere shader in neptuneSurface.js.
+  // Avoiding a flat image prevents polar pinching and longitude seams.
 };
 
 /**

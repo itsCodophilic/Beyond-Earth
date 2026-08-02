@@ -12,6 +12,12 @@ import { createOrbitLine } from "./orbits.js";
 import { createSaturnSurfaceMaterial } from "../planets/saturn/saturn.js";
 import { createSaturnRingSystem, updateSaturnRingSystem } from "../planets/saturn/saturnRings.js";
 import { createUranusRingSystem, updateUranusRingSystem } from "../planets/uranus/uranusRings.js";
+import {
+  applyNeptuneOblateness,
+  createNeptuneAtmosphereLayers,
+  createNeptuneSurfaceMaterial,
+  updateNeptuneAtmosphereLayers,
+} from "../planets/neptune/neptuneSurface.js";
 
 const GAS_PROFILES = {
   Jupiter: {
@@ -1216,6 +1222,9 @@ function addNeptuneDustArcs(planet, config) {
 }
 
 function createPlanetMaterial(config, textures) {
+  // Neptune is built from continuous procedural atmosphere layers. Returning
+  // before texture lookup prevents a failed image from silently replacing it.
+  if (config.name === "Neptune") return createNeptuneSurfaceMaterial();
   const texture = textures[config.texture] ?? makeNoiseTexture(config.texture);
   if (config.name === "Saturn") return createSaturnSurfaceMaterial(texture);
   if (GAS_PROFILES[config.name]) return createGasMaterial(config, texture);
@@ -1250,6 +1259,7 @@ export function createPlanet({
     getSegmentCount(baseSegments[1], segmentScale, 64),
   ];
   const geometry = new THREE.SphereGeometry(config.radius, segments[0], segments[1]);
+  if (config.name === "Neptune") applyNeptuneOblateness(geometry);
   sculptRockyGeometry(geometry, config);
   const mesh = new THREE.Mesh(
     geometry,
@@ -1304,6 +1314,13 @@ export function createPlanet({
   if (atmosphere) mesh.userData.visualLayers.atmosphere = atmosphere;
   if (config.name === "Venus") {
     mesh.userData.visualLayers.clouds = addVenusClouds(mesh, config, textures, segmentScale);
+  }
+  if (config.name === "Neptune") {
+    mesh.userData.visualLayers.neptuneClouds = createNeptuneAtmosphereLayers({
+      planet: mesh,
+      radius: config.radius,
+      segmentScale,
+    });
   }
   if (["Jupiter", "Saturn", "Uranus", "Neptune"].includes(config.name)) {
     mesh.userData.visualLayers.ringSystem = addGiantPlanetRings(mesh, config, textures, segmentScale, hoverTargets);
@@ -1362,6 +1379,9 @@ export function updatePlanetVisuals(planet, time, motionScale = 1, camera = null
     });
   }
   if (layers.atmosphere) layers.atmosphere.rotation.y -= 0.00018 * motionScale;
+  if (layers.neptuneClouds) {
+    updateNeptuneAtmosphereLayers(planet, layers.neptuneClouds, time, motionScale, camera);
+  }
   if (layers.ringSystem) {
     if (planet.name === "Saturn") updateSaturnRingSystem(layers.ringSystem, time);
     if (planet.name === "Uranus") updateUranusRingSystem(layers.ringSystem, time, camera);
