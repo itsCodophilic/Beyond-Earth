@@ -1,6 +1,8 @@
 import * as THREE from "three";
 import { mergeVertices } from "three/addons/utils/BufferGeometryUtils.js";
 
+const PUBLIC_ASSET_ROOT = `${import.meta.env.BASE_URL}assets`;
+
 const PALETTES = Object.freeze({
   mimas: [0xb7b5ae, 0xe0ddd3, 0x66645f],
   enceladus: [0xe4eaec, 0xffffff, 0x8ca8b3],
@@ -32,236 +34,92 @@ function irregularReferenceAssetSlug(name) {
 
 const SATURNIAN_SURFACE_ASSETS = Object.freeze({
   Titan: Object.freeze({
-    albedo: new URL("../../../../assets/textures/saturnian/titan-albedo.jpg", import.meta.url).href,
-    height: new URL("../../../../assets/textures/saturnian/titan-height.jpg", import.meta.url).href,
-    roughness: new URL("../../../../assets/textures/saturnian/titan-roughness.jpg", import.meta.url).href,
+    albedo: `${PUBLIC_ASSET_ROOT}/textures/saturnian/titan-albedo.jpg`,
+    height: `${PUBLIC_ASSET_ROOT}/textures/saturnian/titan-height.jpg`,
+    roughness: `${PUBLIC_ASSET_ROOT}/textures/saturnian/titan-roughness.jpg`,
   }),
   Iapetus: Object.freeze({
-    albedo: new URL("../../../../assets/textures/saturnian/iapetus-albedo.jpg", import.meta.url).href,
-    height: new URL("../../../../assets/textures/saturnian/iapetus-height.jpg", import.meta.url).href,
-    roughness: new URL("../../../../assets/textures/saturnian/iapetus-roughness.jpg", import.meta.url).href,
+    albedo: `${PUBLIC_ASSET_ROOT}/textures/saturnian/iapetus-albedo.jpg`,
+    height: `${PUBLIC_ASSET_ROOT}/textures/saturnian/iapetus-height.jpg`,
+    roughness: `${PUBLIC_ASSET_ROOT}/textures/saturnian/iapetus-roughness.jpg`,
   }),
   Mimas: Object.freeze({
-    albedo: new URL("../../../../assets/textures/saturnian/mimas-albedo.jpg", import.meta.url).href,
-    height: new URL("../../../../assets/textures/saturnian/mimas-height.jpg", import.meta.url).href,
-    roughness: new URL("../../../../assets/textures/saturnian/mimas-roughness.jpg", import.meta.url).href,
+    albedo: `${PUBLIC_ASSET_ROOT}/textures/saturnian/mimas-albedo.jpg`,
+    height: `${PUBLIC_ASSET_ROOT}/textures/saturnian/mimas-height.jpg`,
+    roughness: `${PUBLIC_ASSET_ROOT}/textures/saturnian/mimas-roughness.jpg`,
   }),
   Enceladus: Object.freeze({
-    albedo: new URL("../../../../assets/textures/saturnian/enceladus-albedo.jpg", import.meta.url).href,
-    height: new URL("../../../../assets/textures/saturnian/enceladus-height.jpg", import.meta.url).href,
-    roughness: new URL("../../../../assets/textures/saturnian/enceladus-roughness.jpg", import.meta.url).href,
+    albedo: `${PUBLIC_ASSET_ROOT}/textures/saturnian/enceladus-albedo.jpg`,
+    height: `${PUBLIC_ASSET_ROOT}/textures/saturnian/enceladus-height.jpg`,
+    roughness: `${PUBLIC_ASSET_ROOT}/textures/saturnian/enceladus-roughness.jpg`,
   }),
   Tethys: Object.freeze({
-    albedo: new URL("../../../../assets/textures/saturnian/tethys-albedo.jpg", import.meta.url).href,
-    height: new URL("../../../../assets/textures/saturnian/tethys-height.jpg", import.meta.url).href,
-    roughness: new URL("../../../../assets/textures/saturnian/tethys-roughness.jpg", import.meta.url).href,
+    albedo: `${PUBLIC_ASSET_ROOT}/textures/saturnian/tethys-albedo.jpg`,
+    height: `${PUBLIC_ASSET_ROOT}/textures/saturnian/tethys-height.jpg`,
+    roughness: `${PUBLIC_ASSET_ROOT}/textures/saturnian/tethys-roughness.jpg`,
   }),
   Dione: Object.freeze({
-    albedo: new URL("../../../../assets/textures/saturnian/dione-albedo.jpg", import.meta.url).href,
-    height: new URL("../../../../assets/textures/saturnian/dione-height.jpg", import.meta.url).href,
-    roughness: new URL("../../../../assets/textures/saturnian/dione-roughness.jpg", import.meta.url).href,
+    albedo: `${PUBLIC_ASSET_ROOT}/textures/saturnian/dione-albedo.jpg`,
+    height: `${PUBLIC_ASSET_ROOT}/textures/saturnian/dione-height.jpg`,
+    roughness: `${PUBLIC_ASSET_ROOT}/textures/saturnian/dione-roughness.jpg`,
   }),
   Rhea: Object.freeze({
-    albedo: new URL("../../../../assets/textures/saturnian/rhea-albedo.jpg", import.meta.url).href,
-    height: new URL("../../../../assets/textures/saturnian/rhea-height.jpg", import.meta.url).href,
-    roughness: new URL("../../../../assets/textures/saturnian/rhea-roughness.jpg", import.meta.url).href,
+    albedo: `${PUBLIC_ASSET_ROOT}/textures/saturnian/rhea-albedo.jpg`,
+    height: `${PUBLIC_ASSET_ROOT}/textures/saturnian/rhea-height.jpg`,
+    roughness: `${PUBLIC_ASSET_ROOT}/textures/saturnian/rhea-roughness.jpg`,
   }),
   Ymir: Object.freeze({
-    albedo: new URL(
-      "../../../../assets/textures/saturnian/irregular-reference/ymir-albedo.jpg",
-      import.meta.url,
-    ).href,
-    height: new URL(
-      "../../../../assets/textures/saturnian/irregular-reference/ymir-height.jpg",
-      import.meta.url,
-    ).href,
-    roughness: new URL(
-      "../../../../assets/textures/saturnian/irregular-reference/ymir-roughness.jpg",
-      import.meta.url,
-    ).href,
+    albedo: `${PUBLIC_ASSET_ROOT}/textures/saturnian/irregular-reference/ymir-albedo.jpg`,
+    height: `${PUBLIC_ASSET_ROOT}/textures/saturnian/irregular-reference/ymir-height.jpg`,
+    roughness: `${PUBLIC_ASSET_ROOT}/textures/saturnian/irregular-reference/ymir-roughness.jpg`,
   }),
   Paaliaq: Object.freeze({
-    albedo: new URL(
-      "../../../../assets/textures/saturnian/irregular-reference/paaliaq-albedo.jpg",
-      import.meta.url,
-    ).href,
-    height: new URL(
-      "../../../../assets/textures/saturnian/irregular-reference/paaliaq-height.jpg",
-      import.meta.url,
-    ).href,
-    roughness: new URL(
-      "../../../../assets/textures/saturnian/irregular-reference/paaliaq-roughness.jpg",
-      import.meta.url,
-    ).href,
+    albedo: `${PUBLIC_ASSET_ROOT}/textures/saturnian/irregular-reference/paaliaq-albedo.jpg`,
+    height: `${PUBLIC_ASSET_ROOT}/textures/saturnian/irregular-reference/paaliaq-height.jpg`,
+    roughness: `${PUBLIC_ASSET_ROOT}/textures/saturnian/irregular-reference/paaliaq-roughness.jpg`,
   }),
-  Tarvos: irregularReferenceAsset(new URL(
-    "../../../../assets/textures/saturnian/irregular-reference/tarvos-albedo.jpg",
-    import.meta.url,
-  ).href),
-  Ijiraq: irregularReferenceAsset(new URL(
-    "../../../../assets/textures/saturnian/irregular-reference/ijiraq-albedo.jpg",
-    import.meta.url,
-  ).href),
-  Suttungr: irregularReferenceAsset(new URL(
-    "../../../../assets/textures/saturnian/irregular-reference/suttungr-albedo.jpg",
-    import.meta.url,
-  ).href),
-  Kiviuq: irregularReferenceAsset(new URL(
-    "../../../../assets/textures/saturnian/irregular-reference/kiviuq-albedo.jpg",
-    import.meta.url,
-  ).href),
-  Mundilfari: irregularReferenceAsset(new URL(
-    "../../../../assets/textures/saturnian/irregular-reference/mundilfari-albedo.jpg",
-    import.meta.url,
-  ).href),
-  Albiorix: irregularReferenceAsset(new URL(
-    "../../../../assets/textures/saturnian/irregular-reference/albiorix-albedo.jpg",
-    import.meta.url,
-  ).href),
-  Skathi: irregularReferenceAsset(new URL(
-    "../../../../assets/textures/saturnian/irregular-reference/skathi-albedo.jpg",
-    import.meta.url,
-  ).href),
-  Erriapus: irregularReferenceAsset(new URL(
-    "../../../../assets/textures/saturnian/irregular-reference/erriapus-albedo.jpg",
-    import.meta.url,
-  ).href),
-  Siarnaq: irregularReferenceAsset(new URL(
-    "../../../../assets/textures/saturnian/irregular-reference/siarnaq-albedo.jpg",
-    import.meta.url,
-  ).href),
-  Thrymr: irregularReferenceAsset(new URL(
-    "../../../../assets/textures/saturnian/irregular-reference/thrymr-albedo.jpg",
-    import.meta.url,
-  ).href),
-  Narvi: irregularReferenceAsset(new URL(
-    "../../../../assets/textures/saturnian/irregular-reference/narvi-albedo.jpg",
-    import.meta.url,
-  ).href),
-  Methone: irregularReferenceAsset(new URL(
-    "../../../../assets/textures/saturnian/irregular-reference/methone-albedo.jpg",
-    import.meta.url,
-  ).href),
-  Aegir: irregularReferenceAsset(new URL(
-    "../../../../assets/textures/saturnian/irregular-reference/aegir-albedo.jpg",
-    import.meta.url,
-  ).href),
-  Bebhionn: irregularReferenceAsset(new URL(
-    "../../../../assets/textures/saturnian/irregular-reference/bebhionn-albedo.jpg",
-    import.meta.url,
-  ).href),
-  Bergelmir: irregularReferenceAsset(new URL(
-    "../../../../assets/textures/saturnian/irregular-reference/bergelmir-albedo.jpg",
-    import.meta.url,
-  ).href),
-  Bestla: irregularReferenceAsset(new URL(
-    "../../../../assets/textures/saturnian/irregular-reference/bestla-albedo.jpg",
-    import.meta.url,
-  ).href),
-  Farbauti: irregularReferenceAsset(new URL(
-    "../../../../assets/textures/saturnian/irregular-reference/farbauti-albedo.jpg",
-    import.meta.url,
-  ).href),
-  Fenrir: irregularReferenceAsset(new URL(
-    "../../../../assets/textures/saturnian/irregular-reference/fenrir-albedo.jpg",
-    import.meta.url,
-  ).href),
-  Fornjot: irregularReferenceAsset(new URL(
-    "../../../../assets/textures/saturnian/irregular-reference/fornjot-albedo.jpg",
-    import.meta.url,
-  ).href),
-  Hati: irregularReferenceAsset(new URL(
-    "../../../../assets/textures/saturnian/irregular-reference/hati-albedo.jpg",
-    import.meta.url,
-  ).href),
-  Hyrrokkin: irregularReferenceAsset(new URL(
-    "../../../../assets/textures/saturnian/irregular-reference/hyrrokkin-albedo.jpg",
-    import.meta.url,
-  ).href),
-  Kari: irregularReferenceAsset(new URL(
-    "../../../../assets/textures/saturnian/irregular-reference/kari-albedo.jpg",
-    import.meta.url,
-  ).href),
-  Loge: irregularReferenceAsset(new URL(
-    "../../../../assets/textures/saturnian/irregular-reference/loge-albedo.jpg",
-    import.meta.url,
-  ).href),
-  Skoll: irregularReferenceAsset(new URL(
-    "../../../../assets/textures/saturnian/irregular-reference/skoll-albedo.jpg",
-    import.meta.url,
-  ).href),
-  Surtur: irregularReferenceAsset(new URL(
-    "../../../../assets/textures/saturnian/irregular-reference/surtur-albedo.jpg",
-    import.meta.url,
-  ).href),
-  Jarnsaxa: irregularReferenceAsset(new URL(
-    "../../../../assets/textures/saturnian/irregular-reference/jarnsaxa-albedo.jpg",
-    import.meta.url,
-  ).href),
-  Greip: irregularReferenceAsset(new URL(
-    "../../../../assets/textures/saturnian/irregular-reference/greip-albedo.jpg",
-    import.meta.url,
-  ).href),
-  Tarqeq: irregularReferenceAsset(new URL(
-    "../../../../assets/textures/saturnian/irregular-reference/tarqeq-albedo.jpg",
-    import.meta.url,
-  ).href),
-  Gridr: irregularReferenceAsset(new URL(
-    "../../../../assets/textures/saturnian/irregular-reference/gridr-albedo.jpg",
-    import.meta.url,
-  ).href),
-  Angrboda: irregularReferenceAsset(new URL(
-    "../../../../assets/textures/saturnian/irregular-reference/angrboda-albedo.jpg",
-    import.meta.url,
-  ).href),
-  Skrymir: irregularReferenceAsset(new URL(
-    "../../../../assets/textures/saturnian/irregular-reference/skrymir-albedo.jpg",
-    import.meta.url,
-  ).href),
-  Gerd: irregularReferenceAsset(new URL(
-    "../../../../assets/textures/saturnian/irregular-reference/gerd-albedo.jpg",
-    import.meta.url,
-  ).href),
-  "S/2004 S26": irregularReferenceAsset(new URL(
-    "../../../../assets/textures/saturnian/irregular-reference/s2004-s26-albedo.jpg",
-    import.meta.url,
-  ).href),
-  Eggther: irregularReferenceAsset(new URL(
-    "../../../../assets/textures/saturnian/irregular-reference/eggther-albedo.jpg",
-    import.meta.url,
-  ).href),
-  "S/2004 S29": irregularReferenceAsset(new URL(
-    "../../../../assets/textures/saturnian/irregular-reference/s2004-s29-albedo.jpg",
-    import.meta.url,
-  ).href),
-  Beli: irregularReferenceAsset(new URL(
-    "../../../../assets/textures/saturnian/irregular-reference/beli-albedo.jpg",
-    import.meta.url,
-  ).href),
-  "S/2004 S27": irregularReferenceAsset(new URL(
-    "../../../../assets/textures/saturnian/irregular-reference/s2004-s27-albedo.jpg",
-    import.meta.url,
-  ).href),
-  Gunnlod: irregularReferenceAsset(new URL(
-    "../../../../assets/textures/saturnian/irregular-reference/gunnlod-albedo.jpg",
-    import.meta.url,
-  ).href),
-  Thiazzi: irregularReferenceAsset(new URL(
-    "../../../../assets/textures/saturnian/irregular-reference/thiazzi-albedo.jpg",
-    import.meta.url,
-  ).href),
-  "S/2004 S17": irregularReferenceAsset(new URL(
-    "../../../../assets/textures/saturnian/irregular-reference/s2004-s17-albedo.jpg",
-    import.meta.url,
-  ).href),
-  Alvaldi: irregularReferenceAsset(new URL(
-    "../../../../assets/textures/saturnian/irregular-reference/alvaldi-albedo.jpg",
-    import.meta.url,
-  ).href),
-  Geirrod: irregularReferenceAsset(new URL(
-    "../../../../assets/textures/saturnian/irregular-reference/geirrod-albedo.jpg",
-    import.meta.url,
-  ).href),
+  Tarvos: irregularReferenceAsset(`${PUBLIC_ASSET_ROOT}/textures/saturnian/irregular-reference/tarvos-albedo.jpg`),
+  Ijiraq: irregularReferenceAsset(`${PUBLIC_ASSET_ROOT}/textures/saturnian/irregular-reference/ijiraq-albedo.jpg`),
+  Suttungr: irregularReferenceAsset(`${PUBLIC_ASSET_ROOT}/textures/saturnian/irregular-reference/suttungr-albedo.jpg`),
+  Kiviuq: irregularReferenceAsset(`${PUBLIC_ASSET_ROOT}/textures/saturnian/irregular-reference/kiviuq-albedo.jpg`),
+  Mundilfari: irregularReferenceAsset(`${PUBLIC_ASSET_ROOT}/textures/saturnian/irregular-reference/mundilfari-albedo.jpg`),
+  Albiorix: irregularReferenceAsset(`${PUBLIC_ASSET_ROOT}/textures/saturnian/irregular-reference/albiorix-albedo.jpg`),
+  Skathi: irregularReferenceAsset(`${PUBLIC_ASSET_ROOT}/textures/saturnian/irregular-reference/skathi-albedo.jpg`),
+  Erriapus: irregularReferenceAsset(`${PUBLIC_ASSET_ROOT}/textures/saturnian/irregular-reference/erriapus-albedo.jpg`),
+  Siarnaq: irregularReferenceAsset(`${PUBLIC_ASSET_ROOT}/textures/saturnian/irregular-reference/siarnaq-albedo.jpg`),
+  Thrymr: irregularReferenceAsset(`${PUBLIC_ASSET_ROOT}/textures/saturnian/irregular-reference/thrymr-albedo.jpg`),
+  Narvi: irregularReferenceAsset(`${PUBLIC_ASSET_ROOT}/textures/saturnian/irregular-reference/narvi-albedo.jpg`),
+  Methone: irregularReferenceAsset(`${PUBLIC_ASSET_ROOT}/textures/saturnian/irregular-reference/methone-albedo.jpg`),
+  Aegir: irregularReferenceAsset(`${PUBLIC_ASSET_ROOT}/textures/saturnian/irregular-reference/aegir-albedo.jpg`),
+  Bebhionn: irregularReferenceAsset(`${PUBLIC_ASSET_ROOT}/textures/saturnian/irregular-reference/bebhionn-albedo.jpg`),
+  Bergelmir: irregularReferenceAsset(`${PUBLIC_ASSET_ROOT}/textures/saturnian/irregular-reference/bergelmir-albedo.jpg`),
+  Bestla: irregularReferenceAsset(`${PUBLIC_ASSET_ROOT}/textures/saturnian/irregular-reference/bestla-albedo.jpg`),
+  Farbauti: irregularReferenceAsset(`${PUBLIC_ASSET_ROOT}/textures/saturnian/irregular-reference/farbauti-albedo.jpg`),
+  Fenrir: irregularReferenceAsset(`${PUBLIC_ASSET_ROOT}/textures/saturnian/irregular-reference/fenrir-albedo.jpg`),
+  Fornjot: irregularReferenceAsset(`${PUBLIC_ASSET_ROOT}/textures/saturnian/irregular-reference/fornjot-albedo.jpg`),
+  Hati: irregularReferenceAsset(`${PUBLIC_ASSET_ROOT}/textures/saturnian/irregular-reference/hati-albedo.jpg`),
+  Hyrrokkin: irregularReferenceAsset(`${PUBLIC_ASSET_ROOT}/textures/saturnian/irregular-reference/hyrrokkin-albedo.jpg`),
+  Kari: irregularReferenceAsset(`${PUBLIC_ASSET_ROOT}/textures/saturnian/irregular-reference/kari-albedo.jpg`),
+  Loge: irregularReferenceAsset(`${PUBLIC_ASSET_ROOT}/textures/saturnian/irregular-reference/loge-albedo.jpg`),
+  Skoll: irregularReferenceAsset(`${PUBLIC_ASSET_ROOT}/textures/saturnian/irregular-reference/skoll-albedo.jpg`),
+  Surtur: irregularReferenceAsset(`${PUBLIC_ASSET_ROOT}/textures/saturnian/irregular-reference/surtur-albedo.jpg`),
+  Jarnsaxa: irregularReferenceAsset(`${PUBLIC_ASSET_ROOT}/textures/saturnian/irregular-reference/jarnsaxa-albedo.jpg`),
+  Greip: irregularReferenceAsset(`${PUBLIC_ASSET_ROOT}/textures/saturnian/irregular-reference/greip-albedo.jpg`),
+  Tarqeq: irregularReferenceAsset(`${PUBLIC_ASSET_ROOT}/textures/saturnian/irregular-reference/tarqeq-albedo.jpg`),
+  Gridr: irregularReferenceAsset(`${PUBLIC_ASSET_ROOT}/textures/saturnian/irregular-reference/gridr-albedo.jpg`),
+  Angrboda: irregularReferenceAsset(`${PUBLIC_ASSET_ROOT}/textures/saturnian/irregular-reference/angrboda-albedo.jpg`),
+  Skrymir: irregularReferenceAsset(`${PUBLIC_ASSET_ROOT}/textures/saturnian/irregular-reference/skrymir-albedo.jpg`),
+  Gerd: irregularReferenceAsset(`${PUBLIC_ASSET_ROOT}/textures/saturnian/irregular-reference/gerd-albedo.jpg`),
+  "S/2004 S26": irregularReferenceAsset(`${PUBLIC_ASSET_ROOT}/textures/saturnian/irregular-reference/s2004-s26-albedo.jpg`),
+  Eggther: irregularReferenceAsset(`${PUBLIC_ASSET_ROOT}/textures/saturnian/irregular-reference/eggther-albedo.jpg`),
+  "S/2004 S29": irregularReferenceAsset(`${PUBLIC_ASSET_ROOT}/textures/saturnian/irregular-reference/s2004-s29-albedo.jpg`),
+  Beli: irregularReferenceAsset(`${PUBLIC_ASSET_ROOT}/textures/saturnian/irregular-reference/beli-albedo.jpg`),
+  "S/2004 S27": irregularReferenceAsset(`${PUBLIC_ASSET_ROOT}/textures/saturnian/irregular-reference/s2004-s27-albedo.jpg`),
+  Gunnlod: irregularReferenceAsset(`${PUBLIC_ASSET_ROOT}/textures/saturnian/irregular-reference/gunnlod-albedo.jpg`),
+  Thiazzi: irregularReferenceAsset(`${PUBLIC_ASSET_ROOT}/textures/saturnian/irregular-reference/thiazzi-albedo.jpg`),
+  "S/2004 S17": irregularReferenceAsset(`${PUBLIC_ASSET_ROOT}/textures/saturnian/irregular-reference/s2004-s17-albedo.jpg`),
+  Alvaldi: irregularReferenceAsset(`${PUBLIC_ASSET_ROOT}/textures/saturnian/irregular-reference/alvaldi-albedo.jpg`),
+  Geirrod: irregularReferenceAsset(`${PUBLIC_ASSET_ROOT}/textures/saturnian/irregular-reference/geirrod-albedo.jpg`),
 });
 
 const saturnianTextureLoader = new THREE.TextureLoader();

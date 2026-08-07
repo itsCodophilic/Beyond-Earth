@@ -1,6 +1,8 @@
 import * as THREE from "three";
 import { mergeVertices } from "three/addons/utils/BufferGeometryUtils.js";
 
+const PUBLIC_ASSET_ROOT = `${import.meta.env.BASE_URL}assets`;
+
 const PALETTES = Object.freeze({
   miranda: [0x8d9492, 0xc6cbc7, 0x4a4f4e, 0xa9afab],
   ariel: [0x9ea8a7, 0xd2dad6, 0x525958, 0xb9c3bf],
@@ -17,18 +19,9 @@ const PALETTES = Object.freeze({
 
 function minorSurfaceAssets(slug) {
   return Object.freeze({
-    albedo: new URL(
-      `../../../../assets/textures/uranian/minor-moons/${slug}-albedo-v1.jpg`,
-      import.meta.url,
-    ).href,
-    height: new URL(
-      `../../../../assets/textures/uranian/minor-moons/${slug}-height-v1.jpg`,
-      import.meta.url,
-    ).href,
-    roughness: new URL(
-      `../../../../assets/textures/uranian/minor-moons/${slug}-roughness-v1.jpg`,
-      import.meta.url,
-    ).href,
+    albedo: `${PUBLIC_ASSET_ROOT}/textures/uranian/minor-moons/${slug}-albedo-v1.jpg`,
+    height: `${PUBLIC_ASSET_ROOT}/textures/uranian/minor-moons/${slug}-height-v1.jpg`,
+    roughness: `${PUBLIC_ASSET_ROOT}/textures/uranian/minor-moons/${slug}-roughness-v1.jpg`,
   });
 }
 
@@ -46,116 +39,44 @@ function minorSurfaceAssets(slug) {
  */
 const URANIAN_SURFACE_ASSETS = Object.freeze({
   Miranda: Object.freeze({
-    albedo: new URL(
-      "../../../../assets/textures/uranian/major-moons/miranda-albedo-v1.jpg",
-      import.meta.url,
-    ).href,
-    height: new URL(
-      "../../../../assets/textures/uranian/major-moons/miranda-height-v1.jpg",
-      import.meta.url,
-    ).href,
-    roughness: new URL(
-      "../../../../assets/textures/uranian/major-moons/miranda-roughness-v1.jpg",
-      import.meta.url,
-    ).href,
+    albedo: `${PUBLIC_ASSET_ROOT}/textures/uranian/major-moons/miranda-albedo-v1.jpg`,
+    height: `${PUBLIC_ASSET_ROOT}/textures/uranian/major-moons/miranda-height-v1.jpg`,
+    roughness: `${PUBLIC_ASSET_ROOT}/textures/uranian/major-moons/miranda-roughness-v1.jpg`,
   }),
   Ariel: Object.freeze({
-    albedo: new URL(
-      "../../../../assets/textures/uranian/major-moons/ariel-albedo.jpg",
-      import.meta.url,
-    ).href,
-    height: new URL(
-      "../../../../assets/textures/uranian/major-moons/ariel-height.jpg",
-      import.meta.url,
-    ).href,
-    roughness: new URL(
-      "../../../../assets/textures/uranian/major-moons/ariel-roughness.jpg",
-      import.meta.url,
-    ).href,
+    albedo: `${PUBLIC_ASSET_ROOT}/textures/uranian/major-moons/ariel-albedo.jpg`,
+    height: `${PUBLIC_ASSET_ROOT}/textures/uranian/major-moons/ariel-height.jpg`,
+    roughness: `${PUBLIC_ASSET_ROOT}/textures/uranian/major-moons/ariel-roughness.jpg`,
   }),
   Umbriel: Object.freeze({
-    albedo: new URL(
-      "../../../../assets/textures/uranian/major-moons/umbriel-albedo-v4.jpg",
-      import.meta.url,
-    ).href,
-    height: new URL(
-      "../../../../assets/textures/uranian/major-moons/umbriel-height-v4.jpg",
-      import.meta.url,
-    ).href,
-    roughness: new URL(
-      "../../../../assets/textures/uranian/major-moons/umbriel-roughness-v4.jpg",
-      import.meta.url,
-    ).href,
+    albedo: `${PUBLIC_ASSET_ROOT}/textures/uranian/major-moons/umbriel-albedo-v4.jpg`,
+    height: `${PUBLIC_ASSET_ROOT}/textures/uranian/major-moons/umbriel-height-v4.jpg`,
+    roughness: `${PUBLIC_ASSET_ROOT}/textures/uranian/major-moons/umbriel-roughness-v4.jpg`,
   }),
   Titania: Object.freeze({
-    albedo: new URL(
-      "../../../../assets/textures/uranian/major-moons/titania-albedo-v2.jpg",
-      import.meta.url,
-    ).href,
-    height: new URL(
-      "../../../../assets/textures/uranian/major-moons/titania-height-v2.jpg",
-      import.meta.url,
-    ).href,
-    roughness: new URL(
-      "../../../../assets/textures/uranian/major-moons/titania-roughness-v2.jpg",
-      import.meta.url,
-    ).href,
+    albedo: `${PUBLIC_ASSET_ROOT}/textures/uranian/major-moons/titania-albedo-v2.jpg`,
+    height: `${PUBLIC_ASSET_ROOT}/textures/uranian/major-moons/titania-height-v2.jpg`,
+    roughness: `${PUBLIC_ASSET_ROOT}/textures/uranian/major-moons/titania-roughness-v2.jpg`,
   }),
   Oberon: Object.freeze({
-    albedo: new URL(
-      "../../../../assets/textures/uranian/major-moons/oberon-albedo-v1.jpg",
-      import.meta.url,
-    ).href,
-    height: new URL(
-      "../../../../assets/textures/uranian/major-moons/oberon-height-v1.jpg",
-      import.meta.url,
-    ).href,
-    roughness: new URL(
-      "../../../../assets/textures/uranian/major-moons/oberon-roughness-v1.jpg",
-      import.meta.url,
-    ).href,
+    albedo: `${PUBLIC_ASSET_ROOT}/textures/uranian/major-moons/oberon-albedo-v1.jpg`,
+    height: `${PUBLIC_ASSET_ROOT}/textures/uranian/major-moons/oberon-height-v1.jpg`,
+    roughness: `${PUBLIC_ASSET_ROOT}/textures/uranian/major-moons/oberon-roughness-v1.jpg`,
   }),
   Cordelia: Object.freeze({
-    albedo: new URL(
-      "../../../../assets/textures/uranian/inner-moons/cordelia-albedo-v1.jpg",
-      import.meta.url,
-    ).href,
-    height: new URL(
-      "../../../../assets/textures/uranian/inner-moons/cordelia-height-v1.jpg",
-      import.meta.url,
-    ).href,
-    roughness: new URL(
-      "../../../../assets/textures/uranian/inner-moons/cordelia-roughness-v1.jpg",
-      import.meta.url,
-    ).href,
+    albedo: `${PUBLIC_ASSET_ROOT}/textures/uranian/inner-moons/cordelia-albedo-v1.jpg`,
+    height: `${PUBLIC_ASSET_ROOT}/textures/uranian/inner-moons/cordelia-height-v1.jpg`,
+    roughness: `${PUBLIC_ASSET_ROOT}/textures/uranian/inner-moons/cordelia-roughness-v1.jpg`,
   }),
   Ophelia: Object.freeze({
-    albedo: new URL(
-      "../../../../assets/textures/uranian/inner-moons/ophelia-albedo-v1.jpg",
-      import.meta.url,
-    ).href,
-    height: new URL(
-      "../../../../assets/textures/uranian/inner-moons/ophelia-height-v1.jpg",
-      import.meta.url,
-    ).href,
-    roughness: new URL(
-      "../../../../assets/textures/uranian/inner-moons/ophelia-roughness-v1.jpg",
-      import.meta.url,
-    ).href,
+    albedo: `${PUBLIC_ASSET_ROOT}/textures/uranian/inner-moons/ophelia-albedo-v1.jpg`,
+    height: `${PUBLIC_ASSET_ROOT}/textures/uranian/inner-moons/ophelia-height-v1.jpg`,
+    roughness: `${PUBLIC_ASSET_ROOT}/textures/uranian/inner-moons/ophelia-roughness-v1.jpg`,
   }),
   "S/2025 U1": Object.freeze({
-    albedo: new URL(
-      "../../../../assets/textures/uranian/minor-moons/s2025-u1-albedo-v1.jpg",
-      import.meta.url,
-    ).href,
-    height: new URL(
-      "../../../../assets/textures/uranian/minor-moons/s2025-u1-height-v1.jpg",
-      import.meta.url,
-    ).href,
-    roughness: new URL(
-      "../../../../assets/textures/uranian/minor-moons/s2025-u1-roughness-v1.jpg",
-      import.meta.url,
-    ).href,
+    albedo: `${PUBLIC_ASSET_ROOT}/textures/uranian/minor-moons/s2025-u1-albedo-v1.jpg`,
+    height: `${PUBLIC_ASSET_ROOT}/textures/uranian/minor-moons/s2025-u1-height-v1.jpg`,
+    roughness: `${PUBLIC_ASSET_ROOT}/textures/uranian/minor-moons/s2025-u1-roughness-v1.jpg`,
   }),
   Bianca: minorSurfaceAssets("bianca"),
   Cressida: minorSurfaceAssets("cressida"),

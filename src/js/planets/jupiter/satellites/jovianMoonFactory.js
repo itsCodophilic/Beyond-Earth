@@ -1,6 +1,8 @@
 import * as THREE from "three";
 import { mergeVertices } from "three/addons/utils/BufferGeometryUtils.js";
 
+const PUBLIC_ASSET_ROOT = `${import.meta.env.BASE_URL}assets`;
+
 /**
  * Evidence-tiered 3D surfaces for Jupiter's complete 115-entry satellite
  * catalogue.
@@ -1877,33 +1879,24 @@ const HERO_GALILEAN_TEXTURES = new Set(["Io", "Europa", "Ganymede", "Callisto"])
 
 const HERO_GALILEAN_ASSET_URLS = Object.freeze({
   Io: {
-    albedo: new URL("../../../../assets/textures/jovian/io-albedo.jpg", import.meta.url).href,
-    height: new URL("../../../../assets/textures/jovian/io-height.jpg", import.meta.url).href,
-    roughness: new URL("../../../../assets/textures/jovian/io-roughness.jpg", import.meta.url).href,
+    albedo: `${PUBLIC_ASSET_ROOT}/textures/jovian/io-albedo.jpg`,
+    height: `${PUBLIC_ASSET_ROOT}/textures/jovian/io-height.jpg`,
+    roughness: `${PUBLIC_ASSET_ROOT}/textures/jovian/io-roughness.jpg`,
   },
   Europa: {
-    albedo: new URL("../../../../assets/textures/jovian/europa-albedo.jpg", import.meta.url).href,
-    height: new URL("../../../../assets/textures/jovian/europa-height.jpg", import.meta.url).href,
-    roughness: new URL("../../../../assets/textures/jovian/europa-roughness.jpg", import.meta.url).href,
+    albedo: `${PUBLIC_ASSET_ROOT}/textures/jovian/europa-albedo.jpg`,
+    height: `${PUBLIC_ASSET_ROOT}/textures/jovian/europa-height.jpg`,
+    roughness: `${PUBLIC_ASSET_ROOT}/textures/jovian/europa-roughness.jpg`,
   },
   Ganymede: {
-    albedo: new URL("../../../../assets/textures/jovian/ganymede-albedo.jpg", import.meta.url).href,
-    height: new URL("../../../../assets/textures/jovian/ganymede-height.jpg", import.meta.url).href,
-    roughness: new URL("../../../../assets/textures/jovian/ganymede-roughness.jpg", import.meta.url).href,
+    albedo: `${PUBLIC_ASSET_ROOT}/textures/jovian/ganymede-albedo.jpg`,
+    height: `${PUBLIC_ASSET_ROOT}/textures/jovian/ganymede-height.jpg`,
+    roughness: `${PUBLIC_ASSET_ROOT}/textures/jovian/ganymede-roughness.jpg`,
   },
   Callisto: {
-    albedo: new URL(
-      "../../../../assets/textures/jovian/callisto-reference-albedo.jpg",
-      import.meta.url,
-    ).href,
-    height: new URL(
-      "../../../../assets/textures/jovian/callisto-reference-height.jpg",
-      import.meta.url,
-    ).href,
-    roughness: new URL(
-      "../../../../assets/textures/jovian/callisto-reference-roughness.jpg",
-      import.meta.url,
-    ).href,
+    albedo: `${PUBLIC_ASSET_ROOT}/textures/jovian/callisto-reference-albedo.jpg`,
+    height: `${PUBLIC_ASSET_ROOT}/textures/jovian/callisto-reference-height.jpg`,
+    roughness: `${PUBLIC_ASSET_ROOT}/textures/jovian/callisto-reference-roughness.jpg`,
   },
 });
 
@@ -1919,192 +1912,84 @@ const HERO_GALILEAN_ASSET_URLS = Object.freeze({
  */
 const REFERENCE_IRREGULAR_SURFACE_URLS = Object.freeze({
   Callirrhoe: {
-    albedo: new URL(
-      "../../../../assets/textures/jovian/irregular-reference/callirrhoe-albedo.jpg",
-      import.meta.url,
-    ).href,
-    height: new URL(
-      "../../../../assets/textures/jovian/irregular-reference/callirrhoe-height.jpg",
-      import.meta.url,
-    ).href,
-    roughness: new URL(
-      "../../../../assets/textures/jovian/irregular-reference/callirrhoe-roughness.jpg",
-      import.meta.url,
-    ).href,
+    albedo: `${PUBLIC_ASSET_ROOT}/textures/jovian/irregular-reference/callirrhoe-albedo.jpg`,
+    height: `${PUBLIC_ASSET_ROOT}/textures/jovian/irregular-reference/callirrhoe-height.jpg`,
+    roughness: `${PUBLIC_ASSET_ROOT}/textures/jovian/irregular-reference/callirrhoe-roughness.jpg`,
   },
   Thyone: {
-    albedo: new URL(
-      "../../../../assets/textures/jovian/irregular-reference/thyone-albedo.jpg",
-      import.meta.url,
-    ).href,
-    height: new URL(
-      "../../../../assets/textures/jovian/irregular-reference/thyone-height.jpg",
-      import.meta.url,
-    ).href,
-    roughness: new URL(
-      "../../../../assets/textures/jovian/irregular-reference/thyone-roughness.jpg",
-      import.meta.url,
-    ).href,
+    albedo: `${PUBLIC_ASSET_ROOT}/textures/jovian/irregular-reference/thyone-albedo.jpg`,
+    height: `${PUBLIC_ASSET_ROOT}/textures/jovian/irregular-reference/thyone-height.jpg`,
+    roughness: `${PUBLIC_ASSET_ROOT}/textures/jovian/irregular-reference/thyone-roughness.jpg`,
   },
   Pasithee: {
-    albedo: new URL(
-      "../../../../assets/textures/jovian/irregular-reference/pasithee-albedo.jpg",
-      import.meta.url,
-    ).href,
-    height: new URL(
-      "../../../../assets/textures/jovian/irregular-reference/pasithee-height.jpg",
-      import.meta.url,
-    ).href,
-    roughness: new URL(
-      "../../../../assets/textures/jovian/irregular-reference/pasithee-roughness.jpg",
-      import.meta.url,
-    ).href,
+    albedo: `${PUBLIC_ASSET_ROOT}/textures/jovian/irregular-reference/pasithee-albedo.jpg`,
+    height: `${PUBLIC_ASSET_ROOT}/textures/jovian/irregular-reference/pasithee-height.jpg`,
+    roughness: `${PUBLIC_ASSET_ROOT}/textures/jovian/irregular-reference/pasithee-roughness.jpg`,
   },
   Arche: {
-    albedo: new URL(
-      "../../../../assets/textures/jovian/irregular-reference/arche-albedo.jpg",
-      import.meta.url,
-    ).href,
-    height: new URL(
-      "../../../../assets/textures/jovian/irregular-reference/arche-height.jpg",
-      import.meta.url,
-    ).href,
-    roughness: new URL(
-      "../../../../assets/textures/jovian/irregular-reference/arche-roughness.jpg",
-      import.meta.url,
-    ).href,
+    albedo: `${PUBLIC_ASSET_ROOT}/textures/jovian/irregular-reference/arche-albedo.jpg`,
+    height: `${PUBLIC_ASSET_ROOT}/textures/jovian/irregular-reference/arche-height.jpg`,
+    roughness: `${PUBLIC_ASSET_ROOT}/textures/jovian/irregular-reference/arche-roughness.jpg`,
   },
   Helike: {
-    albedo: new URL(
-      "../../../../assets/textures/jovian/irregular-reference/helike-albedo.jpg",
-      import.meta.url,
-    ).href,
-    height: new URL(
-      "../../../../assets/textures/jovian/irregular-reference/helike-height.jpg",
-      import.meta.url,
-    ).href,
-    roughness: new URL(
-      "../../../../assets/textures/jovian/irregular-reference/helike-roughness.jpg",
-      import.meta.url,
-    ).href,
+    albedo: `${PUBLIC_ASSET_ROOT}/textures/jovian/irregular-reference/helike-albedo.jpg`,
+    height: `${PUBLIC_ASSET_ROOT}/textures/jovian/irregular-reference/helike-height.jpg`,
+    roughness: `${PUBLIC_ASSET_ROOT}/textures/jovian/irregular-reference/helike-roughness.jpg`,
   },
   Kore: {
-    albedo: new URL(
-      "../../../../assets/textures/jovian/irregular-reference/kore-albedo.jpg",
-      import.meta.url,
-    ).href,
-    height: new URL(
-      "../../../../assets/textures/jovian/irregular-reference/kore-height.jpg",
-      import.meta.url,
-    ).href,
-    roughness: new URL(
-      "../../../../assets/textures/jovian/irregular-reference/kore-roughness.jpg",
-      import.meta.url,
-    ).href,
+    albedo: `${PUBLIC_ASSET_ROOT}/textures/jovian/irregular-reference/kore-albedo.jpg`,
+    height: `${PUBLIC_ASSET_ROOT}/textures/jovian/irregular-reference/kore-height.jpg`,
+    roughness: `${PUBLIC_ASSET_ROOT}/textures/jovian/irregular-reference/kore-roughness.jpg`,
   },
   Herse: {
-    albedo: new URL(
-      "../../../../assets/textures/jovian/irregular-reference/herse-albedo.jpg",
-      import.meta.url,
-    ).href,
-    height: new URL(
-      "../../../../assets/textures/jovian/irregular-reference/herse-height.jpg",
-      import.meta.url,
-    ).href,
-    roughness: new URL(
-      "../../../../assets/textures/jovian/irregular-reference/herse-roughness.jpg",
-      import.meta.url,
-    ).href,
+    albedo: `${PUBLIC_ASSET_ROOT}/textures/jovian/irregular-reference/herse-albedo.jpg`,
+    height: `${PUBLIC_ASSET_ROOT}/textures/jovian/irregular-reference/herse-height.jpg`,
+    roughness: `${PUBLIC_ASSET_ROOT}/textures/jovian/irregular-reference/herse-roughness.jpg`,
   },
   Eirene: {
-    albedo: new URL(
-      "../../../../assets/textures/jovian/irregular-reference/eirene-albedo.jpg",
-      import.meta.url,
-    ).href,
-    height: new URL(
-      "../../../../assets/textures/jovian/irregular-reference/eirene-height.jpg",
-      import.meta.url,
-    ).href,
-    roughness: new URL(
-      "../../../../assets/textures/jovian/irregular-reference/eirene-roughness.jpg",
-      import.meta.url,
-    ).href,
+    albedo: `${PUBLIC_ASSET_ROOT}/textures/jovian/irregular-reference/eirene-albedo.jpg`,
+    height: `${PUBLIC_ASSET_ROOT}/textures/jovian/irregular-reference/eirene-height.jpg`,
+    roughness: `${PUBLIC_ASSET_ROOT}/textures/jovian/irregular-reference/eirene-roughness.jpg`,
   },
   Philophrosyn: {
-    albedo: new URL(
-      "../../../../assets/textures/jovian/irregular-reference/philophrosyne-albedo.jpg",
-      import.meta.url,
-    ).href,
-    height: new URL(
-      "../../../../assets/textures/jovian/irregular-reference/philophrosyne-height.jpg",
-      import.meta.url,
-    ).href,
-    roughness: new URL(
-      "../../../../assets/textures/jovian/irregular-reference/philophrosyne-roughness.jpg",
-      import.meta.url,
-    ).href,
+    albedo: `${PUBLIC_ASSET_ROOT}/textures/jovian/irregular-reference/philophrosyne-albedo.jpg`,
+    height: `${PUBLIC_ASSET_ROOT}/textures/jovian/irregular-reference/philophrosyne-height.jpg`,
+    roughness: `${PUBLIC_ASSET_ROOT}/textures/jovian/irregular-reference/philophrosyne-roughness.jpg`,
   },
   Eupheme: {
-    albedo: new URL(
-      "../../../../assets/textures/jovian/irregular-reference/eupheme-albedo.jpg",
-      import.meta.url,
-    ).href,
-    height: new URL(
-      "../../../../assets/textures/jovian/irregular-reference/eupheme-height.jpg",
-      import.meta.url,
-    ).href,
-    roughness: new URL(
-      "../../../../assets/textures/jovian/irregular-reference/eupheme-roughness.jpg",
-      import.meta.url,
-    ).href,
+    albedo: `${PUBLIC_ASSET_ROOT}/textures/jovian/irregular-reference/eupheme-albedo.jpg`,
+    height: `${PUBLIC_ASSET_ROOT}/textures/jovian/irregular-reference/eupheme-height.jpg`,
+    roughness: `${PUBLIC_ASSET_ROOT}/textures/jovian/irregular-reference/eupheme-roughness.jpg`,
   },
   Pandia: {
-    albedo: new URL(
-      "../../../../assets/textures/jovian/irregular-reference/pandia-albedo.jpg",
-      import.meta.url,
-    ).href,
-    height: new URL(
-      "../../../../assets/textures/jovian/irregular-reference/pandia-height.jpg",
-      import.meta.url,
-    ).href,
-    roughness: new URL(
-      "../../../../assets/textures/jovian/irregular-reference/pandia-roughness.jpg",
-      import.meta.url,
-    ).href,
+    albedo: `${PUBLIC_ASSET_ROOT}/textures/jovian/irregular-reference/pandia-albedo.jpg`,
+    height: `${PUBLIC_ASSET_ROOT}/textures/jovian/irregular-reference/pandia-height.jpg`,
+    roughness: `${PUBLIC_ASSET_ROOT}/textures/jovian/irregular-reference/pandia-roughness.jpg`,
   },
   Pasiphae: {
-    albedo: new URL("../../../../assets/textures/jovian/irregular-reference/pasiphae-albedo.jpg", import.meta.url).href,
-    height: new URL("../../../../assets/textures/jovian/irregular-reference/pasiphae-height.jpg", import.meta.url).href,
-    roughness: new URL("../../../../assets/textures/jovian/irregular-reference/pasiphae-roughness.jpg", import.meta.url).href,
+    albedo: `${PUBLIC_ASSET_ROOT}/textures/jovian/irregular-reference/pasiphae-albedo.jpg`,
+    height: `${PUBLIC_ASSET_ROOT}/textures/jovian/irregular-reference/pasiphae-height.jpg`,
+    roughness: `${PUBLIC_ASSET_ROOT}/textures/jovian/irregular-reference/pasiphae-roughness.jpg`,
   },
   Sinope: {
-    albedo: new URL("../../../../assets/textures/jovian/irregular-reference/sinope-albedo.jpg", import.meta.url).href,
-    height: new URL("../../../../assets/textures/jovian/irregular-reference/sinope-height.jpg", import.meta.url).href,
-    roughness: new URL("../../../../assets/textures/jovian/irregular-reference/sinope-roughness.jpg", import.meta.url).href,
+    albedo: `${PUBLIC_ASSET_ROOT}/textures/jovian/irregular-reference/sinope-albedo.jpg`,
+    height: `${PUBLIC_ASSET_ROOT}/textures/jovian/irregular-reference/sinope-height.jpg`,
+    roughness: `${PUBLIC_ASSET_ROOT}/textures/jovian/irregular-reference/sinope-roughness.jpg`,
   },
   Carme: {
-    albedo: new URL("../../../../assets/textures/jovian/irregular-reference/carme-albedo.jpg", import.meta.url).href,
-    height: new URL("../../../../assets/textures/jovian/irregular-reference/carme-height.jpg", import.meta.url).href,
-    roughness: new URL("../../../../assets/textures/jovian/irregular-reference/carme-roughness.jpg", import.meta.url).href,
+    albedo: `${PUBLIC_ASSET_ROOT}/textures/jovian/irregular-reference/carme-albedo.jpg`,
+    height: `${PUBLIC_ASSET_ROOT}/textures/jovian/irregular-reference/carme-height.jpg`,
+    roughness: `${PUBLIC_ASSET_ROOT}/textures/jovian/irregular-reference/carme-roughness.jpg`,
   },
   Valetudo: {
-    albedo: new URL("../../../../assets/textures/jovian/irregular-reference/valetudo-albedo.jpg", import.meta.url).href,
-    height: new URL("../../../../assets/textures/jovian/irregular-reference/valetudo-height.jpg", import.meta.url).href,
-    roughness: new URL("../../../../assets/textures/jovian/irregular-reference/valetudo-roughness.jpg", import.meta.url).href,
+    albedo: `${PUBLIC_ASSET_ROOT}/textures/jovian/irregular-reference/valetudo-albedo.jpg`,
+    height: `${PUBLIC_ASSET_ROOT}/textures/jovian/irregular-reference/valetudo-height.jpg`,
+    roughness: `${PUBLIC_ASSET_ROOT}/textures/jovian/irregular-reference/valetudo-roughness.jpg`,
   },
   Ersa: {
-    albedo: new URL(
-      "../../../../assets/textures/jovian/irregular-reference/ersa-albedo.jpg",
-      import.meta.url,
-    ).href,
-    height: new URL(
-      "../../../../assets/textures/jovian/irregular-reference/ersa-height.jpg",
-      import.meta.url,
-    ).href,
-    roughness: new URL(
-      "../../../../assets/textures/jovian/irregular-reference/ersa-roughness.jpg",
-      import.meta.url,
-    ).href,
+    albedo: `${PUBLIC_ASSET_ROOT}/textures/jovian/irregular-reference/ersa-albedo.jpg`,
+    height: `${PUBLIC_ASSET_ROOT}/textures/jovian/irregular-reference/ersa-height.jpg`,
+    roughness: `${PUBLIC_ASSET_ROOT}/textures/jovian/irregular-reference/ersa-roughness.jpg`,
   },
 });
 
@@ -2119,55 +2004,19 @@ const REFERENCE_IRREGULAR_SURFACE_URLS = Object.freeze({
  * Sun's light.
  */
 const REFERENCE_IRREGULAR_ALBEDO_URLS = Object.freeze({
-  Lysithea: new URL(
-    "../../../../assets/textures/jovian/irregular-reference/lysithea-albedo.jpg",
-    import.meta.url,
-  ).href,
-  Ananke: new URL(
-    "../../../../assets/textures/jovian/irregular-reference/ananke-albedo.jpg",
-    import.meta.url,
-  ).href,
-  Leda: new URL(
-    "../../../../assets/textures/jovian/irregular-reference/leda-albedo.jpg",
-    import.meta.url,
-  ).href,
-  Chaldene: new URL(
-    "../../../../assets/textures/jovian/irregular-reference/chaldene-albedo.jpg",
-    import.meta.url,
-  ).href,
-  Harpalyke: new URL(
-    "../../../../assets/textures/jovian/irregular-reference/harpalyke-albedo.jpg",
-    import.meta.url,
-  ).href,
-  Kalyke: new URL(
-    "../../../../assets/textures/jovian/irregular-reference/kalyke-albedo.jpg",
-    import.meta.url,
-  ).href,
-  Iocaste: new URL(
-    "../../../../assets/textures/jovian/irregular-reference/iocaste-albedo.jpg",
-    import.meta.url,
-  ).href,
-  Erinome: new URL(
-    "../../../../assets/textures/jovian/irregular-reference/erinome-albedo.jpg",
-    import.meta.url,
-  ).href,
-  Isonoe: new URL(
-    "../../../../assets/textures/jovian/irregular-reference/isonoe-albedo.jpg",
-    import.meta.url,
-  ).href,
-  Praxidike: new URL(
-    "../../../../assets/textures/jovian/irregular-reference/praxidike-albedo.jpg",
-    import.meta.url,
-  ).href,
-  Themisto: new URL(
-    "../../../../assets/textures/jovian/irregular-reference/themisto-albedo.jpg",
-    import.meta.url,
-  ).href,
+  Lysithea: `${PUBLIC_ASSET_ROOT}/textures/jovian/irregular-reference/lysithea-albedo.jpg`,
+  Ananke: `${PUBLIC_ASSET_ROOT}/textures/jovian/irregular-reference/ananke-albedo.jpg`,
+  Leda: `${PUBLIC_ASSET_ROOT}/textures/jovian/irregular-reference/leda-albedo.jpg`,
+  Chaldene: `${PUBLIC_ASSET_ROOT}/textures/jovian/irregular-reference/chaldene-albedo.jpg`,
+  Harpalyke: `${PUBLIC_ASSET_ROOT}/textures/jovian/irregular-reference/harpalyke-albedo.jpg`,
+  Kalyke: `${PUBLIC_ASSET_ROOT}/textures/jovian/irregular-reference/kalyke-albedo.jpg`,
+  Iocaste: `${PUBLIC_ASSET_ROOT}/textures/jovian/irregular-reference/iocaste-albedo.jpg`,
+  Erinome: `${PUBLIC_ASSET_ROOT}/textures/jovian/irregular-reference/erinome-albedo.jpg`,
+  Isonoe: `${PUBLIC_ASSET_ROOT}/textures/jovian/irregular-reference/isonoe-albedo.jpg`,
+  Praxidike: `${PUBLIC_ASSET_ROOT}/textures/jovian/irregular-reference/praxidike-albedo.jpg`,
+  Themisto: `${PUBLIC_ASSET_ROOT}/textures/jovian/irregular-reference/themisto-albedo.jpg`,
   // JPL's catalogue spelling is Magaclite; the interface displays Megaclite.
-  Magaclite: new URL(
-    "../../../../assets/textures/jovian/irregular-reference/megaclite-albedo.jpg",
-    import.meta.url,
-  ).href,
+  Magaclite: `${PUBLIC_ASSET_ROOT}/textures/jovian/irregular-reference/megaclite-albedo.jpg`,
 });
 
 /**
@@ -2178,86 +2027,26 @@ const REFERENCE_IRREGULAR_ALBEDO_URLS = Object.freeze({
  * the previously completed twelve-moon pass above is unchanged.
  */
 const COLLAGE_REFERENCE_ALBEDO_URLS = Object.freeze({
-  Autonoe: new URL(
-    "../../../../assets/textures/jovian/collage-reference/autonoe-albedo.jpg",
-    import.meta.url,
-  ).href,
-  Hermippe: new URL(
-    "../../../../assets/textures/jovian/collage-reference/hermippe-albedo.jpg",
-    import.meta.url,
-  ).href,
-  Aitne: new URL(
-    "../../../../assets/textures/jovian/collage-reference/aitne-albedo.jpg",
-    import.meta.url,
-  ).href,
-  Eurydome: new URL(
-    "../../../../assets/textures/jovian/collage-reference/eurydome-albedo.jpg",
-    import.meta.url,
-  ).href,
-  Euanthe: new URL(
-    "../../../../assets/textures/jovian/collage-reference/euanthe-albedo.jpg",
-    import.meta.url,
-  ).href,
-  Euporie: new URL(
-    "../../../../assets/textures/jovian/collage-reference/euporie-albedo.jpg",
-    import.meta.url,
-  ).href,
-  Orthosie: new URL(
-    "../../../../assets/textures/jovian/collage-reference/orthosie-albedo.jpg",
-    import.meta.url,
-  ).href,
-  Sponde: new URL(
-    "../../../../assets/textures/jovian/collage-reference/sponde-albedo.jpg",
-    import.meta.url,
-  ).href,
-  Kale: new URL(
-    "../../../../assets/textures/jovian/collage-reference/kale-albedo.jpg",
-    import.meta.url,
-  ).href,
-  Mneme: new URL(
-    "../../../../assets/textures/jovian/collage-reference/mneme-albedo.jpg",
-    import.meta.url,
-  ).href,
-  Aoede: new URL(
-    "../../../../assets/textures/jovian/collage-reference/aoede-albedo.jpg",
-    import.meta.url,
-  ).href,
-  Thelxinoe: new URL(
-    "../../../../assets/textures/jovian/collage-reference/thelxinoe-albedo.jpg",
-    import.meta.url,
-  ).href,
-  Carpo: new URL(
-    "../../../../assets/textures/jovian/collage-reference/carpo-albedo.jpg",
-    import.meta.url,
-  ).href,
-  Eukelade: new URL(
-    "../../../../assets/textures/jovian/collage-reference/eukelade-albedo.jpg",
-    import.meta.url,
-  ).href,
-  Hegemone: new URL(
-    "../../../../assets/textures/jovian/collage-reference/hegemone-albedo.jpg",
-    import.meta.url,
-  ).href,
-  Dia: new URL(
-    "../../../../assets/textures/jovian/collage-reference/dia-albedo.jpg",
-    import.meta.url,
-  ).href,
-  Cyllene: new URL(
-    "../../../../assets/textures/jovian/collage-reference/cyllene-albedo.jpg",
-    import.meta.url,
-  ).href,
-  Kallichore: new URL(
-    "../../../../assets/textures/jovian/collage-reference/kallichore-albedo.jpg",
-    import.meta.url,
-  ).href,
-  S2010_J_2: new URL(
-    "../../../../assets/textures/jovian/collage-reference/s2010-j2-albedo.jpg",
-    import.meta.url,
-  ).href,
-  S2010_J_1: new URL(
-    "../../../../assets/textures/jovian/collage-reference/s2010-j1-albedo.jpg",
-    import.meta.url,
-  ).href,
+  Autonoe: `${PUBLIC_ASSET_ROOT}/textures/jovian/collage-reference/autonoe-albedo.jpg`,
+  Hermippe: `${PUBLIC_ASSET_ROOT}/textures/jovian/collage-reference/hermippe-albedo.jpg`,
+  Aitne: `${PUBLIC_ASSET_ROOT}/textures/jovian/collage-reference/aitne-albedo.jpg`,
+  Eurydome: `${PUBLIC_ASSET_ROOT}/textures/jovian/collage-reference/eurydome-albedo.jpg`,
+  Euanthe: `${PUBLIC_ASSET_ROOT}/textures/jovian/collage-reference/euanthe-albedo.jpg`,
+  Euporie: `${PUBLIC_ASSET_ROOT}/textures/jovian/collage-reference/euporie-albedo.jpg`,
+  Orthosie: `${PUBLIC_ASSET_ROOT}/textures/jovian/collage-reference/orthosie-albedo.jpg`,
+  Sponde: `${PUBLIC_ASSET_ROOT}/textures/jovian/collage-reference/sponde-albedo.jpg`,
+  Kale: `${PUBLIC_ASSET_ROOT}/textures/jovian/collage-reference/kale-albedo.jpg`,
+  Mneme: `${PUBLIC_ASSET_ROOT}/textures/jovian/collage-reference/mneme-albedo.jpg`,
+  Aoede: `${PUBLIC_ASSET_ROOT}/textures/jovian/collage-reference/aoede-albedo.jpg`,
+  Thelxinoe: `${PUBLIC_ASSET_ROOT}/textures/jovian/collage-reference/thelxinoe-albedo.jpg`,
+  Carpo: `${PUBLIC_ASSET_ROOT}/textures/jovian/collage-reference/carpo-albedo.jpg`,
+  Eukelade: `${PUBLIC_ASSET_ROOT}/textures/jovian/collage-reference/eukelade-albedo.jpg`,
+  Hegemone: `${PUBLIC_ASSET_ROOT}/textures/jovian/collage-reference/hegemone-albedo.jpg`,
+  Dia: `${PUBLIC_ASSET_ROOT}/textures/jovian/collage-reference/dia-albedo.jpg`,
+  Cyllene: `${PUBLIC_ASSET_ROOT}/textures/jovian/collage-reference/cyllene-albedo.jpg`,
+  Kallichore: `${PUBLIC_ASSET_ROOT}/textures/jovian/collage-reference/kallichore-albedo.jpg`,
+  S2010_J_2: `${PUBLIC_ASSET_ROOT}/textures/jovian/collage-reference/s2010-j2-albedo.jpg`,
+  S2010_J_1: `${PUBLIC_ASSET_ROOT}/textures/jovian/collage-reference/s2010-j1-albedo.jpg`,
 });
 
 const HERO_GALILEAN_MATERIAL = Object.freeze({

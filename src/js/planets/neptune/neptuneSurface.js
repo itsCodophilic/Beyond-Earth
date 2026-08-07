@@ -7,7 +7,7 @@
  * from the supplied pole-on reference before being stored in the final texture.
  *
  * Runtime texture:
- *   src/assets/textures/neptune/neptune-enhanced-polar-equirectangular.png
+ *   public/assets/textures/neptune/neptune-enhanced-polar-equirectangular.png
  *
  * Source/reference images are also kept alongside it for future refinement:
  *   neptune-enhanced-equirectangular.png
@@ -15,12 +15,11 @@
  */
 import * as THREE from "three";
 
+const PUBLIC_ASSET_ROOT = `${import.meta.env.BASE_URL}assets`;
+
 const NEPTUNE_OBLATENESS = 0.983;
 
-const NEPTUNE_TEXTURE_URL = new URL(
-  "../../../assets/textures/neptune/neptune-enhanced-polar-equirectangular.png",
-  import.meta.url,
-).href;
+const NEPTUNE_TEXTURE_URL = `${PUBLIC_ASSET_ROOT}/textures/neptune/neptune-enhanced-polar-equirectangular.png`;
 
 let cachedNeptuneTexture = null;
 

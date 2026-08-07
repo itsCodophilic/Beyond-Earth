@@ -48,7 +48,7 @@ The four Galilean hero moons now use local global spacecraft mosaics instead of 
 
 The previous great-circle line generator and clean procedural crater rings are disabled for these four bodies. Their real image mosaics now provide the visible terrain identity in both preview and inspection modes. Local derived height and roughness maps add only restrained lighting relief; they are not presented as authoritative elevation products. Shared texture caching prevents the maps from being regenerated or reloaded every time inspection mode changes.
 
-Full texture provenance and attribution are recorded in `src/assets/textures/jovian/SOURCES.md`.
+Full texture provenance and attribution are recorded in `public/assets/textures/jovian/SOURCES.md`.
 
 ## v7 image-directed irregular reference surfaces
 
