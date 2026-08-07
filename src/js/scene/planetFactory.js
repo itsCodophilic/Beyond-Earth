@@ -1322,20 +1322,18 @@ export function createPlanet({
       segmentScale,
     });
   }
-  if (["Jupiter", "Saturn", "Uranus", "Neptune"].includes(config.name)) {
+  // Neptune rings/arcs are intentionally disabled because they add visible
+  // vertical/horizontal noise around the planet in the current experience.
+  if (["Jupiter", "Saturn", "Uranus"].includes(config.name)) {
     mesh.userData.visualLayers.ringSystem = addGiantPlanetRings(mesh, config, textures, segmentScale, hoverTargets);
     const ringBoundsMultiplier = {
       Jupiter: 1.92,
       Saturn: 2.58,
       Uranus: 2.34,
-      Neptune: 2.10,
     }[config.name];
     mesh.userData.focusVisualRadius = config.radius * ringBoundsMultiplier;
   } else {
     mesh.userData.focusVisualRadius = config.radius;
-  }
-  if (config.name === "Neptune") {
-    mesh.userData.visualLayers.dustArcs = addNeptuneDustArcs(mesh, config);
   }
 
   world.add(mesh);
