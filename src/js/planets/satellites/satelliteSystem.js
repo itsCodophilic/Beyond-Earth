@@ -194,6 +194,7 @@ function createOrbitLines(
     name = "Major satellite orbit guides",
     color = 0x9bc6d9,
     opacity = 0.10,
+    useAtlasOrbitScale = false,
   } = {},
 ) {
   const positions = [];
@@ -207,7 +208,10 @@ function createOrbitLines(
   moons.forEach((moon) => {
     if (!includeEveryOrbit && moon.showOrbitGuide === false) return;
 
-    const semiMajorRadius = parentRadius * moon.orbitScale;
+    const orbitScale = useAtlasOrbitScale
+      ? Number(moon.atlasOrbitScale ?? moon.orbitScale)
+      : Number(moon.orbitScale);
+    const semiMajorRadius = parentRadius * orbitScale;
     const inclination = moon.inclination ?? 0;
     const node = moon.node ?? 0;
 
@@ -845,7 +849,9 @@ export function createMajorSatelliteSystems({
     ));
     let atlasOrbitGuides = null;
     let atlasOrbitHighlight = null;
-    if (["Jupiter", "Saturn", "Uranus"].includes(parentName)) {
+    let atlasOrbitHighlightInnerHalo = null;
+    let atlasOrbitHighlightOuterHalo = null;
+    if (["Jupiter", "Saturn", "Uranus", "Neptune"].includes(parentName)) {
       atlasOrbitGuides = createOrbitLines(
         moonProfiles,
         parentRadius,
@@ -857,8 +863,19 @@ export function createMajorSatelliteSystems({
             ? 0x9dbfff
             : parentName === "Uranus"
               ? 0x67899a
-              : 0x91e9ff,
-          opacity: parentName === "Saturn" ? 0.055 : parentName === "Uranus" ? 0.028 : 0.065,
+              : parentName === "Neptune"
+                ? 0x65baff
+                : 0x91e9ff,
+          opacity: parentName === "Saturn"
+            ? 0.055
+            : parentName === "Uranus"
+              ? 0.028
+              : parentName === "Neptune"
+                ? 0.060
+                : 0.065,
+          // Neptune's innermost moons receive presentation-only spacing in the
+          // reveal-all atlas so their orbits clear the planet's visible limb.
+          useAtlasOrbitScale: parentName === "Neptune",
         },
       );
       atlasOrbitGuides.visible = false;
@@ -874,7 +891,9 @@ export function createMajorSatelliteSystems({
             ? 0xb9d6ff
             : parentName === "Uranus"
               ? 0xb5ffff
-              : 0x8ff8ff,
+              : parentName === "Neptune"
+                ? 0xa8e5ff
+                : 0x8ff8ff,
           transparent: true,
           opacity: 0.92,
           blending: THREE.AdditiveBlending,
@@ -884,8 +903,49 @@ export function createMajorSatelliteSystems({
       );
       atlasOrbitHighlight.name = "Hovered satellite atlas orbit";
       atlasOrbitHighlight.visible = false;
-      atlasOrbitHighlight.renderOrder = 5;
+      atlasOrbitHighlight.renderOrder = 7;
       root.add(atlasOrbitHighlight);
+
+      // Neptune's first three moons occupy extremely tightly packed inner
+      // orbits. Once the complete system is compressed into atlas mode, those
+      // paths can land only a pixel or two apart and the normal one-pixel hover
+      // line visually disappears into its neighbouring guides. Two very faint
+      // concentric halo paths are reserved for those three inner moons only.
+      // They preserve the true centreline while making the selected orbit read
+      // with the same immediate glow as the Jovian/Saturnian/Uranian atlases.
+      if (parentName === "Neptune") {
+        const createInnerOrbitHalo = (name, scaleMultiplier, opacity) => {
+          const halo = new THREE.LineLoop(
+            new THREE.BufferGeometry(),
+            new THREE.LineBasicMaterial({
+              color: 0x67d8ff,
+              transparent: true,
+              opacity,
+              blending: THREE.AdditiveBlending,
+              depthWrite: false,
+              depthTest: true,
+              toneMapped: false,
+            }),
+          );
+          halo.name = name;
+          halo.visible = false;
+          halo.renderOrder = 6;
+          halo.userData.presentationScaleMultiplier = scaleMultiplier;
+          root.add(halo);
+          return halo;
+        };
+
+        atlasOrbitHighlightInnerHalo = createInnerOrbitHalo(
+          "Hovered Neptune inner satellite orbit inner halo",
+          0.988,
+          0.28,
+        );
+        atlasOrbitHighlightOuterHalo = createInnerOrbitHalo(
+          "Hovered Neptune inner satellite orbit outer halo",
+          1.012,
+          0.34,
+        );
+      }
     }
 
     let maximumOrbitRadius = 0;
@@ -1019,6 +1079,8 @@ export function createMajorSatelliteSystems({
       pendingDirectSatellites,
       atlasOrbitGuides,
       atlasOrbitHighlight,
+      atlasOrbitHighlightInnerHalo,
+      atlasOrbitHighlightOuterHalo,
       distantMoonGlintMaterial,
       // Presentation-only values animate between the natural close-up layout
       // and the complete catalogue map. They never alter orbital metadata.
@@ -1347,6 +1409,10 @@ export function updateMajorSatelliteVisibility({
     if (system.atlasOrbitHighlight && !overviewActive) {
       system.atlasOrbitHighlight.visible = false;
     }
+    if (!overviewActive) {
+      if (system.atlasOrbitHighlightInnerHalo) system.atlasOrbitHighlightInnerHalo.visible = false;
+      if (system.atlasOrbitHighlightOuterHalo) system.atlasOrbitHighlightOuterHalo.visible = false;
+    }
 
     (system.denseFields ?? []).forEach((field) => {
       const focusedDenseMoon = focusedBody?.userData?.isDenseSatellite
@@ -1431,6 +1497,16 @@ export function updateMajorSatelliteVisibility({
 export function setSatelliteAtlasOrbitHighlight(systems, body = null) {
   systems.forEach((system) => {
     if (system.atlasOrbitHighlight) system.atlasOrbitHighlight.visible = false;
+    if (system.atlasOrbitHighlightInnerHalo) system.atlasOrbitHighlightInnerHalo.visible = false;
+    if (system.atlasOrbitHighlightOuterHalo) system.atlasOrbitHighlightOuterHalo.visible = false;
+
+    // Restore Neptune's quiet atlas guides after the pointer leaves a moon.
+    // The stored value is captured from the authored atlas material, so this
+    // does not change Jupiter, Saturn, Uranus, or Neptune's normal view.
+    if (system.atlasOrbitGuides?.material
+      && Number.isFinite(system.atlasOrbitGuides.userData?.hoverBaseOpacity)) {
+      system.atlasOrbitGuides.material.opacity = system.atlasOrbitGuides.userData.hoverBaseOpacity;
+    }
   });
   if (!body) return;
 
@@ -1452,7 +1528,11 @@ export function setSatelliteAtlasOrbitHighlight(systems, body = null) {
   if (!profile) return;
 
   const parentRadius = Number(system.parent.userData?.visualRadius ?? 1);
-  const semiMajorRadius = parentRadius * Number(profile.orbitScale ?? 1);
+  const semiMajorRadius = parentRadius * Number(
+    system.parentName === "Neptune"
+      ? (profile.atlasOrbitScale ?? profile.orbitScale ?? 1)
+      : (profile.orbitScale ?? 1),
+  );
   const inclination = Number(profile.inclination ?? 0);
   const node = Number(profile.node ?? 0);
   const segments = system.quality === "low" ? 96 : system.quality === "medium" ? 128 : 160;
@@ -1475,6 +1555,39 @@ export function setSatelliteAtlasOrbitHighlight(systems, body = null) {
   system.atlasOrbitHighlight.geometry = geometry;
   system.atlasOrbitHighlight.scale.setScalar(system.orbitPresentationScale);
   system.atlasOrbitHighlight.visible = true;
+
+  const isNeptuneInnerPackedOrbit = system.parentName === "Neptune"
+    && ["Naiad", "Thalassa", "Despina"].includes(profile.name);
+
+  if (system.parentName === "Neptune" && system.atlasOrbitGuides?.material) {
+    if (!Number.isFinite(system.atlasOrbitGuides.userData?.hoverBaseOpacity)) {
+      system.atlasOrbitGuides.userData.hoverBaseOpacity = Number(
+        system.atlasOrbitGuides.material.opacity ?? 0.060,
+      );
+    }
+    // The first three orbit radii differ by only a few percent. Temporarily
+    // quiet the complete catalogue while one of them is hovered, otherwise the
+    // selected cyan centreline is visually swallowed by its two neighbours.
+    system.atlasOrbitGuides.material.opacity = isNeptuneInnerPackedOrbit ? 0.014 : 0.038;
+    system.atlasOrbitHighlight.material.opacity = isNeptuneInnerPackedOrbit ? 1.0 : 0.94;
+  }
+
+  if (isNeptuneInnerPackedOrbit) {
+    [
+      system.atlasOrbitHighlightInnerHalo,
+      system.atlasOrbitHighlightOuterHalo,
+    ].forEach((halo) => {
+      if (!halo) return;
+      const haloGeometry = geometry.clone();
+      halo.geometry.dispose();
+      halo.geometry = haloGeometry;
+      halo.scale.setScalar(
+        system.orbitPresentationScale
+        * Number(halo.userData?.presentationScaleMultiplier ?? 1),
+      );
+      halo.visible = true;
+    });
+  }
 }
 
 export function updateMajorSatelliteSystems(
@@ -1534,6 +1647,13 @@ export function updateMajorSatelliteSystems(
     if (system.atlasOrbitHighlight) {
       system.atlasOrbitHighlight.scale.setScalar(system.orbitPresentationScale);
     }
+    [system.atlasOrbitHighlightInnerHalo, system.atlasOrbitHighlightOuterHalo].forEach((halo) => {
+      if (!halo) return;
+      halo.scale.setScalar(
+        system.orbitPresentationScale
+        * Number(halo.userData?.presentationScaleMultiplier ?? 1),
+      );
+    });
 
     (system.denseFields ?? []).forEach((field) => updateDenseSatelliteField(
       field,
@@ -1592,8 +1712,11 @@ export function updateMajorSatelliteSystems(
       // Hidden sub-pixel moons still advance their analytical orbit angle, but
       // do not rewrite object matrices until they are needed again.
       if (moon.visible || isHeld) {
+        const presentationSemiMajorVisualRadius = overviewActive && system.parentName === "Neptune"
+          ? parentRadius * Number(profile.atlasOrbitScale ?? profile.orbitScale ?? 1)
+          : semiMajorVisualRadius;
         moon.position.x = orbitRadiusAtAngle(
-          semiMajorVisualRadius,
+          presentationSemiMajorVisualRadius,
           profile.eccentricity,
           pivot.rotation.y,
         ) * system.orbitPresentationScale;

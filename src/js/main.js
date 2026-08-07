@@ -918,7 +918,7 @@ import { createCelestialDetailsPanel } from './ui/planetDetailsPanel.js';
     const system = majorSatelliteSystems.find(
       (candidate) => candidate.parentName === parentName,
     );
-    if (!system || !["Jupiter", "Saturn", "Uranus"].includes(parentName)) return;
+    if (!system || !["Jupiter", "Saturn", "Uranus", "Neptune"].includes(parentName)) return;
 
     if (satelliteOverviewParentName === parentName) {
       closeSatelliteAtlas();
@@ -942,7 +942,11 @@ import { createCelestialDetailsPanel } from './ui/planetDetailsPanel.js';
         parentRadius * 9.30,
         Number(system.maximumOrbitRadius ?? 0) * 1.04,
       )
-      : parentRadius * (parentName === "Saturn" ? 7.20 : 6.80);
+      : parentRadius * (parentName === "Saturn"
+        ? 7.20
+        : parentName === "Neptune"
+          ? 7.10
+          : 6.80);
     const atlasHalfFov = THREE.MathUtils.degToRad(
       Number(focusedBody.userData?.focusFov ?? camera.fov ?? 34) * 0.5,
     );
@@ -3207,7 +3211,7 @@ import { createCelestialDetailsPanel } from './ui/planetDetailsPanel.js';
     const atlasActive = satelliteOverviewParentName === parentName;
     const canOpen = Boolean(
       system
-      && ["Jupiter", "Saturn", "Uranus"].includes(parentName)
+      && ["Jupiter", "Saturn", "Uranus", "Neptune"].includes(parentName)
       && !atlasActive
       && !focusedUiSuppressedByWideView
       && !focusExitTransition

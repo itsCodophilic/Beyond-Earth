@@ -32,6 +32,23 @@ function compressedOrbitScale(aKm) {
   return 1.10 + 1.70 * Math.pow(Math.max(1, aKm / 48227), 0.28);
 }
 
+// Reveal-all mode needs a little more visual breathing room around Neptune.
+// The true inner-moon distances are extremely tightly packed; after the full
+// Neptunian system is compressed to fit the atlas, Naiad/Thalassa/Despina can
+// otherwise sit almost on Neptune's visible limb. These are presentation-only
+// orbit scales used exclusively by the cinematic atlas. Normal inspection and
+// all scientific distance metadata continue to use `orbitScale` / aKm.
+const NEPTUNE_ATLAS_INNER_ORBIT_SCALES = Object.freeze({
+  Naiad: 3.46,
+  Thalassa: 3.86,
+  Despina: 4.26,
+  Galatea: 4.75,
+  Larissa: 5.24,
+  Hippocamp: 5.85,
+  Proteus: 6.28,
+  Triton: 7.05,
+});
+
 export const NEPTUNE_MOON_PROFILES = Object.freeze(RAW.map((row) => {
   const [name, code, aKm, eccentricity, inclinationDeg, nodeDeg, meanAnomalyDeg, periodDays, diameterKm, shape, appearance] = row;
   const retrograde = inclinationDeg > 90;
@@ -47,6 +64,7 @@ export const NEPTUNE_MOON_PROFILES = Object.freeze(RAW.map((row) => {
     diameterKm,
     diameterEstimated: ["S/2002 N5", "S/2021 N1"].includes(name),
     orbitScale: compressedOrbitScale(aKm),
+    atlasOrbitScale: NEPTUNE_ATLAS_INNER_ORBIT_SCALES[name] ?? compressedOrbitScale(aKm),
     semiMajorAxisKm: aKm,
     eccentricity,
     inclination: THREE.MathUtils.degToRad(inclinationDeg),
