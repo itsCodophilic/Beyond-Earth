@@ -4,7 +4,7 @@ const RAW = Object.freeze([
   ["Naiad", 803, 48227, 0.0003, 4.7, 41.4, 89.7, 0.294396, 66, [1.24, 0.91, 0.80], "naiad"],
   ["Thalassa", 804, 50074, 0.0002, 0.2, 130.6, 165.7, 0.311485, 82, [1.20, 0.93, 0.84], "thalassa"],
   ["Despina", 805, 52526, 0.0002, 0.1, 0, 125.1, 0.334655, 150, [1.22, 0.95, 0.87], "despina"],
-  ["Galatea", 806, 61953, 0.0001, 0.1, 0, 32.0, 0.428745, 176, [1.16, 0.94, 0.88], "inner-dark"],
+  ["Galatea", 806, 61953, 0.0001, 0.1, 0, 32.0, 0.428745, 176, [1.18, 0.94, 0.88], "galatea"],
   ["Larissa", 807, 73548, 0.0014, 0.2, 0, 210.0, 0.554654, 194, [1.22, 0.94, 0.86], "inner-dark"],
   ["Hippocamp", 814, 105283, 0.0005, 0.1, 0, 285.0, 0.9362, 34, [1.16, 0.92, 0.84], "inner-dark"],
   ["Proteus", 808, 117647, 0.0005, 0.1, 0, 18.0, 1.122315, 420, [1.13, 1.0, 0.91], "proteus"],
@@ -95,7 +95,9 @@ export const NEPTUNE_MOON_PROFILES = Object.freeze(RAW.map((row) => {
               ? "A small inner moon of Neptune, implemented from the supplied reference style as a pale rounded icy body with softly cratered terrain and gentle brightness variation."
               : name === "Despina"
                 ? "An inner Neptunian moon rendered from the supplied reference style as a pale elongated body with a slightly rougher and more cratered surface than Thalassa."
-                : `${name} is one of Neptune's ${aKm < 1_000_000 ? "dark inner" : "distant irregular"} satellites.`,
+                : name === "Galatea"
+                  ? "A small inner moon of Neptune, recreated from the supplied reference image as a pale gray elongated icy moon with rough cratered terrain and a darker rugged hemisphere."
+                  : `${name} is one of Neptune's ${aKm < 1_000_000 ? "dark inner" : "distant irregular"} satellites.`,
     dataNote: ["S/2002 N5", "S/2021 N1"].includes(name)
       ? "Orbit is measured; displayed size and surface are conservative estimates."
       : "Orbit and established physical scale are represented with cinematic compression.",
