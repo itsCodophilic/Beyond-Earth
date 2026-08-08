@@ -185,6 +185,12 @@ function orbitRadiusAtAngle(semiMajorRadius, eccentricity, angle) {
     / Math.max(0.08, 1 + safeEccentricity * Math.cos(angle));
 }
 
+function getVisualOrbitEccentricity(profile) {
+  return Number.isFinite(Number(profile?.visualEccentricity))
+    ? Number(profile.visualEccentricity)
+    : Number(profile?.eccentricity ?? 0);
+}
+
 function createOrbitLines(
   moons,
   parentRadius,
@@ -218,8 +224,8 @@ function createOrbitLines(
     for (let index = 0; index < segments; index += 1) {
       const a = index / segments * Math.PI * 2;
       const b = (index + 1) / segments * Math.PI * 2;
-      const radiusA = orbitRadiusAtAngle(semiMajorRadius, moon.eccentricity, a);
-      const radiusB = orbitRadiusAtAngle(semiMajorRadius, moon.eccentricity, b);
+      const radiusA = orbitRadiusAtAngle(semiMajorRadius, getVisualOrbitEccentricity(moon), a);
+      const radiusB = orbitRadiusAtAngle(semiMajorRadius, getVisualOrbitEccentricity(moon), b);
 
       orbitPoint.set(Math.cos(a) * radiusA, 0, -Math.sin(a) * radiusA);
       orbitPoint.applyAxisAngle(orbitTiltAxis, inclination);
@@ -305,7 +311,7 @@ function createSatelliteMesh(
   const semiMajorVisualRadius = parentRadius * profile.orbitScale;
   moon.position.x = orbitRadiusAtAngle(
     semiMajorVisualRadius,
-    profile.eccentricity,
+    getVisualOrbitEccentricity(profile),
     profile.meanAnomaly ?? 0,
   );
   if (profile.initialRotation) moon.rotation.set(...profile.initialRotation);
@@ -714,7 +720,7 @@ function updateDenseSatelliteField(
     const { profile, semiMajorVisualRadius } = record;
     const isHeld = record.target === hoveredBody || record.target === focusedBody;
     if (!isHeld) record.angle += (profile.speed ?? 0) * motionScale;
-    const radius = orbitRadiusAtAngle(semiMajorVisualRadius, profile.eccentricity, record.angle);
+    const radius = orbitRadiusAtAngle(semiMajorVisualRadius, getVisualOrbitEccentricity(profile), record.angle);
     orbitPoint.set(Math.cos(record.angle) * radius, 0, -Math.sin(record.angle) * radius);
     orbitPoint.applyAxisAngle(orbitTiltAxis, profile.inclination ?? 0);
     orbitPoint.applyAxisAngle(THREE.Object3D.DEFAULT_UP, profile.node ?? 0);
@@ -1540,7 +1546,7 @@ export function setSatelliteAtlasOrbitHighlight(systems, body = null) {
 
   for (let index = 0; index < segments; index += 1) {
     const angle = index / segments * Math.PI * 2;
-    const radius = orbitRadiusAtAngle(semiMajorRadius, profile.eccentricity, angle);
+    const radius = orbitRadiusAtAngle(semiMajorRadius, getVisualOrbitEccentricity(profile), angle);
     orbitPoint.set(Math.cos(angle) * radius, 0, -Math.sin(angle) * radius);
     orbitPoint.applyAxisAngle(orbitTiltAxis, inclination);
     orbitPoint.applyAxisAngle(THREE.Object3D.DEFAULT_UP, node);
@@ -1717,7 +1723,7 @@ export function updateMajorSatelliteSystems(
           : semiMajorVisualRadius;
         moon.position.x = orbitRadiusAtAngle(
           presentationSemiMajorVisualRadius,
-          profile.eccentricity,
+          getVisualOrbitEccentricity(profile),
           pivot.rotation.y,
         ) * system.orbitPresentationScale;
         // Full-catalogue mode deliberately enlarges sub-pixel moons. Give each

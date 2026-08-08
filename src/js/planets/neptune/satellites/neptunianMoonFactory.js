@@ -9,6 +9,9 @@ const PALETTES = Object.freeze({
   larissa: [0xd3d2cf, 0xf0efec, 0x56585a, 0xdeddd9],
   hippocamp: [0xd8d7d3, 0xf2f1ee, 0x626466, 0xe5e4e0],
   "proteus-mapped": [0x8f6e58, 0xb48a70, 0x4f3b31, 0x9b765f],
+  "triton-mapped": [0xd8cbc5, 0xf1e8df, 0x817471, 0xc6b6b1],
+  "nereid-mapped": [0xb8bbbe, 0xebeef0, 0x62676c, 0xd7dadd],
+  halimede: [0x8b8d90, 0xc7c9cb, 0x43474b, 0xa5a8aa],
   triton: [0xc7b4ad, 0xeadbd0, 0x75666a, 0x9a6d68],
   proteus: [0x4e5357, 0x74787a, 0x242729, 0x5d6163],
   nereid: [0x777c82, 0xa3a6aa, 0x3d4145, 0x858a8e],
@@ -25,6 +28,9 @@ const MAPPED_MOON_TEXTURES = Object.freeze({
   Larissa: `${PUBLIC_TEXTURE_BASE}larissa/larissa-equirectangular.png`,
   Hippocamp: `${PUBLIC_TEXTURE_BASE}hippocamp/hippocamp-equirectangular.png`,
   Proteus: `${PUBLIC_TEXTURE_BASE}proteus/proteus-equirectangular.png`,
+  Triton: `${PUBLIC_TEXTURE_BASE}triton/triton-equirectangular.png`,
+  Nereid: `${PUBLIC_TEXTURE_BASE}nereid/nereid-equirectangular.png`,
+  Halimede: `${PUBLIC_TEXTURE_BASE}halimede/halimede-equirectangular.png`,
 });
 
 // Textured inner moons need a slightly shifted UV seam so the least important
@@ -37,18 +43,21 @@ const MAPPED_MOON_UV_OFFSETS = Object.freeze({
   Larissa: 0.29,
   Hippocamp: 0.33,
   Proteus: 0.27,
+  Triton: 0.07,
+  Nereid: 0.31,
+  Halimede: 0.22,
 });
 
 const textureLoader = new THREE.TextureLoader();
 const textureCache = new Map();
 
-function getCachedTexture(url, offsetX = 0) {
-  const key = `${url}|${offsetX}`;
+function getCachedTexture(url, offsetX = 0, repeatY = false) {
+  const key = `${url}|${offsetX}|${repeatY ? "repeatY" : "clampY"}`;
   if (!textureCache.has(key)) {
     const texture = textureLoader.load(url);
     texture.colorSpace = THREE.SRGBColorSpace;
     texture.wrapS = THREE.RepeatWrapping;
-    texture.wrapT = THREE.ClampToEdgeWrapping;
+    texture.wrapT = repeatY ? THREE.RepeatWrapping : THREE.ClampToEdgeWrapping;
     texture.minFilter = THREE.LinearMipmapLinearFilter;
     texture.magFilter = THREE.LinearFilter;
     texture.generateMipmaps = true;
@@ -80,13 +89,38 @@ function isMappedInnerMoon(name) {
   return Object.hasOwn(MAPPED_MOON_TEXTURES, name);
 }
 
+function isIrregularMappedMoon(name) {
+  return ["Larissa", "Hippocamp", "Proteus", "Nereid", "Halimede"].includes(name);
+}
+
+function isStableWrappedIrregularMoon(name) {
+  return ["Nereid", "Halimede"].includes(name);
+}
+
 function createBaseGeometry(profile, quality, hero) {
-  if (isMappedInnerMoon(profile.name)) {
+  if (["Nereid", "Halimede"].includes(profile.name)) {
+    // Nereid and Halimede are intentionally based on a dense UV sphere rather
+    // than an icosahedron. The earlier icosphere + custom projection exposed
+    // the underlying triangular topology and, after the shader change, could
+    // fail to render on some WebGL paths. A high-resolution SphereGeometry
+    // gives us one predictable, closed shell with conventional UVs. The
+    // normalized textures already match at 0/1 longitude and at both poles.
     const segments = quality === "low"
-      ? [48, 36]
+      ? [64, 48]
       : quality === "medium"
-        ? [72, 52]
-        : [96, 72];
+        ? [96, 72]
+        : [144, 108];
+    return new THREE.SphereGeometry(1, segments[0], segments[1]);
+  }
+
+  if (isMappedInnerMoon(profile.name)) {
+    const segments = profile.name === "Triton"
+      ? (quality === "low" ? [56, 40] : quality === "medium" ? [84, 60] : [112, 80])
+      : quality === "low"
+        ? [48, 36]
+        : quality === "medium"
+          ? [72, 52]
+          : [96, 72];
     return new THREE.SphereGeometry(1, segments[0], segments[1]);
   }
 
@@ -107,16 +141,122 @@ function createMappedMoonMaterial(profile) {
   });
 }
 
-function createMappedMoonMesh(profile, quality) {
-  // IMPORTANT: these moons use direct UV textures. To prevent seam tearing,
-  // visible side gaps, or pinched/warped poles, keep the geometry as a clean
-  // closed sphere. The silhouette elongation is handled later by profile.shape
-  // in the shared satellite system, so we do not sculpt or merge vertices here.
-  const geometry = createBaseGeometry(profile, quality, true);
-  geometry.computeVertexNormals();
+function smoothDirectionalRelief(direction, seed) {
+  // Continuous object-space relief. No floor/fract hashing is used here:
+  // duplicated UV-seam vertices therefore receive the same displacement and
+  // can never pull apart to reveal the space background.
+  return (
+    Math.sin(direction.x * 3.73 + direction.y * 1.91 + seed * 6.7) * 0.46
+    + Math.sin(direction.y * 4.31 - direction.z * 2.27 + seed * 9.3) * 0.31
+    + Math.sin(direction.z * 5.17 + direction.x * 2.11 - seed * 4.9) * 0.23
+  );
+}
 
-  const mesh = new THREE.Mesh(geometry, createMappedMoonMaterial(profile));
+function deformIrregularMappedMoonGeometry(profile, geometry) {
+  const positions = geometry.getAttribute("position");
+  const normals = geometry.getAttribute("normal");
+  const direction = new THREE.Vector3();
+  const featureA = randomDirection(profile.seed + 2.4, 0);
+  const featureB = randomDirection(profile.seed + 2.4, 1);
+  const featureC = randomDirection(profile.seed + 2.4, 2);
+  const axisA = new THREE.Vector3(1.0, 0.10, -0.05).normalize();
+  const axisB = new THREE.Vector3(-0.75, 0.18, 0.58).normalize();
+  const axisC = new THREE.Vector3(-0.15, -0.92, -0.20).normalize();
+  const shape = profile.shape ?? [1, 1, 1];
+
+  for (let i = 0; i < positions.count; i += 1) {
+    direction.fromBufferAttribute(positions, i).normalize();
+    let radius = 1;
+
+    if (profile.name === "Nereid") {
+      // Nereid remains visibly irregular, but its relief is deliberately low
+      // frequency and continuous so the texture never breaks into polygons.
+      const relief = smoothDirectionalRelief(direction, profile.seed);
+      const craterA = Math.max(0, direction.dot(featureA));
+      const craterB = Math.max(0, direction.dot(featureB));
+      const shoulder = Math.max(0, direction.dot(featureC));
+      radius += relief * 0.026;
+      radius -= Math.pow(craterA, 7.0) * 0.050;
+      radius -= Math.pow(craterB, 8.0) * 0.032;
+      radius += Math.pow(shoulder, 3.0) * 0.020;
+    } else if (profile.name === "Halimede") {
+      // Three broad support lobes give Halimede the triangular/blocky outline
+      // from the reference while the transitions stay curved rather than
+      // following individual mesh triangles.
+      const lobeA = Math.max(0, direction.dot(axisA));
+      const lobeB = Math.max(0, direction.dot(axisB));
+      const lobeC = Math.max(0, direction.dot(axisC));
+      const cavity = Math.max(0, direction.dot(featureA));
+      const relief = smoothDirectionalRelief(direction, profile.seed + 0.37);
+      radius += Math.pow(lobeA, 3.0) * 0.090;
+      radius += Math.pow(lobeB, 3.1) * 0.070;
+      radius += Math.pow(lobeC, 3.2) * 0.082;
+      radius -= Math.pow(cavity, 7.0) * 0.052;
+      radius += relief * 0.018;
+    } else if (profile.name === "Larissa") {
+      radius += noise(direction, profile.seed + 3.0, 4.0) * 0.022;
+    } else if (profile.name === "Hippocamp") {
+      radius += noise(direction, profile.seed + 4.0, 4.5) * 0.018;
+    } else if (profile.name === "Proteus") {
+      radius += noise(direction, profile.seed + 4.6, 4.0) * 0.028;
+    }
+
+    radius = Math.max(0.88, radius);
+
+    if (isStableWrappedIrregularMoon(profile.name)) {
+      positions.setXYZ(
+        i,
+        direction.x * radius * shape[0],
+        direction.y * radius * shape[1],
+        direction.z * radius * shape[2],
+      );
+
+      // Use a continuous radial normal rather than per-triangle normals. It is
+      // intentionally a little softer than the exact geometric normal, which
+      // removes faceting while preserving the irregular silhouette.
+      if (normals) {
+        const nx = direction.x / Math.max(shape[0], 0.001);
+        const ny = direction.y / Math.max(shape[1], 0.001);
+        const nz = direction.z / Math.max(shape[2], 0.001);
+        const invLength = 1 / Math.max(Math.hypot(nx, ny, nz), 0.0001);
+        normals.setXYZ(i, nx * invLength, ny * invLength, nz * invLength);
+      }
+    } else {
+      positions.setXYZ(i, direction.x * radius, direction.y * radius, direction.z * radius);
+    }
+  }
+
+  if (!isStableWrappedIrregularMoon(profile.name)) {
+    geometry.deleteAttribute("normal");
+    geometry.computeVertexNormals();
+  } else if (normals) {
+    normals.needsUpdate = true;
+  }
+
+  geometry.computeBoundingBox();
+  geometry.computeBoundingSphere();
+}
+
+function createMappedMoonMesh(profile, quality) {
+  // Mapped moons use closed bodies. Nereid and Halimede use dense spherical
+  // topology with continuous radial relief and ordinary UV texture mapping.
+  const geometry = createBaseGeometry(profile, quality, true);
+  if (isIrregularMappedMoon(profile.name)) {
+    deformIrregularMappedMoonGeometry(profile, geometry);
+  } else {
+    geometry.computeVertexNormals();
+  }
+
+  // Nereid and Halimede intentionally use the same proven MeshStandardMaterial
+  // path as the other visible moons. No custom shader is involved, which also
+  // avoids the WebGL compile path that made these two bodies disappear.
+  const material = createMappedMoonMaterial(profile);
+  const mesh = new THREE.Mesh(geometry, material);
   mesh.name = `${profile.name} textured surface`;
+  if (["Nereid", "Halimede"].includes(profile.name)) {
+    mesh.userData.geometryIncludesShape = true;
+    mesh.userData.sealedTopology = "dense-sphere-continuous-relief";
+  }
 
   // Tiny orientation tuning so the texture seam sits away from the preferred
   // hero view and the polar wrap start is less noticeable.
@@ -138,6 +278,15 @@ function createMappedMoonMesh(profile, quality) {
   } else if (profile.name === "Proteus") {
     mesh.rotation.y = 0.34;
     mesh.rotation.x = -0.04;
+  } else if (profile.name === "Triton") {
+    mesh.rotation.y = 0.10;
+    mesh.rotation.x = -0.02;
+  } else if (profile.name === "Nereid") {
+    mesh.rotation.y = 0.46;
+    mesh.rotation.x = -0.03;
+  } else if (profile.name === "Halimede") {
+    mesh.rotation.y = 0.58;
+    mesh.rotation.x = -0.07;
   } else if (profile.name === "Naiad") {
     mesh.rotation.y = 0.38;
   }
@@ -146,7 +295,7 @@ function createMappedMoonMesh(profile, quality) {
 }
 
 export function createNeptunianMoonSurface(profile, quality = "high") {
-  const hero = ["Naiad", "Thalassa", "Despina", "Galatea", "Larissa", "Hippocamp", "Proteus", "Triton", "Nereid"].includes(profile.name);
+  const hero = ["Naiad", "Thalassa", "Despina", "Galatea", "Larissa", "Hippocamp", "Proteus", "Triton", "Nereid", "Halimede"].includes(profile.name);
   const isMappedMoon = isMappedInnerMoon(profile.name);
 
   if (isMappedMoon) {

@@ -9,11 +9,10 @@
 6. View Things from Nasa Solar System
 
 
+
+
+Prompts:
 I have shared you list of moon names of saturn as well as their images respectively. As per number i have shared you images as well. Now i wanted you first analyze the image color texture shape now it looks in 3D model object, and then you need to accordingly implement things into the src code, and for color and texture suggested you can use these image itself properly. 
 
 
-Biance
-Puck
-MAB
-Caliban
-Sycorax
+in their so basically gaps are visible on the sides, behind the gaps i can see space backgrounds when i you know turn around or move up or down both the moons, the images are not properly formed or wrapped gaps visible. I Suggest you to use your browser turn around 360 degree and make it perfect cut to cut without any gaps or all also the top part of these both moons should be normalized, seems to be top part is the wrapp start

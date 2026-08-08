@@ -8,9 +8,9 @@ const RAW = Object.freeze([
   ["Larissa", 807, 73548, 0.0014, 0.2, 0, 210.0, 0.554654, 194, [1.22, 0.94, 0.86], "larissa"],
   ["Hippocamp", 814, 105283, 0.0005, 0.1, 0, 285.0, 0.9362, 34, [1.16, 0.92, 0.84], "hippocamp"],
   ["Proteus", 808, 117647, 0.0005, 0.1, 0, 18.0, 1.122315, 420, [1.13, 1.0, 0.91], "proteus-mapped"],
-  ["Triton", 801, 354759, 0.0000, 157.3, 178.1, 63.0, 5.876994, 2706.8, [1, 1, 1], "triton"],
-  ["Nereid", 802, 5513400, 0.7507, 7.2, 320.3, 12.0, 360.14, 340, [1.12, 0.92, 0.86], "nereid"],
-  ["Halimede", 809, 16590500, 0.521, 119.6, 198.5, 135.8, 1879, 62, [1.18, 0.86, 0.78], "outer-dark"],
+  ["Triton", 801, 354759, 0.0000, 157.3, 178.1, 63.0, 5.876994, 2706.8, [1.0, 1.0, 1.0], "triton-mapped"],
+  ["Nereid", 802, 5513400, 0.7507, 7.2, 320.3, 12.0, 360.14, 340, [1.10, 0.95, 0.88], "nereid-mapped"],
+  ["Halimede", 809, 16590500, 0.521, 119.6, 198.5, 135.8, 1879, 62, [1.24, 0.94, 0.74], "halimede"],
   ["Sao", 811, 22239900, 0.296, 50.2, 41.8, 178.5, 2919, 44, [1.16, 0.88, 0.80], "outer-dark"],
   ["S/2002 N5", 85051, 23414700, 0.433, 46.3, 258.3, 303.2, 3151, 23, [1.20, 0.84, 0.76], "outer-dark"],
   ["Laomedeia", 812, 23499900, 0.419, 36.9, 57.6, 248.1, 3168, 42, [1.17, 0.88, 0.80], "outer-dark"],
@@ -47,6 +47,7 @@ const NEPTUNE_ATLAS_INNER_ORBIT_SCALES = Object.freeze({
   Hippocamp: 5.85,
   Proteus: 6.28,
   Triton: 7.05,
+  Nereid: 8.25,
 });
 
 export const NEPTUNE_MOON_PROFILES = Object.freeze(RAW.map((row) => {
@@ -67,6 +68,11 @@ export const NEPTUNE_MOON_PROFILES = Object.freeze(RAW.map((row) => {
     atlasOrbitScale: NEPTUNE_ATLAS_INNER_ORBIT_SCALES[name] ?? compressedOrbitScale(aKm),
     semiMajorAxisKm: aKm,
     eccentricity,
+    // Preserve the measured eccentricity for metadata, but use a presentation-
+    // safe eccentricity for Nereid. Its true e≈0.75 collapses to an unrealistically
+    // tiny periapsis after the solar-system distance compression used by this scene,
+    // making the rendered orbit pass through Neptune. This only affects drawing.
+    visualEccentricity: name === "Nereid" ? 0.32 : eccentricity,
     inclination: THREE.MathUtils.degToRad(inclinationDeg),
     inclinationDeg,
     node: THREE.MathUtils.degToRad(nodeDeg),
@@ -84,25 +90,25 @@ export const NEPTUNE_MOON_PROFILES = Object.freeze(RAW.map((row) => {
     orbitalSpeed: `${((Math.PI * 2 * aKm) / (periodDays * 86400)).toFixed(2)} km/s around Neptune`,
     orbitSummary: `Mean orbit ${(aKm / 1_000_000).toFixed(aKm < 1_000_000 ? 3 : 2)} million km from Neptune; period ${periodDays < 10 ? periodDays.toFixed(3) : periodDays.toFixed(0)} days; ${retrograde ? "retrograde" : "prograde"}.`,
     description: name === "Triton"
-      ? "Neptune's largest moon, a captured retrograde world with nitrogen frost, cantaloupe terrain, and active geysers."
-      : name === "Proteus"
-        ? "A dark, irregular and heavily cratered inner moon near the size limit for a non-spherical body."
-        : name === "Nereid"
-          ? "A distant moon travelling on one of the most eccentric satellite orbits in the Solar System."
-          : name === "Naiad"
-            ? "Neptune's innermost known moon, recreated from the supplied real-image reference as a bright elongated icy body with subtle craters and a darker trailing side."
-            : name === "Thalassa"
-              ? "A small inner moon of Neptune, implemented from the supplied reference style as a pale rounded icy body with softly cratered terrain and gentle brightness variation."
-              : name === "Despina"
-                ? "An inner Neptunian moon rendered from the supplied reference style as a pale elongated body with a slightly rougher and more cratered surface than Thalassa."
-                : name === "Galatea"
-                  ? "A small inner moon of Neptune, recreated from the supplied reference image as a pale gray elongated icy moon with rough cratered terrain and a darker rugged hemisphere."
-                  : name === "Larissa"
-                    ? "A dark-to-pale irregular inner moon of Neptune, recreated from the supplied reference image as a rough, cratered, blocky body with dense impact texture."
-                    : name === "Hippocamp"
-                      ? "A tiny inner moon of Neptune, recreated from the supplied reference image as a compact pale-gray irregular moon with rugged pitted terrain and strong crater texture."
-                      : name === "Proteus"
-                        ? "A large irregular inner moon of Neptune, recreated from the supplied reference image as a brownish rugged body with grooves, scarps, smooth plains and scattered craters."
+      ? "Neptune's largest moon, recreated from the supplied reference as a mostly spherical icy world with pale pink-beige frost, mottled terrain and broad rough cantaloupe-like regions."
+      : name === "Nereid"
+        ? "A distant highly eccentric moon of Neptune, recreated from the supplied reference as a pale-gray rugged irregular body with dense craters and battered rocky terrain."
+        : name === "Halimede"
+          ? "An outer irregular moon of Neptune, recreated from the supplied reference as a distinctly angular triangular rocky body with a dark-gray cratered surface."
+          : name === "Proteus"
+            ? "A large irregular inner moon of Neptune, recreated from the supplied reference image as a brownish rugged body with grooves, scarps, smooth plains and scattered craters."
+            : name === "Naiad"
+              ? "Neptune's innermost known moon, recreated from the supplied real-image reference as a bright elongated icy body with subtle craters and a darker trailing side."
+              : name === "Thalassa"
+                ? "A small inner moon of Neptune, implemented from the supplied reference style as a pale rounded icy body with softly cratered terrain and gentle brightness variation."
+                : name === "Despina"
+                  ? "An inner Neptunian moon rendered from the supplied reference style as a pale elongated body with a slightly rougher and more cratered surface than Thalassa."
+                  : name === "Galatea"
+                    ? "A small inner moon of Neptune, recreated from the supplied reference image as a pale gray elongated icy moon with rough cratered terrain and a darker rugged hemisphere."
+                    : name === "Larissa"
+                      ? "A dark-to-pale irregular inner moon of Neptune, recreated from the supplied reference image as a rough, cratered, blocky body with dense impact texture."
+                      : name === "Hippocamp"
+                        ? "A tiny inner moon of Neptune, recreated from the supplied reference image as a compact pale-gray irregular moon with rugged pitted terrain and strong crater texture."
                         : `${name} is one of Neptune's ${aKm < 1_000_000 ? "dark inner" : "distant irregular"} satellites.`,
     dataNote: ["S/2002 N5", "S/2021 N1"].includes(name)
       ? "Orbit is measured; displayed size and surface are conservative estimates."

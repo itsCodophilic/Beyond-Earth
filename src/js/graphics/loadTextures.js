@@ -15,6 +15,20 @@ import { makeNoiseTexture } from "./proceduralTextures.js";
 // reaches its first frame.
 const TEXTURE_LOAD_BUDGET_MS = 6500;
 
+// Earth and the Moon are visible in the opening shot. Their primary surface
+// maps must be ready before the first 3D frame is constructed; otherwise the
+// procedural streaming bridge is visible for a few seconds and then visibly
+// "pops" into the real texture after the loader has already disappeared.
+//
+// Only these essential opening maps are blocking. Heavy optional layers such as
+// Earth clouds/lights and every distant-planet remote texture still stream in
+// the background, so this does not bring back the old all-assets startup stall.
+const OPENING_CRITICAL_TEXTURES = new Set([
+  "earth",
+  "moon",
+  "moonDisplacement",
+]);
+
 /**
  * Creates a tiny, GPU-friendly texture for optional image layers.
  *
@@ -260,7 +274,7 @@ export async function loadUniverseTextures({ anisotropy = 4 } = {}) {
   const loader = new THREE.TextureLoader();
   loader.setCrossOrigin("anonymous");
   const textures = {};
-  const localTextureJobs = [];
+  const startupTextureJobs = [];
 
   Object.entries(TEXTURE_URLS).forEach(([name, url]) => {
     const fallbackKind = TEXTURE_FALLBACKS[name] ?? name;
@@ -272,11 +286,26 @@ export async function loadUniverseTextures({ anisotropy = 4 } = {}) {
     };
 
     if (/^https?:\/\//i.test(url)) {
+      const isOpeningCritical = OPENING_CRITICAL_TEXTURES.has(name);
+
+      if (isOpeningCritical) {
+        // Earth/Moon are the opening heroes. Await their real image (or backup)
+        // while the HTML loader is still present so the first visible frame is
+        // already final-quality instead of changing 2–3 seconds later.
+        startupTextureJobs.push(
+          loadTexture(loader, url, fallbackKind, options).then((texture) => {
+            textures[name] = texture;
+          }),
+        );
+        return;
+      }
+
       const placeholder = createStreamingPlaceholder(name, fallbackKind);
       textures[name] = placeholder;
 
-      // Deliberately do not await this promise. The scene can now render its
-      // first frame even if an external host is slow, offline, or blocks CORS.
+      // All non-critical remote maps remain non-blocking. Their placeholders are
+      // upgraded in place once the network image arrives, preserving the fast
+      // opening path for Jupiter/Saturn/Uranus and optional Earth layers.
       loadTexture(loader, url, fallbackKind, {
         ...options,
         fallbackTexture: placeholder,
@@ -290,14 +319,14 @@ export async function loadUniverseTextures({ anisotropy = 4 } = {}) {
 
     // Bundled surface maps are dependable and should be ready before their
     // planets are constructed, avoiding a visible low-to-high detail pop.
-    localTextureJobs.push(
+    startupTextureJobs.push(
       loadTexture(loader, url, fallbackKind, options).then((texture) => {
         textures[name] = texture;
       }),
     );
   });
 
-  await Promise.all(localTextureJobs);
+  await Promise.all(startupTextureJobs);
 
   return textures;
 }
