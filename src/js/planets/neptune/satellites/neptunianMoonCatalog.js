@@ -11,12 +11,12 @@ const RAW = Object.freeze([
   ["Triton", 801, 354759, 0.0000, 157.3, 178.1, 63.0, 5.876994, 2706.8, [1.0, 1.0, 1.0], "triton-mapped"],
   ["Nereid", 802, 5513400, 0.7507, 7.2, 320.3, 12.0, 360.14, 340, [1.10, 0.95, 0.88], "nereid-mapped"],
   ["Halimede", 809, 16590500, 0.521, 119.6, 198.5, 135.8, 1879, 62, [1.24, 0.94, 0.74], "halimede"],
-  ["Sao", 811, 22239900, 0.296, 50.2, 41.8, 178.5, 2919, 44, [1.16, 0.88, 0.80], "outer-dark"],
-  ["S/2002 N5", 85051, 23414700, 0.433, 46.3, 258.3, 303.2, 3151, 23, [1.20, 0.84, 0.76], "outer-dark"],
-  ["Laomedeia", 812, 23499900, 0.419, 36.9, 57.6, 248.1, 3168, 42, [1.17, 0.88, 0.80], "outer-dark"],
-  ["Psamathe", 810, 47646600, 0.413, 127.8, 302.9, 183.2, 9149, 40, [1.18, 0.86, 0.78], "outer-dark"],
-  ["Neso", 813, 49897800, 0.455, 128.4, 55.4, 13.8, 9805, 60, [1.22, 0.84, 0.76], "outer-dark"],
-  ["S/2021 N1", 85052, 50700200, 0.503, 135.2, 258.9, 237.1, 10043, 14, [1.22, 0.82, 0.74], "outer-dark"],
+  ["Sao", 811, 22239900, 0.296, 50.2, 41.8, 178.5, 2919, 44, [1.12, 0.98, 0.90], "sao"],
+  ["S/2002 N5", 85051, 23414700, 0.433, 46.3, 258.3, 303.2, 3151, 23, [1.18, 0.92, 0.84], "s-2002-n5"],
+  ["Laomedeia", 812, 23499900, 0.419, 36.9, 57.6, 248.1, 3168, 42, [1.06, 1.0, 0.96], "laomedeia"],
+  ["Psamathe", 810, 47646600, 0.413, 127.8, 302.9, 183.2, 9149, 40, [1.14, 0.95, 0.88], "psamathe"],
+  ["Neso", 813, 49897800, 0.455, 128.4, 55.4, 13.8, 9805, 60, [1.16, 1.0, 0.92], "neso"],
+  ["S/2021 N1", 85052, 50700200, 0.503, 135.2, 258.9, 237.1, 10043, 14, [1.18, 0.92, 0.84], "s-2021-n1"],
 ]);
 
 function stableSeed(name) {
@@ -109,7 +109,17 @@ export const NEPTUNE_MOON_PROFILES = Object.freeze(RAW.map((row) => {
                       ? "A dark-to-pale irregular inner moon of Neptune, recreated from the supplied reference image as a rough, cratered, blocky body with dense impact texture."
                       : name === "Hippocamp"
                         ? "A tiny inner moon of Neptune, recreated from the supplied reference image as a compact pale-gray irregular moon with rugged pitted terrain and strong crater texture."
-                        : `${name} is one of Neptune's ${aKm < 1_000_000 ? "dark inner" : "distant irregular"} satellites.`,
+                        : name === "Sao"
+                          ? "A small distant irregular moon of Neptune, recreated from the supplied reference as a compact rough gray body with an uneven cratered silhouette."
+                          : name === "Laomedeia"
+                            ? "A distant Neptunian moon recreated from the supplied reference as a comparatively rounded gray body with muted mottled crater terrain."
+                            : name === "Psamathe"
+                              ? "A distant irregular moon of Neptune, recreated from the supplied reference as a battered pale-gray body with an asymmetric rocky silhouette."
+                              : name === "Neso"
+                                ? "A distant irregular moon of Neptune, recreated from the supplied reference as a bright rounded-blocky body with a softly cratered icy surface."
+                                : name === "S/2021 N1" || name === "S/2002 N5"
+                                  ? "A recently catalogued distant irregular moon of Neptune, using the shared supplied reference style with a rugged gray surface and individually seeded 3D relief."
+                                  : `${name} is one of Neptune's ${aKm < 1_000_000 ? "dark inner" : "distant irregular"} satellites.`,
     dataNote: ["S/2002 N5", "S/2021 N1"].includes(name)
       ? "Orbit is measured; displayed size and surface are conservative estimates."
       : "Orbit and established physical scale are represented with cinematic compression.",

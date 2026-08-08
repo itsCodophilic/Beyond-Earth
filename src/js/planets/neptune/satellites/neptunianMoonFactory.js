@@ -12,6 +12,12 @@ const PALETTES = Object.freeze({
   "triton-mapped": [0xd8cbc5, 0xf1e8df, 0x817471, 0xc6b6b1],
   "nereid-mapped": [0xb8bbbe, 0xebeef0, 0x62676c, 0xd7dadd],
   halimede: [0x8b8d90, 0xc7c9cb, 0x43474b, 0xa5a8aa],
+  sao: [0xb8b3ab, 0xe0dcd5, 0x514e4a, 0xc9c4bc],
+  laomedeia: [0x777871, 0xa9aaa2, 0x41423e, 0x8d8e86],
+  psamathe: [0xaaa9a4, 0xd2d1cb, 0x50514f, 0xbdbcb6],
+  neso: [0xd8d5cc, 0xf2efe6, 0x68655f, 0xe5e0d7],
+  "s-2021-n1": [0xa4a7a9, 0xd2d5d7, 0x4c5053, 0xb9bdc0],
+  "s-2002-n5": [0xa4a7a9, 0xd2d5d7, 0x4c5053, 0xb9bdc0],
   triton: [0xc7b4ad, 0xeadbd0, 0x75666a, 0x9a6d68],
   proteus: [0x4e5357, 0x74787a, 0x242729, 0x5d6163],
   nereid: [0x777c82, 0xa3a6aa, 0x3d4145, 0x858a8e],
@@ -31,6 +37,12 @@ const MAPPED_MOON_TEXTURES = Object.freeze({
   Triton: `${PUBLIC_TEXTURE_BASE}triton/triton-equirectangular.png`,
   Nereid: `${PUBLIC_TEXTURE_BASE}nereid/nereid-equirectangular.png`,
   Halimede: `${PUBLIC_TEXTURE_BASE}halimede/halimede-equirectangular.png`,
+  Sao: `${PUBLIC_TEXTURE_BASE}sao/sao-equirectangular.png`,
+  Laomedeia: `${PUBLIC_TEXTURE_BASE}laomedeia/laomedeia-equirectangular.png`,
+  Psamathe: `${PUBLIC_TEXTURE_BASE}psamathe/psamathe-equirectangular.png`,
+  Neso: `${PUBLIC_TEXTURE_BASE}neso/neso-equirectangular.png`,
+  "S/2021 N1": `${PUBLIC_TEXTURE_BASE}s-2021-n1/s-2021-n1-equirectangular.png`,
+  "S/2002 N5": `${PUBLIC_TEXTURE_BASE}s-2002-n5/s-2002-n5-equirectangular.png`,
 });
 
 // Textured inner moons need a slightly shifted UV seam so the least important
@@ -46,10 +58,25 @@ const MAPPED_MOON_UV_OFFSETS = Object.freeze({
   Triton: 0.07,
   Nereid: 0.31,
   Halimede: 0.22,
+  Sao: 0.18,
+  Laomedeia: 0.33,
+  Psamathe: 0.27,
+  Neso: 0.31,
+  "S/2021 N1": 0.24,
+  "S/2002 N5": 0.24,
 });
 
 const textureLoader = new THREE.TextureLoader();
 const textureCache = new Map();
+
+const FINAL_OUTER_MOON_MATERIAL_TUNING = Object.freeze({
+  Sao: { roughness: 0.965, bumpScale: 0.026, envMapIntensity: 0.030 },
+  Laomedeia: { roughness: 0.975, bumpScale: 0.018, envMapIntensity: 0.025 },
+  Psamathe: { roughness: 0.955, bumpScale: 0.034, envMapIntensity: 0.032 },
+  Neso: { roughness: 0.970, bumpScale: 0.022, envMapIntensity: 0.028 },
+  "S/2021 N1": { roughness: 0.960, bumpScale: 0.030, envMapIntensity: 0.030 },
+  "S/2002 N5": { roughness: 0.960, bumpScale: 0.030, envMapIntensity: 0.030 },
+});
 
 function getCachedTexture(url, offsetX = 0, repeatY = false) {
   const key = `${url}|${offsetX}|${repeatY ? "repeatY" : "clampY"}`;
@@ -90,7 +117,19 @@ function isMappedInnerMoon(name) {
 }
 
 function isIrregularMappedMoon(name) {
-  return ["Larissa", "Hippocamp", "Proteus", "Nereid", "Halimede"].includes(name);
+  return [
+    "Larissa",
+    "Hippocamp",
+    "Proteus",
+    "Nereid",
+    "Halimede",
+    "Sao",
+    "Laomedeia",
+    "Psamathe",
+    "Neso",
+    "S/2021 N1",
+    "S/2002 N5",
+  ].includes(name);
 }
 
 function isStableWrappedIrregularMoon(name) {
@@ -114,13 +153,16 @@ function createBaseGeometry(profile, quality, hero) {
   }
 
   if (isMappedInnerMoon(profile.name)) {
+    const isFinalOuterMoon = Object.hasOwn(FINAL_OUTER_MOON_MATERIAL_TUNING, profile.name);
     const segments = profile.name === "Triton"
       ? (quality === "low" ? [56, 40] : quality === "medium" ? [84, 60] : [112, 80])
-      : quality === "low"
-        ? [48, 36]
-        : quality === "medium"
-          ? [72, 52]
-          : [96, 72];
+      : isFinalOuterMoon
+        ? (quality === "low" ? [56, 40] : quality === "medium" ? [84, 64] : [112, 84])
+        : quality === "low"
+          ? [48, 36]
+          : quality === "medium"
+            ? [72, 52]
+            : [96, 72];
     return new THREE.SphereGeometry(1, segments[0], segments[1]);
   }
 
@@ -129,16 +171,30 @@ function createBaseGeometry(profile, quality, hero) {
 }
 
 function createMappedMoonMaterial(profile) {
-  return new THREE.MeshStandardMaterial({
+  const surfaceTexture = getCachedTexture(
+    MAPPED_MOON_TEXTURES[profile.name],
+    MAPPED_MOON_UV_OFFSETS[profile.name] ?? 0,
+  );
+  const tuning = FINAL_OUTER_MOON_MATERIAL_TUNING[profile.name];
+
+  const material = new THREE.MeshStandardMaterial({
     color: 0xffffff,
-    map: getCachedTexture(
-      MAPPED_MOON_TEXTURES[profile.name],
-      MAPPED_MOON_UV_OFFSETS[profile.name] ?? 0,
-    ),
-    roughness: 0.985,
+    map: surfaceTexture,
+    roughness: tuning?.roughness ?? 0.985,
     metalness: 0,
-    envMapIntensity: 0.02,
+    envMapIntensity: tuning?.envMapIntensity ?? 0.02,
   });
+
+  // The final six outer moons use high-detail grayscale/low-saturation maps.
+  // Reusing the same continuous texture as a very shallow bump source gives
+  // crater rims and rough terrain real lighting response without deforming the
+  // mesh, opening seams, or introducing the polygon artifacts we fixed earlier.
+  if (tuning) {
+    material.bumpMap = surfaceTexture;
+    material.bumpScale = tuning.bumpScale;
+  }
+
+  return material;
 }
 
 function smoothDirectionalRelief(direction, seed) {
@@ -199,6 +255,33 @@ function deformIrregularMappedMoonGeometry(profile, geometry) {
       radius += noise(direction, profile.seed + 4.0, 4.5) * 0.018;
     } else if (profile.name === "Proteus") {
       radius += noise(direction, profile.seed + 4.6, 4.0) * 0.028;
+    } else if (profile.name === "Sao") {
+      const relief = smoothDirectionalRelief(direction, profile.seed + 0.13);
+      const shallowPit = Math.max(0, direction.dot(featureA));
+      radius += relief * 0.030;
+      radius -= Math.pow(shallowPit, 7.0) * 0.034;
+    } else if (profile.name === "Laomedeia") {
+      const relief = smoothDirectionalRelief(direction, profile.seed + 0.41);
+      radius += relief * 0.014;
+      radius += Math.max(0, direction.dot(featureB)) * 0.012;
+    } else if (profile.name === "Psamathe") {
+      const relief = smoothDirectionalRelief(direction, profile.seed + 0.67);
+      const pit = Math.max(0, direction.dot(featureA));
+      radius += relief * 0.024;
+      radius -= Math.pow(pit, 7.0) * 0.040;
+    } else if (profile.name === "Neso") {
+      const relief = smoothDirectionalRelief(direction, profile.seed + 0.82);
+      const shoulder = Math.max(0, direction.dot(featureC));
+      radius += relief * 0.026;
+      radius += Math.pow(shoulder, 3.0) * 0.024;
+    } else if (profile.name === "S/2021 N1" || profile.name === "S/2002 N5") {
+      const seedOffset = profile.name === "S/2021 N1" ? 1.11 : 1.73;
+      const relief = smoothDirectionalRelief(direction, profile.seed + seedOffset);
+      const pitA = Math.max(0, direction.dot(featureA));
+      const shoulder = Math.max(0, direction.dot(featureB));
+      radius += relief * 0.028;
+      radius -= Math.pow(pitA, 7.0) * 0.034;
+      radius += Math.pow(shoulder, 3.0) * 0.018;
     }
 
     radius = Math.max(0.88, radius);
@@ -287,6 +370,24 @@ function createMappedMoonMesh(profile, quality) {
   } else if (profile.name === "Halimede") {
     mesh.rotation.y = 0.58;
     mesh.rotation.x = -0.07;
+  } else if (profile.name === "Sao") {
+    mesh.rotation.y = 0.36;
+    mesh.rotation.x = -0.05;
+  } else if (profile.name === "Laomedeia") {
+    mesh.rotation.y = 0.22;
+    mesh.rotation.x = -0.02;
+  } else if (profile.name === "Psamathe") {
+    mesh.rotation.y = 0.49;
+    mesh.rotation.x = -0.04;
+  } else if (profile.name === "Neso") {
+    mesh.rotation.y = 0.31;
+    mesh.rotation.x = -0.03;
+  } else if (profile.name === "S/2021 N1") {
+    mesh.rotation.y = 0.42;
+    mesh.rotation.x = -0.06;
+  } else if (profile.name === "S/2002 N5") {
+    mesh.rotation.y = 0.18;
+    mesh.rotation.x = 0.03;
   } else if (profile.name === "Naiad") {
     mesh.rotation.y = 0.38;
   }
@@ -295,7 +396,7 @@ function createMappedMoonMesh(profile, quality) {
 }
 
 export function createNeptunianMoonSurface(profile, quality = "high") {
-  const hero = ["Naiad", "Thalassa", "Despina", "Galatea", "Larissa", "Hippocamp", "Proteus", "Triton", "Nereid", "Halimede"].includes(profile.name);
+  const hero = ["Naiad", "Thalassa", "Despina", "Galatea", "Larissa", "Hippocamp", "Proteus", "Triton", "Nereid", "Halimede", "Sao", "Laomedeia", "Psamathe", "Neso", "S/2021 N1", "S/2002 N5"].includes(profile.name);
   const isMappedMoon = isMappedInnerMoon(profile.name);
 
   if (isMappedMoon) {
