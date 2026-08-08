@@ -12,6 +12,7 @@ import { createOrbitLine } from "./orbits.js";
 import { createSaturnSurfaceMaterial } from "../planets/saturn/saturn.js";
 import { createSaturnRingSystem, updateSaturnRingSystem } from "../planets/saturn/saturnRings.js";
 import { createUranusRingSystem, updateUranusRingSystem } from "../planets/uranus/uranusRings.js";
+import { createNeptuneRingSystem, updateNeptuneRingSystem } from "../planets/neptune/neptuneRings.js";
 import {
   applyNeptuneOblateness,
   createNeptuneAtmosphereLayers,
@@ -1123,18 +1124,11 @@ function addGiantPlanetRings(planet, config, textures, segmentScale = 1, hoverTa
   }
 
   if (config.name === "Neptune") {
-    const r = config.radius;
-    const bands = [
-      { innerRadius: r * 1.40, outerRadius: r * 1.435, color: 0x7897b6, opacity: 0.075 },
-      { innerRadius: r * 1.57, outerRadius: r * 1.605, color: 0x9ebfd7, opacity: 0.095 },
-      { innerRadius: r * 1.78, outerRadius: r * 1.82, color: 0x64809e, opacity: 0.065 },
-      { innerRadius: r * 2.02, outerRadius: r * 2.05, color: 0xaac8dc, opacity: 0.050 },
-    ];
-
-    bands.forEach((profile, index) => {
-      const band = createRingBand({ ...profile, segments: ringSegments });
-      band.name = `Neptune faint ring ${index + 1}`;
-      group.add(band);
+    return createNeptuneRingSystem({
+      planet,
+      radius: config.radius,
+      quality: segmentScale < 0.7 ? "low" : segmentScale < 0.9 ? "medium" : "high",
+      hoverTargets,
     });
   }
 
@@ -1322,14 +1316,15 @@ export function createPlanet({
       segmentScale,
     });
   }
-  // Neptune rings/arcs are intentionally disabled because they add visible
-  // vertical/horizontal noise around the planet in the current experience.
-  if (["Jupiter", "Saturn", "Uranus"].includes(config.name)) {
+  if (["Jupiter", "Saturn", "Uranus", "Neptune"].includes(config.name)) {
     mesh.userData.visualLayers.ringSystem = addGiantPlanetRings(mesh, config, textures, segmentScale, hoverTargets);
     const ringBoundsMultiplier = {
       Jupiter: 1.92,
       Saturn: 2.58,
       Uranus: 2.34,
+      // Adams lies at about 2.54 Neptune equatorial radii. A small margin keeps
+      // the complete faint system framed during close inspection.
+      Neptune: 2.72,
     }[config.name];
     mesh.userData.focusVisualRadius = config.radius * ringBoundsMultiplier;
   } else {
@@ -1381,9 +1376,15 @@ export function updatePlanetVisuals(planet, time, motionScale = 1, camera = null
     updateNeptuneAtmosphereLayers(planet, layers.neptuneClouds, time, motionScale, camera);
   }
   if (layers.ringSystem) {
-    if (planet.name === "Saturn") updateSaturnRingSystem(layers.ringSystem, time);
-    if (planet.name === "Uranus") updateUranusRingSystem(layers.ringSystem, time, camera);
-    else layers.ringSystem.rotation.y += 0.000012 * motionScale;
+    if (planet.name === "Saturn") {
+      updateSaturnRingSystem(layers.ringSystem, time);
+    } else if (planet.name === "Uranus") {
+      updateUranusRingSystem(layers.ringSystem, time, camera);
+    } else if (planet.name === "Neptune") {
+      updateNeptuneRingSystem(layers.ringSystem, time, camera, motionScale);
+    } else {
+      layers.ringSystem.rotation.y += 0.000012 * motionScale;
+    }
   }
   if (layers.dustArcs) layers.dustArcs.rotation.z += 0.000085 * motionScale;
 }

@@ -14,6 +14,7 @@ export const neptune = {
     type: "Planet", diameter: "49,244 km", orbitalSpeed: "5.43 km/s",
     distanceFromEarth: "≈ 4.3 billion km at closest approach",
     sizeComparison: getPlanetSizeComparison("Neptune"),
+    rings: "Five principal rings extend outward as Galle, Le Verrier, Lassell, Arago, and Adams. They are extremely faint and dusty compared with Saturn's bright icy rings. The outer Adams ring contains four prominent dust arcs: Liberté, Egalité, Fraternité, and Courage.",
     description: "A deep-blue ice giant where supersonic winds race through bright methane clouds at the edge of the planetary system.",
   },
 };

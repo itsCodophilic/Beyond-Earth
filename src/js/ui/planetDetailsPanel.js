@@ -117,6 +117,7 @@ const PLANET_DETAILS = Object.freeze({
     rotation: "About 16 hours",
     axialTilt: "About 28°",
     gravity: "11.15 m/s² · about 1.14× Earth's gravity",
+    rings: "Five principal rings run outward as Galle, Le Verrier, Lassell, Arago, and Adams. They are narrow, exceptionally faint structures dominated by fine dark dust rather than Saturn-like bright ice. The Adams ring contains the prominent Liberté, Egalité, Fraternité, and Courage arcs; the nearby moon Galatea helps keep these dust concentrations confined.",
     lore: "Neptune is the most distant major planet and hosts some of the fastest winds measured in the Solar System. Its active blue atmosphere forms changing clouds and storms, while the large moon Triton travels in a retrograde orbit and likely originated in the Kuiper Belt.",
     scienceUrl: "https://science.nasa.gov/neptune/facts/",
   }),
