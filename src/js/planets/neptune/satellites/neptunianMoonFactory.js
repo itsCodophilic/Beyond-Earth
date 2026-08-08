@@ -6,6 +6,9 @@ const PALETTES = Object.freeze({
   thalassa: [0xd8d3cb, 0xf1eee8, 0x6a655e, 0xe8e2d7],
   despina: [0xd4cec4, 0xefeae0, 0x605b56, 0xe2ddd2],
   galatea: [0xcac6be, 0xf0ede6, 0x585652, 0xe3ded4],
+  larissa: [0xd3d2cf, 0xf0efec, 0x56585a, 0xdeddd9],
+  hippocamp: [0xd8d7d3, 0xf2f1ee, 0x626466, 0xe5e4e0],
+  "proteus-mapped": [0x8f6e58, 0xb48a70, 0x4f3b31, 0x9b765f],
   triton: [0xc7b4ad, 0xeadbd0, 0x75666a, 0x9a6d68],
   proteus: [0x4e5357, 0x74787a, 0x242729, 0x5d6163],
   nereid: [0x777c82, 0xa3a6aa, 0x3d4145, 0x858a8e],
@@ -19,6 +22,9 @@ const MAPPED_MOON_TEXTURES = Object.freeze({
   Thalassa: `${PUBLIC_TEXTURE_BASE}thalassa/thalassa-equirectangular.png`,
   Despina: `${PUBLIC_TEXTURE_BASE}despina/despina-equirectangular.png`,
   Galatea: `${PUBLIC_TEXTURE_BASE}galatea/galatea-equirectangular.png`,
+  Larissa: `${PUBLIC_TEXTURE_BASE}larissa/larissa-equirectangular.png`,
+  Hippocamp: `${PUBLIC_TEXTURE_BASE}hippocamp/hippocamp-equirectangular.png`,
+  Proteus: `${PUBLIC_TEXTURE_BASE}proteus/proteus-equirectangular.png`,
 });
 
 // Textured inner moons need a slightly shifted UV seam so the least important
@@ -28,6 +34,9 @@ const MAPPED_MOON_UV_OFFSETS = Object.freeze({
   Thalassa: 0.32,
   Despina: 0.36,
   Galatea: 0.34,
+  Larissa: 0.29,
+  Hippocamp: 0.33,
+  Proteus: 0.27,
 });
 
 const textureLoader = new THREE.TextureLoader();
@@ -120,6 +129,15 @@ function createMappedMoonMesh(profile, quality) {
   } else if (profile.name === "Galatea") {
     mesh.rotation.y = 0.46;
     mesh.rotation.x = -0.02;
+  } else if (profile.name === "Larissa") {
+    mesh.rotation.y = 0.24;
+    mesh.rotation.x = -0.01;
+  } else if (profile.name === "Hippocamp") {
+    mesh.rotation.y = 0.51;
+    mesh.rotation.x = -0.02;
+  } else if (profile.name === "Proteus") {
+    mesh.rotation.y = 0.34;
+    mesh.rotation.x = -0.04;
   } else if (profile.name === "Naiad") {
     mesh.rotation.y = 0.38;
   }
@@ -128,7 +146,7 @@ function createMappedMoonMesh(profile, quality) {
 }
 
 export function createNeptunianMoonSurface(profile, quality = "high") {
-  const hero = ["Naiad", "Thalassa", "Despina", "Galatea", "Triton", "Proteus", "Nereid"].includes(profile.name);
+  const hero = ["Naiad", "Thalassa", "Despina", "Galatea", "Larissa", "Hippocamp", "Proteus", "Triton", "Nereid"].includes(profile.name);
   const isMappedMoon = isMappedInnerMoon(profile.name);
 
   if (isMappedMoon) {

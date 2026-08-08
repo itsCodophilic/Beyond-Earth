@@ -5,9 +5,9 @@ const RAW = Object.freeze([
   ["Thalassa", 804, 50074, 0.0002, 0.2, 130.6, 165.7, 0.311485, 82, [1.20, 0.93, 0.84], "thalassa"],
   ["Despina", 805, 52526, 0.0002, 0.1, 0, 125.1, 0.334655, 150, [1.22, 0.95, 0.87], "despina"],
   ["Galatea", 806, 61953, 0.0001, 0.1, 0, 32.0, 0.428745, 176, [1.18, 0.94, 0.88], "galatea"],
-  ["Larissa", 807, 73548, 0.0014, 0.2, 0, 210.0, 0.554654, 194, [1.22, 0.94, 0.86], "inner-dark"],
-  ["Hippocamp", 814, 105283, 0.0005, 0.1, 0, 285.0, 0.9362, 34, [1.16, 0.92, 0.84], "inner-dark"],
-  ["Proteus", 808, 117647, 0.0005, 0.1, 0, 18.0, 1.122315, 420, [1.13, 1.0, 0.91], "proteus"],
+  ["Larissa", 807, 73548, 0.0014, 0.2, 0, 210.0, 0.554654, 194, [1.22, 0.94, 0.86], "larissa"],
+  ["Hippocamp", 814, 105283, 0.0005, 0.1, 0, 285.0, 0.9362, 34, [1.16, 0.92, 0.84], "hippocamp"],
+  ["Proteus", 808, 117647, 0.0005, 0.1, 0, 18.0, 1.122315, 420, [1.13, 1.0, 0.91], "proteus-mapped"],
   ["Triton", 801, 354759, 0.0000, 157.3, 178.1, 63.0, 5.876994, 2706.8, [1, 1, 1], "triton"],
   ["Nereid", 802, 5513400, 0.7507, 7.2, 320.3, 12.0, 360.14, 340, [1.12, 0.92, 0.86], "nereid"],
   ["Halimede", 809, 16590500, 0.521, 119.6, 198.5, 135.8, 1879, 62, [1.18, 0.86, 0.78], "outer-dark"],
@@ -97,7 +97,13 @@ export const NEPTUNE_MOON_PROFILES = Object.freeze(RAW.map((row) => {
                 ? "An inner Neptunian moon rendered from the supplied reference style as a pale elongated body with a slightly rougher and more cratered surface than Thalassa."
                 : name === "Galatea"
                   ? "A small inner moon of Neptune, recreated from the supplied reference image as a pale gray elongated icy moon with rough cratered terrain and a darker rugged hemisphere."
-                  : `${name} is one of Neptune's ${aKm < 1_000_000 ? "dark inner" : "distant irregular"} satellites.`,
+                  : name === "Larissa"
+                    ? "A dark-to-pale irregular inner moon of Neptune, recreated from the supplied reference image as a rough, cratered, blocky body with dense impact texture."
+                    : name === "Hippocamp"
+                      ? "A tiny inner moon of Neptune, recreated from the supplied reference image as a compact pale-gray irregular moon with rugged pitted terrain and strong crater texture."
+                      : name === "Proteus"
+                        ? "A large irregular inner moon of Neptune, recreated from the supplied reference image as a brownish rugged body with grooves, scarps, smooth plains and scattered craters."
+                        : `${name} is one of Neptune's ${aKm < 1_000_000 ? "dark inner" : "distant irregular"} satellites.`,
     dataNote: ["S/2002 N5", "S/2021 N1"].includes(name)
       ? "Orbit is measured; displayed size and surface are conservative estimates."
       : "Orbit and established physical scale are represented with cinematic compression.",
