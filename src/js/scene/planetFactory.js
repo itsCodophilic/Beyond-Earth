@@ -262,11 +262,27 @@ function createVenusSurfaceMaterial(texture) {
   });
 }
 
+function createPlutoMaterial(texture) {
+  return new THREE.MeshStandardMaterial({
+    map: texture,
+    color: 0xffffff,
+    roughness: 0.985,
+    metalness: 0,
+    bumpMap: texture,
+    bumpScale: 0.012,
+    displacementMap: texture,
+    displacementScale: 0.0046,
+    displacementBias: -0.0014,
+    envMapIntensity: 0.05,
+  });
+}
+
 function createRockyMaterial(config, textures) {
   const map = textures[config.texture] ?? makeNoiseTexture(config.texture);
   if (config.name === "Mercury") return createMercuryMaterial(map);
   if (config.name === "Mars") return createMarsMaterial(map);
   if (config.name === "Venus") return createVenusSurfaceMaterial(map);
+  if (config.name === "Pluto") return createPlutoMaterial(map);
   return new THREE.MeshStandardMaterial({
     map,
     color: config.name === "Earth" ? 0xf4f8ff : 0xffffff,
@@ -1247,7 +1263,9 @@ export function createPlanet({
           ? [184, 152]
           : config.name === "Earth"
             ? [192, 160]
-            : [144, 112];
+            : config.name === "Pluto"
+              ? [196, 164]
+              : [144, 112];
   const segments = [
     getSegmentCount(baseSegments[0], segmentScale, 80),
     getSegmentCount(baseSegments[1], segmentScale, 64),

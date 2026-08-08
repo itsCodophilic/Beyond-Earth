@@ -27,6 +27,10 @@ export const TEXTURE_URLS = {
   saturn: "https://threejs.org/examples/textures/planets/saturn.jpg",
   saturnRing: "https://threejs.org/examples/textures/planets/saturnringcolor.jpg",
   uranus: "https://threejs.org/examples/textures/planets/uranus.jpg",
+  // Pluto uses a local New Horizons-inspired equirectangular wrap prepared from
+  // the supplied real-image reference so the dwarf planet reads consistently
+  // from every camera angle without relying on the procedural fallback.
+  pluto: `${import.meta.env.BASE_URL}assets/textures/pluto/pluto-equirectangular.png`,
   // Neptune is drawn by a seamless 3D atmosphere shader in neptuneSurface.js.
   // Avoiding a flat image prevents polar pinching and longitude seams.
 };
