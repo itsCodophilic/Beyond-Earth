@@ -13,20 +13,20 @@ export const TEXTURE_URLS = {
   venus: `${LOCAL_TEXTURE_ROOT}/venus-surface-2k.jpg`,
   venusAtmosphere: `${LOCAL_TEXTURE_ROOT}/venus-atmosphere-2k.jpg`,
   // NASA Blue Marble Next Generation surface with clouds removed.
-  earth: "https://svs.gsfc.nasa.gov/vis/a000000/a003600/a003615/earth_noClouds.0330.jpg",
+  earth: `${LOCAL_TEXTURE_ROOT}/earth-no-clouds.jpg`,
   earthNormal: "https://threejs.org/examples/textures/planets/earth_normal_2048.jpg",
   // NASA GEOS-5 global cloud field on black. The custom Earth shader turns
   // brightness into soft transparency and prevents a grey veil over the globe.
-  earthClouds: "https://svs.gsfc.nasa.gov/vis/a000000/a003800/a003837/clouds.0350_print.jpg",
+  earthClouds: `${LOCAL_TEXTURE_ROOT}/earth-clouds.jpg`,
   earthLights: "https://threejs.org/examples/textures/planets/earth_lights_2048.png",
   // NASA CGI Moon Kit: LROC visible-light colour and LOLA topography.
-  moon: "https://svs.gsfc.nasa.gov/vis/a000000/a004700/a004720/lroc_color_poles_1k.jpg",
-  moonDisplacement: "https://svs.gsfc.nasa.gov/vis/a000000/a004700/a004720/ldem_3_8bit.jpg",
+  moon: `${LOCAL_TEXTURE_ROOT}/moon-color-1k.jpg`,
+  moonDisplacement: `${LOCAL_TEXTURE_ROOT}/moon-displacement-1k.jpg`,
   mars: `${LOCAL_TEXTURE_ROOT}/mars-2k.jpg`,
-  jupiter: "https://threejs.org/examples/textures/planets/jupiter2_1024.jpg",
-  saturn: "https://threejs.org/examples/textures/planets/saturn.jpg",
-  saturnRing: "https://threejs.org/examples/textures/planets/saturnringcolor.jpg",
-  uranus: "https://threejs.org/examples/textures/planets/uranus.jpg",
+  jupiter: `${LOCAL_TEXTURE_ROOT}/jupiter-2k.jpg`,
+  saturn: `${LOCAL_TEXTURE_ROOT}/saturn-2k.jpg`,
+  saturnRing: `${LOCAL_TEXTURE_ROOT}/saturn-ring-2k.png`,
+  uranus: `${LOCAL_TEXTURE_ROOT}/uranus-2k.jpg`,
   // Pluto uses a local New Horizons-inspired equirectangular wrap prepared from
   // the supplied real-image reference so the dwarf planet reads consistently
   // from every camera angle without relying on the procedural fallback.
@@ -36,9 +36,9 @@ export const TEXTURE_URLS = {
 };
 
 /**
- * Backup assets keep the experience functional if a remote NASA host blocks a
- * request or is temporarily unavailable. NASA imagery remains the preferred
- * source; these are only network fallbacks.
+ * Backup assets are retained only for the few textures that still come from
+ * Three.js. Core Earth, Moon, Jupiter, Saturn and Uranus maps are bundled in
+ * public/textures so localhost and GitHub Pages do not depend on CORS access.
  */
 export const TEXTURE_BACKUP_URLS = {
   earth: "https://threejs.org/examples/textures/planets/earth_atmos_2048.jpg",

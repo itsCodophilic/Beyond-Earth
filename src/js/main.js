@@ -1042,8 +1042,11 @@ import { createCelestialDetailsPanel } from './ui/planetDetailsPanel.js';
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.18;
 
-  // Clock supplies elapsed seconds for time-based shader animation.
-  const clock = new THREE.Clock();
+  // Timer replaces deprecated THREE.Clock. It is updated exactly once per
+  // accepted cinematic frame, and its visibility integration prevents a large
+  // delta when the browser tab resumes.
+  const timer = new THREE.Timer();
+  timer.connect(document);
   // Raycaster projects an invisible ray from the camera through the mouse position.
   const raycaster = new THREE.Raycaster();
   // Line raycasting uses a world-space threshold. It is updated dynamically from
@@ -1541,14 +1544,14 @@ import { createCelestialDetailsPanel } from './ui/planetDetailsPanel.js';
     pauseUniverseForInformationOverlay();
     if (!isInformationOverlayOpen()) {
       // Ignore time spent reading so orbital bodies cannot jump on resume.
-      clock.getDelta();
+      timer.reset();
     }
   });
 
   addEventListener("beyond-earth:planet-details-state", (event) => {
     isPlanetDetailsOpen = Boolean(event.detail?.open);
     pauseUniverseForInformationOverlay();
-    if (!isInformationOverlayOpen()) clock.getDelta();
+    if (!isInformationOverlayOpen()) timer.reset();
   });
 
   // Asteroid meshes provide nearby shape; dust points cheaply supply density.
@@ -5230,7 +5233,7 @@ import { createCelestialDetailsPanel } from './ui/planetDetailsPanel.js';
   addEventListener("visibilitychange", () => {
     isPageVisible = !document.hidden;
     spaceEnvironment.setPaused(!isPageVisible || isInformationOverlayOpen());
-    if (isPageVisible) clock.getDelta();
+    if (isPageVisible) timer.reset();
   });
 
   // Release GPU-owned space resources when the page is actually discarded.
@@ -5238,6 +5241,7 @@ import { createCelestialDetailsPanel } from './ui/planetDetailsPanel.js';
     // A page kept in the back-forward cache will resume with its WebGL context;
     // only a true discard should release the environment resources.
     if (!event.persisted) {
+      timer.dispose();
       spaceEnvironment.dispose();
       distanceCinematicPanel?.dispose();
     }
@@ -5257,7 +5261,8 @@ import { createCelestialDetailsPanel } from './ui/planetDetailsPanel.js';
       return;
     }
     lastCinematicFrameTime = frameTime;
-    const deltaTime = Math.min(clock.getDelta(), 0.05);
+    timer.update(frameTime);
+    const deltaTime = Math.min(timer.getDelta(), 0.05);
     if (!isPageVisible || isInformationOverlayOpen()) {
       requestAnimationFrame(animate);
       return;
@@ -5556,7 +5561,7 @@ import { createCelestialDetailsPanel } from './ui/planetDetailsPanel.js';
       hoveredBody: hoveredCelestialBody,
     });
     // Jupiter moves every frame, so its Trojan clouds must follow on the same
-    // clock. Keeping this tiny 84-object pass outside the throttled main-belt
+    // timer cadence. Keeping this tiny 84-object pass outside the throttled main-belt
     // update removes stepping/flicker while keeping the main belt smooth.
     updateJupiterTrojanFrame(asteroidBelt, jupiter);
 
@@ -5635,5 +5640,6 @@ import { createCelestialDetailsPanel } from './ui/planetDetailsPanel.js';
 
   // Seed state and begin the deterministic requestAnimationFrame render loop.
   updateScrollProgress();
+  timer.reset();
   requestAnimationFrame(animate);
 })();

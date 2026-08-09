@@ -111,7 +111,6 @@ function createCloudMaterial(cloudMap, {
     `,
     transparent: true,
     depthWrite: false,
-    roughness: 1,
     side: THREE.FrontSide,
   });
 
