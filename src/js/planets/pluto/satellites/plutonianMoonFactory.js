@@ -1,5 +1,75 @@
 import * as THREE from "three";
 
+const PUBLIC_ASSET_ROOT = `${import.meta.env.BASE_URL}assets`;
+
+/**
+ * Every Pluto moon uses its own global texture set derived from the supplied
+ * visual reference. A photographed disk cannot be wrapped directly around a
+ * 3D body: its black background, baked lighting and photographed limb would
+ * stretch into obvious seams. These assets retain each reference's colours
+ * and geology as unlit, pole-safe equirectangular maps instead.
+ */
+const PLUTONIAN_SURFACE_ASSETS = Object.freeze({
+  Charon: {
+    albedo: `${PUBLIC_ASSET_ROOT}/textures/pluto/moons/charon-albedo-v1.jpg`,
+    height: `${PUBLIC_ASSET_ROOT}/textures/pluto/moons/charon-height-v1.jpg`,
+    roughness: `${PUBLIC_ASSET_ROOT}/textures/pluto/moons/charon-roughness-v1.jpg`,
+  },
+  Styx: {
+    albedo: `${PUBLIC_ASSET_ROOT}/textures/pluto/moons/styx-albedo-v1.jpg`,
+    height: `${PUBLIC_ASSET_ROOT}/textures/pluto/moons/styx-height-v1.jpg`,
+  },
+  Nix: {
+    albedo: `${PUBLIC_ASSET_ROOT}/textures/pluto/moons/nix-albedo-v1.jpg`,
+    height: `${PUBLIC_ASSET_ROOT}/textures/pluto/moons/nix-height-v1.jpg`,
+  },
+  Kerberos: {
+    albedo: `${PUBLIC_ASSET_ROOT}/textures/pluto/moons/kerberos-albedo-v1.jpg`,
+    height: `${PUBLIC_ASSET_ROOT}/textures/pluto/moons/kerberos-height-v1.jpg`,
+  },
+  Hydra: {
+    albedo: `${PUBLIC_ASSET_ROOT}/textures/pluto/moons/hydra-albedo-v1.jpg`,
+    height: `${PUBLIC_ASSET_ROOT}/textures/pluto/moons/hydra-height-v1.jpg`,
+  },
+});
+
+const plutonianTextureLoader = new THREE.TextureLoader();
+const plutonianTextureCache = new Map();
+
+/**
+ * Loads one reusable Pluto-system texture and configures it for a spherical
+ * UV seam. Colour textures use sRGB; height/roughness maps remain linear data.
+ */
+function loadPlutonianTexture(label, url, { color = false } = {}) {
+  if (plutonianTextureCache.has(url)) return plutonianTextureCache.get(url);
+
+  const texture = plutonianTextureLoader.load(url);
+  texture.name = `${label} ${color ? "albedo" : "surface data"} map`;
+  texture.wrapS = THREE.RepeatWrapping;
+  texture.wrapT = THREE.ClampToEdgeWrapping;
+  texture.minFilter = THREE.LinearMipmapLinearFilter;
+  texture.magFilter = THREE.LinearFilter;
+  texture.generateMipmaps = true;
+  texture.anisotropy = 8;
+  texture.colorSpace = color ? THREE.SRGBColorSpace : THREE.NoColorSpace;
+  texture.userData.persistentPlutonianTexture = true;
+  plutonianTextureCache.set(url, texture);
+  return texture;
+}
+
+function getPlutonianSurfaceMaps(name) {
+  const assets = PLUTONIAN_SURFACE_ASSETS[name];
+  if (!assets) return null;
+
+  return {
+    albedoMap: loadPlutonianTexture(name, assets.albedo, { color: true }),
+    heightMap: loadPlutonianTexture(name, assets.height),
+    roughnessMap: assets.roughness
+      ? loadPlutonianTexture(name, assets.roughness)
+      : null,
+  };
+}
+
 function hash3(x, y, z, seed) {
   const value = Math.sin(
     x * 127.1
@@ -78,15 +148,17 @@ function craterSample(direction, center, angularRadius, depth, rimStrength = 0.2
   };
 }
 
-function geometryDetail(profile, quality) {
-  if (profile.name === "Charon") {
-    if (quality === "low") return 4;
-    if (quality === "medium") return 5;
-    return 5;
-  }
-  if (quality === "low") return 3;
-  if (quality === "medium") return 4;
-  return 4;
+/**
+ * A regular UV sphere supplies stable 2:1 texture coordinates and enough
+ * vertices for relief. It is only the starting topology: createGeometry()
+ * sculpts the small moons into their irregular observed silhouettes before the
+ * catalogue's measured axis ratios are applied by the satellite system.
+ */
+function createBaseGeometry(profile, quality) {
+  const segments = profile.name === "Charon"
+    ? (quality === "low" ? [80, 50] : quality === "medium" ? [128, 80] : [192, 120])
+    : (quality === "low" ? [48, 30] : quality === "medium" ? [80, 50] : [128, 80]);
+  return new THREE.SphereGeometry(1, segments[0], segments[1]);
 }
 
 function basePalette(name) {
@@ -126,7 +198,7 @@ function basePalette(name) {
 }
 
 function createGeometry(profile, quality) {
-  const geometry = new THREE.IcosahedronGeometry(1, geometryDetail(profile, quality));
+  const geometry = createBaseGeometry(profile, quality);
   const positions = geometry.getAttribute("position");
   const colours = new Float32Array(positions.count * 3);
   const direction = new THREE.Vector3();
@@ -140,6 +212,10 @@ function createGeometry(profile, quality) {
   const craterCenters = Array.from({ length: craterCount }, (_, index) => directionFromSeed(profile.seed + 0.37, index));
   const redSpotCenter = new THREE.Vector3(0.58, 0.18, 0.79).normalize();
   const hydraDarkCenter = new THREE.Vector3(-0.52, 0.55, 0.65).normalize();
+  const nixHollowDirection = new THREE.Vector3(-0.78, 0.38, 0.50).normalize();
+  const hydraUpperShoulder = new THREE.Vector3(-0.58, 0.68, 0.44).normalize();
+  const hydraSideShoulder = new THREE.Vector3(0.76, 0.18, 0.62).normalize();
+  const hydraLowerShoulder = new THREE.Vector3(-0.18, -0.82, 0.54).normalize();
 
   for (let index = 0; index < positions.count; index += 1) {
     direction.fromBufferAttribute(positions, index).normalize();
@@ -171,16 +247,43 @@ function createGeometry(profile, quality) {
       const equatorial = 1 - smoothstep(0.025, 0.19, Math.abs(direction.y));
       const canyonModulation = 0.45 + 0.55 * Math.abs(Math.sin(Math.atan2(direction.z, direction.x) * 4.0 + direction.y * 7.0));
       radius -= equatorial * canyonModulation * 0.010;
+    } else if (profile.name === "Nix") {
+      // Nix is a rounded, flattened jelly bean with a shallow bite-like hollow
+      // on one end rather than a conventional ellipsoid.
+      const hollowDistance = Math.acos(THREE.MathUtils.clamp(direction.dot(nixHollowDirection), -1, 1));
+      const endHollow = 1 - smoothstep(0.14, 0.42, hollowDistance);
+      radius *= 1 - endHollow * 0.075 + Math.max(0, direction.x) * 0.025;
     } else if (profile.name === "Kerberos") {
-      // A continuous radial pinch gives a single watertight double-lobed body.
-      const waist = Math.exp(-Math.pow(direction.x / 0.28, 2));
+      // A continuous radial pinch creates a watertight contact-binary form;
+      // unlike two intersecting meshes, no crack can expose the starfield.
+      const waist = Math.exp(-Math.pow(direction.x / 0.31, 2));
       const positiveLobe = Math.max(0, direction.x);
       const negativeLobe = Math.max(0, -direction.x);
-      radius *= 1 - waist * 0.10 + positiveLobe * 0.035 + negativeLobe * 0.020;
+      const planarFacet = Math.abs(direction.y * direction.z) * 0.025;
+      radius *= 1 - waist * 0.205 + positiveLobe * 0.075 + negativeLobe * 0.045 - planarFacet;
     } else if (profile.name === "Styx") {
-      radius *= 1 + Math.max(0, direction.x) * 0.025 - Math.max(0, -direction.x) * 0.018;
+      // Styx has two soft unequal bulbs connected by a broad shallow neck.
+      const waist = Math.exp(-Math.pow(direction.x / 0.40, 2));
+      radius *= 1 - waist * 0.145
+        + Math.max(0, direction.x) * 0.065
+        + Math.max(0, -direction.x) * 0.035;
     } else if (profile.name === "Hydra") {
-      radius *= 1 + Math.max(0, direction.z) * 0.020 - Math.max(0, -direction.x) * 0.014;
+      // Hydra's blocky outline has several broad shoulders separated by deep
+      // saddles. Smooth directional lobes keep the result one closed mesh.
+      const upperShoulder = Math.max(0, direction.dot(hydraUpperShoulder)) ** 3;
+      const sideShoulder = Math.max(0, direction.dot(hydraSideShoulder)) ** 3;
+      const lowerShoulder = Math.max(0, direction.dot(hydraLowerShoulder)) ** 3;
+      const centralSaddle = Math.exp(-Math.pow(direction.x / 0.34, 2))
+        * Math.max(0, direction.z);
+      const lobeWaist = Math.exp(-Math.pow(direction.x / 0.30, 2));
+      radius *= 1
+        + upperShoulder * 0.155
+        + sideShoulder * 0.135
+        + lowerShoulder * 0.115
+        - centralSaddle * 0.115
+        - lobeWaist * 0.135
+        + Math.max(0, direction.x) * 0.085
+        + Math.max(0, -direction.x) * 0.055;
     }
 
     radius = Math.max(profile.name === "Charon" ? 0.95 : 0.84, radius);
@@ -222,17 +325,45 @@ function createGeometry(profile, quality) {
 
 export function createPlutonianMoonSurface(profile, quality = "high") {
   const geometry = createGeometry(profile, quality);
-  const material = new THREE.MeshStandardMaterial({
-    vertexColors: true,
-    roughness: profile.name === "Charon" ? 0.965 : 0.985,
-    metalness: 0,
-    envMapIntensity: profile.name === "Charon" ? 0.030 : 0.020,
-    dithering: true,
-  });
+  const surfaceMaps = getPlutonianSurfaceMaps(profile.name);
+  const isCharon = profile.name === "Charon";
+  const material = new THREE.MeshStandardMaterial(surfaceMaps
+    ? {
+      // Albedo preserves the supplied reference's regional colour identity;
+      // shape and lighting remain true 3D rather than baked into the image.
+      map: surfaceMaps.albedoMap,
+      color: isCharon ? 0xffffff : 0xd7d4cf,
+      vertexColors: false,
+      // Displacement reveals major crater rims at the silhouette; bump mapping
+      // carries fine regolith without producing a noisy or inflated body.
+      displacementMap: surfaceMaps.heightMap,
+      displacementScale: isCharon
+        ? (quality === "low" ? 0.007 : 0.011)
+        : (quality === "low" ? 0.009 : 0.016),
+      displacementBias: isCharon
+        ? (quality === "low" ? -0.0035 : -0.0055)
+        : (quality === "low" ? -0.0045 : -0.008),
+      bumpMap: surfaceMaps.heightMap,
+      bumpScale: isCharon ? 0.020 : 0.032,
+      roughnessMap: surfaceMaps.roughnessMap,
+      roughness: isCharon ? 0.94 : 0.975,
+      metalness: 0,
+      envMapIntensity: isCharon ? 0.035 : 0.022,
+      dithering: true,
+    }
+    : {
+      vertexColors: true,
+      roughness: 0.985,
+      metalness: 0,
+      envMapIntensity: 0.020,
+      dithering: true,
+    });
   const mesh = new THREE.Mesh(geometry, material);
-  mesh.name = `${profile.name} New Horizons-informed surface`;
+  mesh.name = `${profile.name} reference-derived watertight ice surface`;
   mesh.castShadow = true;
   mesh.receiveShadow = true;
-  mesh.userData.plutonianSurfaceModel = "new-horizons-informed-individual-3d";
+  mesh.userData.plutonianSurfaceModel = surfaceMaps?.roughnessMap
+    ? "reference-mapped-albedo-relief-roughness-3d"
+    : "reference-mapped-albedo-relief-watertight-3d";
   return mesh;
 }
