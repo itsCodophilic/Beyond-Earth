@@ -30,6 +30,8 @@ import { NEPTUNE_MOON_COUNT, NEPTUNE_MOON_PROFILES } from "../neptune/satellites
 import { createNeptunianMoonSurface } from "../neptune/satellites/neptunianMoonFactory.js";
 import { URANUS_MOON_COUNT, URANUS_MOON_PROFILES } from "../uranus/satellites/uranianMoonCatalog.js";
 import { createUranianMoonSurface } from "../uranus/satellites/uranianMoonFactory.js";
+import { PLUTO_MOON_COUNT, PLUTO_MOON_PROFILES } from "../pluto/satellites/plutonianMoonCatalog.js";
+import { createPlutonianMoonSurface } from "../pluto/satellites/plutonianMoonFactory.js";
 
 const MOON_SYSTEMS = Object.freeze({
   Mars: [
@@ -40,6 +42,7 @@ const MOON_SYSTEMS = Object.freeze({
   Saturn: SATURN_MOON_PROFILES,
   Uranus: URANUS_MOON_PROFILES,
   Neptune: NEPTUNE_MOON_PROFILES,
+  Pluto: PLUTO_MOON_PROFILES,
 });
 
 const PARENT_ORBITAL_SCALE = Object.freeze({
@@ -48,6 +51,7 @@ const PARENT_ORBITAL_SCALE = Object.freeze({
   Saturn: { heliocentricAU: 9.5367, eccentricity: 0.0539 },
   Uranus: { heliocentricAU: 19.1892, eccentricity: 0.0473 },
   Neptune: { heliocentricAU: 30.0699, eccentricity: 0.0086 },
+  Pluto: { heliocentricAU: 39.482, eccentricity: 0.2488 },
 });
 
 const orbitPoint = new THREE.Vector3();
@@ -286,6 +290,8 @@ function createSatelliteMesh(
     moon = createNeptunianMoonSurface(profile, quality);
   } else if (parentName === "Uranus") {
     moon = createUranianMoonSurface(profile, quality);
+  } else if (parentName === "Pluto") {
+    moon = createPlutonianMoonSurface(profile, quality);
   } else {
     moon = new THREE.Mesh(sharedGeometry, createMoonMaterial(profile, sharedTexture));
   }
@@ -329,12 +335,25 @@ function createSatelliteMesh(
     && profile.family !== "Galilean moon"
     && profile.family !== "Inner regular moon";
   const renderedVisualRadius = Math.max(...moon.scale.toArray());
-  const focusDistance = jovianIrregular
-    ? Math.max(0.44, visualRadius * 6.4)
-    : Math.max(0.90, visualRadius * (jovian ? 5.2 : 4.6));
-  const minFocusDistance = jovianIrregular
-    ? Math.max(0.32, visualRadius * 4.8)
-    : Math.max(0.72, visualRadius * (jovian ? 4.15 : 3.7));
+  const plutonian = parentName === "Pluto";
+  const focusDistance = plutonian
+    ? (profile.name === "Charon"
+      ? Math.max(0.52, renderedVisualRadius * 5.2)
+      // Pluto's four small moons are intentionally visibility-boosted, but the
+      // camera must not hug those enlarged irregular silhouettes too tightly.
+      // A more generous inspection distance keeps the body, HTML selection
+      // card anchor, and near clipping plane stable while switching moons.
+      : Math.max(0.62, renderedVisualRadius * 10.5))
+    : jovianIrregular
+      ? Math.max(0.44, visualRadius * 6.4)
+      : Math.max(0.90, visualRadius * (jovian ? 5.2 : 4.6));
+  const minFocusDistance = plutonian
+    ? (profile.name === "Charon"
+      ? Math.max(renderedVisualRadius * 6.2, focusDistance * 0.70)
+      : Math.max(0.48, renderedVisualRadius * 7.8, focusDistance * 0.76))
+    : jovianIrregular
+      ? Math.max(0.32, visualRadius * 4.8)
+      : Math.max(0.72, visualRadius * (jovian ? 4.15 : 3.7));
 
   // Preserve the specialised surface state created by the planet-specific
   // factory. v4 replaced moon.userData wholesale here, which would erase any
@@ -344,7 +363,9 @@ function createSatelliteMesh(
     name: profile.name,
     detail: jovian
       ? `${profile.family} | ${profile.surfaceEvidence ?? "evidence-tiered 3D"} | Jupiter satellite ${profile.jplCode}`
-      : `${parentName} satellite | Earth-relative size preserved`,
+      : plutonian
+        ? `${profile.family} | ${profile.name === "Charon" ? "Pluto-relative size preserved" : "visibility-boosted small-moon scale"} | New Horizons-informed 3D`
+        : `${parentName} satellite | Earth-relative size preserved`,
     parentPlanet: parentName,
     isSatellite: true,
     isJovianSatellite: jovian,
@@ -371,7 +392,9 @@ function createSatelliteMesh(
             ? "neptunian-individual-3d"
             : parentName === "Uranus"
               ? "uranian-individual-3d"
-              : "shared-satellite-sphere",
+              : parentName === "Pluto"
+                ? "plutonian-new-horizons-informed-3d"
+                : "shared-satellite-sphere",
     visualRadius: renderedVisualRadius,
     physicalDiameterKm: profile.diameterKm,
     diameterEarths: profile.diameterKm / 12_756,
@@ -379,13 +402,16 @@ function createSatelliteMesh(
     sizeComparison,
     focusDistance,
     minFocusDistance,
-    focusEase: jovianIrregular ? 0.10 : 0.11,
-    focusFov: jovianIrregular ? 30 : parentName === "Mars" ? 36 : 34,
+    focusEase: plutonian
+      ? (profile.name === "Charon" ? 0.12 : 0.18)
+      : jovianIrregular ? 0.10 : 0.11,
+    focusFov: plutonian ? 30 : jovianIrregular ? 30 : parentName === "Mars" ? 36 : 34,
     info: {
       type: "Natural satellite",
-      diameter: profile.dimensions
-        ? `${profile.dimensions} · ${diameterPrefix}${profile.diameterKm.toLocaleString("en-US", { maximumFractionDigits: 1 })} km mean`
-        : `${diameterPrefix}${profile.diameterKm.toLocaleString("en-US", { maximumFractionDigits: 1 })} km`,
+      diameter: profile.diameterLabel
+        ?? (profile.dimensions
+          ? `${profile.dimensions} · ${diameterPrefix}${profile.diameterKm.toLocaleString("en-US", { maximumFractionDigits: 1 })} km mean`
+          : `${diameterPrefix}${profile.diameterKm.toLocaleString("en-US", { maximumFractionDigits: 1 })} km`),
       orbitalSpeed: profile.orbitalSpeed,
       distanceFromEarth: `Varies with ${parentName}'s orbit`,
       sizeComparison,
@@ -425,7 +451,13 @@ function createSatelliteMesh(
       }),
     );
     hitTarget.name = `${profile.name} interaction target`;
-    const hitRadius = Math.max(visualRadius * (jovian ? 1.55 : 1.9), jovian ? 0.10 : 0.14);
+    const minimumHitRadius = parentName === "Pluto"
+      ? (profile.name === "Charon" ? 0.012 : 0.040)
+      : jovian ? 0.10 : 0.14;
+    const hitRadius = Math.max(
+      renderedVisualRadius * (parentName === "Pluto" ? 1.55 : jovian ? 1.55 : 1.9),
+      minimumHitRadius,
+    );
     hitTarget.scale.setScalar(hitRadius);
     hitTarget.position.copy(moon.position);
     hitTarget.userData.interactionOwner = moon;
@@ -822,7 +854,9 @@ export function createMajorSatelliteSystems({
             ? NEPTUNE_MOON_COUNT
             : parentName === "Uranus"
               ? URANUS_MOON_COUNT
-              : moonProfiles.length,
+              : parentName === "Pluto"
+                ? PLUTO_MOON_COUNT
+                : moonProfiles.length,
       officiallyRecognizedCount: parentName === "Jupiter"
         ? JUPITER_IAU_RECOGNIZED_COUNT
         : moonProfiles.length,
@@ -1686,7 +1720,13 @@ export function updateMajorSatelliteSystems(
         pivot.rotation.y += speed * motionScale;
         if (!moon.userData.tidallyLocked) {
           const spinDirection = profile.retrograde ? -1 : 1;
-          moon.rotation.y += spinDirection * (0.0025 + index * 0.000013) * motionScale;
+          if (profile.chaoticTumble && Array.isArray(profile.tumbleRate)) {
+            moon.rotation.x += profile.tumbleRate[0] * motionScale;
+            moon.rotation.y += spinDirection * profile.tumbleRate[1] * motionScale;
+            moon.rotation.z += profile.tumbleRate[2] * motionScale;
+          } else {
+            moon.rotation.y += spinDirection * (0.0025 + index * 0.000013) * motionScale;
+          }
         }
       }
 

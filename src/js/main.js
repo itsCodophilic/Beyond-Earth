@@ -2722,6 +2722,15 @@ import { createCelestialDetailsPanel } from './ui/planetDetailsPanel.js';
       return distancePixels <= Math.min(radiusPixels + satelliteAssist, 8.5);
     }
 
+    // Pluto has only five moons and four of them remain visually small even
+    // after the cinematic size lift. Give their acquired hover a slightly
+    // wider release envelope so the green locator does not drop/reacquire as
+    // the camera and parent system make tiny frame-to-frame adjustments.
+    if (body.userData?.parentPlanet === "Pluto") {
+      const satelliteAssist = radiusPixels >= 12 ? 6 : radiusPixels >= 4 ? 11 : 18;
+      return distancePixels <= radiusPixels + satelliteAssist;
+    }
+
     // Other non-lunar major satellites remain deliberately easy to hold after
     // acquisition because their systems contain only a small number of moons.
     if (body.userData?.isSatellite && body.userData?.name !== "Moon") {
@@ -3046,9 +3055,15 @@ import { createCelestialDetailsPanel } from './ui/planetDetailsPanel.js';
       // Once a moon itself is inspected, every system rim is removed so neither
       // the selected surface nor its siblings glow around the edges.
       system.moons.forEach(({ moon: satellite }) => {
+        const isHoveredSatellite = hoveredCelestialBody === satellite;
+        const systemRimIntensity = focusedSatellite ? 0 : intensity;
+        // When one moon is already focused, a sibling under the pointer still
+        // receives the familiar green edge shell. This makes moon-to-moon
+        // switching explicit without re-lighting the selected surface itself.
+        const hoverRimIntensity = isHoveredSatellite && satellite !== focusedBody ? 1 : 0;
         updateSatelliteRimGlow(
           satellite,
-          focusedSatellite ? 0 : intensity,
+          Math.max(systemRimIntensity, hoverRimIntensity),
           pulse,
         );
       });
@@ -3773,6 +3788,19 @@ import { createCelestialDetailsPanel } from './ui/planetDetailsPanel.js';
       return;
     }
 
+    // Pluto's five individually-modelled moons own explicit spherical pointer
+    // proxies. Use those proxies as a direct acquisition fallback so Styx, Nix,
+    // Kerberos and Hydra get the same immediate green target cue as the mature
+    // satellite systems even when their visible silhouette is only a few pixels.
+    const directPlutonianSatellite = hitBodies.find((body) => (
+      body.userData?.parentPlanet === "Pluto"
+      && body.userData?.isSatellite
+    ));
+    if (directPlutonianSatellite) {
+      setCelestialHover(directPlutonianSatellite);
+      return;
+    }
+
     const directSaturnRing = hitBodies.find(isSaturnRingBody);
     if (directSaturnRing) {
       setCelestialHover(directSaturnRing);
@@ -3949,6 +3977,13 @@ import { createCelestialDetailsPanel } from './ui/planetDetailsPanel.js';
       overviewParentName: satelliteOverviewParentName,
     });
     if (nearbyDenseSatellite) return nearbyDenseSatellite;
+
+    const directPlutonianSatellite = bodies.find((candidate) => (
+      candidate.userData?.parentPlanet === "Pluto"
+      && candidate.userData?.isSatellite
+      && candidate !== focusedBody
+    ));
+    if (directPlutonianSatellite) return directPlutonianSatellite;
 
     const directSaturnRing = bodies.find(isSaturnRingBody);
     if (directSaturnRing) return directSaturnRing.userData?.parentPlanetObject ?? null;
@@ -5025,6 +5060,8 @@ import { createCelestialDetailsPanel } from './ui/planetDetailsPanel.js';
       && !hoveredPlanetOrbit
       && getAsteroidEncounterIntensity() < 0.18
       && getJovianEncounterIntensity() < 0.12
+      && focusedBody?.userData?.parentPlanet !== "Pluto"
+      && (focusedBody?.userData?.name ?? focusedBody?.name) !== "Pluto"
       && !distanceCinematicPanel?.isOpen()) {
       // Even without dragging, a tiny pointer parallax keeps the wider scene
       // alive. It is disabled in the asteroid belt and Jupiter's moon region

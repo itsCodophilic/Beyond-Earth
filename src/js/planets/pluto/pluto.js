@@ -25,8 +25,10 @@ export const pluto = {
   orbitOpacity: 0.14,
   detail: "Dwarf planet · Kuiper Belt world",
   focusScale: 2.6,
-  minFocusDistance: scale.focusDistance * 0.88,
-  focusDistance: scale.focusDistance,
+  // Wider framing for the expanded five-moon portrait. The outer Hydra orbit
+  // now has enough breathing room while Pluto and all moons remain visible.
+  minFocusDistance: 3.35,
+  focusDistance: 3.95,
   focusEase: 0.075,
   focusFov: 35,
   info: {
