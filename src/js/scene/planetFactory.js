@@ -1362,6 +1362,7 @@ export function createPlanet({
       config.orbitInclination ?? config.tilt ?? 0,
       config.orbitEccentricity ?? 0,
       config.orbitRotation ?? 0,
+      config.orbitSegments ?? 240,
     );
     orbitGuide.name = `${config.name} orbit`;
     orbitGuide.userData.planetName = config.name;

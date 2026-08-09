@@ -17,6 +17,9 @@ export const pluto = {
   orbitEccentricity: 0.2488,
   orbitRotation: 1.93,
   orbitInclination: 0.299,
+  // Pluto is tiny compared with its scene-space orbit, so a denser guide keeps
+  // the rendered polyline centred on the same analytical path as the dwarf planet.
+  orbitSegments: 1440,
   bump: 0.030,
   orbitColor: 0xa9a0b8,
   orbitOpacity: 0.14,

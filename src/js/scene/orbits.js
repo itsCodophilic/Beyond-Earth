@@ -60,12 +60,17 @@ export function createOrbitLine(
   tilt = 0,
   eccentricity = 0,
   rotation = 0,
+  segmentCount = 240,
 ) {
-  const points = Array.from({ length: 241 }, (_, index) => setOrbitPosition(
+  // Compact distant bodies can need a denser guide than the default. Keep the
+  // normal 240-segment budget for every other planet so orbit-hover raycasting
+  // stays lightweight, while allowing Pluto to opt into a more precise path.
+  const segments = Math.max(120, Math.floor(segmentCount));
+  const points = Array.from({ length: segments + 1 }, (_, index) => setOrbitPosition(
     new THREE.Vector3(),
     radius,
     eccentricity,
-    (index / 240) * Math.PI * 2,
+    (index / segments) * Math.PI * 2,
     tilt,
     rotation,
   ));

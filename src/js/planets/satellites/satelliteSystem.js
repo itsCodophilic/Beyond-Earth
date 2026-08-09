@@ -30,8 +30,6 @@ import { NEPTUNE_MOON_COUNT, NEPTUNE_MOON_PROFILES } from "../neptune/satellites
 import { createNeptunianMoonSurface } from "../neptune/satellites/neptunianMoonFactory.js";
 import { URANUS_MOON_COUNT, URANUS_MOON_PROFILES } from "../uranus/satellites/uranianMoonCatalog.js";
 import { createUranianMoonSurface } from "../uranus/satellites/uranianMoonFactory.js";
-import { PLUTO_MOON_COUNT, PLUTO_MOON_PROFILES } from "../pluto/satellites/plutonianMoonCatalog.js";
-import { createPlutonianMoonSurface } from "../pluto/satellites/plutonianMoonFactory.js";
 
 const MOON_SYSTEMS = Object.freeze({
   Mars: [
@@ -42,7 +40,6 @@ const MOON_SYSTEMS = Object.freeze({
   Saturn: SATURN_MOON_PROFILES,
   Uranus: URANUS_MOON_PROFILES,
   Neptune: NEPTUNE_MOON_PROFILES,
-  Pluto: PLUTO_MOON_PROFILES,
 });
 
 const PARENT_ORBITAL_SCALE = Object.freeze({
@@ -51,7 +48,6 @@ const PARENT_ORBITAL_SCALE = Object.freeze({
   Saturn: { heliocentricAU: 9.5367, eccentricity: 0.0539 },
   Uranus: { heliocentricAU: 19.1892, eccentricity: 0.0473 },
   Neptune: { heliocentricAU: 30.0699, eccentricity: 0.0086 },
-  Pluto: { heliocentricAU: 39.482, eccentricity: 0.2488 },
 });
 
 const orbitPoint = new THREE.Vector3();
@@ -290,8 +286,6 @@ function createSatelliteMesh(
     moon = createNeptunianMoonSurface(profile, quality);
   } else if (parentName === "Uranus") {
     moon = createUranianMoonSurface(profile, quality);
-  } else if (parentName === "Pluto") {
-    moon = createPlutonianMoonSurface(profile, quality);
   } else {
     moon = new THREE.Mesh(sharedGeometry, createMoonMaterial(profile, sharedTexture));
   }
@@ -334,6 +328,7 @@ function createSatelliteMesh(
   const jovianIrregular = jovian
     && profile.family !== "Galilean moon"
     && profile.family !== "Inner regular moon";
+  const renderedVisualRadius = Math.max(...moon.scale.toArray());
   const focusDistance = jovianIrregular
     ? Math.max(0.44, visualRadius * 6.4)
     : Math.max(0.90, visualRadius * (jovian ? 5.2 : 4.6));
@@ -376,10 +371,8 @@ function createSatelliteMesh(
             ? "neptunian-individual-3d"
             : parentName === "Uranus"
               ? "uranian-individual-3d"
-              : parentName === "Pluto"
-                ? "plutonian-individual-3d"
-                : "shared-satellite-sphere",
-    visualRadius: Math.max(...moon.scale.toArray()),
+              : "shared-satellite-sphere",
+    visualRadius: renderedVisualRadius,
     physicalDiameterKm: profile.diameterKm,
     diameterEarths: profile.diameterKm / 12_756,
     volumeEarths: Math.pow(profile.diameterKm / 12_756, 3),
@@ -829,9 +822,7 @@ export function createMajorSatelliteSystems({
             ? NEPTUNE_MOON_COUNT
             : parentName === "Uranus"
               ? URANUS_MOON_COUNT
-              : parentName === "Pluto"
-                ? PLUTO_MOON_COUNT
-                : moonProfiles.length,
+              : moonProfiles.length,
       officiallyRecognizedCount: parentName === "Jupiter"
         ? JUPITER_IAU_RECOGNIZED_COUNT
         : moonProfiles.length,
