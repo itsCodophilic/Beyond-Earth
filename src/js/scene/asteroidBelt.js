@@ -746,8 +746,12 @@ function createAsteroidGeometry({
   // SphereGeometry is indexed and carries smooth shared normals, like the Moon.
   // Its high subdivision count gives the procedural crater and fracture pass
   // enough vertices to sculpt the surface directly in genuine 3D.
-  const widthSegments = detail >= 5 ? 144 : 80;
-  const heightSegments = detail >= 5 ? 104 : 60;
+  // detail 5 = hero bodies (Vesta/Ceres), 4 = the standard resolved rock,
+  // 2 = the distant stand-in used by the level-of-detail swap. A detail-4 rock
+  // is ~9,600 triangles; detail 2 is ~768, which is indistinguishable once the
+  // body covers only a handful of pixels.
+  const widthSegments = detail >= 5 ? 144 : detail >= 4 ? 80 : detail >= 3 ? 48 : 24;
+  const heightSegments = detail >= 5 ? 104 : detail >= 4 ? 60 : detail >= 3 ? 32 : 16;
   const geometry = new THREE.SphereGeometry(1, widthSegments, heightSegments);
   const positions = geometry.attributes.position;
   const surfaceColors = new Float32Array(positions.count * 3);
@@ -1455,6 +1459,14 @@ function createAsteroidObject({
   core.name = `${name} surface`;
   group.add(core);
 
+  // Level-of-detail pair. The swap is driven by projected pixel size in
+  // updateAsteroidBelt(); both geometries stay resident because the stand-in is
+  // only ~768 triangles and re-generating one mid-flight would stutter.
+  const lowSet = geometryPool.__lowDetail?.[composition]?.[chosenArchetype]
+    ?? geometryPool.__lowDetail?.[composition]?.irregular;
+  core.userData.lodHigh = geometry;
+  core.userData.lodLow = lowSet ? lowSet[index % lowSet.length] : null;
+
   // A transparent local-space proxy makes small resolved rocks easier to tap
   // without changing their rendered size. Metadata is still resolved from the
   // parent asteroid group.
@@ -2030,27 +2042,69 @@ function createTrojanCloud({
   }
 }
 
+
+
+/**
+ * Lazily-built pool of procedural rock geometries.
+ *
+ * Eagerly building every variant cost 3,649 ms -- 47% of total startup -- for
+ * 3 compositions x 5 archetypes x 4 variants x 2 detail levels = 120 sculpted
+ * meshes, each an 80x60 or 24x16 sphere displaced vertex by vertex.
+ *
+ * Most of that is never needed. Ordinary rocks only ever request the three
+ * archetypes their composition actually declares; "irregular", "rounded" and
+ * "basin" are added to every composition defensively and are frequently unused.
+ * Each slot is therefore a memoised accessor: the first read sculpts its four
+ * variants, later reads are free, and untouched combinations are never built.
+ *
+ * The setter matters too -- the MAJOR_BODIES pass overwrites individual slots
+ * with bespoke hero geometry, and that must keep working unchanged.
+ */
+function buildGeometryVariants(composition, archetype, detail) {
+  return Array.from({ length: 4 }, (_, index) => createAsteroidGeometry({
+    seed: composition.charCodeAt(0) * 100 + archetype.length * 17 + index * 29,
+    composition,
+    archetype,
+    detail,
+    roundness: archetype === "rounded" ? 0.62 : 0.08,
+    majorBasin: false,
+  }));
+}
+
+function defineLazyGeometrySlot(target, composition, archetype, detail, stats) {
+  let cached = null;
+  Object.defineProperty(target, archetype, {
+    configurable: true,
+    enumerable: true,
+    get() {
+      if (!cached) {
+        cached = buildGeometryVariants(composition, archetype, detail);
+        stats.built += 1;
+      }
+      return cached;
+    },
+    set(value) { cached = value; },
+  });
+}
+
 function createGeometryPool() {
   const pool = {};
+  const lowPool = {};
+  const stats = { built: 0, slots: 0 };
 
   Object.entries(COMPOSITIONS).forEach(([composition, config]) => {
     pool[composition] = {};
+    lowPool[composition] = {};
     const archetypes = new Set([...config.archetypes, "irregular", "rounded", "basin"]);
-
     archetypes.forEach((archetype) => {
-      pool[composition][archetype] = Array.from({ length: 4 }, (_, index) =>
-        createAsteroidGeometry({
-          seed: composition.charCodeAt(0) * 100 + archetype.length * 17 + index * 29,
-          composition,
-          archetype,
-          detail: 4,
-          roundness: archetype === "rounded" ? 0.62 : 0.08,
-          majorBasin: false,
-        }),
-      );
+      defineLazyGeometrySlot(pool[composition], composition, archetype, 4, stats);
+      defineLazyGeometrySlot(lowPool[composition], composition, archetype, 2, stats);
+      stats.slots += 2;
     });
   });
 
+  Object.defineProperty(pool, "__lowDetail", { value: lowPool, enumerable: false });
+  Object.defineProperty(pool, "__stats", { value: stats, enumerable: false });
   return pool;
 }
 
@@ -2087,7 +2141,16 @@ function collectAsteroidVisibilityMaterials(root) {
 }
 
 /** Creates the complete interactive asteroid system. */
-export function createAsteroidBelt({ world, hoverTargets = [], quality = "high" }) {
+export async function createAsteroidBelt({
+  world,
+  hoverTargets = [],
+  quality = "high",
+  // When supplied, the belt is built co-operatively: this is awaited between
+  // expensive steps so the render loop keeps running. Omit it to build in one
+  // synchronous pass, which preserves the original behaviour for any caller
+  // that needs the belt to exist immediately.
+  yieldToBrowser = null,
+} = {}) {
   const initialQuality = ASTEROID_QUALITY_PRESETS[quality]
     ? quality
     : "medium";
@@ -2101,8 +2164,11 @@ export function createAsteroidBelt({ world, hoverTargets = [], quality = "high" 
   trojans.name = "Jupiter Trojan clouds";
   system.add(mainBelt, trojans);
 
+  performance.mark("BE:belt.materials-start");
   const materials = createCompositionMaterials();
+  performance.mark("BE:belt.materials-end");
   const geometryPool = createGeometryPool();
+  performance.mark("BE:belt.geometryPool-end");
   const rocks = [];
 
   MAJOR_BODIES.forEach((body, index) => {
@@ -2190,6 +2256,8 @@ export function createAsteroidBelt({ world, hoverTargets = [], quality = "high" 
     accepted += 1;
   }
 
+  performance.mark("BE:belt.majorBodies-end");
+  if (yieldToBrowser) await yieldToBrowser();
   createFamily({
     name: "Flora",
     composition: "S",
@@ -2257,11 +2325,16 @@ export function createAsteroidBelt({ world, hoverTargets = [], quality = "high" 
   // The belt is rendered as a depth hierarchy. Resolved bodies remain fully
   // interactive; instanced boulders supply nearby 3D mass; points represent
   // only the enormous population that is too small to resolve at this scale.
+  performance.mark("BE:belt.familiesAndTrojans-end");
+  if (yieldToBrowser) await yieldToBrowser();
   const { field: instancedBoulderField, meshes: instancedBoulders } =
     createInstancedBoulderField(materials, qualityPreset.instanceDensity);
+  performance.mark("BE:belt.boulders-end");
+  if (yieldToBrowser) await yieldToBrowser();
   const distantDebris = createDistantDebris(
     Math.max(1, Math.round(UNRESOLVED_PEBBLE_COUNT * qualityPreset.debrisDensity)),
   );
+  performance.mark("BE:belt.debris-end");
   mainBelt.add(instancedBoulderField, distantDebris);
 
   world.add(system);
@@ -2505,6 +2578,90 @@ export function updateJupiterTrojanFrame(asteroidBelt, jupiter = null) {
 }
 
 /** Advances asteroid orbits and synchronizes resolved-body spin orientation. */
+// Level-of-detail thresholds, in rendered pixels of body radius.
+//
+// Measured before this existed: 1,239 individually modelled rocks were drawn at
+// ~9,600 triangles each regardless of distance, contributing 7.8M of the
+// scene's 13.2M triangles while the belt occupied a thin ellipse on screen.
+// Each rock also carried an invisible interaction proxy costing a further draw
+// call, so culling the whole group below the floor removes both.
+//
+// Both thresholds are hysteretic: a rock sitting exactly on a boundary would
+// otherwise flip state every frame as it orbits, and each flip can cost a
+// geometry re-bind. Separate enter/leave values give it somewhere to settle.
+const ASTEROID_LOD = {
+  hideBelowPixels: 1.05,
+  showAbovePixels: 1.45,
+  standInBelowPixels: 4.5,
+  fullSculptAbovePixels: 6.5,
+  // Uploading a geometry the GPU has not seen before stalls the frame. Spread
+  // first-time swaps across frames instead of letting hundreds land at once.
+  maximumSwapsPerFrame: 12,
+};
+
+const _lodWorldPosition = new THREE.Vector3();
+
+/**
+ * Chooses a detail level for one resolved rock from its projected size.
+ * Returns true when the body should be drawn at all.
+ */
+function applyAsteroidLevelOfDetail(rock, camera, focalPixels, budget) {
+  const core = rock.userData.core;
+  if (!core || !core.userData.lodLow) return true;
+
+  _lodWorldPosition.setFromMatrixPosition(rock.matrixWorld);
+  const distance = camera.position.distanceTo(_lodWorldPosition);
+  const radius = Number(rock.userData.visualRadius ?? 0.1);
+  const pixels = (radius / Math.max(distance, 1e-4)) * focalPixels;
+
+  // Visibility, with a dead band between the two thresholds.
+  if (rock.visible) {
+    if (pixels < ASTEROID_LOD.hideBelowPixels) { rock.visible = false; return false; }
+  } else if (pixels > ASTEROID_LOD.showAbovePixels) {
+    rock.visible = true;
+  } else {
+    return false;
+  }
+
+  const usingStandIn = core.geometry === core.userData.lodLow;
+  let wanted = core.geometry;
+  if (usingStandIn && pixels > ASTEROID_LOD.fullSculptAbovePixels) {
+    wanted = core.userData.lodHigh;
+  } else if (!usingStandIn && pixels < ASTEROID_LOD.standInBelowPixels) {
+    wanted = core.userData.lodLow;
+  }
+
+  if (wanted !== core.geometry && budget.remaining > 0) {
+    core.geometry = wanted;
+    budget.remaining -= 1;
+  }
+  return true;
+}
+
+/**
+ * Settles every rock on its correct detail level in one pass.
+ *
+ * Rocks are constructed holding their full-detail geometry, so without this the
+ * first 34 frames are spent swapping all 405 of them down to their stand-ins at
+ * the 12-per-frame budget -- each first-time swap risking an upload stall, and
+ * the whole belt visibly popping while it settles. Called once before the first
+ * frame, where the cost is hidden behind the loader.
+ */
+export function primeAsteroidLevelOfDetail(asteroidBelt, camera) {
+  if (!asteroidBelt?.rocks || !camera) return 0;
+  const focalPixels = (window.innerHeight * 0.5)
+    / Math.tan(THREE.MathUtils.degToRad(camera.fov * 0.5));
+  // Unbudgeted on purpose: this runs once, off-screen.
+  const budget = { remaining: Number.MAX_SAFE_INTEGER };
+  let settled = 0;
+  asteroidBelt.rocks.forEach((rock) => {
+    if (!rock?.userData?.orbit) return;
+    applyAsteroidLevelOfDetail(rock, camera, focalPixels, budget);
+    settled += 1;
+  });
+  return settled;
+}
+
 export function updateAsteroidBelt(
   asteroidBelt,
   motionScale = 1,
@@ -2551,9 +2708,32 @@ export function updateAsteroidBelt(
   );
   const spinTime = Number(asteroidBelt.spinElapsedSeconds ?? 0);
 
+  // Vertical focal length in pixels: how many pixels one world unit spans at
+  // one unit of distance. Computed once per frame rather than per rock.
+  const focalPixels = camera
+    ? (window.innerHeight * 0.5)
+      / Math.tan(THREE.MathUtils.degToRad(camera.fov * 0.5))
+    : 0;
+
+  // The very first pass runs unbudgeted. Every rock is constructed holding its
+  // full-detail geometry, so at 12 swaps per frame the belt spent its first ~34
+  // frames swapping all 405 of them down and visibly popping while it settled.
+  // Doing it in one go costs a single expensive frame, which is still behind the
+  // loader, and the budget then applies to ordinary movement from there on.
+  const lodBudget = {
+    remaining: asteroidBelt.lodPrimed
+      ? ASTEROID_LOD.maximumSwapsPerFrame
+      : Number.MAX_SAFE_INTEGER,
+  };
+  asteroidBelt.lodPrimed = true;
+
   asteroidBelt.rocks.forEach((rock) => {
     const orbit = rock.userData.orbit;
     if (!orbit) return;
+
+    // Detail selection runs for every rock including Trojans, which return
+    // early below because their motion is driven from updateJupiterTrojanFrame.
+    if (camera) applyAsteroidLevelOfDetail(rock, camera, focalPixels, lodBudget);
 
     // Trojan positions and spin are synchronized every rendered frame by
     // updateJupiterTrojanFrame(), avoiding 20-30 Hz stepping near Jupiter.

@@ -1,14 +1,9 @@
 import * as THREE from "three";
-import { createCosmicDustField } from "./cosmicDustField.js";
 import { EnvironmentStateController } from "./environmentStateController.js";
-import { createGalaxyField } from "./galaxyField.js";
-import { createHeroStarField } from "./heroStarField.js";
-import { createMilkyWayBackground } from "./milkyWayBackground.js";
 import {
   QUALITY_PRESETS,
   SPACE_ENVIRONMENT_CONFIG,
 } from "./spaceEnvironmentConfig.js";
-import { createStarField } from "./starField.js";
 import { createZodiacalLight } from "./zodiacalLight.js";
 
 /**
@@ -32,7 +27,6 @@ export class SpaceEnvironment {
     this.sunPosition = new THREE.Vector3();
     this.sunDirection = new THREE.Vector3(0, 0, -1);
     this.sunAngularRadius = 0;
-    this.deepSkyAnchor = new THREE.Vector3();
     this.hasSolarDirectionOverride = false;
     this.updateContext = {
       time: 0,
@@ -62,57 +56,17 @@ export class SpaceEnvironment {
   async init() {
     if (this.initialized) return this;
     const radii = SPACE_ENVIRONMENT_CONFIG.radii;
-    const pixelRatio = this.pixelRatio;
 
-    this.backgroundStars = createStarField({
-      count: this.quality.backgroundStars,
-      minimumRadius: radii.backgroundStarShell - 45,
-      maximumRadius: radii.backgroundStarShell + 45,
-      seed: 0x51a7f13d,
-      pixelRatio,
-      name: "Deterministic distant stellar sphere",
-    });
-    this.parallaxStars = createStarField({
-      count: this.quality.parallaxStars,
-      minimumRadius: radii.parallaxMinimum,
-      maximumRadius: radii.parallaxMaximum,
-      seed: 0x77bc3e19,
-      pixelRatio,
-      name: "Subtle mid-distance parallax stars",
-      midDistance: true,
-    });
-    this.milkyWay = createMilkyWayBackground({
-      count: this.quality.galacticStars,
-      radius: radii.milkyWayShell,
-      pixelRatio,
-      rotation: SPACE_ENVIRONMENT_CONFIG.milkyWayRotation,
-    });
-    this.heroStars = createHeroStarField({
-      count: this.quality.heroStars,
-      radius: radii.heroStarShell,
-      pixelRatio,
-    });
-    this.galaxies = createGalaxyField({
-      count: this.quality.galaxies,
-      radius: radii.galaxyShell,
-    });
-    this.dust = createCosmicDustField({
-      count: this.quality.dust,
-      maximumRadius: radii.dustMaximum,
-      pixelRatio,
-    });
-    this.zodiacalLight = createZodiacalLight({ radius: radii.parallaxMaximum + 140 });
+    this.zodiacalLight = this.quality.zodiacalLightEnabled
+      ? createZodiacalLight({ radius: radii.zodiacalLightShell })
+      : null;
 
-    this.layers.push(
-      this.backgroundStars,
-      this.parallaxStars,
-      this.milkyWay,
-      this.heroStars,
-      this.galaxies,
-      this.dust,
-      this.zodiacalLight,
-    );
-    this.root.add(...this.layers.map((layer) => layer.object));
+    this.layers.push(...[this.zodiacalLight].filter(Boolean));
+    if (this.layers.length) {
+      this.root.add(...this.layers.map((layer) => layer.object));
+    }
+    // The root must join the scene even when every layer is disabled, so that
+    // re-enabling one later does not silently render nothing.
     this.scene.add(this.root);
     this.setQuality(this.qualityName);
     this.resize(window.innerWidth, window.innerHeight, this.pixelRatio);
@@ -159,15 +113,6 @@ export class SpaceEnvironment {
 
     this.renderer.toneMappingExposure = state.rendererExposure;
 
-    // The most distant layers follow most of the camera translation. They still
-    // retain a little movement for depth, but never reveal themselves as nearby
-    // spheres centred on the Sun when the camera travels hundreds of units.
-    this.deepSkyAnchor.copy(this.camera.position);
-    this.backgroundStars.object.position.copy(this.deepSkyAnchor);
-    this.milkyWay.object.position.copy(this.deepSkyAnchor);
-    this.heroStars.object.position.copy(this.deepSkyAnchor);
-    this.galaxies.object.position.copy(this.deepSkyAnchor);
-
     const context = this.updateContext;
     context.time = elapsedTime;
     context.sunAngularRadius = this.sunAngularRadius;
@@ -176,20 +121,8 @@ export class SpaceEnvironment {
     context.reducedMotion = this.reducedMotion;
     context.contrast = state.backgroundContrast;
     context.journeyProgress = state.journeyProgress;
-    context.visibility = state.starVisibility;
-    this.backgroundStars.update(context);
-    context.visibility = state.starVisibility * (0.22 + state.journeyProgress * 0.26);
-    this.parallaxStars.update(context);
-    context.visibility = state.milkyWayVisibility;
-    this.milkyWay.update(context);
-    context.visibility = this.quality.heroStarsEnabled ? state.heroStarVisibility : 0;
-    this.heroStars.update(context);
-    context.visibility = this.quality.galaxiesEnabled ? state.galaxyVisibility : 0;
-    this.galaxies.update(context);
-    context.visibility = this.quality.dustEnabled ? state.dustVisibility : 0;
-    this.dust.update(context);
-    context.visibility = this.quality.zodiacalLightEnabled ? state.zodiacalGlow : 0;
-    this.zodiacalLight.update(context);
+    context.visibility = state.zodiacalGlow;
+    this.zodiacalLight?.update(context);
     return state;
   }
 
@@ -212,16 +145,6 @@ export class SpaceEnvironment {
     this.qualityName = presetName;
     this.quality = preset;
 
-    this.backgroundStars?.setCount?.(preset.backgroundStars);
-    this.parallaxStars?.setCount?.(preset.parallaxStars);
-    this.milkyWay?.setCount?.(preset.galacticStars);
-    this.heroStars?.setCount?.(preset.heroStars);
-    this.galaxies?.setCount?.(preset.galaxies);
-    this.dust?.setCount?.(preset.dust);
-
-    if (this.heroStars) this.heroStars.object.visible = preset.heroStarsEnabled;
-    if (this.galaxies) this.galaxies.object.visible = preset.galaxiesEnabled;
-    if (this.dust) this.dust.object.visible = preset.dustEnabled;
     if (this.zodiacalLight) this.zodiacalLight.object.visible = preset.zodiacalLightEnabled;
   }
 

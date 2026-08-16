@@ -1396,7 +1396,7 @@ export function updatePlanetVisuals(planet, time, motionScale = 1, camera = null
   }
   if (layers.ringSystem) {
     if (planet.name === "Saturn") {
-      updateSaturnRingSystem(layers.ringSystem, time);
+      updateSaturnRingSystem(layers.ringSystem, time, camera);
     } else if (planet.name === "Uranus") {
       updateUranusRingSystem(layers.ringSystem, time, camera);
     } else if (planet.name === "Neptune") {

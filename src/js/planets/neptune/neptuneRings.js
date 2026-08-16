@@ -1,5 +1,51 @@
 import * as THREE from "three";
 
+// Scratch vectors reused by the per-frame update below. Allocating a fresh
+// Vector3 on every animation frame produced steady garbage-collector pressure,
+// which surfaces as periodic frame-time spikes rather than a lower average FPS.
+const neptuneRingWorldPosition = new THREE.Vector3();
+
+// Ring particle level of detail -- same rule proven on Uranus, where reducing
+// the drawn particle count (rather than shrinking the sprites) recovered the
+// fill-rate cost without changing how the rings read.
+//
+// Applied by traversal rather than through the bands/dustLayers/arcLayers
+// arrays, so it cannot be broken by a layer that happens to be absent.
+const NEPTUNE_RING_LOD = {
+  fullDetailPixels: 380,
+  minimumDetailPixels: 50,
+  minimumFraction: 0.16,
+  hideBelowPixels: 2.4,
+  showAbovePixels: 3.2,
+};
+
+function applyNeptuneRingDetail(system, projectedRadiusPixels) {
+  const wasHidden = system.userData.ringDetailHidden === true;
+  const hidden = wasHidden
+    ? projectedRadiusPixels < NEPTUNE_RING_LOD.showAbovePixels
+    : projectedRadiusPixels < NEPTUNE_RING_LOD.hideBelowPixels;
+  if (hidden !== wasHidden) {
+    system.userData.ringDetailHidden = hidden;
+    system.traverse((object) => { if (object?.isPoints) object.visible = !hidden; });
+  }
+  if (hidden) return;
+
+  const span = NEPTUNE_RING_LOD.fullDetailPixels - NEPTUNE_RING_LOD.minimumDetailPixels;
+  const raw = (projectedRadiusPixels - NEPTUNE_RING_LOD.minimumDetailPixels) / Math.max(span, 1);
+  const fraction = THREE.MathUtils.clamp(raw, NEPTUNE_RING_LOD.minimumFraction, 1);
+
+  system.traverse((object) => {
+    if (!object?.isPoints) return;
+    const geometry = object.geometry;
+    if (!geometry?.attributes?.position) return;
+    const total = geometry.userData.fullDrawCount
+      ?? (geometry.userData.fullDrawCount = geometry.attributes.position.count);
+    if (!total) return;
+    const count = fraction >= 1 ? total : Math.max(1, Math.ceil(total * fraction));
+    if (geometry.drawRange.count !== count) geometry.setDrawRange(0, count);
+  });
+}
+
 const TAU = Math.PI * 2;
 const NEPTUNE_EQUATORIAL_RADIUS_KM = 24_764;
 
@@ -481,10 +527,18 @@ export function updateNeptuneRingSystem(system, time, camera, motionScale = 1) {
 
   let inspection = system.userData.inspection ?? 0;
   if (camera && system.parent) {
-    const worldPosition = new THREE.Vector3();
+    const worldPosition = neptuneRingWorldPosition;
     system.parent.getWorldPosition(worldPosition);
     const planetRadius = Number(system.parent.userData?.visualRadius ?? 1);
-    const normalizedDistance = camera.position.distanceTo(worldPosition) / Math.max(planetRadius, 0.001);
+    const cameraDistance = camera.position.distanceTo(worldPosition);
+    const normalizedDistance = cameraDistance / Math.max(planetRadius, 0.001);
+
+    const focalPixels = (window.innerHeight * 0.5)
+      / Math.tan(THREE.MathUtils.degToRad(camera.fov * 0.5));
+    applyNeptuneRingDetail(
+      system,
+      ((planetRadius * 2.5) / Math.max(cameraDistance, 1e-4)) * focalPixels,
+    );
     const targetInspection = 1 - THREE.MathUtils.smoothstep(normalizedDistance, 6.5, 22.0);
     inspection = THREE.MathUtils.lerp(inspection, targetInspection, 0.08);
     system.userData.inspection = inspection;

@@ -61,10 +61,34 @@ import { JOURNEY_MAP } from './scene/space/spaceEnvironmentConfig.js';
 import { createSun, setSunPerformanceProfile, updateSun } from './stars/sun/sun.js';
 import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
 import { createCelestialDetailsPanel } from './ui/planetDetailsPanel.js';
+import { createPerformanceHud } from './ui/performanceHud.js';
 
 // An async immediately-invoked function lets us await texture loading while
 // keeping all application variables private to this module.
 (async () => {
+  // The universe is assembled synchronously, and until this module yields the
+  // browser cannot paint anything at all -- not even the loader markup that is
+  // already sitting in the document. Measured cold, that left the page visibly
+  // black for ~10.6s while Chrome had long since reported the document complete,
+  // which reads as a broken page and invites a reload.
+  //
+  // Yielding across two animation frames guarantees the browser has actually
+  // committed a paint of the loader before any construction begins. The total
+  // startup time is unchanged; what changes is that the viewer sees the loader
+  // immediately instead of a black screen.
+  // A background tab never fires requestAnimationFrame, so the paint yield must
+  // race against a timer. Without the fallback, opening the experience in a
+  // background tab would postpone construction indefinitely.
+  await new Promise((resolve) => {
+    let settled = false;
+    const proceed = () => {
+      if (settled) return;
+      settled = true;
+      resolve();
+    };
+    requestAnimationFrame(() => requestAnimationFrame(proceed));
+    setTimeout(proceed, 120);
+  });
 
   // Cache frequently used HTML elements once instead of querying every frame.
   const canvas = document.querySelector("#universe");
@@ -1011,6 +1035,18 @@ import { createCelestialDetailsPanel } from './ui/planetDetailsPanel.js';
     powerPreference: "high-performance",
   });
   const creationQuality = "high";
+
+  // Asteroid belt population density, kept separate from creationQuality so the
+  // belt can be thinned without touching planet, moon or sun detail.
+  //
+  //   high   instanceDensity 1.00  debrisDensity 1.00
+  //   medium instanceDensity 0.72  debrisDensity 0.65
+  //   low    instanceDensity 0.44  debrisDensity 0.34
+  //
+  // Note this is an authored look, not a performance fix: hiding the belt's
+  // entire 120,000-point pebble field moved the measured frame rate by 0.2 fps.
+  // What it does buy is a lighter belt and a faster build.
+  const asteroidBeltDensity = "low";
   const CINEMATIC_MAX_PIXEL_RATIO = 2;
   const CINEMATIC_TARGET_FPS = 60;
   const CINEMATIC_FRAME_INTERVAL_MS = 1000 / CINEMATIC_TARGET_FPS;
@@ -1041,6 +1077,14 @@ import { createCelestialDetailsPanel } from './ui/planetDetailsPanel.js';
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.18;
+
+  // Diagnostic only. Stays completely inert until enabled with Shift+P or the
+  // ?perf=1 query parameter, so it costs one boolean test per frame when off.
+  const performanceHud = createPerformanceHud({ renderer, scene });
+
+  // Diagnostic handle used to inspect and toggle scene layers from the console
+  // while tuning. Safe to remove; nothing in the experience reads it.
+  window.__beyondEarth = { scene, camera, renderer };
 
   // Timer replaces deprecated THREE.Clock. It is updated exactly once per
   // accepted cinematic frame, and its visibility integration prevents a large
@@ -1354,11 +1398,13 @@ import { createCelestialDetailsPanel } from './ui/planetDetailsPanel.js';
     : creationQuality === "medium"
       ? 4
       : 2;
+  performance.mark("BE:textures-start");
   const textures = await loadUniverseTextures({
     anisotropy: Math.min(renderer.capabilities.getMaxAnisotropy(), preferredAnisotropy),
   });
 
   // The star module owns the Sun's surface, atmosphere, corona, flares, and light.
+  performance.mark("BE:textures-end");
   const sun = createSun({
     world,
     hoverTargets,
@@ -1368,6 +1414,7 @@ import { createCelestialDetailsPanel } from './ui/planetDetailsPanel.js';
 
   // Every planet is built through one realistic factory. Earth receives its extra
   // cloud, atmosphere, night-light, and Moon layers below as before.
+  performance.mark("BE:sun-end");
   PLANET_CONFIGS.forEach((config) => {
     createPlanet({
       config,
@@ -1427,6 +1474,7 @@ import { createCelestialDetailsPanel } from './ui/planetDetailsPanel.js';
   });
 
   // Earth owns its satellite builder; main.js only keeps references needed for animation.
+  performance.mark("BE:planets-end");
   const { moon, moonPivot, moonOrbit } = createMoonSystem({
     earth,
     textures,
@@ -1438,6 +1486,7 @@ import { createCelestialDetailsPanel } from './ui/planetDetailsPanel.js';
   // unresolved populations now. Resolved high-detail moons are added one at a
   // time after the opening frame, preventing Uranus and Saturn from each
   // producing a visible full-frame pause.
+  performance.mark("BE:moon-end");
   const majorSatelliteSystems = createMajorSatelliteSystems({
     world,
     planets,
@@ -1513,6 +1562,7 @@ import { createCelestialDetailsPanel } from './ui/planetDetailsPanel.js';
   // Space is a distant celestial sphere rather than a nearby cloud of coloured
   // particles. The environment owns steady stars, the tilted Milky Way, cloudy
   // galactic light, and its dark interstellar dust lanes.
+  performance.mark("BE:satellites-end");
   const spaceEnvironment = new SpaceEnvironment({
     scene,
     camera,
@@ -1521,6 +1571,8 @@ import { createCelestialDetailsPanel } from './ui/planetDetailsPanel.js';
     pixelRatio: cinematicPixelRatio,
   });
   await spaceEnvironment.init();
+  performance.mark("BE:spaceEnv-end");
+
 
   function isInformationOverlayOpen() {
     return isAboutExperienceOpen || isPlanetDetailsOpen;
@@ -1555,11 +1607,51 @@ import { createCelestialDetailsPanel } from './ui/planetDetailsPanel.js';
   });
 
   // Asteroid meshes provide nearby shape; dust points cheaply supply density.
-  const asteroidBelt = createAsteroidBelt({
-    world,
-    hoverTargets,
-    quality: creationQuality,
-  });
+  // The asteroid belt is the most expensive object in the experience to build --
+  // 5.5s measured, of which 3.8s is its 60-variant procedural rock geometry pool.
+  // Built in one synchronous pass it froze the page solid, so the loader could
+  // not even animate.
+  //
+  // It is still built before the universe is revealed, because the belt belongs
+  // in the opening composition, but it now yields between sculpts so the loader
+  // stays alive throughout. Consumers still treat a null belt as "not built yet".
+  let asteroidBelt = null;
+  let asteroidBeltBuildStarted = false;
+
+
+  function yieldToBrowser() {
+    // A hidden tab paints nothing, so there is no loader animation to protect --
+    // and browsers clamp both requestAnimationFrame (suspended) and setTimeout
+    // (~1s minimum) there. Yielding 60 times under that clamp stretched a 4s
+    // build into over a minute, so hidden tabs build straight through instead.
+    if (document.hidden) return Promise.resolve();
+
+    return new Promise((resolve) => {
+      let settled = false;
+      const proceed = () => {
+        if (settled) return;
+        settled = true;
+        resolve();
+      };
+      requestAnimationFrame(proceed);
+      // Safety net for the moment a tab is backgrounded mid-build.
+      setTimeout(proceed, 60);
+    });
+  }
+
+  async function buildAsteroidBeltProgressively() {
+    if (asteroidBeltBuildStarted) return;
+    asteroidBeltBuildStarted = true;
+    performance.mark("BE:belt-start");
+    asteroidBelt = await createAsteroidBelt({
+      world,
+      hoverTargets,
+      quality: asteroidBeltDensity,
+      yieldToBrowser,
+    });
+    performance.mark("BE:belt-end");
+    setAsteroidBeltQuality(asteroidBelt, asteroidBeltDensity, cinematicPixelRatio);
+  }
   const earthDistanceTracker = createEarthDistanceTracker({ earth });
   let previousDistanceProgress = smoothProgress;
 
@@ -1845,7 +1937,7 @@ import { createCelestialDetailsPanel } from './ui/planetDetailsPanel.js';
   // cadence changes are allowed after initialisation.
   spaceEnvironment.setQuality("high");
   spaceEnvironment.resize(innerWidth, innerHeight, cinematicPixelRatio);
-  setAsteroidBeltQuality(asteroidBelt, "high", cinematicPixelRatio);
+  setAsteroidBeltQuality(asteroidBelt, asteroidBeltDensity, cinematicPixelRatio);
   setSunPerformanceProfile(sun, "high", {
     projectedRadiusPixels: currentSunProjectedRadiusPixels,
     focused: false,
@@ -2340,7 +2432,7 @@ import { createCelestialDetailsPanel } from './ui/planetDetailsPanel.js';
     spaceEnvironment.setQuality("high");
     spaceEnvironment.resize(innerWidth, innerHeight, pixelRatio);
     spaceEnvironment.setJourneyProgress(1);
-    setAsteroidBeltQuality(asteroidBelt, "high", pixelRatio);
+    setAsteroidBeltQuality(asteroidBelt, asteroidBeltDensity, pixelRatio);
 
     renderer.setRenderTarget(null);
     renderer.renderLists?.dispose?.();
@@ -3277,9 +3369,33 @@ import { createCelestialDetailsPanel } from './ui/planetDetailsPanel.js';
     satelliteSystemOverview.setAttribute("aria-hidden", "false");
   }
 
+  // Satellite systems hydrate progressively, but between hydrations their
+  // contents are completely stable. Rebuilding, flattening and re-sorting these
+  // arrays on every animation frame allocated hundreds of short-lived objects
+  // per frame for Saturn and Jupiter, which showed up as GC pauses rather than
+  // as a lower average frame rate. The derived arrays are now cached per system
+  // and rebuilt only when the population actually changes.
+  const EMPTY_SATELLITE_LIST = Object.freeze([]);
+  const satelliteAtlasBodiesCache = new WeakMap();
+  const satelliteSystemEntriesCache = new WeakMap();
+  let satelliteAtlasFilteredButtonCount = -1;
+
+  function getSatelliteSystemSignature(system) {
+    const denseFields = system.denseFields ?? [];
+    let signature = `${system.moons?.length ?? 0}`;
+    for (let index = 0; index < denseFields.length; index += 1) {
+      signature += `:${denseFields[index].records?.length ?? 0}`;
+    }
+    return signature;
+  }
+
   /** Returns every currently hydrated focus target in stable catalogue order. */
   function getSatelliteAtlasBodies(system) {
-    if (!system) return [];
+    if (!system) return EMPTY_SATELLITE_LIST;
+    const signature = getSatelliteSystemSignature(system);
+    const cached = satelliteAtlasBodiesCache.get(system);
+    if (cached && cached.signature === signature) return cached.value;
+
     const bodies = [
       ...system.moons.map(({ moon: body }) => body),
       ...(system.denseFields ?? []).flatMap((field) => (
@@ -3290,7 +3406,28 @@ import { createCelestialDetailsPanel } from './ui/planetDetailsPanel.js';
       Number(a.userData?.catalogueOrdinal ?? Number.MAX_SAFE_INTEGER)
       - Number(b.userData?.catalogueOrdinal ?? Number.MAX_SAFE_INTEGER)
     ));
+    satelliteAtlasBodiesCache.set(system, { signature, value: bodies });
     return bodies;
+  }
+
+  /**
+   * Label candidates need the same population as the atlas but keep each moon
+   * paired with its catalogue profile, so it is cached under the same rule.
+   */
+  function getSatelliteSystemEntries(system) {
+    if (!system) return EMPTY_SATELLITE_LIST;
+    const signature = getSatelliteSystemSignature(system);
+    const cached = satelliteSystemEntriesCache.get(system);
+    if (cached && cached.signature === signature) return cached.value;
+
+    const entries = [
+      ...system.moons,
+      ...(system.denseFields ?? []).flatMap((field) => (
+        field.records.map(({ target, profile }) => ({ moon: target, profile }))
+      )),
+    ];
+    satelliteSystemEntriesCache.set(system, { signature, value: entries });
+    return entries;
   }
 
   /**
@@ -3312,7 +3449,9 @@ import { createCelestialDetailsPanel } from './ui/planetDetailsPanel.js';
     if (!atlasOwnsView) {
       if (satelliteAtlasDirectoryHoverBody) clearSatelliteAtlasDirectoryHover();
       satelliteAtlasDirectory.classList.remove("is-visible");
-      satelliteAtlasDirectory.setAttribute("aria-hidden", "true");
+      if (satelliteAtlasDirectory.getAttribute("aria-hidden") !== "true") {
+        satelliteAtlasDirectory.setAttribute("aria-hidden", "true");
+      }
       return;
     }
 
@@ -3328,6 +3467,7 @@ import { createCelestialDetailsPanel } from './ui/planetDetailsPanel.js';
       satelliteAtlasBodiesByName.clear();
       satelliteAtlasButtonsByName.clear();
       satelliteAtlasDirectoryList?.replaceChildren();
+      satelliteAtlasFilteredButtonCount = -1;
       if (satelliteAtlasDirectorySearch) satelliteAtlasDirectorySearch.value = "";
       if (satelliteAtlasDirectoryList) satelliteAtlasDirectoryList.scrollLeft = 0;
     }
@@ -3381,18 +3521,36 @@ import { createCelestialDetailsPanel } from './ui/planetDetailsPanel.js';
       );
       satelliteAtlasDirectoryList?.insertBefore(button, nextButton ?? null);
     });
-    filterSatelliteAtlasDirectory();
+    // Re-filtering walks every catalogue button and writes .hidden on each,
+    // invalidating layout for the whole directory. Saturn alone has hundreds of
+    // buttons, so running it unconditionally cost a full directory relayout on
+    // every animation frame. It only has to run when the button set changed --
+    // the search field already calls it directly on input.
+    if (satelliteAtlasFilteredButtonCount !== satelliteAtlasButtonsByName.size) {
+      satelliteAtlasFilteredButtonCount = satelliteAtlasButtonsByName.size;
+      filterSatelliteAtlasDirectory();
+    }
 
-    satelliteAtlasDirectoryTitle.textContent =
+    const atlasTitleText =
       `${system.parentName} · ${catalogueTotal.toLocaleString("en-US")} satellites`;
+    if (satelliteAtlasDirectoryTitle.textContent !== atlasTitleText) {
+      satelliteAtlasDirectoryTitle.textContent = atlasTitleText;
+    }
     // Direct moon surfaces continue hydrating quietly between frames. Showing
     // that internal ready count made the footer appear to increase whenever
     // the user happened to hover or scroll during loading. The atlas identity
     // should stay stable, so always present the complete catalogue total.
-    satelliteAtlasDirectoryStatus.textContent =
+    const atlasStatusText =
       `${catalogueTotal.toLocaleString("en-US")} selectable orbital bodies`;
-    satelliteAtlasDirectory.classList.add("is-visible");
-    satelliteAtlasDirectory.setAttribute("aria-hidden", "false");
+    if (satelliteAtlasDirectoryStatus.textContent !== atlasStatusText) {
+      satelliteAtlasDirectoryStatus.textContent = atlasStatusText;
+    }
+    if (!satelliteAtlasDirectory.classList.contains("is-visible")) {
+      satelliteAtlasDirectory.classList.add("is-visible");
+    }
+    if (satelliteAtlasDirectory.getAttribute("aria-hidden") !== "false") {
+      satelliteAtlasDirectory.setAttribute("aria-hidden", "false");
+    }
   }
 
   function getSatelliteNameLabel(body) {
@@ -3460,24 +3618,63 @@ import { createCelestialDetailsPanel } from './ui/planetDetailsPanel.js';
     ".about-experience",
   ].join(",");
 
-  function addVisibleUiOcclusionRects(occupied) {
-    document.querySelectorAll(satelliteLabelUiOcclusionSelector).forEach((element) => {
-      if (!(element instanceof HTMLElement) || element.hidden) return;
+  // Reading getBoundingClientRect and getComputedStyle forces the browser to
+  // flush style and layout synchronously. Doing that on every animation frame,
+  // directly after the HUD has written new inline positions in the same frame,
+  // produced a layout-thrash stall in the middle of the render loop.
+  //
+  // These rectangles only decide *whether* a moon label may be placed, never
+  // where it is drawn, so resampling them at ~12 Hz is visually identical while
+  // removing the per-frame synchronous layout.
+  const UI_OCCLUSION_SAMPLE_INTERVAL_MS = 84;
+  const UI_OCCLUSION_ELEMENT_TTL_MS = 1000;
+  let uiOcclusionElements = [];
+  let uiOcclusionElementsSampledAt = -Infinity;
+  const uiOcclusionRects = [];
+  let uiOcclusionRectsSampledAt = -Infinity;
+
+  function refreshUiOcclusionRects(now) {
+    // Several cinematic panels are created after first paint, so the element
+    // set is rediscovered periodically rather than once.
+    if (now - uiOcclusionElementsSampledAt > UI_OCCLUSION_ELEMENT_TTL_MS) {
+      uiOcclusionElementsSampledAt = now;
+      uiOcclusionElements = Array.prototype.filter.call(
+        document.querySelectorAll(satelliteLabelUiOcclusionSelector),
+        (element) => element instanceof HTMLElement,
+      );
+    }
+
+    uiOcclusionRectsSampledAt = now;
+    uiOcclusionRects.length = 0;
+    for (let index = 0; index < uiOcclusionElements.length; index += 1) {
+      const element = uiOcclusionElements[index];
+      if (element.hidden || !element.isConnected) continue;
+      // A display:none element already reports a zero-sized rect, so the cheap
+      // geometry test removes most candidates before any computed-style read.
+      const rect = element.getBoundingClientRect();
+      if (rect.width < 2 || rect.height < 2) continue;
       const style = getComputedStyle(element);
       if (
-        style.display === "none"
-        || style.visibility === "hidden"
+        style.visibility === "hidden"
         || Number(style.opacity) < 0.08
-      ) return;
-      const rect = element.getBoundingClientRect();
-      if (rect.width < 2 || rect.height < 2) return;
-      occupied.push({
+      ) continue;
+      uiOcclusionRects.push({
         left: rect.left,
         top: rect.top,
         right: rect.right,
         bottom: rect.bottom,
       });
-    });
+    }
+  }
+
+  function addVisibleUiOcclusionRects(occupied) {
+    const now = performance.now();
+    if (now - uiOcclusionRectsSampledAt > UI_OCCLUSION_SAMPLE_INTERVAL_MS) {
+      refreshUiOcclusionRects(now);
+    }
+    for (let index = 0; index < uiOcclusionRects.length; index += 1) {
+      occupied.push(uiOcclusionRects[index]);
+    }
   }
 
   function updateSatelliteNameLabels() {
@@ -3500,14 +3697,7 @@ import { createCelestialDetailsPanel } from './ui/planetDetailsPanel.js';
       return;
     }
     const selectedSystem = majorSatelliteSystems.find((system) => system.parentName === selectedName);
-    const selectedSystemEntries = selectedSystem
-      ? [
-        ...selectedSystem.moons,
-        ...(selectedSystem.denseFields ?? []).flatMap((field) => (
-          field.records.map(({ target, profile }) => ({ moon: target, profile }))
-        )),
-      ]
-      : [];
+    const selectedSystemEntries = getSatelliteSystemEntries(selectedSystem);
     const entries = selectedName === "Earth"
       ? [{
         moon,
@@ -3820,7 +4010,7 @@ import { createCelestialDetailsPanel } from './ui/planetDetailsPanel.js';
 
     const encounterIntensity = getAsteroidEncounterIntensity();
     const nearbyInstance = findNearestAsteroidInstanceAtPointer({
-      meshes: asteroidBelt.instancedBoulders,
+      meshes: asteroidBelt?.instancedBoulders ?? [],
       pointer,
       camera,
       viewportWidth: innerWidth,
@@ -4015,7 +4205,7 @@ import { createCelestialDetailsPanel } from './ui/planetDetailsPanel.js';
     // Instanced belt rocks use a strict visibility-aware fallback. The helper
     // rejects sub-pixel objects and uses a tight hit radius based on rendered size.
     return findNearestAsteroidInstanceAtPointer({
-      meshes: asteroidBelt.instancedBoulders,
+      meshes: asteroidBelt?.instancedBoulders ?? [],
       pointer,
       camera,
       viewportWidth: innerWidth,
@@ -5223,7 +5413,7 @@ import { createCelestialDetailsPanel } from './ui/planetDetailsPanel.js';
     camera.updateProjectionMatrix();
     const pixelRatio = resizeCinematicRenderer();
     spaceEnvironment.resize(innerWidth, innerHeight, pixelRatio);
-    setAsteroidBeltQuality(asteroidBelt, "high", pixelRatio);
+    setAsteroidBeltQuality(asteroidBelt, asteroidBeltDensity, pixelRatio);
     distanceCinematicPanel?.position();
   });
 
@@ -5565,7 +5755,7 @@ import { createCelestialDetailsPanel } from './ui/planetDetailsPanel.js';
     // update removes stepping/flicker while keeping the main belt smooth.
     updateJupiterTrojanFrame(asteroidBelt, jupiter);
 
-    updateAsteroidBelt(
+    if (asteroidBelt) updateAsteroidBelt(
       asteroidBelt,
       frameMotionScale,
       camera,
@@ -5575,8 +5765,8 @@ import { createCelestialDetailsPanel } from './ui/planetDetailsPanel.js';
         hoveredBody: hoveredCelestialBody,
       },
     );
-    // One journey value coordinates exposure, stellar layers, galaxies, local
-    // dust, and zodiacal light for scroll, reverse travel, and body focus alike.
+    // One journey value coordinates renderer exposure and the zodiacal glow
+    // for scroll, reverse travel, and body focus alike.
     spaceEnvironment.setJourneyProgress(getEnvironmentJourneyProgress());
     spaceEnvironment.setPaused(!isPageVisible || isInformationOverlayOpen());
     spaceEnvironment.update(deltaTime * motionScale, simulationTime);
@@ -5594,12 +5784,14 @@ import { createCelestialDetailsPanel } from './ui/planetDetailsPanel.js';
     updateSatelliteNameLabels();
     updateInspectionInterface();
     renderer.render(scene, camera);
+    performanceHud.update(frameTime);
 
     // Loader visibility is tied to a frame that was actually submitted, not to
     // elapsed wall-clock time. This prevents the HTML HUD from appearing over
     // a canvas that is still compiling its first WebGL scene.
     if (!hasRenderedOpeningFrame) {
       hasRenderedOpeningFrame = true;
+      performance.mark("BE:first-rendered-frame");
       requestAnimationFrame(revealExperienceAfterOpeningFrame);
     }
 
@@ -5638,7 +5830,128 @@ import { createCelestialDetailsPanel } from './ui/planetDetailsPanel.js';
     }, 420);
   }
 
+  // The belt is part of the opening composition, so the universe must never be
+  // revealed without it. It is still built co-operatively: yielding between rock
+  // sculpts lets the loader keep animating instead of freezing for seconds,
+  // which is what happened when all 60 variants were sculpted in one pass.
+  await buildAsteroidBeltProgressively();
+
+  /**
+   * Diagnostic layer isolation, driven entirely by the URL. Nothing is deleted
+   * or permanently disabled; each name below simply has `visible = false` set
+   * once, so a plain reload restores the full scene.
+   *
+   *   ?hide=bg       distant shells: stellar sphere, Milky Way, parallax and
+   *                  sparkle stars, galaxy field  (radius 1130 - 2174)
+   *   ?hide=dust     interplanetary haze bound to the solar system (radius 565)
+   *   ?hide=pebbles  the belt's 120,000-point unresolved pebble field
+   *
+   * Combine with commas, e.g. ?hide=bg,pebbles leaves only the dust visible
+   * against pure black, which identifies it beyond doubt.
+   */
+  const DIAGNOSTIC_GROUPS = {
+    belt: ["Asteroid populations"],
+    // Subset of `belt`, so it is deliberately excluded from the additive mode
+    // below -- hiding it must be asked for explicitly with ?hide=pebbles.
+    pebbles: ["Virtual million-object pebble population"],
+    saturnRings: ["Saturn independently orbiting ice grains"],
+  };
+
+  // Only these participate in the additive ?only= mode.
+  const ADDITIVE_DIAGNOSTIC_GROUPS = ["belt"];
+
+  /**
+   * Detaches a group from the scene graph.
+   *
+   * Setting `visible = false` is not enough: the space environment re-asserts
+   * visibility on its own layers every frame from its journey-progress state,
+   * so the flag is overwritten before the next render. Removing the object from
+   * its parent takes it out of rendering regardless of what that controller
+   * does afterwards, and a plain reload restores everything.
+   */
+  function detachDiagnosticGroup(group) {
+    const names = new Set(DIAGNOSTIC_GROUPS[group] ?? []);
+    if (!names.size) return [];
+
+    // Collect first; mutating the graph during traverse() would skip siblings.
+    const targets = [];
+    scene.traverse((object) => {
+      if (object.name && names.has(object.name)) targets.push(object);
+    });
+    targets.forEach((object) => object.parent?.remove(object));
+    return targets.map((object) => object.name);
+  }
+
+  function applyDiagnosticLayerHiding() {
+    const params = new URLSearchParams(window.location.search);
+    const parse = (key) => (params.get(key) ?? "")
+      .split(",")
+      .map((entry) => entry.trim().toLowerCase())
+      .filter(Boolean);
+
+    const only = parse("only");
+    const hide = parse("hide");
+    if (!only.length && !hide.length) return;
+
+    const removed = [];
+    // `only` is additive: empty sky, then switch groups back on one at a time.
+    if (only.length) {
+      ADDITIVE_DIAGNOSTIC_GROUPS
+        .filter((group) => !only.includes(group))
+        .forEach((group) => removed.push(...detachDiagnosticGroup(group)));
+    }
+    // `hide` is subtractive and can target any group, including subsets.
+    hide.forEach((group) => removed.push(...detachDiagnosticGroup(group)));
+
+    scene.background = new THREE.Color(0x000000);
+    console.log(
+      "[BeyondEarth] diagnostic"
+      + (only.length ? ` only=${only.join(",")}` : "")
+      + (hide.length ? ` hide=${hide.join(",")}` : "")
+      + ` | detached: ${removed.join(", ") || "nothing"}`,
+    );
+  }
+
+  applyDiagnosticLayerHiding();
+
+  // Two sources of startup jank, both paid here behind the loader instead of on
+  // the first frame the viewer actually sees.
+  //
+  // 1. Measured: the first render cost 418ms against 7.5ms for the second -- a
+  //    410ms freeze while every shader compiled and every geometry and texture
+  //    made its first trip to the GPU. compile() does that work up front.
+  // 2. Every rock is built holding its full-detail geometry, so the belt
+  //    otherwise spends its first ~34 frames swapping them down and visibly
+  //    popping. Settle them all in one unbudgeted pass instead.
+  performance.mark("BE:precompile-start");
+  scene.updateMatrixWorld(true);
+  camera.updateMatrixWorld(true);
+  // compile() builds every shader program up front.
+  renderer.compile(scene, camera);
+  // ...but it does not upload textures, which was the larger half of the
+  // first-frame stall. initTexture() pushes each one to the GPU now.
+  const uploaded = new Set();
+  scene.traverse((object) => {
+    const materials = Array.isArray(object.material)
+      ? object.material
+      : (object.material ? [object.material] : []);
+    for (const material of materials) {
+      if (!material) continue;
+      const push = (value) => {
+        if (!value?.isTexture || uploaded.has(value) || !value.image) return;
+        uploaded.add(value);
+        try { renderer.initTexture(value); } catch (error) { /* non-fatal */ }
+      };
+      for (const value of Object.values(material)) push(value);
+      if (material.uniforms) {
+        for (const uniform of Object.values(material.uniforms)) push(uniform?.value);
+      }
+    }
+  });
+  performance.mark("BE:precompile-end");
+
   // Seed state and begin the deterministic requestAnimationFrame render loop.
+  performance.mark("BE:pre-animate");
   updateScrollProgress();
   timer.reset();
   requestAnimationFrame(animate);

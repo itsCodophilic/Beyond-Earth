@@ -1,8 +1,10 @@
 /**
  * Central artistic and performance settings for the space environment.
  *
- * Counts favour tiny stable stars over large transparent clouds. The Milky Way
- * is a distant, restrained band and must never become a bright enclosing fog.
+ * The solar system is presented against empty space. The former deep-sky
+ * backdrop -- star shells, the Milky Way band, the distant galaxy field and the
+ * interplanetary haze -- has been removed along with its modules; only the
+ * zodiacal light remains, together with the journey-driven exposure curve.
  */
 export const JOURNEY_MAP = Object.freeze({
   sun: 0,
@@ -22,53 +24,14 @@ export const JOURNEY_MAP = Object.freeze({
 });
 
 export const QUALITY_PRESETS = Object.freeze({
-  high: {
-    backgroundStars: 30000,
-    galacticStars: 26000,
-    parallaxStars: 1300,
-    heroStars: 72,
-    galaxies: 96,
-    dust: 1180,
-    heroStarsEnabled: true,
-    galaxiesEnabled: true,
-    zodiacalLightEnabled: true,
-    dustEnabled: true,
-  },
-  medium: {
-    backgroundStars: 21000,
-    galacticStars: 18500,
-    parallaxStars: 900,
-    heroStars: 52,
-    galaxies: 72,
-    dust: 760,
-    heroStarsEnabled: true,
-    galaxiesEnabled: true,
-    zodiacalLightEnabled: true,
-    dustEnabled: true,
-  },
-  low: {
-    backgroundStars: 12000,
-    galacticStars: 10000,
-    parallaxStars: 480,
-    heroStars: 28,
-    galaxies: 40,
-    dust: 280,
-    heroStarsEnabled: true,
-    galaxiesEnabled: true,
-    zodiacalLightEnabled: false,
-    dustEnabled: false,
-  },
+  high: { zodiacalLightEnabled: true },
+  medium: { zodiacalLightEnabled: true },
+  low: { zodiacalLightEnabled: false },
 });
 
 export const SPACE_ENVIRONMENT_CONFIG = Object.freeze({
   radii: {
-    dustMaximum: 460,
-    parallaxMinimum: 680,
-    parallaxMaximum: 1120,
-    galaxyShell: 1880,
-    heroStarShell: 1940,
-    backgroundStarShell: 2060,
-    milkyWayShell: 2180,
+    zodiacalLightShell: 1260,
   },
   exposure: {
     innerSolar: 1.00,
@@ -79,7 +42,4 @@ export const SPACE_ENVIRONMENT_CONFIG = Object.freeze({
   damping: {
     environment: 3.5,
   },
-  // A diagonal galactic plane reads naturally during the long zoom-out while
-  // avoiding the previous horizontal line wrapped around the entire scene.
-  milkyWayRotation: [0.25, -0.10, -0.32],
 });

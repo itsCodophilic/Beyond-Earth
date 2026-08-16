@@ -1,5 +1,100 @@
 import * as THREE from "three";
 
+// Scratch vectors reused by the per-frame update below. Allocating a fresh
+// Vector3 on every animation frame produced steady garbage-collector pressure,
+// which surfaces as periodic frame-time spikes rather than a lower average FPS.
+const uranusRingWorldPosition = new THREE.Vector3();
+
+// Ring particle level of detail.
+//
+// Measured: hiding every planetary ring particle system doubled the frame rate
+// in the outer system (29.9 -> 59.9 fps) while the triangle count stayed
+// identical, so the cost is per-pixel, not per-vertex. Each particle is a
+// blended sprite up to 8.4 * pixelRatio across, and uDistanceVisibility
+// deliberately grows the sprites with distance to keep faint rings legible --
+// which is exactly when the most of them are on screen at once.
+//
+// Rather than shrink the sprites (that is what makes the rings readable), draw
+// proportionally fewer of them while the ring is small on screen. The ring keeps
+// its shape, brightness profile and colour; it simply becomes sparser at the
+// distance where individual grains were never resolvable anyway.
+const RING_LOD = {
+  // Projected ring radius, in pixels, at which the full population is drawn.
+  fullDetailPixels: 420,
+  // ...and at which the sparsest population is used.
+  minimumDetailPixels: 55,
+  minimumFraction: 0.14,
+  // Below this the entire ring system is smaller than a couple of pixels and is
+  // not drawn at all. Measured at the outer-system viewpoint: Uranus was 0.4px
+  // across, its rings 0.8px, and 8,127 sprites were still being rendered --
+  // each inflated to as much as 8.4 * pixelRatio by uDistanceVisibility, which
+  // grows with distance by design. The result was millions of blended pixels
+  // for an object under one pixel wide. Hysteresis avoids flicker at the edge.
+  hideBelowPixels: 2.4,
+  showAbovePixels: 3.2,
+  // Decorative layers are pure overdraw at small sizes.
+  haloBelowPixels: 110,
+  glowBelowPixels: 150,
+};
+
+function setRingFieldDrawFraction(points, fraction) {
+  if (!points?.geometry) return;
+  const geometry = points.geometry;
+  const total = geometry.userData.fullDrawCount
+    ?? (geometry.userData.fullDrawCount = geometry.attributes.position?.count ?? 0);
+  if (!total) return;
+  const count = fraction >= 1
+    ? total
+    : Math.max(1, Math.ceil(total * fraction));
+  if (geometry.drawRange.count !== count) geometry.setDrawRange(0, count);
+}
+
+/**
+ * Scales every ring field by the ring's apparent size, and retires the purely
+ * decorative halo/glow layers once they are too small to read.
+ */
+function applyUranusRingDetail(system, projectedRadiusPixels) {
+  // Whole-system cull for sub-pixel rings.
+  const wasHidden = system.userData.ringDetailHidden === true;
+  const hidden = wasHidden
+    ? projectedRadiusPixels < RING_LOD.showAbovePixels
+    : projectedRadiusPixels < RING_LOD.hideBelowPixels;
+  if (hidden !== wasHidden) {
+    system.userData.ringDetailHidden = hidden;
+    ["particleFields", "chunkFields", "haloFields", "glowFields"].forEach((key) => {
+      system.userData[key]?.forEach((p) => { if (p) p.visible = !hidden; });
+    });
+  }
+  if (hidden) return;
+
+  const span = RING_LOD.fullDetailPixels - RING_LOD.minimumDetailPixels;
+  const raw = (projectedRadiusPixels - RING_LOD.minimumDetailPixels) / Math.max(span, 1);
+  const fraction = THREE.MathUtils.clamp(raw, RING_LOD.minimumFraction, 1);
+
+  // These arrays are sparse: not every ring defines a halo, chunk or glow
+  // layer, so entries can be null. The original updateField() guarded against
+  // that and this must too -- an exception here happens inside the render loop
+  // and kills the whole frame.
+  system.userData.particleFields?.forEach((p) => setRingFieldDrawFraction(p, fraction));
+  system.userData.chunkFields?.forEach((p) => setRingFieldDrawFraction(p, fraction));
+
+  const haloVisible = projectedRadiusPixels >= RING_LOD.haloBelowPixels;
+  system.userData.haloFields?.forEach((p) => {
+    if (!p) return;
+    if (p.visible !== haloVisible) p.visible = haloVisible;
+    if (haloVisible) setRingFieldDrawFraction(p, fraction);
+  });
+
+  const glowAllowed = projectedRadiusPixels >= RING_LOD.glowBelowPixels;
+  system.userData.glowFields?.forEach((p) => {
+    if (!p) return;
+    // The existing hover logic owns turning glow on; this only forces it off
+    // when the ring is too small for a glow to be perceptible.
+    if (!glowAllowed && p.visible) p.visible = false;
+    if (glowAllowed) setRingFieldDrawFraction(p, fraction);
+  });
+}
+
 const URANUS_EQUATORIAL_RADIUS_KM = 25_559;
 const TAU = Math.PI * 2;
 const PIXEL_RATIO = Math.min(
@@ -575,10 +670,20 @@ export function updateUranusRingSystem(system, time, camera = null) {
 
   let distanceVisibility = 1;
   if (camera) {
-    const worldPosition = new THREE.Vector3();
+    const worldPosition = uranusRingWorldPosition;
     system.getWorldPosition(worldPosition);
     const distance = camera.position.distanceTo(worldPosition);
     distanceVisibility = THREE.MathUtils.clamp(0.98 + distance / 46.0, 1.0, 2.25);
+
+    // Apparent ring radius in pixels. The ring system spans roughly twice the
+    // planet's visual radius, which is accurate enough to drive detail.
+    const focalPixels = (window.innerHeight * 0.5)
+      / Math.tan(THREE.MathUtils.degToRad(camera.fov * 0.5));
+    const ringRadius = Number(system.parent?.userData?.visualRadius ?? 1) * 2;
+    applyUranusRingDetail(
+      system,
+      (ringRadius / Math.max(distance, 1e-4)) * focalPixels,
+    );
   }
 
   const hoverIndex = system.userData.hover;

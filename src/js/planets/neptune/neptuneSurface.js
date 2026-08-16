@@ -15,6 +15,11 @@
  */
 import * as THREE from "three";
 
+// Scratch vectors reused by the per-frame update below. Allocating a fresh
+// Vector3 on every animation frame produced steady garbage-collector pressure,
+// which surfaces as periodic frame-time spikes rather than a lower average FPS.
+const neptuneSurfaceWorldPosition = new THREE.Vector3();
+
 const PUBLIC_ASSET_ROOT = `${import.meta.env.BASE_URL}assets`;
 
 const NEPTUNE_OBLATENESS = 0.983;
@@ -163,7 +168,7 @@ export function updateNeptuneAtmosphereLayers(
 ) {
   if (!camera) return;
 
-  const worldPosition = new THREE.Vector3();
+  const worldPosition = neptuneSurfaceWorldPosition;
   planet.getWorldPosition(worldPosition);
 
   const radius = planet.userData.visualRadius || 1;

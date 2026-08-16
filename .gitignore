@@ -20,3 +20,7 @@ old/
 
 # zip
 *.zip
+
+# Local safety copies created during the performance pass
+public_ORIGINAL_BACKUP/
+_to_delete/

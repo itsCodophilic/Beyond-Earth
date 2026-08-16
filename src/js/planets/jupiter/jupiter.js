@@ -15,6 +15,12 @@
  * being a scientifically exact scale model.
  */
 import * as THREE from "three";
+
+// Scratch vectors reused by the per-frame update below. Allocating a fresh
+// Vector3 on every animation frame produced steady garbage-collector pressure,
+// which surfaces as periodic frame-time spikes rather than a lower average FPS.
+const jupiterWorldPosition = new THREE.Vector3();
+const jupiterSunDirection = new THREE.Vector3();
 import { PLANET_SCALE_PROFILES, getPlanetSizeComparison } from "../../config/celestialScale.js";
 import { createPlanetAuroraLayer, updatePlanetAuroraLayer } from "../../graphics/planetAurora.js";
 
@@ -1381,16 +1387,14 @@ export function updateJupiter({
     sunWorldPosition &&
     surface.material.uniforms?.uLightDirection
   ) {
-    const jupiterPosition =
-      surface.getWorldPosition(
-        new THREE.Vector3()
-      );
+    const jupiterPosition = surface.getWorldPosition(jupiterWorldPosition);
 
-    const directionTowardSun =
-      sunWorldPosition
-        .clone()
-        .sub(jupiterPosition)
-        .normalize();
+    // copy() into a reused vector instead of clone(); the result is consumed
+    // immediately below and never retained past this frame.
+    const directionTowardSun = jupiterSunDirection
+      .copy(sunWorldPosition)
+      .sub(jupiterPosition)
+      .normalize();
 
     surface.material.uniforms.uLightDirection.value.copy(
       directionTowardSun
