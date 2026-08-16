@@ -1,0 +1,647 @@
+/*
+ * Opening sequence: the initialisation manifest, then the singularity gate.
+ *
+ * Deliberately DOM-only. The 3D universe is being constructed on the main
+ * thread while this is on screen, so nothing here may claim WebGL or run
+ * JavaScript per frame -- every animation below is CSS, which the compositor
+ * keeps running even while the main thread is busy building the scene.
+ *
+ * Palette is grounded in real astrophotography rather than the usual blue: the
+ * galactic core reads brownish-red and yellow, dust lanes reddish-brown, and
+ * fewer than 1% of stars are actually blue.
+ */
+
+.intro {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: grid;
+  place-items: center;
+  background:
+    radial-gradient(ellipse 120% 80% at 50% 50%, rgba(20, 14, 10, 0.55), transparent 70%),
+    #000104;
+  transition: opacity 1100ms ease, visibility 1100ms ease;
+}
+
+.intro.is-hidden {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+/* Letterbox. Present from the first frame so the whole intro reads as film. */
+.intro::before,
+.intro::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 8vh;
+  background: #000;
+  z-index: 2;
+  animation: intro-letterbox 1400ms cubic-bezier(0.16, 0.84, 0.3, 1) both;
+}
+
+.intro::before { top: 0; }
+.intro::after { bottom: 0; }
+
+@keyframes intro-letterbox {
+  from { height: 0; }
+  to   { height: 8vh; }
+}
+
+/* ---------------------------------------------------------------- act one */
+
+.intro__stage {
+  width: min(640px, 76vw);
+  /* Keeps the header fixed while the log grows beneath it. */
+  display: flex;
+  flex-direction: column;
+  max-height: 74vh;
+}
+
+/*
+ * An explicit `display` beats the `hidden` attribute's UA `display: none`, so
+ * without this the title and manifest stayed on screen through act two --
+ * invisible only because their opacity had been faded. Act two must be a
+ * genuinely empty screen, not an empty-looking one.
+ */
+.intro__stage[hidden] { display: none; }
+
+.intro__header {
+  margin-bottom: 2.1rem;
+  transition: opacity 700ms ease;
+  animation: intro-header-in 1500ms cubic-bezier(0.16, 0.84, 0.3, 1) both;
+}
+
+.intro__header.is-retiring { opacity: 0; }
+
+.intro__title {
+  margin: 0;
+  font-size: 1.42rem;
+  font-weight: 300;
+  letter-spacing: 0.46em;
+  text-transform: uppercase;
+  color: rgba(255, 241, 224, 0.93);
+}
+
+.intro__subtitle {
+  margin: 0.5rem 0 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.66rem;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: rgba(212, 176, 140, 0.5);
+}
+
+/* A hairline under the header, drawn outward, like an instrument waking up. */
+.intro__header::after {
+  content: "";
+  display: block;
+  margin-top: 1.35rem;
+  height: 1px;
+  background: linear-gradient(90deg,
+    rgba(255, 196, 130, 0.5), rgba(255, 196, 130, 0.06) 62%, transparent);
+  animation: intro-rule 1800ms cubic-bezier(0.16, 0.84, 0.3, 1) 400ms both;
+  transform-origin: left;
+}
+
+@keyframes intro-header-in {
+  from { opacity: 0; transform: translateY(-14px); filter: blur(6px); }
+  to   { opacity: 1; transform: none; filter: blur(0); }
+}
+
+@keyframes intro-rule {
+  from { transform: scaleX(0); }
+  to   { transform: scaleX(1); }
+}
+
+.intro__log {
+  display: flex;
+  flex-direction: column;
+  /*
+   * The manifest is longer than the screen. Anchoring it to the bottom means
+   * new lines push older ones up and out of view, like a terminal, instead of
+   * the block growing until it shunts the header off the top -- which is
+   * exactly what happened before this. The mask fades the oldest lines out
+   * rather than clipping them on a hard edge.
+   */
+  justify-content: flex-end;
+  max-height: 44vh;
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(180deg, transparent 0%, #000 18%, #000 100%);
+  mask-image: linear-gradient(180deg, transparent 0%, #000 18%, #000 100%);
+  /* Tight leading: the manifest should read as one block of telemetry rather
+     than a spaced-out list. */
+  gap: 0.12rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.74rem;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  transition: opacity 700ms ease;
+}
+
+.intro__log.is-retiring { opacity: 0; }
+
+/*
+ * Each line falls in from above and settles rather than simply fading.
+ *
+ * The easing is the point: a long, slightly overshooting settle reads as low
+ * gravity -- the line drops, drifts just past its resting place, and eases
+ * back, the way debris settles in vacuum. The entrance is longer than the gap
+ * between lines, so several are in flight at once and the manifest arrives as
+ * a slow cascade instead of a list appearing a row at a time.
+ */
+.intro__line {
+  display: grid;
+  flex: 0 0 auto;
+  grid-template-columns: 2.4rem 1fr;
+  align-items: baseline;
+  margin: 0;
+  padding: 0.28rem 0;
+  color: rgba(206, 216, 234, 0.26);
+  transition: color 1100ms ease;
+  animation: intro-line-fall 1250ms cubic-bezier(0.17, 0.72, 0.24, 1) both;
+  will-change: transform, opacity;
+}
+
+.intro__index {
+  font-size: 0.62rem;
+  letter-spacing: 0.14em;
+  color: rgba(255, 196, 130, 0.28);
+  transition: color 1100ms ease;
+}
+
+/* The newest line is the live one; earlier lines recede into the record. */
+.intro__line:last-child { color: rgba(255, 246, 232, 0.96); }
+.intro__line:last-child .intro__index { color: rgba(255, 200, 138, 0.95); }
+
+.intro__line:last-child .intro__label::after {
+  content: "";
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  margin-left: 0.7rem;
+  border-radius: 50%;
+  background: #ffd096;
+  box-shadow: 0 0 10px rgba(255, 208, 150, 0.95);
+  transform: translateY(-1px);
+  animation: intro-spark 1600ms ease-in-out infinite;
+}
+
+@keyframes intro-line-fall {
+  0% {
+    opacity: 0;
+    transform: translate3d(-16px, -76px, 0) rotate(-1.8deg);
+    filter: blur(4px);
+  }
+  45% { opacity: 1; filter: blur(0); }
+  74% { transform: translate3d(2px, 6px, 0) rotate(0.3deg); }
+  100% { opacity: 1; transform: none; filter: blur(0); }
+}
+
+@keyframes intro-spark {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.28; }
+}
+
+/* ---------------------------------------------------------------- act two */
+
+.intro__gate {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 3.6rem;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 1200ms ease;
+}
+
+.intro__gate.is-live {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* No transition on the way in: the gate is already black-on-black, so it can
+   appear instantly and let the falling particle be the only visible event. */
+.intro__gate.is-live { transition: none; }
+
+/*
+ * The singularity descends in slow motion and is inert until it lands.
+ *
+ * Clicking a mark that is still falling would undercut the moment, so the
+ * button carries `disabled` for the whole descent and JavaScript releases it on
+ * animationend. The cursor stays default until then, so it never invites a
+ * click it will not honour.
+ */
+.intro__singularity {
+  position: relative;
+  width: 190px;
+  height: 190px;
+  border: 0;
+  padding: 0;
+  background: none;
+  cursor: default;
+  display: grid;
+  place-items: center;
+  /* Parked above the frame, not falling yet. */
+  opacity: 0;
+  transform: translateY(-52vh);
+}
+
+/*
+ * The descent starts on cue, not on page load.
+ *
+ * Previously the animation was declared on the element itself, so it began the
+ * moment the button existed -- the particle fell invisibly behind the manifest
+ * during act one and was already resting at centre by the time the gate faded
+ * in. Nobody would ever have seen it move. Binding the animation to `is-live`
+ * means it starts exactly when the black screen is ready for it.
+ */
+.intro__gate.is-live .intro__singularity {
+  animation: intro-descend 6200ms cubic-bezier(0.22, 0.61, 0.16, 1) both;
+}
+
+.intro__singularity.is-arrived { cursor: pointer; }
+
+.intro__singularity:focus-visible {
+  outline: 1px solid rgba(255, 214, 160, 0.55);
+  outline-offset: 14px;
+  border-radius: 50%;
+}
+
+.intro__core {
+  position: relative;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #fff6e8;
+  box-shadow:
+    0 0 12px 2px rgba(255, 226, 178, 0.95),
+    0 0 34px 8px rgba(255, 186, 112, 0.5),
+    0 0 92px 26px rgba(255, 138, 72, 0.18);
+}
+
+/* Halo and breathing begin only once it has landed. */
+.is-arrived .intro__core {
+  animation: intro-breathe 4200ms ease-in-out infinite;
+}
+
+.is-arrived .intro__core::after {
+  content: "";
+  position: absolute;
+  inset: -26px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 200, 150, 0.15);
+  animation: intro-halo 4200ms ease-out infinite;
+}
+
+/* A single ring pushed outward at the moment of arrival. */
+.is-arrived .intro__core::before {
+  content: "";
+  position: absolute;
+  inset: -8px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 214, 168, 0.65);
+  animation: intro-landing 1500ms cubic-bezier(0.16, 0.84, 0.3, 1) both;
+}
+
+.intro__singularity.is-arrived:hover .intro__core {
+  box-shadow:
+    0 0 16px 3px rgba(255, 238, 206, 1),
+    0 0 50px 13px rgba(255, 198, 132, 0.72),
+    0 0 128px 36px rgba(255, 146, 80, 0.3);
+}
+
+@keyframes intro-descend {
+  0%   { transform: translateY(-52vh); opacity: 0; }
+  18%  { opacity: 1; }
+  100% { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes intro-landing {
+  from { transform: scale(0.4); opacity: 0.9; }
+  to   { transform: scale(7); opacity: 0; }
+}
+
+@keyframes intro-breathe {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.55); }
+}
+
+@keyframes intro-halo {
+  0%   { transform: scale(0.55); opacity: 0; }
+  32%  { opacity: 0.85; }
+  100% { transform: scale(2); opacity: 0; }
+}
+
+/*
+ * Caption column: the invitation, and the lore beneath it.
+ *
+ * They are separate rows of one column rather than siblings of the mark, so
+ * however the sentences wrap they can never run into the prompt above them.
+ */
+.intro__caption {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.9rem;
+  text-align: center;
+}
+
+/*
+ * The lore appears while the mark is still falling.
+ *
+ * That is deliberate: the viewer has several seconds of nothing but a
+ * descending point of light, and this is what those seconds are for. The
+ * invitation itself is still held back until the mark lands, so the two never
+ * arrive together and never compete.
+ */
+.intro__lore {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  max-width: min(52ch, 82vw);
+  opacity: 0;
+  transition: opacity 700ms ease;
+}
+
+.intro__gate.is-live .intro__lore { opacity: 1; }
+
+.intro__lore-line {
+  margin: 0;
+  font-size: 0.86rem;
+  font-weight: 300;
+  line-height: 1.75;
+  letter-spacing: 0.035em;
+  color: rgba(226, 216, 204, 0.5);
+  animation: intro-lore-in 2600ms cubic-bezier(0.16, 0.84, 0.3, 1) both;
+}
+
+/* The second line is the quieter half of the thought. */
+.intro__lore-line:last-child { color: rgba(214, 200, 186, 0.36); }
+
+@keyframes intro-lore-in {
+  0%   { opacity: 0; transform: translateY(10px); filter: blur(5px); }
+  100% { opacity: 1; transform: none; filter: blur(0); }
+}
+
+/* On click the caption stops explaining and starts announcing. */
+.intro__lore.is-entering .intro__lore-line {
+  animation: none;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.7rem;
+  letter-spacing: 0.36em;
+  text-transform: uppercase;
+  color: rgba(255, 226, 186, 0.92);
+  text-shadow: 0 0 22px rgba(255, 176, 96, 0.45);
+  transition: color 400ms ease;
+}
+
+.intro__lore.is-spent {
+  opacity: 0;
+  transition: opacity 300ms ease;
+}
+
+/*
+ * The tremble.
+ *
+ * Amplitude and brightness both escalate across the run, so the mark reads as
+ * losing its hold rather than as vibrating on a fixed setting. It ends hard
+ * against the collapse, which begins on the same frame this finishes -- the
+ * two motions are meant to be one continuous failure, not a shake followed by
+ * a separate animation.
+ */
+.intro__singularity.is-shaking .intro__core {
+  animation: intro-tremble 1500ms cubic-bezier(0.42, 0, 0.58, 1) both;
+}
+
+/* The halo can no longer keep its shape either -- it snaps inward, fast. */
+.intro__singularity.is-shaking .intro__core::after {
+  animation: intro-halo 420ms ease-out infinite;
+}
+
+.intro__singularity.is-shaking .intro__core::before {
+  animation: intro-halo 300ms ease-out infinite;
+}
+
+@keyframes intro-tremble {
+  0%   { transform: translate3d(0, 0, 0) scale(1); }
+  6%   { transform: translate3d(1px, -1px, 0) scale(1.06); }
+  12%  { transform: translate3d(-1px, 1px, 0) scale(1.02); }
+  20%  { transform: translate3d(2px, 1px, 0) scale(1.14); }
+  27%  { transform: translate3d(-2px, -2px, 0) scale(1.06); }
+  35%  { transform: translate3d(3px, -2px, 0) scale(1.24);
+         box-shadow: 0 0 20px 5px rgba(255, 236, 206, 1),
+                     0 0 54px 14px rgba(255, 190, 120, 0.7); }
+  43%  { transform: translate3d(-4px, 3px, 0) scale(1.12); }
+  52%  { transform: translate3d(5px, 3px, 0) scale(1.36); }
+  60%  { transform: translate3d(-5px, -4px, 0) scale(1.18); }
+  68%  { transform: translate3d(7px, -5px, 0) scale(1.5);
+         box-shadow: 0 0 32px 9px rgba(255, 248, 232, 1),
+                     0 0 96px 30px rgba(255, 200, 140, 0.85); }
+  76%  { transform: translate3d(-8px, 6px, 0) scale(1.26); }
+  84%  { transform: translate3d(9px, 6px, 0) scale(1.66); }
+  91%  { transform: translate3d(-10px, -7px, 0) scale(1.34); }
+  100% { transform: translate3d(0, 0, 0) scale(1.9);
+         box-shadow: 0 0 46px 14px rgba(255, 255, 250, 1),
+                     0 0 150px 52px rgba(255, 214, 160, 0.95); }
+}
+
+.intro__prompt.is-spent {
+  opacity: 0;
+  transition: opacity 260ms ease;
+}
+
+.intro__prompt {
+  margin: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.68rem;
+  letter-spacing: 0.42em;
+  text-transform: uppercase;
+  color: rgba(226, 234, 248, 0);
+  transition: color 1400ms ease, letter-spacing 1400ms ease;
+}
+
+/* Only invite the click once the mark has actually landed. */
+.intro__gate.is-arrived .intro__prompt {
+  color: rgba(232, 224, 214, 0.58);
+  letter-spacing: 0.34em;
+}
+
+/*
+ * The charge. On click the mark contracts and brightens, as if drawing the
+ * whole field into itself, then detonates -- the white blowout covers the
+ * hand-off from DOM to WebGL, so the seam between them is never visible.
+ */
+.intro__singularity.is-charging { animation: none; }
+
+.intro__singularity.is-charging .intro__core {
+  animation: intro-charge 900ms cubic-bezier(0.7, 0, 0.84, 0) both;
+}
+
+.intro__singularity.is-charging .intro__core::after,
+.intro__singularity.is-charging .intro__core::before {
+  animation: intro-charge-collapse 620ms cubic-bezier(0.7, 0, 0.84, 0) both;
+}
+
+@keyframes intro-charge {
+  0%   { transform: scale(1); }
+  62%  { transform: scale(0.26); box-shadow: 0 0 26px 6px rgba(255, 244, 222, 1); }
+  100% { transform: scale(70); box-shadow: 0 0 220px 120px rgba(255, 250, 240, 1); }
+}
+
+@keyframes intro-charge-collapse {
+  from { transform: scale(1); opacity: 0.8; }
+  to   { transform: scale(0.1); opacity: 0; }
+}
+
+/* Full-frame blowout at detonation, fading to transparent so the WebGL burst
+   behind the overlay is revealed rather than cut to. */
+.intro.is-detonating::before,
+.intro.is-detonating::after { opacity: 0; }
+
+.intro.is-detonating {
+  animation: intro-blowout 1100ms cubic-bezier(0.6, 0, 0.9, 0.2) both;
+}
+
+@keyframes intro-blowout {
+  0%   { background-color: #000104; }
+  58%  { background-color: #241705; }
+  74%  { background-color: #fffaf0; }
+  100% { background-color: rgba(0, 1, 4, 0); }
+}
+
+/*
+ * Act three is a clean travelling shot.
+ *
+ * Once the overlay fades to transparent the WebGL burst is visible behind it --
+ * but so was the whole interface, including a distance readout still reporting
+ * the pre-launch position. The chrome is held back until the viewer arrives,
+ * then fades up over the solar system.
+ */
+body.is-cosmic-intro .experience,
+body.is-cosmic-intro .distance-cinematic-layer,
+body.is-cosmic-intro .earth-return-button,
+body.is-cosmic-intro .body-card,
+body.is-cosmic-intro .body-connector,
+body.is-cosmic-intro .celestial-selection-card,
+body.is-cosmic-intro .satellite-system-overview,
+body.is-cosmic-intro .satellite-atlas-directory,
+body.is-cosmic-intro .satellite-name-layer,
+body.is-cosmic-intro .progress {
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+/* Restored gently, so the interface arrives after the destination does. */
+.experience,
+.distance-cinematic-layer,
+.progress {
+  transition: opacity 900ms ease 260ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .intro::before,
+  .intro::after { animation: none; height: 8vh; }
+  .intro__line,
+  .intro__header { animation-duration: 300ms; }
+  .intro__singularity { animation-duration: 900ms; }
+  .intro__core,
+  .intro__core::after,
+  .intro__core::before,
+  .intro__singularity.is-shaking .intro__core,
+  .intro__lore-line,
+  .intro__line:last-child .intro__label::after { animation: none; }
+}
+
+/* ------------------------------------------------- acts three to seven */
+
+/*
+ * Travelling captions.
+ *
+ * Held at the top of the frame, above the action, for two reasons: the subject
+ * of every one of these shots is dead centre, and a caption placed there would
+ * be sitting on top of it. Kept to a title and one sentence -- anything longer
+ * cannot be read while the frame is moving.
+ *
+ * This element is created and removed by cosmicIntro.js, so it exists only for
+ * the duration of the journey.
+ */
+.cosmic-caption {
+  position: fixed;
+  top: 13vh;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 12;
+  width: min(58ch, 84vw);
+  text-align: center;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 900ms ease;
+}
+
+.cosmic-caption.is-live { opacity: 1; }
+
+.cosmic-caption__title {
+  margin: 0;
+  font-size: 0.72rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-weight: 400;
+  letter-spacing: 0.44em;
+  text-transform: uppercase;
+  color: rgba(255, 232, 200, 0.86);
+  text-shadow: 0 0 26px rgba(0, 0, 0, 0.85);
+}
+
+.cosmic-caption__body {
+  margin: 1.05rem 0 0;
+  font-size: 0.85rem;
+  font-weight: 300;
+  line-height: 1.72;
+  letter-spacing: 0.03em;
+  color: rgba(222, 214, 206, 0.56);
+  text-shadow: 0 0 24px rgba(0, 0, 0, 0.9);
+}
+
+/* A hairline between the two, drawn outward each time the caption changes. */
+.cosmic-caption__title::after {
+  content: "";
+  display: block;
+  width: 46px;
+  height: 1px;
+  margin: 0.95rem auto 0;
+  background: linear-gradient(90deg,
+    transparent, rgba(255, 196, 130, 0.6), transparent);
+}
+
+.cosmic-caption.is-live .cosmic-caption__title {
+  animation: cosmic-caption-in 1600ms cubic-bezier(0.16, 0.84, 0.3, 1) both;
+}
+
+.cosmic-caption.is-live .cosmic-caption__body {
+  animation: cosmic-caption-in 1600ms cubic-bezier(0.16, 0.84, 0.3, 1) 280ms both;
+}
+
+@keyframes cosmic-caption-in {
+  0%   { opacity: 0; transform: translateY(-9px); filter: blur(5px); }
+  100% { opacity: 1; transform: none; filter: blur(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cosmic-caption.is-live .cosmic-caption__title,
+  .cosmic-caption.is-live .cosmic-caption__body { animation: none; }
+}
+
+/*
+ * The journey is a shot, not a document.
+ *
+ * The page is tall and scrollable -- that is how the camera is driven -- so a
+ * scrollbar sits down the right-hand edge of every frame of the opening. The
+ * overlay already blocks wheel input, so nothing is lost by hiding the track
+ * until the viewer has arrived.
+ */
+body.is-cosmic-intro { scrollbar-width: none; }
+body.is-cosmic-intro::-webkit-scrollbar { width: 0; height: 0; }

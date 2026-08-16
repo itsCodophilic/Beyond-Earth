@@ -1,18 +1,30 @@
-
-1. When click on "Click to know more info" the mouse and the white character moving fadeness is not in sync it likes delayes the when mouse is hover
-2. Satellie carts get overlap over everything
-3. Satellite itself gets over another Satellite seems like they are gonna clash
-
-5. All planets accomodate between earth and moon
-
-
-6. View Things from Nasa Solar System
+Buddy, all things looks really good, but below i found some observations
 
 
 
 
-Prompts:
-I have shared you list of moon names of saturn as well as their images respectively. As per number i have shared you images as well. Now i wanted you first analyze the image color texture shape now it looks in 3D model object, and then you need to accordingly implement things into the src code, and for color and texture suggested you can use these image itself properly. 
 
 
-in their so basically gaps are visible on the sides, behind the gaps i can see space backgrounds when i you know turn around or move up or down both the moons, the images are not properly formed or wrapped gaps visible. I Suggest you to use your browser turn around 360 degree and make it perfect cut to cut without any gaps or all also the top part of these both moons should be normalized, seems to be top part is the wrapp start
+
+WHen travelling throught the mult-verse the multi-verse bubbles have a huge space distance between the our center universe and others can we atleast decrease them out? it looks very far currently compare to our universe which is in center
+
+
+
+When the camera is near to our universe travelling through multi-verse, suddenly below our a universe another universe pop-ups out of no where can we remove it out?
+
+
+
+When travelling throughout our universe between galaxies can we introduce space dust as well making it realistic cinematic travelling throught universe, including a sparkling glowing dim out glowing dim out shinny stars like stuffs , diffferent cosmic dust colors.
+
+
+
+The design of our milky way galaxy needs to be improved, i have shared you a reference image of how does it looks like replicate it out buddy.
+
+
+
+There is a sudden shift in the camera angle from showing Milky way galaxy to The orion arm, instead of sudden shift can we make it smoother transition like going that region like entering in that region cinematically
+
+
+
+Before showing our solar system, the phase where we see the region in that region can we show the shiny sun glowing glowing and when we zoomed in, after that phase our solar system (maxed zoomed out should appear) so basically when we are entering the region we would see a shiny star sun glowing and when the camera is taken towards it, our zoomed out solar system would appear
+

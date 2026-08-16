@@ -1,0 +1,78 @@
+<!doctype html>
+<!--
+  Scrub harness for the opening journey. Not part of the site.
+
+  ?t=12.5  seek to 12.5 seconds and hold there (single frame, for capture)
+  ?play=1  run in real time from t
+-->
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>intro preview</title>
+    <link rel="stylesheet" href="./src/css/styles.css" />
+    <style>
+      html, body { margin: 0; height: 100%; background: #000104; overflow: hidden; }
+      canvas { display: block; width: 100vw; height: 100vh; }
+      #hud {
+        position: fixed; left: 12px; bottom: 10px; z-index: 40;
+        font: 11px ui-monospace, Menlo, monospace; color: #7fe3a0;
+        text-shadow: 0 0 8px #000;
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="c"></canvas>
+    <div id="hud"></div>
+    <script type="module">
+      import * as THREE from "three";
+      import { createCosmicIntro, INTRO_TIMING } from "./src/js/scene/space/cosmicIntro.js";
+
+      const params = new URLSearchParams(location.search);
+      const seek = Number(params.get("t") ?? 0);
+      const play = params.get("play") === "1";
+
+      const renderer = new THREE.WebGLRenderer({
+        canvas: document.querySelector("#c"), antialias: true,
+      });
+      renderer.setPixelRatio(Math.min(2, devicePixelRatio));
+      renderer.setSize(innerWidth, innerHeight, false);
+
+      const intro = createCosmicIntro();
+      intro.resize(innerWidth, innerHeight);
+      const hud = document.querySelector("#hud");
+
+      const phases = Object.entries(INTRO_TIMING);
+      function phaseAt(seconds) {
+        let mark = 0;
+        for (const [name, ms] of phases) {
+          mark += ms / 1000;
+          if (seconds <= mark) return name;
+        }
+        return "done";
+      }
+
+      // Seek by stepping at a fixed 60 Hz so every frame-rate-dependent term
+      // (drift, spin, decay) integrates exactly as it would in a real run.
+      const STEP = 1 / 60;
+      let t = 0;
+      while (t < seek) { intro.update(STEP); t += STEP; }
+      renderer.render(intro.scene, intro.camera);
+      hud.textContent = `t=${t.toFixed(2)}s  ${phaseAt(t)}`;
+      window.__t = () => t;
+
+      if (play) {
+        let last = performance.now();
+        const loop = (now) => {
+          const delta = Math.min(0.05, (now - last) / 1000);
+          last = now;
+          t += delta;
+          intro.update(delta);
+          renderer.render(intro.scene, intro.camera);
+          hud.textContent = `t=${t.toFixed(2)}s  ${phaseAt(t)}`;
+          requestAnimationFrame(loop);
+        };
+        requestAnimationFrame(loop);
+      }
+    </script>
+  </body>
+</html>

@@ -62,6 +62,8 @@ import { createSun, setSunPerformanceProfile, updateSun } from './stars/sun/sun.
 import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
 import { createCelestialDetailsPanel } from './ui/planetDetailsPanel.js';
 import { createPerformanceHud } from './ui/performanceHud.js';
+import { createIntroSequence } from './ui/introSequence.js';
+import { createCosmicIntro } from './scene/space/cosmicIntro.js';
 
 // An async immediately-invoked function lets us await texture loading while
 // keeping all application variables private to this module.
@@ -93,6 +95,10 @@ import { createPerformanceHud } from './ui/performanceHud.js';
   // Cache frequently used HTML elements once instead of querying every frame.
   const canvas = document.querySelector("#universe");
   const loader = document.querySelector("#loader");
+  // Built before any construction begins so its first line lands immediately.
+  const intro = createIntroSequence({ root: loader });
+  intro.step("boot");
+  intro.step("ephemeris");
   const progressBar = document.querySelector("#progress-bar");
   const progressShell = progressBar?.closest(".progress") ?? progressBar?.parentElement ?? null;
   let distanceValueLabel = null;
@@ -1082,6 +1088,11 @@ import { createPerformanceHud } from './ui/performanceHud.js';
   // ?perf=1 query parameter, so it costs one boolean test per frame when off.
   const performanceHud = createPerformanceHud({ renderer, scene });
 
+  // Act three runs in its own scene, rendered by this renderer in place of the
+  // solar system. Null except while it is playing; disposed immediately after,
+  // so it costs nothing once the viewer has arrived.
+  let cosmicIntro = null;
+
   // Diagnostic handle used to inspect and toggle scene layers from the console
   // while tuning. Safe to remove; nothing in the experience reads it.
   window.__beyondEarth = { scene, camera, renderer };
@@ -1405,6 +1416,7 @@ import { createPerformanceHud } from './ui/performanceHud.js';
 
   // The star module owns the Sun's surface, atmosphere, corona, flares, and light.
   performance.mark("BE:textures-end");
+  intro.step("textures");
   const sun = createSun({
     world,
     hoverTargets,
@@ -1415,7 +1427,16 @@ import { createPerformanceHud } from './ui/performanceHud.js';
   // Every planet is built through one realistic factory. Earth receives its extra
   // cloud, atmosphere, night-light, and Moon layers below as before.
   performance.mark("BE:sun-end");
+  intro.step("sun");
+  intro.step("corona");
   PLANET_CONFIGS.forEach((config) => {
+    // One manifest line per world, carrying its real orbital distance. These
+    // are emitted from the actual construction loop, not a script.
+    const au = HELIOCENTRIC_ORBIT_AU[config.name];
+    intro.step(
+      `planet:${config.name}`,
+      au ? `${config.name} · ${au.toFixed(2)} AU` : `Forming ${config.name}`,
+    );
     createPlanet({
       config,
       textures,
@@ -1487,6 +1508,7 @@ import { createPerformanceHud } from './ui/performanceHud.js';
   // time after the opening frame, preventing Uranus and Saturn from each
   // producing a visible full-frame pause.
   performance.mark("BE:moon-end");
+  intro.step("moon");
   const majorSatelliteSystems = createMajorSatelliteSystems({
     world,
     planets,
@@ -1563,6 +1585,7 @@ import { createPerformanceHud } from './ui/performanceHud.js';
   // particles. The environment owns steady stars, the tilted Milky Way, cloudy
   // galactic light, and its dark interstellar dust lanes.
   performance.mark("BE:satellites-end");
+  intro.step("satellites");
   const spaceEnvironment = new SpaceEnvironment({
     scene,
     camera,
@@ -5414,6 +5437,7 @@ import { createPerformanceHud } from './ui/performanceHud.js';
     const pixelRatio = resizeCinematicRenderer();
     spaceEnvironment.resize(innerWidth, innerHeight, pixelRatio);
     setAsteroidBeltQuality(asteroidBelt, asteroidBeltDensity, pixelRatio);
+    cosmicIntro?.resize(innerWidth, innerHeight);
     distanceCinematicPanel?.position();
   });
 
@@ -5442,6 +5466,52 @@ import { createPerformanceHud } from './ui/performanceHud.js';
     - Main render loop that updates the camera, rotates bodies, animates particles, and renders the scene.
   */
   function animate(frameTime = performance.now()) {
+    // While the opening burst plays it owns the frame entirely. The solar
+    // system is already built and its satellites keep hydrating on their own
+    // timers underneath, so nothing is lost by pausing scene updates here.
+    if (cosmicIntro) {
+      if (lastCinematicFrameTime > 0
+        && frameTime - lastCinematicFrameTime < CINEMATIC_FRAME_INTERVAL_MS - 0.5) {
+        requestAnimationFrame(animate);
+        return;
+      }
+      const introDelta = lastCinematicFrameTime > 0
+        ? Math.min(0.05, (frameTime - lastCinematicFrameTime) / 1000)
+        : 1 / 60;
+      lastCinematicFrameTime = frameTime;
+
+      // This is the entrance to the whole experience. If anything in the
+      // opening throws, the viewer must still arrive at the solar system --
+      // never be left on a black screen, which is exactly what happened when
+      // dispose() threw here and killed the loop.
+      let progress = 1;
+      try {
+        progress = cosmicIntro.update(introDelta);
+        renderer.render(cosmicIntro.scene, cosmicIntro.camera);
+      } catch (error) {
+        console.error("[BeyondEarth] opening sequence failed, skipping to the system", error);
+        progress = 1;
+      }
+
+      if (progress >= 1) {
+        try {
+          cosmicIntro.dispose();
+        } catch (error) {
+          console.error("[BeyondEarth] opening sequence dispose failed", error);
+        }
+        cosmicIntro = null;
+        try {
+          completeCosmicIntro();
+        } catch (error) {
+          console.error("[BeyondEarth] arrival failed", error);
+          document.body.classList.remove("is-cosmic-intro");
+          intro.dismiss();
+        }
+      }
+      requestAnimationFrame(animate);
+      return;
+    }
+
     // Keep a deterministic 60 FPS cinematic cadence even on 120/144 Hz panels.
     // This preserves high-resolution rendering without allowing refresh-rate
     // differences to multiply GPU load or simulation speed.
@@ -5799,42 +5869,89 @@ import { createPerformanceHud } from './ui/performanceHud.js';
     requestAnimationFrame(animate);
   }
 
+  /**
+   * Places the opening view at 6 AU, looking back at the whole inner system.
+   *
+   * getCameraDistance() eases 4.8 -> 2550 scene units through
+   * `p * p * (3 - 2p)`. SOLAR_ORBIT_SCALE is 10.5 units per AU, so 6 AU is 63
+   * units, which solves to a scroll progress of about 0.0901.
+   */
+  const LANDING_SCROLL_PROGRESS = 0.0901;
+
+  function settleLandingView() {
+    const maximumScroll = Math.max(0, document.documentElement.scrollHeight - innerHeight);
+    // Use the journey's own scroll helper: it writes documentElement, body and
+    // window together, which a bare window.scrollTo does not, and was silently
+    // being reverted.
+    forceJourneyScrollPosition(maximumScroll * LANDING_SCROLL_PROGRESS);
+    // Then set the journey state directly. The scroll listener is the only
+    // thing that would overwrite it, and it has just been given the matching
+    // position, so the two agree.
+    scrollProgress = LANDING_SCROLL_PROGRESS;
+    // Arrive already framed rather than gliding out to the destination after
+    // the cut, which would undo the whole point of the transition.
+    smoothProgress = LANDING_SCROLL_PROGRESS;
+    // The camera rig must not ease in from wherever it happened to be.
+    hasCameraFocusPoint = false;
+    freeExploreCameraOffsetCurrent.set(0, 0, 0);
+    freeExploreCameraOffsetTarget.set(0, 0, 0);
+    freeExploreFocusOffsetCurrent.set(0, 0, 0);
+    freeExploreFocusOffsetTarget.set(0, 0, 0);
+  }
+
+  /** Hand-off from the burst into the solar system. */
+  function completeCosmicIntro() {
+    settleLandingView();
+    // One frame of the destination before the interface returns, so the arrival
+    // reads as a place rather than as a screen.
+    updateDistanceReadout(smoothProgress);
+    document.body.classList.remove("is-cosmic-intro");
+    intro.dismiss();
+    openingMotionStartedAt = performance.now() + 500;
+    setTimeout(() => {
+      earthReturnButton.disabled = false;
+      earthReturnButton.classList.remove("is-awaiting-entrance");
+      earthReturnButton.classList.add("is-entering");
+      setTimeout(() => earthReturnButton.classList.remove("is-entering"), 1500);
+    }, 700);
+  }
+
   function revealExperienceAfterOpeningFrame() {
     if (hasRevealedOpeningFrame) return;
     hasRevealedOpeningFrame = true;
 
-    // Preserve a short cinematic beat, now measured from the first real frame.
-    setTimeout(() => {
-      loader.classList.add("is-hidden");
+    // The universe is now renderable. The remaining wait belongs to the viewer:
+    // intro.ready() resolves when they click the singularity, so nothing here
+    // runs on a timer they did not start. Moon hydration deliberately continues
+    // in the background while the gate is up -- by the time they enter, a good
+    // part of the satellite population has already been built.
+    intro.step("ready");
+    scheduleMajorSatelliteHydration();
+
+    intro.ready().then(() => {
+      // Frame the destination before the burst, so the cut lands on the view
+      // the viewer is meant to arrive at rather than easing into it afterwards.
+      settleLandingView();
+      document.body.classList.add("is-cosmic-intro");
+      cosmicIntro = createCosmicIntro({ pixelRatio: cinematicPixelRatio });
       // `.loader` takes 700 ms to fade. Start the celestial entrance from the
       // end of that transition—not from the moment its class changes—otherwise
       // Earth, the Moon, and the belt are already moving rapidly when the user
       // sees the first clear frame.
-      openingMotionStartedAt = performance.now() + 700;
-      // The loader fade itself lasts 700 ms. Starting terrain construction
-      // during that transition could freeze the overlay halfway out, making its
-      // text disappear while the dark loading backdrop remained on screen.
-      // Hydration begins only after the opening motion ramp is nearly complete,
-      // so a detailed outer moon cannot interrupt Earth and Moon settling into
-      // their first visible orbit.
-      setTimeout(scheduleMajorSatelliteHydration, 2600);
-
-      // Let the loader nearly complete its fade before the persistent navigation
-      // rocket flies in, overshoots its resting point, and bounces into place.
-      setTimeout(() => {
-        earthReturnButton.disabled = false;
-        earthReturnButton.classList.remove("is-awaiting-entrance");
-        earthReturnButton.classList.add("is-entering");
-        setTimeout(() => earthReturnButton.classList.remove("is-entering"), 1500);
-      }, 620);
-    }, 420);
+    });
   }
 
   // The belt is part of the opening composition, so the universe must never be
   // revealed without it. It is still built co-operatively: yielding between rock
   // sculpts lets the loader keep animating instead of freezing for seconds,
   // which is what happened when all 60 variants were sculpted in one pass.
+  intro.step("environment");
+  intro.step("beltPool");
   await buildAsteroidBeltProgressively();
+  intro.step("beltMajor");
+  intro.step("beltFamilies");
+  intro.step("beltBoulders");
+  intro.step("beltDebris");
 
   /**
    * Diagnostic layer isolation, driven entirely by the URL. Nothing is deleted
@@ -5923,6 +6040,7 @@ import { createPerformanceHud } from './ui/performanceHud.js';
   // 2. Every rock is built holding its full-detail geometry, so the belt
   //    otherwise spends its first ~34 frames swapping them down and visibly
   //    popping. Settle them all in one unbudgeted pass instead.
+  intro.step("compile");
   performance.mark("BE:precompile-start");
   scene.updateMatrixWorld(true);
   camera.updateMatrixWorld(true);

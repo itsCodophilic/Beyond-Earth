@@ -17,14 +17,9 @@
   </head>
   <body>
     <!-- Loader overlay displayed while Three.js assets and textures initialize. -->
-    <div id="loader" class="loader" aria-live="polite">
-      <div class="loader__ring" aria-hidden="true">
-        <span></span>
-        <span></span>
-        <span></span>
-      </div>
-      <p>Bringing the universe to you</p>
-    </div>
+    <!-- Contents are replaced by createIntroSequence(); this markup is only the
+         first paint, shown before the module has executed. -->
+    <div id="loader" class="intro" aria-live="polite"></div>
 
     <!-- Canvas element used by Three.js for rendering the 3D universe. -->
     <canvas id="universe" aria-label="Interactive animated 3D universe scene"></canvas>
@@ -89,6 +84,47 @@
 
     <!-- Progress bar reflects current scroll progress; updated by JavaScript. -->
     <div class="progress" aria-hidden="true"><span id="progress-bar"></span></div>
+
+    <!--
+      Diagnostic: foreground emulation.
+
+      Browsers suspend requestAnimationFrame entirely in a background tab and
+      clamp setTimeout to about a second, which makes the opening sequence
+      impossible to capture or measure under automation -- the loop simply
+      never runs. With ?raf=poll the frame clock is driven by MessageChannel,
+      which is exempt from that throttling, and the visibility API is reported
+      as visible so the application's own visibility-aware paths behave as they
+      would on screen.
+
+      This changes only WHEN frames are delivered, never their contents or
+      their timing: the 60 FPS cadence gate downstream still works from
+      performance.now(), so measurements taken this way remain comparable.
+      Absent the query parameter this block does nothing at all.
+    -->
+    <script>
+      if (new URLSearchParams(location.search).get("raf") === "poll") {
+        (function () {
+          const channel = new MessageChannel();
+          const pending = new Map();
+          let nextHandle = 1;
+          channel.port1.onmessage = (event) => {
+            const callback = pending.get(event.data);
+            if (!callback) return;
+            pending.delete(event.data);
+            callback(performance.now());
+          };
+          window.requestAnimationFrame = (callback) => {
+            const handle = nextHandle++;
+            pending.set(handle, callback);
+            channel.port2.postMessage(handle);
+            return handle;
+          };
+          window.cancelAnimationFrame = (handle) => pending.delete(handle);
+          Object.defineProperty(document, "hidden", { get: () => false });
+          Object.defineProperty(document, "visibilityState", { get: () => "visible" });
+        }());
+      }
+    </script>
 
     <!-- Main application script loaded as a module. -->
     <script type="module" defer src="./src/js/main.js"></script>
