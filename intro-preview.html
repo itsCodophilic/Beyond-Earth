@@ -59,6 +59,8 @@
       renderer.render(intro.scene, intro.camera);
       hud.textContent = `t=${t.toFixed(2)}s  ${phaseAt(t)}`;
       window.__t = () => t;
+      window.__intro = intro;
+      window.__renderer = renderer;
 
       if (play) {
         let last = performance.now();

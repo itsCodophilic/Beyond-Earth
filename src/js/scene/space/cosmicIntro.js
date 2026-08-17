@@ -42,11 +42,13 @@ export const INTRO_TIMING = {
   galaxies: 8500,
   milkyWay: 8500,
   orionArm: 5500,
-  arrive: 2400,
+  sunApproach: 5000,
+  arrive: 2600,
 };
 
 const PHASE_ORDER = [
-  "detonation", "multiverse", "approach", "galaxies", "milkyWay", "orionArm", "arrive",
+  "detonation", "multiverse", "approach", "galaxies",
+  "milkyWay", "orionArm", "sunApproach", "arrive",
 ];
 
 const FIELD_DEPTH = 2600;
@@ -82,7 +84,11 @@ const CAPTIONS = {
   },
   orionArm: {
     title: "The Orion Arm",
-    body: "26,000 light-years from the centre, on the inner rim of a minor arm — one ordinary star.",
+    body: "26,000 light-years from the centre, on the inner rim of a minor arm, between Perseus and Carina-Sagittarius.",
+  },
+  sunApproach: {
+    title: "Our Star",
+    body: "A G-type main-sequence star, 4.6 billion years old. Everything you are about to see is held by it.",
   },
   arrive: null,
 };
@@ -217,6 +223,241 @@ function createCloudTexture(variant = 0) {
 
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
+  return texture;
+}
+
+/**
+ * The galaxy disc, painted rather than sampled.
+ *
+ * Point clouds cannot make a galaxy look like a galaxy. A real spiral is
+ * mostly *diffuse* -- unresolved starlight and dust, smooth over degrees --
+ * with resolved stars only as a sparkle on top. Rendering it purely as points
+ * gives a sparse, grainy pinwheel: every photograph of the Milky Way is broad
+ * luminous bands, a warm bar, and dark dust lanes carving through them.
+ *
+ * So the diffuse component is painted once into a canvas and mapped onto a
+ * plane in the disc, and the point stars stay as the sparkle over it. Three
+ * details do most of the work:
+ *
+ *   - the dust lanes are *carved*, using destination-out, rather than drawn
+ *     dark. The scene composites additively, so black paint is invisible;
+ *     removing light is the only way to make a lane read as dust in front of
+ *     the disc, which is what it physically is.
+ *   - each arm is painted twice, a broad cool base and a narrow bright ridge,
+ *     because a single stroke reads as a ribbon rather than as a crowd.
+ *   - the HII knots go on last and only along the ridges, which is where star
+ *     formation actually happens: the leading edge of the density wave.
+ */
+function createGalaxyDiscTexture(size = 1024) {
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const context = canvas.getContext("2d");
+  const half = size / 2;
+  context.translate(half, half);
+
+  let seed = 0x7f4a7c15;
+  const random = () => {
+    seed = (seed * 1664525 + 1013904223) >>> 0;
+    return seed / 4294967296;
+  };
+
+  /*
+   * The disc must finish well inside the canvas.
+   *
+   * The halo painted below reaches 1.16 R, so at R = 0.9 of the half-width it
+   * ran off the edge of the bitmap -- and a gradient clipped by a canvas edge
+   * shows as a straight line across the sky. Backing R off leaves room for the
+   * halo to fade out on its own; the plane is sized to compensate, so the disc
+   * still lands at radius 1 in the group's local units.
+   */
+  const R = half * 0.76;
+  const ARMS = 4;
+  const SPIN = 4.6;
+  const BAR = 0.42;
+
+  const blob = (x, y, radius, colour, alpha) => {
+    if (alpha <= 0.001 || radius <= 0.2) return;
+    const gradient = context.createRadialGradient(x, y, 0, x, y, radius);
+    gradient.addColorStop(0, `rgba(${colour},${alpha.toFixed(4)})`);
+    gradient.addColorStop(0.55, `rgba(${colour},${(alpha * 0.42).toFixed(4)})`);
+    gradient.addColorStop(1, `rgba(${colour},0)`);
+    context.fillStyle = gradient;
+    context.beginPath();
+    context.arc(x, y, radius, 0, TAU);
+    context.fill();
+  };
+
+  /** One spiral pass: `paint` is called with x, y and the fraction along it. */
+  function alongArms(steps, from, to, jitter, offset, paint) {
+    for (let arm = 0; arm < ARMS; arm += 1) {
+      const base = (arm / ARMS) * TAU + offset;
+      for (let i = 0; i <= steps; i += 1) {
+        const t = from + (to - from) * (i / steps);
+        const angle = base + t * SPIN + (random() - 0.5) * jitter;
+        const r = t * R;
+        paint(Math.cos(angle) * r, Math.sin(angle) * r, t, arm);
+      }
+    }
+  }
+
+  context.globalCompositeOperation = "lighter";
+
+  // ---- the outer halo, so the disc does not stop on a hard edge
+  const halo = context.createRadialGradient(0, 0, R * 0.2, 0, 0, R * 1.16);
+  halo.addColorStop(0, "rgba(146,166,200,0.13)");
+  halo.addColorStop(0.55, "rgba(112,136,180,0.085)");
+  halo.addColorStop(1, "rgba(46,64,104,0)");
+  context.fillStyle = halo;
+  context.beginPath();
+  context.arc(0, 0, R * 1.16, 0, TAU);
+  context.fill();
+
+  // ---- the smooth disc the arms sit in
+  const disc = context.createRadialGradient(0, 0, 0, 0, 0, R);
+  disc.addColorStop(0, "rgba(228,206,172,0.30)");
+  disc.addColorStop(0.16, "rgba(196,190,186,0.21)");
+  disc.addColorStop(0.55, "rgba(158,176,206,0.15)");
+  disc.addColorStop(1, "rgba(96,120,166,0)");
+  context.fillStyle = disc;
+  context.beginPath();
+  context.arc(0, 0, R, 0, TAU);
+  context.fill();
+
+  // ---- arms: broad cool base
+  alongArms(210, 0.10, 1.0, 0.16, 0, (x, y, t) => {
+    const width = R * (0.055 + t * 0.115);
+    const fade = Math.pow(Math.sin(Math.min(1, (t - 0.1) / 0.9) * Math.PI), 0.45);
+    blob(x, y, width, "170,190,222", 0.07 * fade);
+  });
+
+  // ---- arms: narrow bright ridge
+  alongArms(230, 0.13, 0.97, 0.05, 0.06, (x, y, t) => {
+    const width = R * (0.020 + t * 0.045);
+    const fade = Math.pow(Math.sin(Math.min(1, (t - 0.13) / 0.84) * Math.PI), 0.5);
+    blob(x, y, width, "216,230,250", 0.068 * fade);
+  });
+
+  /*
+   * Flocculent spurs.
+   *
+   * Four clean arms is a diagram, not a galaxy. Real spirals -- ours very much
+   * included -- are feathery: short branches peel off the main arms at a
+   * shallow angle and fade out between them, and it is that broken, fibrous
+   * quality that makes the reference read as a photograph rather than as a
+   * pinwheel. Each spur is a short spiral of its own, launched from a random
+   * point on an arm.
+   */
+  for (let i = 0; i < 46; i += 1) {
+    const arm = Math.floor(random() * ARMS) / ARMS;
+    const launch = 0.24 + random() * 0.62;
+    const lean = (random() - 0.5) * 0.9;
+    const reach = 0.09 + random() * 0.2;
+    const steps = 26;
+    for (let k = 0; k <= steps; k += 1) {
+      const u = k / steps;
+      const t = launch + reach * u;
+      if (t > 1.02) break;
+      const angle = arm * TAU + t * SPIN + 0.06 + lean * u * 0.7;
+      const r = t * R;
+      const width = R * (0.012 + t * 0.03) * (1 - u * 0.55);
+      blob(Math.cos(angle) * r, Math.sin(angle) * r, width,
+        "196,214,244", 0.05 * Math.sin(u * Math.PI) ** 0.5);
+    }
+  }
+
+  // ---- the bar and the bulge
+  context.save();
+  context.rotate(BAR);
+  context.scale(1, 0.34);
+  const bar = context.createRadialGradient(0, 0, 0, 0, 0, R * 0.34);
+  bar.addColorStop(0, "rgba(255,238,198,0.62)");
+  bar.addColorStop(0.4, "rgba(255,214,150,0.34)");
+  bar.addColorStop(1, "rgba(226,168,104,0)");
+  context.fillStyle = bar;
+  context.beginPath();
+  context.arc(0, 0, R * 0.34, 0, TAU);
+  context.fill();
+  context.restore();
+
+  const bulge = context.createRadialGradient(0, 0, 0, 0, 0, R * 0.16);
+  bulge.addColorStop(0, "rgba(255,246,220,0.85)");
+  bulge.addColorStop(0.42, "rgba(255,216,156,0.4)");
+  bulge.addColorStop(1, "rgba(238,178,110,0)");
+  context.fillStyle = bulge;
+  context.beginPath();
+  context.arc(0, 0, R * 0.16, 0, TAU);
+  context.fill();
+
+  // ---- dust lanes, carved out of everything above
+  context.globalCompositeOperation = "destination-out";
+  // Along the inner edge of each arm, where the density wave piles dust up.
+  alongArms(180, 0.16, 0.94, 0.05, -0.24, (x, y, t) => {
+    const width = R * (0.014 + t * 0.042);
+    const fade = Math.pow(Math.sin(Math.min(1, (t - 0.16) / 0.78) * Math.PI), 0.6);
+    blob(x, y, width, "0,0,0", 0.66 * fade);
+  });
+  // The pair of lanes that wrap the bar -- the most recognisable feature of
+  // the reference, and the thing that makes the core read as three-dimensional.
+  for (let side = 0; side < 2; side += 1) {
+    const flip = side === 0 ? 1 : -1;
+    for (let i = 0; i <= 90; i += 1) {
+      const t = i / 90;
+      const angle = BAR + flip * (0.55 + t * 2.5);
+      const r = R * (0.10 + t * 0.28);
+      blob(
+        Math.cos(angle) * r, Math.sin(angle) * r,
+        R * (0.022 + t * 0.03), "0,0,0",
+        0.62 * Math.sin(t * Math.PI) ** 0.5,
+      );
+    }
+  }
+
+  /*
+   * Dust filaments crossing the disc.
+   *
+   * The reference is threaded with fine dark lanes that cut across the arms at
+   * an angle rather than following them. They are what break the disc up into
+   * something layered and irregular; without them the carved lanes alone read
+   * as four tidy grooves.
+   */
+  for (let i = 0; i < 34; i += 1) {
+    const arm = Math.floor(random() * ARMS) / ARMS;
+    const launch = 0.22 + random() * 0.6;
+    const lean = (random() - 0.5) * 1.3;
+    const reach = 0.07 + random() * 0.17;
+    const steps = 22;
+    for (let k = 0; k <= steps; k += 1) {
+      const u = k / steps;
+      const t = launch + reach * u;
+      if (t > 1.0) break;
+      const angle = arm * TAU + t * SPIN - 0.16 + lean * u * 0.8;
+      const r = t * R;
+      blob(Math.cos(angle) * r, Math.sin(angle) * r,
+        R * (0.008 + t * 0.017), "0,0,0", 0.4 * Math.sin(u * Math.PI) ** 0.6);
+    }
+  }
+
+  // ---- star-forming regions, on the ridges only
+  context.globalCompositeOperation = "lighter";
+  alongArms(120, 0.18, 0.95, 0.035, 0.06, (x, y, t) => {
+    if (random() > 0.42) return;
+    const size = R * (0.006 + random() * 0.014);
+    const hot = random() < 0.4;
+    blob(x, y, size, hot ? "255,150,196" : "255,110,150", 0.42 + random() * 0.34);
+  });
+
+  // ---- a scatter of resolved foreground stars over the whole disc
+  for (let i = 0; i < 420; i += 1) {
+    const angle = random() * TAU;
+    const r = Math.pow(random(), 0.5) * R * 1.05;
+    blob(Math.cos(angle) * r, Math.sin(angle) * r, R * (0.002 + random() * 0.005),
+      "255,255,255", 0.3 + random() * 0.5);
+  }
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.anisotropy = 4;
   return texture;
 }
 
@@ -831,9 +1072,9 @@ export function createCosmicIntro({ pixelRatio } = {}) {
   const oursKnotGeometry = buildBubbleKnots(260);
   const oursGalaxyGeometry = buildBubbleGalaxies(90);
 
-  const BUBBLE_COUNT = 11;
-  // The z period the drifting bubbles recycle on.
-  const BUBBLE_LOOP = 7600;
+  const BUBBLE_COUNT = 9;
+  // Depth at which a bubble has finished its pass and goes back to its slot.
+  const BUBBLE_RETIRE_DEPTH = 620;
 
   /**
    * Builds one bubble: shell, knots and film, in a group that can be scaled
@@ -906,7 +1147,25 @@ export function createCosmicIntro({ pixelRatio } = {}) {
     group.add(new THREE.Mesh(bubbleRimGeometry, rimMaterial));
 
     scene.add(group);
-    return { group, shellMaterial, knotMaterial, galaxyMaterial, rimMaterial };
+    return { group, shell, knots, shellMaterial, knotMaterial, galaxyMaterial, rimMaterial };
+  }
+
+  /*
+   * Density control for the bubble the camera enters.
+   *
+   * Ours carries 24,000 stars so that it still reads as a sky once it fills
+   * the frame -- but while it is a fifty-pixel dot in the distance those same
+   * stars pile up at three per pixel and blend, additively, into a flat white
+   * disc. Trimming the draw range keeps the *surface density* roughly constant
+   * instead of the star count: few while it is far, all of them by the time it
+   * is around us. Same buffer either way, so this costs nothing to change.
+   */
+  function setBubbleDetail(bubble, fraction) {
+    const shellCount = bubble.shell.geometry.attributes.position.count;
+    const knotCount = bubble.knots.geometry.attributes.position.count;
+    const f = Math.max(0.02, Math.min(1, fraction));
+    bubble.shell.geometry.setDrawRange(0, Math.ceil(shellCount * f));
+    bubble.knots.geometry.setDrawRange(0, Math.ceil(knotCount * f));
   }
 
   /** Sets a whole bubble's visibility. The film stays well under the stars. */
@@ -927,13 +1186,25 @@ export function createCosmicIntro({ pixelRatio } = {}) {
    * Note this deliberately does not apply to ours -- it sits far beyond the
    * loop and never recycles, because it is the destination rather than scenery.
    */
-  const BUBBLE_FADE_IN_DEPTH = 6300;
-  const BUBBLE_FADE_OUT_DEPTH = 1300;
-  function bubbleDepthFade(z) {
-    const depth = -z;
-    const arriving = (BUBBLE_LOOP - depth) / (BUBBLE_LOOP - BUBBLE_FADE_IN_DEPTH);
-    const leaving = (depth - 500) / (BUBBLE_FADE_OUT_DEPTH - 500);
+  function bubbleJourneyFade(bubble) {
+    const depth = -bubble.group.position.z;
+    const span = bubble.startDepth - BUBBLE_RETIRE_DEPTH;
+    const travelled = (bubble.startDepth - depth) / Math.max(1, span);
+    const arriving = travelled / 0.16;
+    const leaving = (1 - travelled) / 0.18;
     return Math.max(0, Math.min(1, arriving, leaving));
+  }
+
+  /**
+   * Advances one bubble along its pass, returning it to its slot at the end.
+   *
+   * Returns true while it still has somewhere to go.
+   */
+  function driftBubble(bubble, step) {
+    bubble.group.position.z += step;
+    if (-bubble.group.position.z <= BUBBLE_RETIRE_DEPTH) {
+      bubble.group.position.copy(bubble.slot);
+    }
   }
 
   function setBubbleOpacity(bubble, value) {
@@ -959,13 +1230,28 @@ export function createCosmicIntro({ pixelRatio } = {}) {
    * one another.
    */
   function bubbleFits(x, y, z, radius) {
+    const length = Math.hypot(x, y, z);
+    const alpha = radius / -z;
     for (let i = 0; i < bubbleSlots.length; i += 1) {
       const slot = bubbleSlots[i];
+
+      /*
+       * Angular separation first, because that is what "overlapping" means
+       * here. Bubbles only ever translate along z, so each one owns a fixed
+       * ray out from the camera; two on nearby rays draw on top of one another
+       * no matter how far apart they are in space, which is exactly what the
+       * 3D-only test let through. Comparing the angle between their rays
+       * against the sum of their angular radii keeps them apart on screen.
+       */
+      const cosine = (x * slot.x + y * slot.y + z * slot.z) / (length * slot.length);
+      const between = Math.acos(Math.min(1, Math.max(-1, cosine)));
+      if (between < (alpha + slot.alpha) * 1.35) return false;
+
+      // And a true 3D test as well.
       const dx = x - slot.x;
       const dy = y - slot.y;
-      let dz = z - slot.z;
-      dz -= BUBBLE_LOOP * Math.round(dz / BUBBLE_LOOP);
-      const needed = (radius + slot.radius) * 1.7;
+      const dz = z - slot.z;
+      const needed = (radius + slot.radius) * 1.5;
       if (dx * dx + dy * dy + dz * dz < needed * needed) return false;
     }
     return true;
@@ -973,30 +1259,54 @@ export function createCosmicIntro({ pixelRatio } = {}) {
 
   // Ours first, and on the axis: it is the destination, so nothing else may be
   // allowed to sit in front of it.
-  const OURS_START_Z = -9000;
+  /*
+   * Ours is not in the collision set, and does not need to be.
+   *
+   * Every other bubble is placed at least half its own depth off the axis
+   * while ours sits on it at a tenth of its depth in radius, so there is a
+   * clear cone down the middle of the shot that nothing else can enter --
+   * whatever their z. Including it in the rejection test would only have
+   * forced the others further out, which is the opposite of what is wanted:
+   * a destination with nothing near it reads as remote rather than as the one
+   * you are heading for.
+   */
+  const OURS_START_Z = -6200;
   const ours = createBubble(0, UNIVERSE_PAIRS[0], true);
   ours.group.position.set(0, 0, OURS_START_Z);
-  ours.group.scale.setScalar(780);
+  ours.group.scale.setScalar(620);
   bubbles.push(ours);
-  bubbleSlots.push({ x: 0, y: 0, z: OURS_START_Z, radius: 780 });
+
+  // The angular half-size ours occupies down the middle of the shot. Every
+  // other bubble has to clear it with room to spare.
+  const OURS_ALPHA = 620 / -OURS_START_Z;
 
   for (let i = 1; i < BUBBLE_COUNT; i += 1) {
     const bubble = createBubble(i % BUBBLE_VARIANTS, UNIVERSE_PAIRS[i % UNIVERSE_PAIRS.length], false);
     let slot = null;
     for (let attempt = 0; attempt < 90 && !slot; attempt += 1) {
-      const z = -1150 - (i - 1) * 560 - random() * 320;
+      const z = -2000 - (i - 1) * 620 - random() * 280;
       const depth = -z;
       /*
        * Size and offset both scale with depth, so every bubble subtends a
        * similar angle however far away it is. Without that the near ones
        * swallow the frame and the far ones vanish, and the field stops
        * reading as a population of comparable things.
+       *
+       * The offsets are deliberately modest -- half a depth rather than a
+       * whole one. Pushed further out the neighbours sat at forty degrees off
+       * axis, which put them at the very edge of frame and made our own
+       * universe look stranded in the middle of an empty shot.
        */
-      const angle = i * 2.39996 + (random() - 0.5) * 0.7;
-      const radial = depth * (0.80 + random() * 0.50);
-      const radius = depth * (0.17 + random() * 0.12);
+      const angle = i * 2.39996 + (random() - 0.5) * 0.9;
+      // A wide band of off-axis angles, not a narrow ring. Packed into a thin
+      // annulus there is simply not enough sky to separate them in.
+      const radial = depth * (0.48 + random() * 0.78);
+      const radius = depth * (0.13 + random() * 0.10);
       const x = Math.cos(angle) * radial;
-      const y = Math.sin(angle) * radial * 0.78;
+      const y = Math.sin(angle) * radial * 0.82;
+      // Stay out of the corridor ours occupies down the axis.
+      const fromAxis = Math.atan2(Math.hypot(x, y), depth);
+      if (fromAxis < radius / depth + OURS_ALPHA * 1.8) continue;
       if (bubbleFits(x, y, z, radius)) slot = { x, y, z, radius };
     }
     // If 90 tries could not find room, that bubble simply is not placed --
@@ -1004,7 +1314,22 @@ export function createCosmicIntro({ pixelRatio } = {}) {
     if (!slot) { bubble.group.visible = false; continue; }
     bubble.group.position.set(slot.x, slot.y, slot.z);
     bubble.group.scale.set(slot.radius, slot.radius * (0.9 + random() * 0.2), slot.radius);
+    slot.length = Math.hypot(slot.x, slot.y, slot.z);
+    slot.alpha = slot.radius / -slot.z;
     bubbleSlots.push(slot);
+    /*
+     * Each bubble remembers where it started and goes back there.
+     *
+     * The previous recycle subtracted one fixed period from z, which moved a
+     * bubble that had been placed close to the camera out to the far end --
+     * where its unchanged sideways offset put it a few degrees off axis and
+     * therefore right on top of the universe the shot is heading for. Because
+     * every slot here is proved clear of its neighbours and of that corridor,
+     * returning a bubble to its own slot is the one recycle that cannot
+     * reintroduce a collision.
+     */
+    bubble.slot = new THREE.Vector3(slot.x, slot.y, slot.z);
+    bubble.startDepth = -slot.z;
     bubbles.push(bubble);
   }
 
@@ -1170,6 +1495,97 @@ export function createCosmicIntro({ pixelRatio } = {}) {
   milkyWay.visible = false;
   scene.add(milkyWay);
 
+  /*
+   * The diffuse disc: one plane, one painted texture, drawn under the stars.
+   *
+   * The plane is built in XY and laid into the XZ plane to match the star
+   * geometry, which puts the disc's thickness on Y. Rendered first and with
+   * depth writing off so the point stars always composite over it.
+   */
+  const discTexture = track(createGalaxyDiscTexture(1024));
+  const discGeometry = track(new THREE.PlaneGeometry(2.62, 2.62));
+
+  /*
+   * Three sheets, not one.
+   *
+   * A single painted plane is a painting: tilt the camera and you can see it
+   * is a sheet, which is exactly what made the galaxy read as flat. Stacking
+   * copies above and below the mid-plane -- offset, slightly rotated, slightly
+   * scaled -- gives the disc real thickness. Face-on they superimpose into one
+   * image; the moment the shot rolls over, they separate and slide against one
+   * another, and the disc becomes a slab of light with things inside it.
+   *
+   * The offsets match the vertical scatter of the star cloud, so the painted
+   * component and the resolved component occupy the same volume. The rotations
+   * matter as much as the offsets: identical copies would stack exactly and
+   * just look brighter.
+   */
+  const DISC_LAYERS = [
+    { y: -0.022, spin: -0.07, scale: 1.03, weight: 0.3 },
+    { y: 0.0, spin: 0.0, scale: 1.0, weight: 0.42 },
+    { y: 0.022, spin: 0.07, scale: 0.97, weight: 0.3 },
+  ];
+  const discLayers = DISC_LAYERS.map((layer) => {
+    const material = track(new THREE.MeshBasicMaterial({
+      map: discTexture,
+      transparent: true,
+      opacity: 0,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      side: THREE.DoubleSide,
+    }));
+    const mesh = new THREE.Mesh(discGeometry, material);
+    mesh.rotation.set(-Math.PI / 2, 0, layer.spin);
+    mesh.position.y = layer.y;
+    mesh.scale.setScalar(layer.scale);
+    mesh.renderOrder = -1;
+    milkyWay.add(mesh);
+    return { material, weight: layer.weight };
+  });
+
+  function setDiscOpacity(level) {
+    const value = Math.max(0, level);
+    for (let i = 0; i < discLayers.length; i += 1) {
+      discLayers[i].material.opacity = value * discLayers[i].weight;
+    }
+  }
+
+  /*
+   * The bulge, as a ball.
+   *
+   * A sprite always faces the camera, which is the whole point of using one
+   * here: however far the shot rolls toward the disc plane, the core stays
+   * round and keeps sticking up out of it. That single cue does more for the
+   * three-dimensionality of the galaxy than anything else -- a real bulge is a
+   * sphere of old stars several thousand light-years thick, and if it flattens
+   * with the disc the eye immediately reads the whole thing as a decal.
+   */
+  const bulgeMaterial = track(new THREE.SpriteMaterial({
+    map: track(createGlowTexture("rgba(255,244,214,0.9)", "rgba(255,206,138,0.34)", 0.26)),
+    transparent: true,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+    opacity: 0,
+  }));
+  const mwBulge = new THREE.Sprite(bulgeMaterial);
+  mwBulge.scale.setScalar(0.33);
+  mwBulge.renderOrder = -1;
+  milkyWay.add(mwBulge);
+
+  // A companion, well off the plane. The reference has one, and an object
+  // clearly outside the disc is another thing the eye can read depth from.
+  const satelliteMaterial = track(new THREE.SpriteMaterial({
+    map: track(createGlowTexture("rgba(255,255,255,0.8)", "rgba(214,228,255,0.34)", 0.24)),
+    transparent: true,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+    opacity: 0,
+  }));
+  const mwSatellite = new THREE.Sprite(satelliteMaterial);
+  mwSatellite.position.set(-0.72, 0.46, -0.58);
+  mwSatellite.scale.set(0.15, 0.1, 1);
+  milkyWay.add(mwSatellite);
+
   const MW_DISC = 46000;
   const mwPositions = new Float32Array(MW_DISC * 3);
   const mwColours = new Float32Array(MW_DISC * 3);
@@ -1202,7 +1618,18 @@ export function createCosmicIntro({ pixelRatio } = {}) {
       const angle = arm * TAU + t * MILKY_WAY_SPIN + gaussian() * (0.19 + t * 0.1);
       const radius = t + gaussian() * 0.018;
       mwPositions[i3] = Math.cos(angle) * radius;
-      mwPositions[i3 + 1] = gaussian() * 0.02 * (1.2 - t * 0.7);
+      /*
+       * Thickness, and a warp.
+       *
+       * The disc is scattered vertically, and beyond about half a radius the
+       * whole plane bends -- the Milky Way's outer disc really is warped, bent
+       * up on one side and down on the other by the pull of the Magellanic
+       * Clouds. It is worth having for its own sake and it is also the single
+       * cheapest way to stop a spiral looking like a flat cut-out: once the
+       * edges leave the plane there is no plane left to read.
+       */
+      const warp = Math.sin(angle - 0.6) * Math.pow(Math.max(0, t - 0.45), 2) * 0.34;
+      mwPositions[i3 + 1] = gaussian() * 0.028 * (1.25 - t * 0.6) + warp;
       mwPositions[i3 + 2] = Math.sin(angle) * radius;
       // Warm inside, blue-white outward, with scatter so it is not a ramp.
       const mix = Math.min(1, Math.pow(t, 0.75)) * (0.7 + random() * 0.5);
@@ -1226,7 +1653,7 @@ export function createCosmicIntro({ pixelRatio } = {}) {
    * not by distance.
    */
   const mwMaterial = track(new THREE.PointsMaterial({
-    size: px(1.6),
+    size: px(1.25),
     map: track(createGlowTexture("rgba(255,255,255,1)", "rgba(255,236,214,0.4)")),
     vertexColors: true,
     transparent: true,
@@ -1250,7 +1677,10 @@ export function createCosmicIntro({ pixelRatio } = {}) {
     const arm = Math.floor(random() * MILKY_WAY_ARMS) / MILKY_WAY_ARMS;
     const angle = arm * TAU + t * MILKY_WAY_SPIN + gaussian() * 0.07;
     knotPositions[i3] = Math.cos(angle) * t;
-    knotPositions[i3 + 1] = gaussian() * 0.012;
+    // Star formation happens in the thin gas layer, so the knots stay much
+    // closer to the mid-plane than the stars do -- but they follow the warp.
+    knotPositions[i3 + 1] = gaussian() * 0.012
+      + Math.sin(angle - 0.6) * Math.pow(Math.max(0, t - 0.45), 2) * 0.34;
     knotPositions[i3 + 2] = Math.sin(angle) * t;
     const hot = random() < 0.42;
     knotColours[i3] = 1.0;
@@ -1308,8 +1738,18 @@ export function createCosmicIntro({ pixelRatio } = {}) {
   const sunLocal = new THREE.Vector3(
     Math.cos(SUN_ANGLE) * SUN_RADIUS, 0, Math.sin(SUN_ANGLE) * SUN_RADIUS,
   );
+  /*
+   * The Sun is white.
+   *
+   * It is a G2V star at 5,778 K, and its spectrum integrates to white -- it
+   * only looks yellow from the ground, because the atmosphere scatters the
+   * blue out of it. Painting it yellow here also broke the match cut: the
+   * intro handed over a yellow star to a solar system that renders a white
+   * one. The warmth is kept to the faintest edge of the corona, which is
+   * where a little chromatic bloom is honest.
+   */
   const sunMarkMaterial = track(new THREE.SpriteMaterial({
-    map: track(createGlowTexture("rgba(255,255,246,1)", "rgba(255,206,140,0.55)", 0.22)),
+    map: track(createGlowTexture("rgba(255,255,255,1)", "rgba(232,240,255,0.55)", 0.22)),
     transparent: true,
     depthWrite: false,
     blending: THREE.AdditiveBlending,
@@ -1321,6 +1761,87 @@ export function createCosmicIntro({ pixelRatio } = {}) {
   milkyWay.add(sunMark);
 
   const sunWorld = new THREE.Vector3();
+
+  /*
+   * The Sun, once it is close enough to be a star rather than a mark.
+   *
+   * Kept outside the galaxy group on purpose. Inside it, its size would be
+   * hostage to a scale that runs into the tens of thousands, and it would have
+   * to be un-scaled every frame to stay sane. Out here it is simply an object
+   * at a fixed distance in front of the camera that grows -- and because both
+   * it and the mark sit dead centre, the hand-off between them is invisible.
+   */
+  const sunStar = new THREE.Group();
+  sunStar.position.set(0, 0, -140);
+  sunStar.visible = false;
+  scene.add(sunStar);
+
+  const sunCoreMaterial = track(new THREE.SpriteMaterial({
+    map: track(createGlowTexture("rgba(255,255,255,1)", "rgba(240,246,255,0.75)", 0.2)),
+    transparent: true,
+    depthWrite: false,
+    depthTest: false,
+    blending: THREE.AdditiveBlending,
+    opacity: 0,
+  }));
+  const sunCore = new THREE.Sprite(sunCoreMaterial);
+  sunCore.renderOrder = 8;
+  sunStar.add(sunCore);
+
+  const sunCoronaMaterial = track(new THREE.SpriteMaterial({
+    map: track(createGlowTexture("rgba(255,253,250,0.85)", "rgba(226,232,248,0.3)", 0.28)),
+    transparent: true,
+    depthWrite: false,
+    depthTest: false,
+    blending: THREE.AdditiveBlending,
+    opacity: 0,
+  }));
+  const sunCorona = new THREE.Sprite(sunCoronaMaterial);
+  sunCorona.renderOrder = 7;
+  sunStar.add(sunCorona);
+
+  // The same flare the detonation uses, tinted warm. A star this close without
+  // one reads as a bare disc rather than as something too bright to look at.
+  const sunFlareMaterial = track(new THREE.SpriteMaterial({
+    map: rayTexture,
+    transparent: true,
+    depthWrite: false,
+    depthTest: false,
+    blending: THREE.AdditiveBlending,
+    opacity: 0,
+    color: new THREE.Color(1.0, 0.99, 0.96),
+  }));
+  const sunFlare = new THREE.Sprite(sunFlareMaterial);
+  sunFlare.renderOrder = 6;
+  sunStar.add(sunFlare);
+
+  /**
+   * Frames the galaxy.
+   *
+   * `sunBias` slides what the shot is pointed at: 0 centres the galactic
+   * centre, 1 centres the Sun. Every phase that shows the galaxy goes through
+   * here, which is the point -- the previous version framed the approach on
+   * the galaxy's origin and then the dive on the Sun's position, two entirely
+   * different translations, so the cut between them jumped. Running both from
+   * one function with a parameter that eases between them turns that jump into
+   * a pan.
+   */
+  function frameMilkyWay(rotX, rotY, rotZ, scale, range, sunBias) {
+    milkyWay.rotation.set(rotX, rotY, rotZ);
+    milkyWay.scale.setScalar(scale);
+    // Solve for the offset from a zeroed position: leaving last frame's
+    // translation in place makes the Sun's world position include it, and
+    // subtracting it again throws the destination twice as far out.
+    milkyWay.position.set(0, 0, 0);
+    milkyWay.updateMatrixWorld(true);
+    sunWorld.copy(sunLocal).applyMatrix4(milkyWay.matrixWorld);
+    milkyWay.position.set(
+      -sunWorld.x * sunBias,
+      -sunWorld.y * sunBias,
+      -sunWorld.z * sunBias - range,
+    );
+    holdSunMarkSize(range);
+  }
 
   /**
    * Holds the mark at a constant angular size.
@@ -1414,6 +1935,7 @@ export function createCosmicIntro({ pixelRatio } = {}) {
 
     elapsed += deltaSeconds * 1000;
     dustMaterial.uniforms.uTime.value += deltaSeconds;
+    const seconds = elapsed / 1000;
     const total = phaseTotal();
     const T = INTRO_TIMING;
     bubbles.forEach((bubble) => { bubble.rimMaterial.uniforms.uPhase.value += deltaSeconds * 0.55; });
@@ -1489,6 +2011,7 @@ export function createCosmicIntro({ pixelRatio } = {}) {
       });
 
       bubbles.forEach((bubble) => setBubbleOpacity(bubble, 0));
+      setBubbleDetail(ours, 0.1);
       return elapsed / total;
     }
 
@@ -1518,17 +2041,25 @@ export function createCosmicIntro({ pixelRatio } = {}) {
       // approach that follows has to start from wherever it has got to.
       ours.group.position.z += 90 * deltaSeconds;
       ours.group.rotation.y += deltaSeconds * 0.05;
-      setBubbleOpacity(ours, 0.95 * rising);
+      setBubbleOpacity(ours, 0.8 * rising);
+      setBubbleDetail(ours, 0.1);
       bubbles.forEach((bubble, index) => {
         if (index === 0) return;
         // Fast enough that several actually sweep past the camera during the
-        // phase, rather than the whole field merely swelling in place. The
-        // recycle distance is the same period the placement was proved
-        // collision-free against, so the spacing survives the wrap.
-        bubble.group.position.z += lerp(190, 470, local) * deltaSeconds;
-        if (bubble.group.position.z > 500) bubble.group.position.z -= BUBBLE_LOOP;
+        // phase, rather than the whole field merely swelling in place.
+        driftBubble(bubble, lerp(190, 470, local) * deltaSeconds);
         bubble.group.rotation.y += deltaSeconds * 0.05;
-        setBubbleOpacity(bubble, 0.85 * rising * bubbleDepthFade(bubble.group.position.z));
+        /*
+         * Retired before the phase is over, not after.
+         *
+         * The dive that follows goes inside one universe, and a neighbour
+         * still lingering at the edge of frame while that happens reads as a
+         * second universe appearing out of nowhere -- which is exactly what it
+         * looked like. Clearing them in the last fifth of the drift means the
+         * approach begins on a frame that already holds nothing but ours.
+         */
+        const retiring = clamp01((1 - local) / 0.2);
+        setBubbleOpacity(bubble, 0.85 * rising * retiring * bubbleJourneyFade(bubble));
       });
       dust.rotation.z += deltaSeconds * 0.014;
       return elapsed / total;
@@ -1543,10 +2074,13 @@ export function createCosmicIntro({ pixelRatio } = {}) {
       driftField(lerp(150, 340, eased) * deltaSeconds);
       if (approachStartZ === null) approachStartZ = ours.group.position.z;
       ours.group.position.z = lerp(approachStartZ, 360, eased);
-      const swell = lerp(780, 4600, eased);
+      const swell = lerp(620, 4600, eased);
       ours.group.scale.setScalar(swell);
       ours.group.rotation.y += deltaSeconds * 0.06;
-      setBubbleOpacity(ours, 0.95);
+      // Stars come in as fast as the surface they sit on grows, so the
+      // density on screen stays put while the bubble goes from a dot to a sky.
+      setBubbleDetail(ours, lerp(0.1, 1, easeInCubic(local)));
+      setBubbleOpacity(ours, lerp(0.8, 0.95, eased));
       /*
        * Clear the field before the dive, not during it.
        *
@@ -1556,17 +2090,16 @@ export function createCosmicIntro({ pixelRatio } = {}) {
        * first fifth of the phase, and they no longer recycle -- nothing may
        * arrive from the far end once the destination is set.
        */
-      const clearing = Math.max(0, 1 - eased * 4);
       bubbles.forEach((bubble, index) => {
         if (index === 0) return;
-        bubble.group.position.z += 260 * deltaSeconds;
-        setBubbleOpacity(bubble, 0.85 * clearing * bubbleDepthFade(bubble.group.position.z));
+        setBubbleOpacity(bubble, 0);
       });
       // Galaxies resolve out of the haze as we cross the wall.
       galaxyGroup.visible = true;
       const reveal = clamp01((eased - 0.4) * 1.7);
       galaxySprites.forEach((sprite) => { sprite.material.opacity = reveal * 0.85; });
       spiralMaterial.opacity = reveal * 0.9;
+      setNebulaLevel(reveal, seconds);
       dust.rotation.z += deltaSeconds * 0.02;
       return elapsed / total;
     }
@@ -1574,7 +2107,7 @@ export function createCosmicIntro({ pixelRatio } = {}) {
     mark += T.galaxies;
     if (elapsed <= mark) {
       showCaption("galaxies");
-      const local = (elapsed - T.detonation - T.multiverse - T.approach) / T.galaxies;
+      const local = 1 - (mark - elapsed) / T.galaxies;
       setBubbleOpacity(ours, Math.max(0, 0.95 * (1 - local * 2.6)));
       bubbles.forEach((bubble, index) => { if (index > 0) setBubbleOpacity(bubble, 0); });
       driftField(lerp(360, 640, easeInOutSine(Math.min(1, local * 1.3))) * deltaSeconds);
@@ -1583,6 +2116,7 @@ export function createCosmicIntro({ pixelRatio } = {}) {
       });
       spiralMaterial.opacity = 0.95;
       spirals.forEach((points) => { points.rotation.y += deltaSeconds * 0.04; });
+      setNebulaLevel(Math.min(1, local * 2.5), seconds);
       dust.rotation.z += deltaSeconds * 0.04;
 
       // Our galaxy resolves out of the field in the last third, so the next
@@ -1590,12 +2124,13 @@ export function createCosmicIntro({ pixelRatio } = {}) {
       const rise = clamp01((local - 0.62) / 0.38);
       if (rise > 0) {
         milkyWay.visible = true;
-        milkyWay.position.set(0, 90, lerp(-9000, -5600, rise));
-        milkyWay.rotation.set(-1.16, 0.4, 0.22);
-        milkyWay.scale.setScalar(1500);
-        mwMaterial.opacity = rise * 0.5;
-        knotMaterial.opacity = rise * 0.4;
-        haloMaterial.opacity = rise * 0.28;
+        frameMilkyWay(-1.16, 0.4, 0.22, 1500, lerp(9000, 5600, rise), 0);
+        setDiscOpacity(rise * 0.72);
+        bulgeMaterial.opacity = rise * 0.5;
+        satelliteMaterial.opacity = rise * 0.35;
+        mwMaterial.opacity = rise * 0.2;
+        knotMaterial.opacity = rise * 0.14;
+        haloMaterial.opacity = rise * 0.2;
       }
       return elapsed / total;
     }
@@ -1603,85 +2138,174 @@ export function createCosmicIntro({ pixelRatio } = {}) {
     mark += T.milkyWay;
     if (elapsed <= mark) {
       showCaption("milkyWay");
-      const local = (elapsed - T.detonation - T.multiverse - T.approach - T.galaxies) / T.milkyWay;
+      const local = 1 - (mark - elapsed) / T.milkyWay;
       const eased = easeInOutSine(local);
       // Everything else falls away: from here there is only one galaxy.
       const recede = clamp01(1 - local * 1.8);
       galaxySprites.forEach((sprite) => { sprite.material.opacity = recede * 0.7; });
       spiralMaterial.opacity = recede * 0.9;
+      setNebulaLevel(recede, seconds);
       driftField(lerp(640, 200, easeOutCubic(local)) * deltaSeconds);
       dustMaterial.uniforms.uOpacity.value = lerp(1, 0.5, eased);
 
       milkyWay.visible = true;
-      // Toward it, and rolling from three-quarters toward the disc plane.
-      milkyWay.position.set(0, lerp(90, 30, eased), lerp(-5600, -2700, eased));
-      // Rolling from three-quarters down toward the disc plane: the shot drops
-      // to the galaxy's own level rather than staying above it.
-      milkyWay.rotation.set(lerp(-1.16, -0.94, eased), lerp(0.4, 0.16, eased), lerp(0.22, 0.08, eased));
-      milkyWay.scale.setScalar(lerp(1500, 1900, eased));
-      mwMaterial.opacity = lerp(0.5, 1, clamp01(local * 2));
-      knotMaterial.opacity = lerp(0.4, 0.95, clamp01(local * 2));
-      haloMaterial.opacity = lerp(0.28, 0.6, clamp01(local * 2));
-      sunMarkMaterial.opacity = clamp01((local - 0.55) / 0.45) * 0.85;
-      holdSunMarkSize(-milkyWay.position.z);
+      /*
+       * The pan.
+       *
+       * The first half holds the galaxy centred and simply closes on it. The
+       * second half slides the aim off the core and onto the Sun, so by the
+       * time the dive begins the camera is already pointed where it is going.
+       * That ramp is the whole fix for the jump: the dive now starts from the
+       * exact framing this phase ends on.
+       */
+      const aim = easeInOutSine(clamp01((local - 0.42) / 0.58));
+      frameMilkyWay(
+        lerp(-1.16, -0.94, eased),
+        lerp(0.4, 0.16, eased),
+        lerp(0.22, 0.08, eased),
+        lerp(1500, 1780, eased),
+        lerp(5600, 3150, eased),
+        aim,
+      );
+      setDiscOpacity(lerp(0.72, 1.25, clamp01(local * 2)));
+      bulgeMaterial.opacity = lerp(0.5, 1.0, clamp01(local * 2));
+      satelliteMaterial.opacity = lerp(0.35, 0.6, clamp01(local * 2));
+      mwMaterial.opacity = lerp(0.2, 0.42, clamp01(local * 2));
+      knotMaterial.opacity = lerp(0.14, 0.46, clamp01(local * 2));
+      haloMaterial.opacity = lerp(0.2, 0.42, clamp01(local * 2));
+      sunMarkMaterial.opacity = clamp01((local - 0.45) / 0.55) * 0.9;
       return elapsed / total;
     }
 
     mark += T.orionArm;
     if (elapsed <= mark) {
       showCaption("orionArm");
-      const local = (elapsed - total + T.arrive + T.orionArm) / T.orionArm;
+      const local = 1 - (mark - elapsed) / T.orionArm;
       const eased = easeInCubic(clamp01(local));
       galaxySprites.forEach((sprite) => { sprite.material.opacity = 0; });
       spiralMaterial.opacity = 0;
+      setNebulaLevel(0, seconds);
       // Local stars streaming past, the only cue that the camera is moving
       // once the galaxy fills the frame.
       driftField(lerp(200, 1500, eased) * deltaSeconds);
       dustMaterial.uniforms.uOpacity.value = lerp(0.5, 0.9, eased);
 
       /*
-       * The dive.
-       *
-       * Rather than solving a camera path, the galaxy is scaled up hard and
-       * then translated so that the Sun's own position lands on the camera.
-       * That keeps the destination exact at every scale: whatever the disc is
-       * doing, the star we are heading for is always dead centre.
+       * The dive. Continues exactly where the pan left off -- same rotation,
+       * same scale, same aim -- and drives the range in from 2,600 units to
+       * 90, which is what carries the camera down into the disc.
        */
-      milkyWay.rotation.set(lerp(-0.94, -0.3, eased), lerp(0.16, -0.22, eased), lerp(0.08, 0.02, eased));
-      milkyWay.scale.setScalar(lerp(1900, 15000, eased));
-      milkyWay.position.set(0, 0, 0);
-      milkyWay.updateMatrixWorld(true);
-      sunWorld.copy(sunLocal).applyMatrix4(milkyWay.matrixWorld);
-      const range = lerp(2700, 70, eased);
-      milkyWay.position.set(-sunWorld.x, -sunWorld.y, -sunWorld.z - range);
-      holdSunMarkSize(range);
+      frameMilkyWay(
+        lerp(-0.94, -0.32, eased),
+        lerp(0.16, -0.22, eased),
+        lerp(0.08, 0.02, eased),
+        lerp(1780, 15000, eased),
+        lerp(3150, 90, eased),
+        1,
+      );
 
-      mwMaterial.size = px(lerp(1.6, 3.4, eased));
-      knotMaterial.opacity = lerp(0.95, 0.3, eased);
-      haloMaterial.opacity = lerp(0.6, 0, eased);
-      sunMarkMaterial.opacity = 0.85 + Math.sin(elapsed * 0.004) * 0.15;
+      // The painted disc is a flat plane; edge-on it is worth nothing, and
+      // from inside the disc there is no face-on view to have. It retires and
+      // the stars carry the shot.
+      setDiscOpacity(lerp(1.25, 0, clamp01(local * 1.7)));
+      bulgeMaterial.opacity = lerp(1.0, 0, clamp01(local * 1.4));
+      satelliteMaterial.opacity = lerp(0.6, 0, clamp01(local * 1.2));
+      mwMaterial.size = px(lerp(1.25, 3.4, eased));
+      mwMaterial.opacity = lerp(0.42, 1, clamp01(local * 1.6));
+      knotMaterial.opacity = lerp(0.46, 0.24, eased);
+      haloMaterial.opacity = lerp(0.42, 0, eased);
+      sunMarkMaterial.opacity = 0.9;
       return elapsed / total;
     }
 
-    // Deceleration and fade for the cut.
+    mark += T.sunApproach;
+    if (elapsed <= mark) {
+      showCaption("sunApproach");
+      const local = 1 - (mark - elapsed) / T.sunApproach;
+      const eased = easeInOutSine(local);
+
+      /*
+       * The last leg: one star, growing.
+       *
+       * The mark inside the galaxy hands over to a real star in the first
+       * quarter. Both are dead centre and both are a warm glow, so there is no
+       * frame on which the swap can be seen -- and from here the object can be
+       * grown freely without dragging a galaxy scaled by fifteen thousand
+       * along with it.
+       */
+      milkyWay.visible = true;
+      frameMilkyWay(
+        lerp(-0.32, -0.24, eased),
+        lerp(-0.22, -0.3, eased),
+        0.02,
+        lerp(15000, 19000, eased),
+        90,
+        1,
+      );
+      const settle = clamp01((local - 0.05) / 0.35);
+      sunMarkMaterial.opacity = 0.9 * (1 - settle);
+      // The band of the galaxy dims behind it as the star takes the frame.
+      mwMaterial.opacity = lerp(1, 0.42, eased);
+      knotMaterial.opacity = lerp(0.24, 0.1, eased);
+
+      driftField(lerp(1500, 240, easeOutCubic(local)) * deltaSeconds);
+      dustMaterial.uniforms.uOpacity.value = lerp(0.9, 0.55, eased);
+
+      sunStar.visible = true;
+      const grow = easeInCubic(local);
+      const breath = 1 + Math.sin(seconds * 2.1) * 0.018;
+      sunCore.scale.setScalar(lerp(1.4, 30, grow) * breath);
+      sunCorona.scale.setScalar(lerp(3.4, 96, grow) * breath);
+      sunFlare.scale.setScalar(lerp(6, 190, grow));
+      sunFlareMaterial.rotation += deltaSeconds * 0.05;
+      sunCoreMaterial.opacity = settle;
+      sunCoronaMaterial.opacity = settle * 0.72;
+      sunFlareMaterial.opacity = settle * lerp(0.2, 0.62, grow);
+      return elapsed / total;
+    }
+
+    /*
+     * Arrival: a match cut on the Sun.
+     *
+     * Everything except the star fades, and the star itself eases back to
+     * roughly the size it has in the view that follows. The solar system opens
+     * on the Sun centred and bright, so cutting on the same shape in the same
+     * place makes the two scenes read as one continuous move rather than as a
+     * transition.
+     */
     showCaption("arrive");
-    const local = clamp01((elapsed - total + T.arrive) / T.arrive);
+    const local = clamp01(1 - (total - elapsed) / T.arrive);
     const fade = 1 - easeInOutSine(local);
-    driftField(lerp(1500, 0, easeOutCubic(local)) * deltaSeconds);
-    dustMaterial.uniforms.uOpacity.value = fade * 0.9;
-    mwMaterial.opacity = fade;
-    knotMaterial.opacity = fade * 0.3;
-    sunMarkMaterial.opacity = fade;
-    milkyWay.scale.setScalar(lerp(15000, 24000, easeOutCubic(local)));
-    // Zero the offset before solving for it. Leaving last frame's translation
-    // in place meant the Sun's world position already included it, so
-    // subtracting it again threw the destination twice as far out -- the mark
-    // we are supposed to be arriving at simply left the frame.
-    milkyWay.position.set(0, 0, 0);
-    milkyWay.updateMatrixWorld(true);
-    sunWorld.copy(sunLocal).applyMatrix4(milkyWay.matrixWorld);
-    milkyWay.position.set(-sunWorld.x, -sunWorld.y, -sunWorld.z - 70);
-    holdSunMarkSize(70);
+    driftField(lerp(240, 0, easeOutCubic(local)) * deltaSeconds);
+    dustMaterial.uniforms.uOpacity.value = fade * 0.55;
+    setDiscOpacity(0);
+    bulgeMaterial.opacity = 0;
+    satelliteMaterial.opacity = 0;
+    mwMaterial.opacity = fade * 0.42;
+    knotMaterial.opacity = fade * 0.1;
+    haloMaterial.opacity = 0;
+    sunMarkMaterial.opacity = 0;
+    setNebulaLevel(0, seconds);
+    frameMilkyWay(-0.24, -0.3, 0.02, 19000, 90, 1);
+
+    /*
+     * Shrink to the size the Sun actually has in the view that follows.
+     *
+     * This is what makes the cut smooth rather than merely quick. The solar
+     * system opens fully scrolled out, with the Sun a small white core inside
+     * a soft bloom; ending the journey on a star of that same size, colour and
+     * position means the two frames are nearly the same image and the join has
+     * nothing to show. A short white veil in `completeCosmicIntro` covers
+     * whatever is left over.
+     */
+    sunStar.visible = true;
+    const ease = easeInOutSine(local);
+    sunCore.scale.setScalar(lerp(30, 4.6, ease));
+    sunCorona.scale.setScalar(lerp(96, 17, ease));
+    sunFlare.scale.setScalar(lerp(190, 34, ease));
+    sunCoreMaterial.opacity = 1;
+    sunCoronaMaterial.opacity = lerp(0.72, 0.62, ease);
+    sunFlareMaterial.opacity = lerp(0.62, 0.26, ease);
     dust.rotation.z += deltaSeconds * 0.04 * fade;
     return Math.min(1, elapsed / total);
   }

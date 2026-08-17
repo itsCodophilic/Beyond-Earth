@@ -5872,11 +5872,14 @@ import { createCosmicIntro } from './scene/space/cosmicIntro.js';
   /**
    * Places the opening view at 6 AU, looking back at the whole inner system.
    *
-   * getCameraDistance() eases 4.8 -> 2550 scene units through
-   * `p * p * (3 - 2p)`. SOLAR_ORBIT_SCALE is 10.5 units per AU, so 6 AU is 63
-   * units, which solves to a scroll progress of about 0.0901.
+   * The journey ends where the scroll does: fully out, at the far end of
+   * CAMERA_DISTANCE_STOPS -- 6.0 light-years, the local stellar neighbourhood,
+   * with the whole system inside one frame. Arriving part way along the scroll
+   * put the camera among the inner planets instead, which is a place you
+   * travel *to* rather than the establishing shot the sequence has spent
+   * forty seconds earning.
    */
-  const LANDING_SCROLL_PROGRESS = 0.0901;
+  const LANDING_SCROLL_PROGRESS = 1;
 
   function settleLandingView() {
     const maximumScroll = Math.max(0, document.documentElement.scrollHeight - innerHeight);
@@ -5902,6 +5905,16 @@ import { createCosmicIntro } from './scene/space/cosmicIntro.js';
   /** Hand-off from the burst into the solar system. */
   function completeCosmicIntro() {
     settleLandingView();
+    /*
+     * A short white veil across the join.
+     *
+     * The opening sequence ends on a white star, centred, at the size the Sun
+     * has in this view -- so the two frames very nearly match already. This
+     * covers what is left: the instant the scene changes there is still a
+     * whole solar system's worth of geometry appearing at once, and a brief
+     * bloom reads as the eye adjusting to the light rather than as a cut.
+     */
+    intro.land?.();
     // One frame of the destination before the interface returns, so the arrival
     // reads as a place rather than as a screen.
     updateDistanceReadout(smoothProgress);

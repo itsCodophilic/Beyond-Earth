@@ -645,3 +645,21 @@ body.is-cosmic-intro .progress {
  */
 body.is-cosmic-intro { scrollbar-width: none; }
 body.is-cosmic-intro::-webkit-scrollbar { width: 0; height: 0; }
+
+/*
+ * Landfall.
+ *
+ * The last frame of the journey is a white star on black; the first frame of
+ * the solar system is a white star on black. This bloom sits across the join
+ * so that the one thing that does change between them -- an entire system's
+ * worth of geometry arriving at once -- happens behind a wash of light rather
+ * than in plain view. The overlay's own fade carries it out.
+ */
+.intro.is-landing {
+  animation: intro-landfall 1400ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
+}
+
+@keyframes intro-landfall {
+  0%   { background-color: rgba(255, 252, 246, 0.5); }
+  100% { background-color: rgba(0, 1, 4, 0); }
+}

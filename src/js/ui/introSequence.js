@@ -59,6 +59,7 @@ export function createIntroSequence({ root } = {}) {
     return {
       step() {},
       ready: () => Promise.resolve(),
+      land() {},
       dismiss() {},
       isDismissed: () => true,
     };
@@ -284,6 +285,18 @@ export function createIntroSequence({ root } = {}) {
     }));
   }
 
+  /**
+   * Blooms the overlay white for the hand-off into the solar system.
+   *
+   * Called one beat before dismiss(), so the white is already up when the
+   * scene changes underneath it and then dissolves away with the overlay.
+   */
+  function land() {
+    if (dismissed) return;
+    container.classList.remove("is-detonating");
+    container.classList.add("is-landing");
+  }
+
   function dismiss() {
     if (dismissed) return;
     dismissed = true;
@@ -291,5 +304,5 @@ export function createIntroSequence({ root } = {}) {
     container.classList.add("is-hidden");
   }
 
-  return { step, ready, dismiss, isDismissed: () => dismissed };
+  return { step, ready, land, dismiss, isDismissed: () => dismissed };
 }
