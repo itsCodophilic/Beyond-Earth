@@ -45,6 +45,7 @@ export function createDistanceCinematicPanel({ readoutElement }) {
   const connector = layer.querySelector(".distance-cinematic-connector");
   // Start with no route at all, so nothing can be drawn before one is solved.
   connector?.style.setProperty("--connector-length", "0px");
+  let lastRouteLength = 0;
   const connectorTrail = connector.querySelector(".distance-cinematic-connector__trail");
   const connectorBeam = connector.querySelector(".distance-cinematic-connector__beam");
   const connectorOrigin = connector.querySelector(".distance-cinematic-connector__origin");
@@ -92,9 +93,23 @@ export function createDistanceCinematicPanel({ readoutElement }) {
    * Writes a multi-segment SVG route in viewport coordinates. SVG stroke-dash
    * animation makes the light visibly travel through every corner in order.
    */
+  /*
+   * Snap a coordinate to a half-pixel.
+   *
+   * A one-pixel stroke is centred on its path, so at a whole coordinate it
+   * straddles two rows of pixels and is drawn as two half-intensity lines.
+   * That is what makes a hairline shimmer over a canvas that repaints every
+   * frame: the antialiasing is resolved slightly differently from frame to
+   * frame and the line appears to blink. Centring it on a half-pixel puts the
+   * whole stroke inside one row, where it is crisp and stable.
+   */
+  function crisp(value) {
+    return Math.round(value) + 0.5;
+  }
+
   function setConnectorPath({ points, variant, connection }) {
     const pathData = points
-      .map((point, index) => `${index === 0 ? "M" : "L"} ${point.x.toFixed(1)} ${point.y.toFixed(1)}`)
+      .map((point, index) => `${index === 0 ? "M" : "L"} ${crisp(point.x)} ${crisp(point.y)}`)
       .join(" ");
     const firstPoint = points[0];
     const lastPoint = points[points.length - 1];
@@ -118,12 +133,25 @@ export function createDistanceCinematicPanel({ readoutElement }) {
      * entirely. The dash is now exactly as long as the line it has to cover,
      * whatever shape the route takes.
      */
+    /*
+     * Only republish the length when it has actually changed.
+     *
+     * `position()` re-solves the route on every resize and on every scroll the
+     * readout takes, and each rewrite of --connector-length restarts the dash
+     * pattern from scratch. Even when the new length differs by a fraction of
+     * a pixel the stroke is re-rasterised, which is what makes an otherwise
+     * static hairline blink. A half-pixel threshold keeps the dash stable
+     * through the churn while still tracking a genuine reflow.
+     */
     const routeLength = connectorBeam.getTotalLength();
-    connector.style.setProperty("--connector-length", `${routeLength.toFixed(2)}px`);
-    connectorOrigin.setAttribute("cx", firstPoint.x);
-    connectorOrigin.setAttribute("cy", firstPoint.y);
-    connectorDestination.setAttribute("cx", lastPoint.x);
-    connectorDestination.setAttribute("cy", lastPoint.y);
+    if (Math.abs(routeLength - lastRouteLength) > 0.5) {
+      lastRouteLength = routeLength;
+      connector.style.setProperty("--connector-length", `${routeLength.toFixed(2)}px`);
+    }
+    connectorOrigin.setAttribute("cx", crisp(firstPoint.x));
+    connectorOrigin.setAttribute("cy", crisp(firstPoint.y));
+    connectorDestination.setAttribute("cx", crisp(lastPoint.x));
+    connectorDestination.setAttribute("cy", crisp(lastPoint.y));
   }
 
   /** Places the card and connector around their live DOM anchor. */
@@ -302,6 +330,20 @@ export function createDistanceCinematicPanel({ readoutElement }) {
   function getAnchor() {
     return activeAnchor;
   }
+
+  /*
+   * Seal the card off from the scene behind it.
+   *
+   * The application listens for clicks on `window` to travel into whatever
+   * region was clicked. A click on this card -- the close button above all --
+   * bubbled all the way up and was read as a click on empty space, so
+   * dismissing the explanation also flew the camera somewhere. Stopping the
+   * pointer events at the panel leaves its own controls working and takes the
+   * card out of the scene's input path entirely.
+   */
+  ["pointerdown", "pointerup", "click", "dblclick", "contextmenu"].forEach((type) => {
+    panel.addEventListener(type, (event) => event.stopPropagation());
+  });
 
   function handleViewportChange() {
     if (!panel.hidden) position();

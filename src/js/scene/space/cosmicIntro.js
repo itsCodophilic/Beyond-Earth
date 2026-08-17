@@ -43,7 +43,8 @@ export const INTRO_TIMING = {
   milkyWay: 8500,
   orionArm: 5500,
   sunApproach: 5000,
-  arrive: 2600,
+  // Short on purpose: this is a flare and a cut, not a scene.
+  arrive: 1500,
 };
 
 const PHASE_ORDER = [
@@ -2275,7 +2276,9 @@ export function createCosmicIntro({ pixelRatio } = {}) {
      */
     showCaption("arrive");
     const local = clamp01(1 - (total - elapsed) / T.arrive);
-    const fade = 1 - easeInOutSine(local);
+    // Everything that is not the star is gone by a third of the way in, so the
+    // bloom happens against nothing.
+    const fade = Math.max(0, 1 - local * 3);
     driftField(lerp(240, 0, easeOutCubic(local)) * deltaSeconds);
     dustMaterial.uniforms.uOpacity.value = fade * 0.55;
     setDiscOpacity(0);
@@ -2289,23 +2292,30 @@ export function createCosmicIntro({ pixelRatio } = {}) {
     frameMilkyWay(-0.24, -0.3, 0.02, 19000, 90, 1);
 
     /*
-     * Shrink to the size the Sun actually has in the view that follows.
+     * The flare.
      *
-     * This is what makes the cut smooth rather than merely quick. The solar
-     * system opens fully scrolled out, with the Sun a small white core inside
-     * a soft bloom; ending the journey on a star of that same size, colour and
-     * position means the two frames are nearly the same image and the join has
-     * nothing to show. A short white veil in `completeCosmicIntro` covers
-     * whatever is left over.
+     * This was a match cut -- the star eased *down* to the size the Sun has in
+     * the view that follows, so the two frames were nearly the same image. It
+     * was defensible and it was wrong: it left the sequence ending on a small
+     * star held on black, a lull exactly where the payoff belongs, and it read
+     * as "a shiny star, and then, later, the solar system".
+     *
+     * So the last beat is the star going up instead. It blooms until it fills
+     * the frame, the overlay carries that white across the scene change, and
+     * when the light clears the system is simply already there -- with no
+     * object to look at in between.
+     *
+     * Cubed, so almost all of the growth lands in the final third: the star
+     * holds, then goes. A linear bloom reads as a zoom, not as a flare.
      */
     sunStar.visible = true;
-    const ease = easeInOutSine(local);
-    sunCore.scale.setScalar(lerp(30, 4.6, ease));
-    sunCorona.scale.setScalar(lerp(96, 17, ease));
-    sunFlare.scale.setScalar(lerp(190, 34, ease));
+    const flare = easeInCubic(local);
+    sunCore.scale.setScalar(lerp(30, 520, flare));
+    sunCorona.scale.setScalar(lerp(96, 1250, flare));
+    sunFlare.scale.setScalar(lerp(190, 900, flare));
     sunCoreMaterial.opacity = 1;
-    sunCoronaMaterial.opacity = lerp(0.72, 0.62, ease);
-    sunFlareMaterial.opacity = lerp(0.62, 0.26, ease);
+    sunCoronaMaterial.opacity = lerp(0.72, 1, flare);
+    sunFlareMaterial.opacity = lerp(0.62, 0.9, clamp01(local * 2)) * (1 - flare * 0.5);
     dust.rotation.z += deltaSeconds * 0.04 * fade;
     return Math.min(1, elapsed / total);
   }

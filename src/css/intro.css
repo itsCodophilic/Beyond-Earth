@@ -543,6 +543,28 @@ body.is-cosmic-intro .progress {
   transition: opacity 900ms ease 260ms;
 }
 
+/*
+ * ...but withdrawn instantly.
+ *
+ * That transition runs in both directions, so at the moment the journey began
+ * the chrome took 900ms -- after a 260ms delay -- to fade out, and the travel
+ * readout sat over the Big Bang still saying "18,100 km from Earth" while the
+ * detonation played behind it. Only the arrival should be eased; the departure
+ * has to be a cut.
+ */
+body.is-cosmic-intro .experience,
+body.is-cosmic-intro .distance-cinematic-layer,
+body.is-cosmic-intro .progress,
+body.is-cosmic-intro .earth-return-button,
+body.is-cosmic-intro .celestial-selection-card,
+body.is-cosmic-intro .satellite-system-overview,
+body.is-cosmic-intro .satellite-atlas-directory,
+body.is-cosmic-intro .satellite-name-layer,
+body.is-cosmic-intro .body-card,
+body.is-cosmic-intro .body-connector {
+  transition: none !important;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .intro::before,
   .intro::after { animation: none; height: 8vh; }
@@ -656,10 +678,20 @@ body.is-cosmic-intro::-webkit-scrollbar { width: 0; height: 0; }
  * than in plain view. The overlay's own fade carries it out.
  */
 .intro.is-landing {
-  animation: intro-landfall 1400ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
+  animation: intro-landfall 1150ms cubic-bezier(0.3, 0.7, 0.4, 1) both;
 }
 
+/*
+ * The white-out the solar system emerges from.
+ *
+ * This used to be a light wash across a match cut, which worked but left the
+ * journey ending on a small star held on black for two and a half seconds --
+ * a lull exactly where the payoff belongs. The sequence now flares instead,
+ * and this carries that flare over the scene change so the system is simply
+ * *there* when the light clears.
+ */
 @keyframes intro-landfall {
-  0%   { background-color: rgba(255, 252, 246, 0.5); }
+  0%   { background-color: rgba(255, 253, 250, 0.94); }
+  22%  { background-color: rgba(255, 252, 246, 0.72); }
   100% { background-color: rgba(0, 1, 4, 0); }
 }

@@ -75,6 +75,12 @@ export function createAboutExperiencePanel({ trigger }) {
   const connector = layer.querySelector(".about-experience__connector");
   // Start with no route at all, so nothing can be drawn before one is solved.
   connector?.style.setProperty("--connector-length", "0px");
+
+  // Same reason as the distance card: a click on this panel must not also be
+  // read by the scene as a click on empty space.
+  ["pointerdown", "pointerup", "click", "dblclick"].forEach((type) => {
+    card?.addEventListener(type, (event) => event.stopPropagation());
+  });
   const connectorPath = connector?.querySelector("path");
   const originDot = connector?.querySelector(".about-experience__connector-origin");
   const connectorPort = layer.querySelector(".about-experience__connector-port");
@@ -278,13 +284,16 @@ export function createAboutExperiencePanel({ trigger }) {
     connectorPort.style.top = `${endY}px`;
 
     connector.setAttribute("viewBox", `0 0 ${width} ${height}`);
+    // Half-pixel centres: a 1px stroke on a whole coordinate straddles two
+    // rows of pixels and shimmers over the repainting canvas beneath it.
+    const crisp = (value) => Math.round(value) + 0.5;
     connectorPath.setAttribute(
       "d",
       [
-        `M ${startX} ${startY}`,
-        `L ${horizontalX.toFixed(2)} ${startY}`,
-        `L ${approachX.toFixed(2)} ${approachY.toFixed(2)}`,
-        `L ${endX} ${endY}`,
+        `M ${crisp(startX)} ${crisp(startY)}`,
+        `L ${crisp(horizontalX)} ${crisp(startY)}`,
+        `L ${crisp(approachX)} ${crisp(approachY)}`,
+        `L ${crisp(endX)} ${crisp(endY)}`,
       ].join(" "),
     );
     // Same fix as the distance connector: an absolute dash cannot be rescaled
@@ -293,8 +302,8 @@ export function createAboutExperiencePanel({ trigger }) {
       "--connector-length",
       `${connectorPath.getTotalLength().toFixed(2)}px`,
     );
-    originDot?.setAttribute("cx", String(startX));
-    originDot?.setAttribute("cy", String(startY));
+    originDot?.setAttribute("cx", String(crisp(startX)));
+    originDot?.setAttribute("cy", String(crisp(startY)));
   }
 
   function dispatchState(isOpen) {
