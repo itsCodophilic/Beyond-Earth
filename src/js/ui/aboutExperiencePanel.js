@@ -29,7 +29,7 @@ export function createAboutExperiencePanel({ trigger }) {
         ${trigger.innerHTML}
       </div>
       <svg class="about-experience__connector" aria-hidden="true" preserveAspectRatio="none">
-        <path pathLength="1"></path>
+        <path></path>
         <circle class="about-experience__connector-origin" r="3.5"></circle>
       </svg>
       <span class="about-experience__connector-port" aria-hidden="true"></span>
@@ -38,20 +38,25 @@ export function createAboutExperiencePanel({ trigger }) {
 
         <div class="about-experience__eyebrow">
           <span>Beyond Earth</span>
-          <span>Interactive 3D learning universe</span>
+          <span>An interactive universe, built to scale</span>
         </div>
 
+        <!--
+          The two lines are the whole argument for the project, so they are the
+          largest type in the product. The turn between them is what the second
+          line is for, which is why it takes the accent colour.
+        -->
         <h2 id="about-experience-title">
-          <span class="about-experience__cosmic-word" data-cosmic>Beyond the sky, let curiosity fly.</span>
-          <span class="about-experience__cosmic-word about-experience__cosmic-word--accent" data-cosmic>From the comfort of home, through the cosmos we roam.</span>
+          <span class="about-experience__cosmic-word" data-cosmic>Almost none of us will ever leave the ground.</span>
+          <span class="about-experience__cosmic-word about-experience__cosmic-word--accent" data-cosmic>Any one of us can leave the planet.</span>
         </h2>
 
         <p class="about-experience__intro about-experience__cosmic-copy" data-cosmic>
-          Beyond Earth turns the unreachable universe into a place anyone can enter. It is a living 3D learning journey for curious minds who dream of seeing space but cannot travel there in reality. Glide from Earth to distant worlds, pause beside planets and moons, and discover the stories, scale, and wonder of the cosmos—one click, scroll, and discovery at a time.
+          Beyond Earth is a place to go, not a page to read. The orbits are solved from real ephemerides, the worlds are the sizes and distances they genuinely are, and the belt between Mars and Jupiter holds the rocks it actually holds. Start at the world you know. Then keep going.
         </p>
 
         <p class="about-experience__vision about-experience__cosmic-copy" data-cosmic>
-          Begin on the world you know, then wander through orbital paths, asteroid fields, glowing stars, and the darkness between them. Look closer, follow your questions, and let the universe teach you by becoming a place you can explore.
+          Drift out past Mars into the debris of a planet that never formed. Watch Saturn's rings resolve from a band of light into a hundred thousand kilometres of ice. Fall beyond Neptune into the dark, where the Sun is only the brightest star. Stay as long as you like — nothing out here is in a hurry.
         </p>
 
         <footer class="about-experience__author">
@@ -68,6 +73,8 @@ export function createAboutExperiencePanel({ trigger }) {
   const brandAnchor = layer.querySelector(".about-experience__brand-anchor");
   const closeButton = layer.querySelector(".about-experience__close");
   const connector = layer.querySelector(".about-experience__connector");
+  // Start with no route at all, so nothing can be drawn before one is solved.
+  connector?.style.setProperty("--connector-length", "0px");
   const connectorPath = connector?.querySelector("path");
   const originDot = connector?.querySelector(".about-experience__connector-origin");
   const connectorPort = layer.querySelector(".about-experience__connector-port");
@@ -279,6 +286,12 @@ export function createAboutExperiencePanel({ trigger }) {
         `L ${approachX.toFixed(2)} ${approachY.toFixed(2)}`,
         `L ${endX} ${endY}`,
       ].join(" "),
+    );
+    // Same fix as the distance connector: an absolute dash cannot be rescaled
+    // through pathLength, so the line has to be told how long it actually is.
+    connector.style.setProperty(
+      "--connector-length",
+      `${connectorPath.getTotalLength().toFixed(2)}px`,
     );
     originDot?.setAttribute("cx", String(startX));
     originDot?.setAttribute("cy", String(startY));

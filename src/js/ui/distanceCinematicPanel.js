@@ -18,8 +18,8 @@ export function createDistanceCinematicPanel({ readoutElement }) {
       preserveAspectRatio="none"
       hidden
     >
-      <path class="distance-cinematic-connector__trail" pathLength="1"></path>
-      <path class="distance-cinematic-connector__beam" pathLength="1"></path>
+      <path class="distance-cinematic-connector__trail"></path>
+      <path class="distance-cinematic-connector__beam"></path>
       <circle class="distance-cinematic-connector__origin" r="4"></circle>
       <circle class="distance-cinematic-connector__destination" r="4"></circle>
     </svg>
@@ -43,6 +43,8 @@ export function createDistanceCinematicPanel({ readoutElement }) {
 
   const panel = layer.querySelector("#distance-unit-popover");
   const connector = layer.querySelector(".distance-cinematic-connector");
+  // Start with no route at all, so nothing can be drawn before one is solved.
+  connector?.style.setProperty("--connector-length", "0px");
   const connectorTrail = connector.querySelector(".distance-cinematic-connector__trail");
   const connectorBeam = connector.querySelector(".distance-cinematic-connector__beam");
   const connectorOrigin = connector.querySelector(".distance-cinematic-connector__origin");
@@ -102,6 +104,22 @@ export function createDistanceCinematicPanel({ readoutElement }) {
     connector.setAttribute("viewBox", `0 0 ${window.innerWidth} ${window.innerHeight}`);
     connectorTrail.setAttribute("d", pathData);
     connectorBeam.setAttribute("d", pathData);
+
+    /*
+     * Publish the route's real length, and animate the dash from that.
+     *
+     * The draw-on used `pathLength="1"` with `stroke-dasharray: 1`, which is
+     * the usual trick -- but the computed dash resolves to `1px`, an absolute
+     * length, and Chrome does not rescale an absolute dash through pathLength.
+     * The result was a stroke that stopped roughly halfway along the route and
+     * never reached the card: the gap.
+     *
+     * Measuring the path and handing the number to CSS removes the ambiguity
+     * entirely. The dash is now exactly as long as the line it has to cover,
+     * whatever shape the route takes.
+     */
+    const routeLength = connectorBeam.getTotalLength();
+    connector.style.setProperty("--connector-length", `${routeLength.toFixed(2)}px`);
     connectorOrigin.setAttribute("cx", firstPoint.x);
     connectorOrigin.setAttribute("cy", firstPoint.y);
     connectorDestination.setAttribute("cx", lastPoint.x);

@@ -9,3 +9,5 @@
 @import url("./hud.css");
 @import url("./celestial-card.css");
 @import url("./brand.css");
+/* Loaded last so it can restate the interface in the language of the intro. */
+@import url("./cinematic-ui.css");

@@ -1,0 +1,2126 @@
+/*
+ * The cinematic interface layer.
+ *
+ * The opening sequence and the experience it opens into were speaking two
+ * different languages: forty seconds of restrained, filmic titling -- hairline
+ * rules, wide-tracked monospace, warm amber, near-black -- and then a set of
+ * glowing cyan glass panels. This layer carries the film language the whole
+ * way through, so arriving at the solar system reads as the next shot rather
+ * than as leaving the film and entering a dashboard.
+ *
+ * Loaded last, so it is free to replace what the component modules set. That
+ * is deliberate: every ID, class and behaviour those modules depend on is
+ * untouched, and only appearance and layout are rewritten here. Deleting this
+ * one import restores the previous interface exactly.
+ *
+ * Four ideas do most of the work:
+ *
+ *   No boxes.        A rounded, filled, glowing panel is a dialog. A hairline
+ *                    rule with type hanging off it is a title card. Almost
+ *                    nothing here has a border on all four sides.
+ *   One rule each.   Every surface is anchored by a single amber hairline that
+ *                    draws itself on when the surface appears. It is the same
+ *                    gesture as the manifest's rule in act one.
+ *   Numbers align.   Every figure is monospace and right-aligned, so values
+ *                    stack into a column you can read down. Proportional
+ *                    digits in a data panel are the difference between a
+ *                    readout and a paragraph.
+ *   Type does the    Scale, weight and tracking carry the hierarchy instead of
+ *   hierarchy.       background fills. It costs no pixels and never competes
+ *                    with the scene behind it.
+ */
+
+:root {
+  --cin-ink: rgba(255, 246, 232, 0.96);
+  --cin-ink-soft: rgba(226, 216, 204, 0.58);
+  --cin-ink-faint: rgba(206, 216, 234, 0.3);
+  --cin-amber: rgba(255, 196, 130, 0.9);
+  --cin-amber-soft: rgba(255, 196, 130, 0.3);
+  --cin-veil: rgba(2, 4, 9, 0.82);
+  --cin-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  --cin-micro: 0.6rem;
+}
+
+/* A label in the manifest's voice: tiny, tracked out, monospace, quiet. */
+.cin-micro,
+.body-card__eyebrow,
+.distance-readout__header,
+.satellite-system-overview__copy small,
+.satellite-atlas-directory__header small {
+  font-family: var(--cin-mono);
+  font-size: var(--cin-micro);
+  font-weight: 400;
+  letter-spacing: 0.32em;
+  text-transform: uppercase;
+  color: var(--cin-amber);
+}
+
+/* The hairline every surface hangs from. */
+@keyframes cin-rule {
+  from { transform: scaleX(0); }
+  to   { transform: scaleX(1); }
+}
+
+@keyframes cin-rise {
+  from { opacity: 0; transform: translateY(10px); filter: blur(4px); }
+  to   { opacity: 1; transform: none; filter: blur(0); }
+}
+
+/* ------------------------------------------------- the selection card */
+
+/*
+ * The card that names whatever the cursor is on.
+ *
+ * It floats in the frame anchored to a body in 3D, so unlike the other
+ * surfaces it does need something behind it -- it can land on a bright
+ * planet as easily as on empty space. It gets the least panel that will
+ * still read: near-black, square, one amber hairline across the top, and
+ * nothing else. No glow, no gradient, no rounded glass.
+ *
+ * (`.body-card` above it in the cascade is dead: celestial-card.css retires it
+ * with `display: none !important` in favour of this plus the centred dossier.)
+ */
+.celestial-selection-card {
+  width: max-content;
+  min-width: 208px;
+  max-width: 300px;
+  gap: 0.55rem;
+  padding: 0.8rem 0.95rem 0.85rem;
+  border: 0;
+  border-top: 1px solid var(--cin-amber);
+  border-radius: 0;
+  background: linear-gradient(180deg, rgba(3, 5, 11, 0.94), rgba(3, 5, 11, 0.82));
+  color: var(--cin-ink);
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  transform: translateY(6px);
+  transition: opacity 180ms ease, transform 300ms cubic-bezier(0.16, 0.84, 0.3, 1);
+}
+
+.celestial-selection-card.is-visible { transform: translateY(0); }
+
+.celestial-selection-card__path {
+  gap: 0.4rem;
+  font-family: var(--cin-mono);
+  font-size: 0.52rem;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--cin-ink-faint);
+}
+
+.celestial-selection-card__path i {
+  font-style: normal;
+  color: var(--cin-amber-soft);
+}
+
+.celestial-selection-card__identity { align-items: center; gap: 0.6rem; }
+
+.celestial-selection-card__identity strong {
+  /* Names are names. The old card set them in tracked uppercase, which turns
+     Ganymede into a label; the intro sets every proper noun in normal case
+     and lets the size carry the weight. */
+  font-size: 1.16rem;
+  font-weight: 250;
+  letter-spacing: 0.02em;
+  text-transform: none;
+  line-height: 1.15;
+  color: var(--cin-ink);
+  background: none;
+  -webkit-text-fill-color: currentColor;
+}
+
+.celestial-selection-card__identity small {
+  font-family: var(--cin-mono);
+  font-size: 0.52rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--cin-ink-faint);
+}
+
+/* A thin ring rather than a filled chip -- the same mark as the singularity. */
+.celestial-selection-card__info-icon {
+  width: 20px;
+  height: 20px;
+  border: 1px solid var(--cin-amber-soft);
+  border-radius: 50%;
+  background: none;
+  box-shadow: none;
+  color: var(--cin-amber);
+  font-family: var(--cin-mono);
+  font-size: 0.58rem;
+  font-style: normal;
+  line-height: 18px;
+  text-align: center;
+  transition: border-color 200ms ease, color 200ms ease;
+}
+
+.celestial-selection-card:hover .celestial-selection-card__info-icon,
+.celestial-selection-card:focus-visible .celestial-selection-card__info-icon {
+  border-color: var(--cin-amber);
+  background: none;
+  box-shadow: none;
+  color: var(--cin-ink);
+}
+
+.celestial-selection-card__satellite-rank {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  font-family: var(--cin-mono);
+  font-size: 0.52rem;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: rgba(255, 196, 130, 0.6);
+}
+
+.celestial-selection-card__instruction {
+  padding: 0.5rem 0 0;
+  border: 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  background: none;
+  font-family: var(--cin-mono);
+  font-size: 0.52rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: rgba(255, 196, 130, 0.55);
+}
+
+.celestial-selection-card:hover { border-top-color: var(--cin-amber); box-shadow: 0 18px 44px rgba(0, 0, 0, 0.55); }
+
+/* --------------------------------------------------- the distance readout */
+
+/*
+ * The travel instrument. Same three facts, restated as a title card: a rule
+ * across the top, the figure set large and thin beneath it, and the supporting
+ * values as one monospace line.
+ */
+.progress.distance-readout {
+  /*
+   * The old rule kept this inside a fixed panel with `overflow: hidden`, which
+   * cut the figure off mid-word once it read "6.0 light-years from Earth".
+   * Without a box to fit inside, it can simply be as wide as its longest line.
+   */
+  width: max-content;
+  /*
+   * A floor, so the box does not resize on every frame.
+   *
+   * The figure changes continuously while the camera is moving -- "18,100 km",
+   * "5,000,000 km", "43.1 AU" -- and with a purely content-driven width the
+   * whole readout, including the hairlines that span it, jittered horizontally
+   * once per frame. The floor covers the common cases so only genuinely long
+   * values move it at all.
+   */
+  min-width: min(24rem, calc(100vw - 40px));
+  max-width: min(560px, calc(100vw - 40px));
+  min-height: 0;
+  overflow: visible;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+.progress::before { display: none; }
+
+.progress.distance-readout::after {
+  content: "";
+  position: absolute;
+  inset: -22px -26px -20px -24px;
+  z-index: -1;
+  background: linear-gradient(20deg, rgba(2, 4, 9, 0.9), rgba(2, 4, 9, 0.42) 62%, transparent);
+  -webkit-mask-image: linear-gradient(0deg, #000 60%, transparent);
+  mask-image: linear-gradient(0deg, #000 60%, transparent);
+  pointer-events: none;
+}
+
+.distance-readout__value {
+  font-size: clamp(1.32rem, 1.85vw, 1.78rem);
+}
+
+.distance-readout__header {
+  /* The mode label carried `flex: 1 1 210px`, whose basis alone was wider than
+     the row, so it wrapped onto a line of its own under "You are at". These
+     two belong side by side: one names the reading, the other qualifies it. */
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 0.75rem;
+  align-items: baseline;
+  margin: 0 0 0.75rem;
+  padding: 0.85rem 0 0;
+  border: 0;
+  border-top: 1px solid var(--cin-amber-soft);
+  background: none;
+}
+
+.distance-readout__header em {
+  flex: 0 0 auto;
+  width: auto;
+  font-style: normal;
+  color: var(--cin-ink-faint);
+  letter-spacing: 0.22em;
+}
+
+.distance-readout__value {
+  display: block;
+  margin: 0;
+  font-size: clamp(1.5rem, 2.1vw, 2.05rem);
+  font-weight: 200;
+  letter-spacing: 0.004em;
+  line-height: 1.1;
+  color: var(--cin-ink);
+  background: none;
+  -webkit-text-fill-color: currentColor;
+  text-shadow: 0 0 30px rgba(0, 0, 0, 0.85);
+}
+
+.distance-readout__footer {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 0.85rem;
+  align-items: baseline;
+  justify-content: flex-start;
+  margin: 0.7rem 0 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  font-family: var(--cin-mono);
+  font-size: 0.62rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--cin-ink-faint);
+}
+
+/* The region label came through in the old cyan; everything in this layer
+   reads on the same warm scale so nothing jumps out of the palette. */
+.distance-readout__footer > span:first-child {
+  color: var(--cin-ink-faint);
+  background: none;
+  -webkit-text-fill-color: currentColor;
+}
+
+.distance-readout__footer span + span {
+  margin-left: 0;
+  font-variant-numeric: tabular-nums;
+  color: rgba(255, 214, 168, 0.62);
+  background: none;
+  -webkit-text-fill-color: currentColor;
+}
+
+.distance-readout__footer span + span::before {
+  content: "· ";
+  color: var(--cin-amber-soft);
+}
+
+.distance-readout__method {
+  display: flex;
+  gap: 0.6rem;
+  align-items: center;
+  margin: 0.95rem 0 0;
+  padding: 0.6rem 0 0;
+  border: 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+  text-align: left;
+  transition: border-color 240ms ease;
+}
+
+.distance-readout__method:hover,
+.distance-readout__method:focus-visible {
+  border-top-color: var(--cin-amber-soft);
+  background: none;
+  box-shadow: none;
+}
+
+.distance-readout__method-icon {
+  width: 15px;
+  height: 15px;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+  color: var(--cin-amber);
+  opacity: 0.75;
+}
+
+.distance-readout__method-icon svg {
+  width: 100%;
+  height: 100%;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.35;
+}
+
+.distance-readout__method-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 0.16rem;
+  font-family: var(--cin-mono);
+  font-size: var(--cin-micro);
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: rgba(226, 216, 204, 0.62);
+}
+
+.distance-readout__method-copy small {
+  font-size: 0.54rem;
+  letter-spacing: 0.16em;
+  color: var(--cin-ink-faint);
+  text-transform: none;
+}
+
+.distance-readout__method-arrow {
+  margin-left: auto;
+  color: var(--cin-amber-soft);
+  font-size: 0.9rem;
+  transition: transform 240ms ease, color 240ms ease;
+}
+
+.distance-readout__method:hover .distance-readout__method-arrow {
+  transform: translateX(3px);
+  color: var(--cin-amber);
+}
+
+/* ------------------------------------------------- reveal every moon */
+
+/*
+ * An invitation, not a button.
+ *
+ * A filled pill in the corner of a film is a piece of software. This is a
+ * bracketed mark and a line of tracked type, with a ring that keeps turning --
+ * the same orbital gesture the singularity used, so the control reads as
+ * belonging to the same world it is pointing at.
+ */
+.satellite-system-overview {
+  /* The fixed 268px box wrapped the label onto two lines and truncated the
+     note. Type this small has to be given the width it asks for. */
+  width: max-content;
+  max-width: min(360px, calc(100vw - 32px));
+  grid-template-columns: 10px 1fr auto;
+  gap: 0.85rem;
+  padding: 0.85rem 0 0;
+  border: 0;
+  border-top: 1px solid var(--cin-amber-soft);
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+  backdrop-filter: none;
+  transition: opacity 320ms ease, transform 420ms cubic-bezier(0.16, 0.84, 0.3, 1);
+}
+
+.satellite-system-overview::before,
+.satellite-system-overview::after { display: none; }
+
+.satellite-system-overview__signal {
+  position: relative;
+  width: 9px;
+  height: 9px;
+  border: 0;
+  border-radius: 50%;
+  background: #ffd096;
+  box-shadow: 0 0 12px rgba(255, 208, 150, 0.9);
+}
+
+.satellite-system-overview__signal::after {
+  content: "";
+  position: absolute;
+  inset: -7px;
+  border: 1px solid rgba(255, 200, 150, 0.34);
+  border-radius: 50%;
+  animation: cin-orbit-ring 3200ms ease-out infinite;
+}
+
+@keyframes cin-orbit-ring {
+  0%   { transform: scale(0.6); opacity: 0; }
+  30%  { opacity: 0.9; }
+  100% { transform: scale(1.9); opacity: 0; }
+}
+
+.satellite-system-overview__copy {
+  gap: 0.3rem;
+  text-align: left;
+}
+
+.satellite-system-overview__copy small,
+.satellite-system-overview__copy em { white-space: nowrap; }
+
+.satellite-system-overview__copy strong {
+  font-size: 0.98rem;
+  font-weight: 250;
+  letter-spacing: 0.05em;
+  color: var(--cin-ink);
+  background: none;
+  -webkit-text-fill-color: currentColor;
+}
+
+.satellite-system-overview__copy em {
+  font-family: var(--cin-mono);
+  font-size: 0.56rem;
+  font-style: normal;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--cin-ink-faint);
+}
+
+.satellite-system-overview__icon {
+  margin-left: 0.4rem;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+  color: var(--cin-amber-soft);
+  font-size: 1.05rem;
+  transition: color 240ms ease, transform 600ms cubic-bezier(0.16, 0.84, 0.3, 1);
+}
+
+.satellite-system-overview:hover {
+  border-top-color: var(--cin-amber);
+  background: none;
+  box-shadow: none;
+  transform: none;
+}
+
+.satellite-system-overview:hover .satellite-system-overview__icon {
+  color: var(--cin-amber);
+  transform: rotate(90deg);
+}
+
+/* ------------------------------------------------------ the moon atlas */
+
+/*
+ * The strip along the bottom of the frame.
+ *
+ * Anchored by one rule across the full width, with the catalogue running
+ * beneath it and dissolving off both edges rather than stopping at a hard
+ * border. Each moon is an ordinal above a name -- a catalogue entry, which is
+ * what it is -- and the whole row is set in monospace so the numbers form an
+ * even rhythm as it scrolls.
+ */
+.satellite-atlas-directory {
+  /*
+   * Edge to edge along the bottom of the frame. A 820px panel floating in the
+   * lower right is a dialog; a band that runs the full width and dissolves at
+   * both ends is the lower third of a title sequence, and it gives ninety-five
+   * moons somewhere to actually go.
+   */
+  right: 0;
+  left: 0;
+  bottom: 0;
+  width: auto;
+  min-width: 0;
+  gap: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: linear-gradient(0deg, rgba(1, 3, 7, 0.95) 42%, rgba(1, 3, 7, 0.72) 78%, transparent);
+  box-shadow: none;
+  backdrop-filter: blur(9px);
+}
+
+.satellite-atlas-directory::before,
+.satellite-atlas-directory::after { display: none; }
+
+.satellite-atlas-directory__header {
+  align-items: flex-end;
+  margin: 0;
+  padding: 1.05rem clamp(20px, 4vw, 54px) 0.85rem;
+  border: 0;
+  border-top: 1px solid var(--cin-amber-soft);
+  background: none;
+}
+
+.satellite-atlas-directory__header > span { gap: 0.4rem; }
+
+.satellite-atlas-directory__header strong {
+  font-size: 1.02rem;
+  font-weight: 250;
+  letter-spacing: 0.05em;
+  color: var(--cin-ink);
+  background: none;
+  -webkit-text-fill-color: currentColor;
+}
+
+/* Search as an underline, not a field. */
+.satellite-atlas-directory__search {
+  border: 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+  transition: border-color 240ms ease;
+}
+
+.satellite-atlas-directory__search:focus-within {
+  border-bottom-color: var(--cin-amber);
+  background: none;
+  box-shadow: none;
+}
+
+.satellite-atlas-directory__search::before {
+  color: var(--cin-amber-soft);
+  opacity: 0.9;
+}
+
+.satellite-atlas-directory__search input {
+  padding: 0.34rem 0 0.34rem 1.5rem;
+  border: 0;
+  background: none;
+  box-shadow: none;
+  font-family: var(--cin-mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.14em;
+  color: var(--cin-ink);
+}
+
+.satellite-atlas-directory__search input::placeholder {
+  color: var(--cin-ink-faint);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  font-size: 0.58rem;
+}
+
+.satellite-atlas-directory__close {
+  border: 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+  color: var(--cin-ink-faint);
+  font-size: 1.2rem;
+  font-weight: 200;
+  transition: color 200ms ease, transform 200ms ease;
+}
+
+.satellite-atlas-directory__close:hover,
+.satellite-atlas-directory__close:focus-visible {
+  border: 0;
+  background: none;
+  box-shadow: none;
+  color: var(--cin-amber);
+  transform: scale(1.15);
+}
+
+/*
+ * The catalogue itself.
+ *
+ * The mask is the detail that matters: the row dissolves at both ends instead
+ * of being cut off by the edge of a container, so there is no visible box and
+ * the strip reads as continuing past the frame -- which, with ninety-five
+ * moons in it, it does.
+ */
+.satellite-atlas-directory__list {
+  gap: 0;
+  padding: 0.55rem clamp(20px, 4vw, 54px) 0.5rem;
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 3%, #000 97%, transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 3%, #000 97%, transparent);
+  scrollbar-width: none;
+}
+
+.satellite-atlas-directory__list::-webkit-scrollbar { height: 0; }
+
+.satellite-atlas-directory__moon {
+  flex-direction: column;
+  gap: 0.25rem;
+  /* Sized by the name, with a floor so short ones keep a common rhythm. */
+  width: auto;
+  min-width: 104px;
+  max-width: none;
+  padding: 0.6rem 1rem 0.65rem;
+  border: 0;
+  border-left: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+  text-align: left;
+  transition: background 220ms ease, border-color 220ms ease;
+}
+
+.satellite-atlas-directory__moon:first-child { border-left-color: transparent; }
+
+.satellite-atlas-directory__moon > span {
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  font-family: var(--cin-mono);
+  font-size: 0.54rem;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.22em;
+  color: rgba(255, 196, 130, 0.42);
+}
+
+.satellite-atlas-directory__moon strong {
+  max-width: none;
+  overflow: visible;
+  text-overflow: clip;
+  font-size: 0.8rem;
+  font-weight: 300;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+  color: rgba(226, 216, 204, 0.72);
+  background: none;
+  -webkit-text-fill-color: currentColor;
+  transition: color 220ms ease;
+}
+
+.satellite-atlas-directory__moon:hover,
+.satellite-atlas-directory__moon:focus-visible {
+  border-color: rgba(255, 255, 255, 0.08);
+  background: linear-gradient(180deg, rgba(255, 196, 130, 0.08), transparent 70%);
+  box-shadow: none;
+  transform: none;
+}
+
+.satellite-atlas-directory__moon:hover strong,
+.satellite-atlas-directory__moon:focus-visible strong { color: var(--cin-ink); }
+
+.satellite-atlas-directory__moon:hover > span,
+.satellite-atlas-directory__moon:focus-visible > span { color: var(--cin-amber); }
+
+/* The one currently being previewed in the scene, marked by its own rule. */
+.satellite-atlas-directory__moon.is-orbit-preview {
+  border-color: rgba(255, 255, 255, 0.08);
+  background: linear-gradient(180deg, rgba(255, 196, 130, 0.13), transparent 72%);
+  box-shadow: inset 0 2px 0 var(--cin-amber);
+}
+
+.satellite-atlas-directory__moon.is-orbit-preview strong { color: var(--cin-ink); }
+.satellite-atlas-directory__moon.is-orbit-preview > span { color: var(--cin-amber); }
+
+.satellite-atlas-directory footer {
+  padding: 0.55rem clamp(20px, 4vw, 54px) 0.9rem;
+  font-weight: 400;
+  border: 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  background: none;
+  font-family: var(--cin-mono);
+  font-size: 0.54rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--cin-ink-faint);
+}
+
+/*
+ * The atlas now runs the full width of the frame, so when it opens it would
+ * sit straight over the travel readout in the corner. Lifting the readout
+ * above the band keeps both legible without either needing to know about the
+ * other in JavaScript.
+ */
+body:has(.satellite-atlas-directory.is-visible) .progress.distance-readout {
+  bottom: 172px;
+  transition: bottom 420ms cubic-bezier(0.16, 0.84, 0.3, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .satellite-system-overview__signal::after { animation: none; }
+  .body-card::after { transition: none; transform: scaleY(1); }
+}
+
+/* ------------------------------------------------------ the header row */
+
+/*
+ * The brand and the instructions were the two loudest objects on screen: a
+ * glowing bordered slab in each top corner, over a shot that is otherwise
+ * black. Both are reference material -- you read them once and then want them
+ * out of the way -- so both lose their containers and become type on the
+ * frame, held by the same hairline as everything else.
+ */
+.brand {
+  /* Same reason as the instruction row: the glass sweep is animated, so it
+     survives every static override until the animation is stopped. */
+  animation: none;
+  min-width: 0;
+  min-height: 0;
+  grid-template-columns: 40px auto;
+  gap: 0.8rem;
+  padding: 0.75rem 0 0;
+  border: 0;
+  border-top: 1px solid var(--cin-amber-soft);
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+  backdrop-filter: none;
+  transition: border-color 260ms ease;
+}
+
+.brand::before,
+.brand::after { display: none; }
+
+.brand:hover,
+.brand:focus-visible {
+  border-top-color: var(--cin-amber);
+  background: none;
+  box-shadow: none;
+  transform: none;
+}
+
+/*
+ * The mark keeps turning -- it is the one piece of motion worth having up
+ * there -- but drops most of its colour and all of its bloom, so it sits in
+ * the frame as a small silver planet rather than as a lit-up logo.
+ */
+.brand__mark { width: 40px; height: 40px; }
+
+.brand__mark,
+.brand__planet,
+.brand__orbit {
+  filter: saturate(0.22) brightness(0.82);
+}
+
+.brand__planet {
+  width: 22px;
+  border-color: rgba(232, 224, 214, 0.55);
+  box-shadow: inset -5px -4px 8px rgba(0, 0, 0, 0.85);
+}
+
+.brand__orbit { border-color: rgba(255, 196, 130, 0.3); box-shadow: none; }
+
+.brand__copy { gap: 0.28rem; }
+
+.brand__kicker {
+  font-family: var(--cin-mono);
+  font-size: var(--cin-micro);
+  font-weight: 400;
+  letter-spacing: 0.32em;
+  text-transform: uppercase;
+  color: var(--cin-amber);
+  background: none;
+  -webkit-text-fill-color: currentColor;
+}
+
+.brand__text {
+  font-size: 1.06rem;
+  font-weight: 250;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--cin-ink);
+  background: none;
+  -webkit-text-fill-color: currentColor;
+  text-shadow: none;
+}
+
+/* ---- the instruction row */
+
+.ship-controls {
+  /*
+   * The pulsing glow is a keyframe animation, and an animated value beats a
+   * plain declaration however late it is in the cascade -- setting box-shadow
+   * to none here did nothing until the animation itself was called off. It has
+   * to go regardless: a border that breathes cyan and rose on a loop is the
+   * single least filmic thing on the screen.
+   */
+  animation: none;
+  /* The old pill clipped its own last item; without a box there is nothing to
+     clip against, so the row is simply as wide as the three instructions. */
+  max-width: none;
+  overflow: visible;
+  gap: 0;
+  padding: 0.75rem 0 0;
+  border: 0;
+  border-top: 1px solid var(--cin-amber-soft);
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+.ship-controls::before,
+.ship-controls::after { display: none; }
+
+.ship-controls__step,
+.ship-controls__escape {
+  gap: 0.55rem;
+  padding: 0.1rem 1.15rem;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+}
+
+.ship-controls__step + .ship-controls__step,
+.ship-controls__escape {
+  border-left: 1px solid rgba(255, 255, 255, 0.09);
+}
+
+.ship-controls__escape:last-child { padding-right: 0; }
+
+.ship-controls__index {
+  width: auto;
+  height: auto;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+  font-family: var(--cin-mono);
+  font-size: 0.54rem;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.2em;
+  color: rgba(255, 196, 130, 0.55);
+}
+
+.ship-controls__copy { gap: 0.14rem; }
+
+.ship-controls__copy strong {
+  font-size: 0.78rem;
+  font-weight: 300;
+  letter-spacing: 0.035em;
+  text-transform: none;
+  color: var(--cin-ink);
+  background: none;
+  -webkit-text-fill-color: currentColor;
+}
+
+.ship-controls__copy small {
+  font-family: var(--cin-mono);
+  font-size: 0.5rem;
+  font-weight: 400;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--cin-ink-faint);
+  text-shadow: none;
+}
+
+.ship-controls__copy strong { text-shadow: none; }
+
+.ship-controls__escape kbd {
+  padding: 0.16rem 0.42rem;
+  border: 1px solid var(--cin-amber-soft);
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+  font-family: var(--cin-mono);
+  font-size: 0.5rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--cin-amber);
+}
+
+.ship-controls__escape:hover,
+.ship-controls__escape:focus-visible {
+  border-color: rgba(255, 255, 255, 0.09);
+  background: none;
+  box-shadow: none;
+}
+
+.ship-controls__escape:hover kbd,
+.ship-controls__escape:focus-visible kbd {
+  border-color: var(--cin-amber);
+  background: none;
+  box-shadow: none;
+  color: var(--cin-ink);
+}
+
+/* ================================================================== *
+ *  Second pass: the surfaces that only appear on hover, click or open
+ * ================================================================== */
+
+/*
+ * Re-point the global palette.
+ *
+ * base.css hands out --cyan, --green, --rose and --gold to anything that wants
+ * an accent, which is how the interface ended up with four unrelated colours
+ * signalling four unrelated things. Redefining them here retunes everything
+ * that reads them -- including surfaces this file never names -- onto one warm
+ * scale. Nothing is lost: hierarchy in this language comes from type and rules,
+ * not from hue, so an accent only has to be the accent.
+ */
+:root {
+  --cyan: rgba(255, 214, 170, 0.92);
+  --green: rgba(255, 214, 170, 0.92);
+  --rose: rgba(255, 176, 120, 0.85);
+  --gold: #ffc482;
+  --line: rgba(255, 255, 255, 0.09);
+  --panel: rgba(3, 5, 11, 0.86);
+}
+
+/*
+ * The shared plate.
+ *
+ * Every surface that has to float over the scene and be read at a glance --
+ * orbit tooltips, ring cards, popovers -- is the same object: near-black,
+ * square, one amber hairline across the top, and no glow. Grouping them means
+ * they can never drift apart again.
+ */
+.planet-orbit-hover-tooltip,
+.asteroid-hover-tooltip,
+.saturn-ring-hover-card,
+.distance-cinematic-panel.distance-unit-popover {
+  border: 0;
+  border-top: 1px solid var(--cin-amber);
+  border-radius: 0;
+  background: linear-gradient(180deg, rgba(3, 5, 11, 0.95), rgba(3, 5, 11, 0.86));
+  box-shadow: 0 20px 52px rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(11px);
+  -webkit-backdrop-filter: blur(11px);
+  color: var(--cin-ink);
+}
+
+/* ------------------------------------------- 1. orbit and asteroid tooltips */
+
+.planet-orbit-hover-tooltip,
+.asteroid-hover-tooltip {
+  gap: 0.34rem;
+  min-width: 0;
+  width: max-content;
+  max-width: min(300px, calc(100vw - 24px));
+  padding: 0.7rem 0.9rem 0.75rem;
+}
+
+.planet-orbit-hover-tooltip__eyebrow,
+.asteroid-hover-tooltip span:first-child {
+  font-family: var(--cin-mono);
+  font-size: 0.5rem;
+  font-weight: 400;
+  letter-spacing: 0.26em;
+  text-transform: uppercase;
+  color: var(--cin-amber);
+}
+
+/* Orbit names are names: the old card tracked them out in uppercase and then
+   cut them off with an ellipsis at 240px. */
+.planet-orbit-hover-tooltip strong,
+.asteroid-hover-tooltip strong {
+  overflow: visible;
+  max-width: none;
+  font-size: 0.92rem;
+  font-weight: 250;
+  letter-spacing: 0.02em;
+  text-overflow: clip;
+  text-transform: none;
+  color: var(--cin-ink);
+  background: none;
+  -webkit-text-fill-color: currentColor;
+}
+
+.planet-orbit-hover-tooltip small,
+.asteroid-hover-tooltip span {
+  font-family: var(--cin-mono);
+  font-size: 0.56rem;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.1em;
+  color: var(--cin-ink-soft);
+}
+
+/* --------------------------------------------- 2. the moon catalogue chips */
+
+/*
+ * The entry was still `display: grid` with two columns and a 164px ceiling, so
+ * `flex-direction: column` in the first pass did nothing and every long name
+ * was truncated with an ellipsis. Declaring the flow explicitly, and letting
+ * the entry be as wide as the name it carries, is the fix.
+ */
+.satellite-atlas-directory__moon {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  grid-template-columns: none;
+  width: auto;
+  min-width: 104px;
+  max-width: none;
+}
+
+.satellite-atlas-directory__moon > span {
+  display: block;
+  min-width: 0;
+  height: auto;
+  place-items: initial;
+}
+
+.satellite-atlas-directory__moon strong {
+  overflow: visible;
+  max-width: none;
+  text-overflow: clip;
+}
+
+/* ----------------------------- 3. the distance explanations and their line */
+
+/*
+ * The connector is gone.
+ *
+ * It drew an SVG beam from the readout to the popover, and because the two are
+ * laid out independently the line regularly started or ended somewhere near
+ * neither -- the broken linkage. A line that has to be aimed at a target that
+ * moves is a standing bug; a panel that simply sits against the thing it
+ * explains needs no line at all, and reads quieter for it.
+ */
+/*
+ * The connector, restored and redrawn.
+ *
+ * Hiding it was the wrong call: the line is the thing that makes the
+ * explanation feel like it is being pulled out of the reading rather than
+ * appearing on top of it, and the slow travel of the light along it is the
+ * best moment in the interaction. What was wrong was never the geometry --
+ * that is solved live from both rects -- but a 6px glowing cyan trail under a
+ * 1.65px beam, which read as two lines that did not agree with each other.
+ *
+ * One hairline, one colour, no bloom, and a longer draw so the light visibly
+ * travels.
+ */
+.distance-cinematic-connector {
+  color: rgba(255, 208, 158, 0.95);
+  filter: none;
+}
+
+/*
+ * Why the line never reached the card.
+ *
+ * Two faults stacked on top of each other, and both had to go.
+ *
+ * The first: the draw-on used `pathLength="1"` with `stroke-dasharray: 1`.
+ * That resolves to an absolute `1px`, and Chrome does not rescale an absolute
+ * dash through pathLength, so the dash bore no relation to the route. The
+ * panel code now measures the path and publishes its real length as
+ * --connector-length.
+ *
+ * The second, and the reason this was only ever visible on some machines:
+ * `vector-effect: non-scaling-stroke` resolves the dash pattern in DEVICE
+ * pixels, while getTotalLength() returns user units. On a 2x display that
+ * makes every dash exactly half as long as it should be -- so the stroke
+ * stopped at the midpoint of the route and the last leg into the card simply
+ * never drew. It reads as a gap; it is a scale factor.
+ *
+ * The vector effect is not needed here. The SVG's viewBox is set to the
+ * viewport every time the path is solved, so one user unit is already one CSS
+ * pixel and a 1-unit stroke is a hairline either way.
+ */
+.distance-cinematic-connector__trail,
+.distance-cinematic-connector__beam,
+.about-experience__connector path {
+  vector-effect: none;
+  /*
+   * Two values, and a gap far longer than any route.
+   *
+   * A single-value dash fails dangerously: if --connector-length is ever
+   * missing or stale -- on the very first open after a reload, before the
+   * panel code has measured anything -- the pattern becomes one enormous dash
+   * and `is-visible` snaps the whole line on at once, with no draw. Then the
+   * real length arrives a frame later and it restarts from hidden. That is a
+   * flash, and it only ever happens on the first open.
+   *
+   * With an explicit huge gap, a length of 0 draws nothing at all, so the
+   * unmeasured state fails to invisible instead of to fully-drawn.
+   */
+  stroke-dasharray: var(--connector-length, 0px) 99999px;
+  stroke-dashoffset: var(--connector-length, 0px);
+}
+
+.distance-cinematic-connector.is-visible .distance-cinematic-connector__trail,
+.distance-cinematic-connector.is-visible .distance-cinematic-connector__beam,
+.about-experience.is-route-drawing .about-experience__connector path {
+  stroke-dashoffset: 0;
+}
+
+.distance-cinematic-connector.is-retiring .distance-cinematic-connector__trail,
+.distance-cinematic-connector.is-retiring .distance-cinematic-connector__beam,
+.about-experience.is-closing .about-experience__connector path {
+  stroke-dashoffset: var(--connector-length, 0px);
+}
+
+.distance-cinematic-connector__trail {
+  stroke-width: 1;
+  opacity: 0.16;
+}
+
+.distance-cinematic-connector__beam {
+  stroke-width: 1;
+  opacity: 0.95;
+}
+
+.distance-cinematic-connector__trail,
+.distance-cinematic-connector__beam {
+  transition: stroke-dashoffset 1080ms cubic-bezier(0.22, 0.61, 0.24, 1);
+}
+
+/* Endpoints as small open marks: a filled dot with a white ring reads as a
+   handle, an open ring reads as an anchor. */
+.distance-cinematic-connector__origin,
+.distance-cinematic-connector__destination {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.2;
+}
+
+.distance-cinematic-connector__destination { transition-delay: 760ms; }
+
+.distance-cinematic-connector[data-variant="measurement"] {
+  color: rgba(255, 208, 158, 0.95);
+  filter: none;
+}
+
+.distance-cinematic-panel.distance-unit-popover {
+  /*
+   * No max-width here on purpose.
+   *
+   * distanceCinematicPanel.js sets an explicit pixel width and then solves the
+   * connector's endpoint against it. Capping the panel narrower than that made
+   * the beam stop in mid-air short of the card -- which is what the "broken
+   * linkage" actually was. The panel's width belongs to the code that draws
+   * the line to it.
+   */
+  padding: 1rem 1.1rem 1.05rem;
+  clip-path: none;
+  transform: translateY(9px);
+  transition: opacity 260ms ease, transform 420ms cubic-bezier(0.16, 0.84, 0.3, 1);
+}
+
+.distance-cinematic-panel.distance-unit-popover.is-open,
+.distance-cinematic-panel.distance-unit-popover.is-visible {
+  clip-path: none;
+  transform: translateY(0);
+}
+
+/* The measurement variant had its own green identity; there is one accent. */
+.distance-cinematic-panel.distance-unit-popover[data-layout="measurement"] {
+  border-top-color: var(--cin-amber);
+  background: linear-gradient(180deg, rgba(3, 5, 11, 0.95), rgba(3, 5, 11, 0.86));
+}
+
+/*
+ * Addressed by id and by full class, not by tag.
+ *
+ * The panel's own rules are two classes deep, so the single-class selectors
+ * used at first lost the cascade and the eyebrow stayed mint green while the
+ * close button kept its grey chip. Matching their specificity is the fix.
+ */
+/* The measurement layout gave its eyebrow mint green from a two-class,
+   attribute-qualified selector, which outranked everything simpler. */
+.distance-cinematic-panel[data-layout="measurement"] .distance-unit-popover__eyebrow,
+.distance-unit-popover .distance-unit-popover__eyebrow {
+  display: block;
+  margin-bottom: 0.55rem;
+  font-family: var(--cin-mono);
+  font-size: var(--cin-micro);
+  font-weight: 400;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: var(--cin-amber);
+  background: none;
+  -webkit-text-fill-color: currentColor;
+}
+
+.distance-unit-popover #distance-unit-equivalent {
+  display: block;
+  margin-top: 0.85rem;
+  padding-top: 0.7rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  font-family: var(--cin-mono);
+  font-size: 0.56rem;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.14em;
+  line-height: 1.7;
+  text-transform: uppercase;
+  color: rgba(255, 214, 168, 0.7);
+  background: none;
+  -webkit-text-fill-color: currentColor;
+}
+
+.distance-unit-popover #distance-unit-title,
+.distance-unit-popover h3,
+.distance-unit-popover strong:first-child {
+  margin: 0 0 0.55rem;
+  font-size: 1.02rem;
+  font-weight: 250;
+  letter-spacing: 0.02em;
+  text-transform: none;
+  color: var(--cin-ink);
+  background: none;
+  -webkit-text-fill-color: currentColor;
+}
+
+.distance-unit-popover p {
+  margin: 0 0 0.7rem;
+  font-size: 0.8rem;
+  font-weight: 300;
+  line-height: 1.7;
+  color: var(--cin-ink-soft);
+}
+
+.distance-unit-popover p:last-child { margin-bottom: 0; }
+
+.distance-unit-popover small,
+.distance-unit-popover em {
+  font-family: var(--cin-mono);
+  font-size: 0.54rem;
+  font-style: normal;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--cin-amber);
+}
+
+.distance-unit-popover li {
+  padding: 0.5rem 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  font-size: 0.76rem;
+  line-height: 1.6;
+  color: var(--cin-ink-soft);
+}
+
+.distance-unit-popover ul,
+.distance-unit-popover ol { margin: 0; padding: 0; list-style: none; }
+
+.distance-unit-popover button,
+.distance-unit-popover .distance-unit-popover__close {
+  border: 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+  color: var(--cin-ink-faint);
+  font-weight: 200;
+  transition: color 200ms ease;
+}
+
+.distance-unit-popover button:hover,
+.distance-unit-popover button:focus-visible { color: var(--cin-amber); }
+
+/* The underlined unit links inside the readout. */
+.distance-unit-link,
+.distance-readout__value a,
+.distance-readout__value button {
+  border: 0;
+  border-bottom: 1px solid var(--cin-amber-soft);
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+  color: inherit;
+  text-decoration: none;
+  transition: border-color 200ms ease;
+}
+
+/*
+ * The unit links, and the small ringed mark inside them.
+ *
+ * These were the last coloured objects left in the interface -- a pale cyan
+ * word with a cyan ring beside it, sitting inside a readout that is otherwise
+ * entirely warm. The ring is a good idea and stays; it just takes the accent
+ * everything else uses.
+ */
+.distance-readout .distance-unit-link {
+  border-radius: 0;
+  color: rgba(255, 226, 186, 0.92);
+}
+
+.distance-readout .distance-unit-link__icon {
+  border-color: var(--cin-amber-soft);
+  font-weight: 400;
+  font-family: var(--cin-mono);
+}
+
+.distance-unit-link:hover,
+.distance-unit-link:focus-visible {
+  border-bottom-color: var(--cin-amber);
+  background: none;
+  box-shadow: none;
+  color: #fff6ea;
+}
+
+.distance-unit-link:hover .distance-unit-link__icon,
+.distance-unit-link:focus-visible .distance-unit-link__icon {
+  border-color: var(--cin-amber);
+}
+
+/* --------------------------------------------------- 4. the ring cards */
+
+.saturn-ring-hover-card {
+  gap: 0.55rem;
+  width: min(330px, calc(100vw - 24px));
+  padding: 0.9rem 1rem 0.95rem;
+}
+
+.saturn-ring-hover-card__eyebrow {
+  font-family: var(--cin-mono);
+  font-size: 0.5rem;
+  font-weight: 400;
+  letter-spacing: 0.26em;
+  text-transform: uppercase;
+  color: var(--cin-amber);
+}
+
+.saturn-ring-hover-card__heading {
+  padding-bottom: 0.55rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.saturn-ring-hover-card__heading strong {
+  font-size: 1.5rem;
+  font-weight: 200;
+  letter-spacing: 0.02em;
+  color: var(--cin-ink);
+}
+
+.saturn-ring-hover-card__heading small {
+  max-width: 130px;
+  font-family: var(--cin-mono);
+  font-size: 0.5rem;
+  letter-spacing: 0.14em;
+  line-height: 1.5;
+  text-transform: uppercase;
+  color: var(--cin-ink-faint);
+}
+
+.saturn-ring-hover-card__character {
+  font-family: var(--cin-mono);
+  font-size: 0.52rem;
+  font-weight: 400;
+  letter-spacing: 0.22em;
+  color: var(--cin-amber);
+}
+
+.saturn-ring-hover-card p {
+  font-size: 0.78rem;
+  font-weight: 300;
+  line-height: 1.68;
+  color: var(--cin-ink-soft);
+}
+
+.saturn-ring-hover-card__range,
+.saturn-ring-hover-card__motion {
+  font-family: var(--cin-mono);
+  font-size: 0.54rem;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.12em;
+  line-height: 1.6;
+  color: var(--cin-ink-faint);
+}
+
+.saturn-ring-hover-card__motion {
+  padding-top: 0.55rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+/* ------------------------------------------------- 5. travel back to Earth */
+
+/*
+ * The return.
+ *
+ * It was a glowing green disc, the loudest object on the screen and the one
+ * colour in the interface that meant nothing in particular. It is now a mark
+ * in the same family as the singularity: a thin amber ring with a small world
+ * inside it and a satellite that keeps going round. The label is set as tracked
+ * micro type against a hairline instead of in a bubble, and only on hover.
+ */
+.earth-return-button {
+  width: 46px;
+  height: 46px;
+  border: 1px solid var(--cin-amber-soft);
+  border-radius: 50%;
+  background: rgba(3, 5, 11, 0.7);
+  color: rgba(255, 226, 186, 0.9);
+  box-shadow: none;
+  backdrop-filter: blur(9px);
+  transition: border-color 260ms ease, transform 320ms cubic-bezier(0.16, 0.84, 0.3, 1);
+}
+
+/* The satellite: one dot on a ring, always going round. */
+.earth-return-button::before {
+  content: "";
+  position: absolute;
+  inset: -7px;
+  border: 1px solid rgba(255, 196, 130, 0.22);
+  border-radius: 50%;
+  animation: cin-return-orbit 9s linear infinite;
+}
+
+@keyframes cin-return-orbit {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+/*
+ * The label sits to the LEFT of the mark.
+ *
+ * The control lives in the bottom-right corner, so a label hung off its right
+ * edge simply leaves the frame -- which is what the original did, and why it
+ * was never legible there.
+ */
+.earth-return-button::after {
+  left: auto;
+  right: 60px;
+  padding: 0.4rem 0.9rem 0.4rem 0;
+  border: 0;
+  border-right: 1px solid var(--cin-amber-soft);
+  text-align: right;
+  border-radius: 0;
+  background: none;
+  font-family: var(--cin-mono);
+  font-size: 0.54rem;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: rgba(255, 226, 186, 0.85);
+  transform: translateX(4px);
+  transition: opacity 220ms ease, transform 320ms cubic-bezier(0.16, 0.84, 0.3, 1);
+}
+
+.earth-return-button:hover,
+.earth-return-button:focus-visible {
+  border-color: var(--cin-amber);
+  box-shadow: none;
+  outline: none;
+  transform: scale(1.06);
+}
+
+.earth-return-button:hover::after,
+.earth-return-button:focus-visible::after {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+/* ---------------------------------------------------- 6. the dossier modal */
+
+/*
+ * The science dossier.
+ *
+ * The largest surface in the product, and the one that most needs to stop
+ * looking like a settings dialog: a 24px-radius panel washed in cyan and
+ * violet with a starfield printed on it. It becomes a page -- black, square,
+ * one amber rule at the top, and the whole hierarchy carried by type. The
+ * backdrop loses its coloured tints too, because a modal that is meant to put
+ * the scene aside should read as the lights going down, not as a filter.
+ */
+.planet-details__backdrop {
+  background: radial-gradient(ellipse 120% 90% at 50% 45%, rgba(6, 8, 14, 0.86), rgba(0, 1, 3, 0.95));
+  backdrop-filter: blur(16px) brightness(0.28) saturate(0.2);
+  -webkit-backdrop-filter: blur(16px) brightness(0.28) saturate(0.2);
+}
+
+.planet-details__card {
+  width: min(880px, calc(100vw - 64px));
+  padding: clamp(26px, 3.4vw, 44px);
+  border: 0;
+  border-top: 1px solid var(--cin-amber);
+  border-radius: 0;
+  background: linear-gradient(180deg, rgba(4, 6, 12, 0.985), rgba(2, 3, 8, 0.99));
+  box-shadow: 0 40px 120px rgba(0, 0, 0, 0.8);
+  color: var(--cin-ink);
+}
+
+/* The printed starfield was the last decorative texture in the interface. */
+.planet-details__card::before { display: none; }
+
+.planet-details__close {
+  top: 14px;
+  right: 16px;
+  width: 30px;
+  height: 30px;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+  color: var(--cin-ink-faint);
+  font: 200 24px/1 system-ui, sans-serif;
+  transition: color 200ms ease, transform 200ms ease;
+}
+
+.planet-details__close:hover,
+.planet-details__close:focus-visible {
+  border: 0;
+  background: none;
+  box-shadow: none;
+  color: var(--cin-amber);
+  transform: scale(1.14);
+}
+
+.planet-details__eyebrow {
+  margin-bottom: 0.7rem;
+  font-family: var(--cin-mono);
+  font-size: var(--cin-micro);
+  font-weight: 400;
+  letter-spacing: 0.32em;
+  text-transform: uppercase;
+  color: var(--cin-amber);
+  background: none;
+  -webkit-text-fill-color: currentColor;
+}
+
+.planet-details__heading-row {
+  padding-bottom: 1rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.planet-details__heading-row h2 {
+  font-size: clamp(2rem, 3.4vw, 3.1rem);
+  font-weight: 200;
+  letter-spacing: 0.01em;
+  line-height: 1.02;
+  text-transform: none;
+  color: var(--cin-ink);
+  background: none;
+  -webkit-text-fill-color: currentColor;
+}
+
+.planet-details__heading-row p {
+  font-size: 0.86rem;
+  font-weight: 300;
+  line-height: 1.72;
+  color: var(--cin-ink-soft);
+}
+
+/* Facts as the same ledger the selection card uses. */
+.planet-details__fact {
+  padding: 0.7rem 0;
+  border: 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+}
+
+.planet-details__fact dt {
+  font-family: var(--cin-mono);
+  font-size: var(--cin-micro);
+  font-weight: 400;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--cin-ink-faint);
+}
+
+.planet-details__fact dd {
+  font-family: var(--cin-mono);
+  font-size: 0.86rem;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+  color: rgba(255, 240, 222, 0.94);
+  background: none;
+  -webkit-text-fill-color: currentColor;
+}
+
+.planet-details__advanced,
+.planet-details__advanced-item {
+  border: 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+}
+
+.planet-details__advanced summary {
+  padding: 0.85rem 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+}
+
+.planet-details__advanced summary:hover,
+.planet-details__advanced summary:focus-visible {
+  border: 0;
+  background: none;
+  box-shadow: none;
+}
+
+.planet-details__advanced summary strong {
+  font-size: 0.92rem;
+  font-weight: 250;
+  letter-spacing: 0.04em;
+  text-transform: none;
+  color: var(--cin-ink);
+  background: none;
+  -webkit-text-fill-color: currentColor;
+}
+
+.planet-details__advanced summary small,
+.planet-details__advanced-item > span {
+  font-family: var(--cin-mono);
+  font-size: 0.54rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--cin-ink-faint);
+}
+
+.planet-details__advanced-item > span { color: var(--cin-amber); }
+
+.planet-details__advanced-item p {
+  font-size: 0.8rem;
+  font-weight: 300;
+  line-height: 1.7;
+  color: var(--cin-ink-soft);
+}
+
+.planet-details__advanced-item.is-context-highlight {
+  border-top-color: var(--cin-amber);
+  background: linear-gradient(180deg, rgba(255, 196, 130, 0.06), transparent 70%);
+  box-shadow: none;
+}
+
+.planet-details__summary-icon {
+  border: 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+  color: var(--cin-amber);
+}
+
+.planet-details__sources {
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+  font-family: var(--cin-mono);
+  font-size: 0.54rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--cin-ink-faint);
+}
+
+.planet-details__sources a {
+  border-bottom: 1px solid var(--cin-amber-soft);
+  color: rgba(255, 214, 168, 0.8);
+  text-decoration: none;
+}
+
+.planet-details__sources a:hover,
+.planet-details__sources a:focus-visible {
+  border-bottom-color: var(--cin-amber);
+  color: var(--cin-ink);
+}
+
+/* ------------------------------------------------ 7. the targeting signal */
+
+/*
+ * The reticle that lands where you click, and the mark on the readout.
+ *
+ * Both were vivid cyan-and-green with several layers of bloom -- the most
+ * saturated thing in the frame, on top of a shot that is nearly black. The
+ * signal is still a signal: it acquires, settles and dissolves exactly as it
+ * did. It just does it in one hairline colour, at one pixel wide, which is
+ * enough for something moving against an empty sky.
+ */
+.space-dive-pulse__ring {
+  border-color: rgba(255, 214, 170, 0.9);
+  box-shadow: none;
+}
+
+.space-dive-pulse__ring::before { border-color: rgba(255, 196, 130, 0.4); }
+
+.space-dive-pulse__ring::after {
+  border-color: rgba(255, 196, 130, 0.16);
+  box-shadow: none;
+}
+
+.space-dive-pulse__reticle {
+  color: rgba(255, 226, 186, 0.9);
+  filter: none;
+}
+
+.space-dive-pulse__point {
+  background: #fff2dd;
+  box-shadow: 0 0 10px rgba(255, 214, 168, 0.8);
+}
+
+.space-dive-pulse__caption {
+  border: 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+  font-family: var(--cin-mono);
+  font-size: 0.52rem;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: rgba(255, 226, 186, 0.85);
+}
+
+/* The pulsing green chip beside the units. */
+.distance-readout__info {
+  animation: none;
+  width: 15px;
+  height: 15px;
+  border: 1px solid var(--cin-amber-soft);
+  border-radius: 50%;
+  background: none;
+  color: var(--cin-amber);
+  font: 400 0.5rem/1 var(--cin-mono);
+  box-shadow: none;
+  transition: border-color 200ms ease, color 200ms ease;
+}
+
+.distance-readout__info:hover,
+.distance-readout__info:focus-visible {
+  border-color: var(--cin-amber);
+  box-shadow: none;
+  color: var(--cin-ink);
+  transform: translateY(-50%);
+}
+
+.distance-readout__info.is-updated { animation: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .earth-return-button::before { animation: none; }
+}
+
+/* ================================================================ *
+ *  Third pass: scrollbars, close marks, and the Beyond Earth panel
+ * ================================================================ */
+
+/*
+ * Scrollbars.
+ *
+ * Any panel tall enough to scroll was drawing the operating system's default
+ * bar down its edge -- a light grey slab, the one piece of the interface that
+ * had never been designed at all. These are two pixels of amber that appear
+ * only where there is something to scroll, and read as a position indicator
+ * rather than as a control.
+ */
+.planet-details__card,
+.distance-unit-popover,
+.about-experience__card,
+.satellite-atlas-directory__list {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 196, 130, 0.32) transparent;
+}
+
+.planet-details__card::-webkit-scrollbar,
+.distance-unit-popover::-webkit-scrollbar,
+.about-experience__card::-webkit-scrollbar {
+  width: 2px;
+  height: 2px;
+}
+
+.planet-details__card::-webkit-scrollbar-track,
+.distance-unit-popover::-webkit-scrollbar-track,
+.about-experience__card::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.planet-details__card::-webkit-scrollbar-thumb,
+.distance-unit-popover::-webkit-scrollbar-thumb,
+.about-experience__card::-webkit-scrollbar-thumb {
+  border-radius: 0;
+  background: rgba(255, 196, 130, 0.5);
+}
+
+.planet-details__card::-webkit-scrollbar-thumb:hover,
+.distance-unit-popover::-webkit-scrollbar-thumb:hover,
+.about-experience__card::-webkit-scrollbar-thumb:hover {
+  background: var(--cin-amber);
+}
+
+/* --------------------------------------------------------- close marks */
+
+/*
+ * The close mark.
+ *
+ * Stripping the buttons back to a bare glyph in the first pass took them too
+ * far: a thin grey × on a black field is genuinely hard to find. It gets a
+ * ring of its own -- drawn in, not filled -- and the ring is what makes it
+ * visible. On hover the ring goes solid amber, the glyph goes white, and the
+ * whole mark turns a quarter turn, which is the only piece of playfulness in
+ * the interface and the right place for it.
+ */
+.planet-details__close,
+.about-experience__close,
+.satellite-atlas-directory__close,
+.distance-unit-popover .distance-unit-popover__close,
+.body-card__close {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 1px solid rgba(255, 196, 130, 0.34);
+  border-radius: 50%;
+  background: rgba(3, 5, 11, 0.72);
+  box-shadow: none;
+  color: rgba(255, 226, 186, 0.86);
+  font: 200 1.32rem/1 system-ui, sans-serif;
+  cursor: pointer;
+  transition:
+    border-color 240ms ease,
+    color 240ms ease,
+    background 240ms ease,
+    transform 420ms cubic-bezier(0.16, 0.84, 0.3, 1);
+}
+
+/* A second ring, pushed outward on hover -- the same gesture as the halo
+   around the singularity, so closing a card belongs to the same world. */
+.planet-details__close::after,
+.about-experience__close::after,
+.satellite-atlas-directory__close::after,
+.distance-unit-popover .distance-unit-popover__close::after,
+.body-card__close::after {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border: 1px solid transparent;
+  border-radius: 50%;
+  transition: inset 420ms cubic-bezier(0.16, 0.84, 0.3, 1), border-color 300ms ease;
+  pointer-events: none;
+}
+
+.planet-details__close:hover,
+.planet-details__close:focus-visible,
+.about-experience__close:hover,
+.about-experience__close:focus-visible,
+.satellite-atlas-directory__close:hover,
+.satellite-atlas-directory__close:focus-visible,
+.distance-unit-popover .distance-unit-popover__close:hover,
+.distance-unit-popover .distance-unit-popover__close:focus-visible,
+.body-card__close:hover,
+.body-card__close:focus-visible {
+  border-color: var(--cin-amber);
+  background: rgba(255, 196, 130, 0.1);
+  box-shadow: none;
+  color: #fff6ea;
+  outline: none;
+  transform: rotate(90deg);
+}
+
+.planet-details__close:hover::after,
+.planet-details__close:focus-visible::after,
+.about-experience__close:hover::after,
+.about-experience__close:focus-visible::after,
+.satellite-atlas-directory__close:hover::after,
+.satellite-atlas-directory__close:focus-visible::after,
+.distance-unit-popover .distance-unit-popover__close:hover::after,
+.distance-unit-popover .distance-unit-popover__close:focus-visible::after,
+.body-card__close:hover::after,
+.body-card__close:focus-visible::after {
+  inset: -7px;
+  border-color: rgba(255, 196, 130, 0.3);
+}
+
+/* The dossier's sits inside the card's own padding rather than on its corner. */
+.planet-details__close { top: 20px; right: 22px; }
+.body-card__close { top: -10px; right: 0; }
+
+/* ------------------------------------------------- the Beyond Earth panel */
+
+/*
+ * The statement.
+ *
+ * This is the one surface whose subject is the project itself, so it is the
+ * one place the interface is allowed to perform. It gets the full treatment:
+ * a slow drift of stars behind the type, a hairline running down the side of
+ * the copy, and the title set larger than anything else in the product. The
+ * glyph-by-glyph reveal already in the JavaScript does the rest.
+ */
+.about-experience__backdrop {
+  background: radial-gradient(ellipse 130% 100% at 50% 40%, rgba(6, 8, 14, 0.84), rgba(0, 1, 3, 0.96));
+  backdrop-filter: blur(20px) brightness(0.26) saturate(0.2);
+  -webkit-backdrop-filter: blur(20px) brightness(0.26) saturate(0.2);
+}
+
+.about-experience__card {
+  width: min(760px, calc(100vw - 56px));
+  padding: clamp(30px, 3.8vw, 52px);
+  border: 0;
+  border-top: 1px solid var(--cin-amber);
+  border-radius: 0;
+  background: linear-gradient(180deg, rgba(4, 6, 12, 0.985), rgba(2, 3, 8, 0.99));
+  box-shadow: 0 44px 130px rgba(0, 0, 0, 0.82);
+  color: var(--cin-ink);
+  /* There is about a screen and a half of content at most; letting the card
+     size to it means the scrollbar only ever appears on a short viewport. */
+  max-height: min(86vh, 720px);
+  overflow: hidden auto;
+}
+
+/*
+ * The drift.
+ *
+ * Two layers of dots at different sizes and speeds, masked away from the
+ * bottom of the card so they never compete with the text. It is the cheapest
+ * possible parallax -- two translating background layers -- and at this
+ * opacity it reads as depth rather than as decoration.
+ */
+/*
+ * The pointer glow already on this card is worth keeping -- it follows the
+ * cursor through `--cosmic-x/--cosmic-y` and is the reason the panel feels
+ * alive under the hand. It only needed retinting off cyan and violet.
+ */
+.about-experience__card::before {
+  background: radial-gradient(
+    circle 160px at var(--cosmic-x) var(--cosmic-y),
+    rgba(255, 206, 150, 0.13), rgba(255, 168, 96, 0.05) 42%, transparent 76%
+  );
+}
+
+/*
+ * The drift is painted inside the box, not hanging out of it.
+ *
+ * With `inset: -40%` this layer extended past the card's bottom edge, and a
+ * scrollable container counts that overflow as content -- so the card grew a
+ * vertical scrollbar for a page that fits comfortably. Animating the
+ * background position instead of the element keeps every pixel inside the
+ * border box and gets the same parallax for free.
+ */
+.about-experience__card::after {
+  display: block;
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background-image:
+    radial-gradient(circle, rgba(255, 244, 228, 0.5) 0 0.7px, transparent 1.2px),
+    radial-gradient(circle, rgba(255, 208, 158, 0.34) 0 0.9px, transparent 1.5px);
+  background-size: 96px 88px, 151px 137px;
+  background-position: 0 0, 43px 31px;
+  -webkit-mask-image: linear-gradient(180deg, #000, transparent 62%);
+  mask-image: linear-gradient(180deg, #000, transparent 62%);
+  opacity: 0.5;
+  animation: cin-about-drift 62s linear infinite;
+  pointer-events: none;
+  border-radius: 0;
+}
+
+@keyframes cin-about-drift {
+  from { background-position: 0 0, 43px 31px; }
+  to   { background-position: -96px -88px, -53px -57px; }
+}
+
+.about-experience__eyebrow {
+  gap: 0.7rem;
+  margin-bottom: 1.6rem;
+  padding: 0;
+  border: 0;
+  background: none;
+  font-family: var(--cin-mono);
+  font-size: var(--cin-micro);
+  font-weight: 400;
+  letter-spacing: 0.32em;
+  text-transform: uppercase;
+  color: var(--cin-amber);
+}
+
+.about-experience__eyebrow span + span { color: var(--cin-ink-faint); }
+
+.about-experience__eyebrow span + span::before {
+  content: "· ";
+  color: var(--cin-amber-soft);
+}
+
+/* The bar down the side of the title was a cyan-to-violet gradient with two
+   layers of bloom -- the last coloured light in the interface. */
+.about-experience h2::before {
+  width: 1px;
+  border-radius: 0;
+  background: linear-gradient(180deg,
+    transparent, var(--cin-amber) 14%, var(--cin-amber) 86%, transparent);
+  box-shadow: none;
+}
+
+#about-experience-title {
+  margin: 0 0 2rem;
+  padding: 0 0 0 1.35rem;
+  font-size: clamp(1.7rem, 3.1vw, 2.7rem);
+  font-weight: 200;
+  letter-spacing: 0.005em;
+  line-height: 1.24;
+  text-transform: none;
+  color: var(--cin-ink);
+  background: none;
+  -webkit-text-fill-color: currentColor;
+}
+
+.about-experience__cosmic-word {
+  display: block;
+  background: none;
+  -webkit-text-fill-color: currentColor;
+}
+
+/* The second line is the turn, so it takes the accent. */
+/*
+ * The turn, not a shout.
+ *
+ * The original set this line at weight 730 in cyan with a glow, which made it
+ * look like a different piece of type from the line above it. Same weight,
+ * same size, one shade warmer: the sentence does the work.
+ */
+.about-experience__cosmic-word--accent {
+  font-weight: 200;
+  color: rgba(255, 214, 168, 0.95);
+  background: none;
+  text-shadow: none;
+  -webkit-text-fill-color: currentColor;
+}
+
+/* The copy hangs off a hairline, like the selection card. */
+.about-experience__intro,
+.about-experience__vision {
+  margin: 0 0 1.15rem;
+  padding-left: 1.15rem;
+  border-left: 1px solid rgba(255, 255, 255, 0.09);
+  font-size: 0.9rem;
+  font-weight: 300;
+  line-height: 1.85;
+  color: var(--cin-ink-soft);
+  background: none;
+  -webkit-text-fill-color: currentColor;
+}
+
+.about-experience__vision {
+  border-left-color: var(--cin-amber-soft);
+  color: rgba(226, 216, 204, 0.46);
+}
+
+.about-experience__author {
+  margin-top: 2rem;
+  padding-top: 1rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  font-family: var(--cin-mono);
+  font-size: 0.56rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--cin-ink-faint);
+}
+
+.about-experience__author strong {
+  font-weight: 400;
+  color: var(--cin-ink);
+  background: none;
+  -webkit-text-fill-color: currentColor;
+}
+
+.about-experience__author a {
+  border-bottom: 1px solid var(--cin-amber-soft);
+  color: rgba(255, 214, 168, 0.82);
+  text-decoration: none;
+  text-transform: none;
+  letter-spacing: 0.06em;
+}
+
+.about-experience__author a:hover,
+.about-experience__author a:focus-visible {
+  border-bottom-color: var(--cin-amber);
+  color: var(--cin-ink);
+}
+
+/* ---- its connector, in the same hairline as the distance one */
+
+.about-experience__connector {
+  color: rgba(255, 208, 158, 0.95);
+  filter: none;
+}
+
+.about-experience__connector path {
+  stroke: currentColor;
+  stroke-width: 1;
+  opacity: 0.95;
+  transition: stroke-dashoffset 900ms cubic-bezier(0.22, 0.61, 0.24, 1);
+}
+
+.about-experience__connector-origin {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.2;
+}
+
+.about-experience__connector-port {
+  border: 1px solid var(--cin-amber);
+  border-radius: 50%;
+  background: none;
+  box-shadow: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .about-experience__card::before { animation: none; }
+  .planet-details__close,
+  .about-experience__close,
+  .satellite-atlas-directory__close,
+  .distance-unit-popover__close,
+  .body-card__close { transition-duration: 0ms; transform: none; }
+}

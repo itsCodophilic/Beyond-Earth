@@ -5902,6 +5902,35 @@ import { createCosmicIntro } from './scene/space/cosmicIntro.js';
     freeExploreFocusOffsetTarget.set(0, 0, 0);
   }
 
+  /**
+   * The last title card.
+   *
+   * The journey names every scale it passes through -- the multiverse, our
+   * universe, the galaxy, the arm -- and then arrived at the destination
+   * unnamed, which left the final and most important shot as the only one
+   * without a caption. This closes the sequence in its own voice, using the
+   * same element and the same typography as the travelling captions, and then
+   * retires so the viewer is left alone with the system.
+   */
+  function announceArrival() {
+    const caption = document.createElement("div");
+    caption.className = "cosmic-caption";
+    caption.innerHTML = `
+      <p class="cosmic-caption__title"></p>
+      <p class="cosmic-caption__body"></p>
+    `;
+    caption.querySelector(".cosmic-caption__title").textContent = "The Solar System";
+    caption.querySelector(".cosmic-caption__body").textContent =
+      "One star, eight planets, and everything else it holds. You are six light-years out, looking back in.";
+    document.body.append(caption);
+
+    // Cued on the next frame so the element has been laid out first and the
+    // opacity transition actually has two values to run between.
+    requestAnimationFrame(() => caption.classList.add("is-live"));
+    setTimeout(() => caption.classList.remove("is-live"), 7000);
+    setTimeout(() => caption.remove(), 9000);
+  }
+
   /** Hand-off from the burst into the solar system. */
   function completeCosmicIntro() {
     settleLandingView();
@@ -5920,6 +5949,7 @@ import { createCosmicIntro } from './scene/space/cosmicIntro.js';
     updateDistanceReadout(smoothProgress);
     document.body.classList.remove("is-cosmic-intro");
     intro.dismiss();
+    announceArrival();
     openingMotionStartedAt = performance.now() + 500;
     setTimeout(() => {
       earthReturnButton.disabled = false;
@@ -5940,6 +5970,20 @@ import { createCosmicIntro } from './scene/space/cosmicIntro.js';
     // part of the satellite population has already been built.
     intro.step("ready");
     scheduleMajorSatelliteHydration();
+
+    /*
+     * Diagnostic: skip straight to the destination.
+     *
+     * The opening runs about seventy seconds from a cold load, which is right
+     * for a first visit and completely wrong for working on anything that only
+     * exists after it -- every card, panel and connector in the interface. With
+     * ?skipIntro=1 the sequence is not played and the viewer is placed at the
+     * arrival directly. Absent the parameter this costs one string comparison.
+     */
+    if (new URLSearchParams(location.search).get("skipIntro") === "1") {
+      completeCosmicIntro();
+      return;
+    }
 
     intro.ready().then(() => {
       // Frame the destination before the burst, so the cut lands on the view

@@ -1,0 +1,244 @@
+<!doctype html>
+<!--
+  Static preview of the interface surfaces. Not part of the site.
+
+  The real markup for each card, mounted at once over a dark backdrop, so the
+  cinematic layer can be iterated on without sitting through the opening
+  sequence and hunting for the state that reveals each one.
+-->
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>ui preview</title>
+    <link rel="stylesheet" href="./src/css/styles.css" />
+    <style>
+      html, body { margin: 0; min-height: 100%; background: #000104; }
+      body::before {
+        content: ""; position: fixed; inset: 0;
+        background:
+          radial-gradient(900px 600px at 62% 38%, rgba(90, 110, 160, 0.10), transparent 70%),
+          radial-gradient(500px 400px at 20% 80%, rgba(140, 90, 70, 0.07), transparent 70%);
+      }
+    </style>
+  </head>
+  <body>
+    <header class="hud" aria-label="Universe navigation">
+      <button class="brand" id="about-experience-trigger" type="button">
+        <span class="brand__mark" aria-hidden="true">
+          <span class="brand__orbit brand__orbit--outer"></span>
+          <span class="brand__orbit brand__orbit--inner"></span>
+          <span class="brand__planet"></span>
+        </span>
+        <span class="brand__copy">
+          <span class="brand__kicker">Interstellar experience</span>
+          <span class="brand__text">Beyond Earth</span>
+        </span>
+      </button>
+      <div class="ship-controls" aria-label="Universe navigation instructions">
+        <span class="ship-controls__step ship-controls__step--space">
+          <span class="ship-controls__index" aria-hidden="true">01</span>
+          <span class="ship-controls__copy">
+            <strong>Click empty space</strong>
+            <small>Travel into that region</small>
+          </span>
+        </span>
+        <span class="ship-controls__step ship-controls__step--body">
+          <span class="ship-controls__index" aria-hidden="true">02</span>
+          <span class="ship-controls__copy">
+            <strong>Click a celestial body</strong>
+            <small>Inspect its information</small>
+          </span>
+        </span>
+        <button class="ship-controls__escape" id="space-exit-control" type="button">
+          <kbd>Esc</kbd>
+          <span class="ship-controls__copy">
+            <strong>Exit current view</strong>
+            <small>Click here or press the key</small>
+          </span>
+        </button>
+      </div>
+    </header>
+
+    <div class="cosmic-caption is-live" style="top:11vh">
+      <p class="cosmic-caption__title">The Solar System</p>
+      <p class="cosmic-caption__body">One star, eight planets, and everything else it holds. You are 6 light-years out, looking back in.</p>
+    </div>
+
+    <div id="celestial-selection-card" class="celestial-selection-card is-visible" style="left:58%;top:34%">
+      <span class="celestial-selection-card__path">
+        <span>Milky Way Galaxy</span>
+        <i aria-hidden="true">›</i>
+        <span>Solar System</span>
+      </span>
+      <span class="celestial-selection-card__identity">
+        <span>
+          <strong id="celestial-selection-card-name">Ganymede</strong>
+          <small id="celestial-selection-card-type">Natural satellite</small>
+        </span>
+        <span class="celestial-selection-card__info-icon" aria-hidden="true">i</span>
+      </span>
+      <span class="celestial-selection-card__satellite-rank">Satellite 03 of 95</span>
+      <span class="celestial-selection-card__instruction">Click to know more information</span>
+    </div>
+
+    <div class="progress distance-readout" role="region" aria-label="Distance from Earth">
+      <div class="distance-readout__header">
+        <span>You are at</span>
+        <em id="distance-travel-mode">Camera position</em>
+      </div>
+      <strong class="distance-readout__value" id="distance-travel-value">6.0 light-years from Earth</strong>
+      <div class="distance-readout__footer">
+        <span id="distance-travel-region">Local stellar neighbourhood</span>
+        <span id="distance-travel-secondary">379,446 AU</span>
+      </div>
+      <div class="distance-readout__range" id="distance-travel-range" hidden></div>
+      <button class="distance-readout__method" id="distance-measurement-info" type="button">
+        <span class="distance-readout__method-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24">
+            <circle cx="12" cy="12" r="8.25"></circle>
+            <path d="M7.2 13.3c2.1-3.9 7.1-6.2 10.5-4.1M8.1 8.4l-.9 4.9 4.8.7"></path>
+            <circle cx="17.4" cy="8.8" r="1.15"></circle>
+          </svg>
+        </span>
+        <span class="distance-readout__method-copy">
+          <span>How is this distance measured?</span>
+          <small id="distance-measurement-summary">Scroll-mapped camera scale</small>
+        </span>
+        <span class="distance-readout__method-arrow" aria-hidden="true">›</span>
+      </button>
+    </div>
+
+    <button id="satellite-system-overview" class="satellite-system-overview is-visible" type="button">
+      <span class="satellite-system-overview__signal" aria-hidden="true"></span>
+      <span class="satellite-system-overview__copy">
+        <small>Complete satellite system</small>
+        <strong id="satellite-system-overview-title">Reveal every moon</strong>
+        <em id="satellite-system-overview-note">95 catalogued · orbital atlas</em>
+      </span>
+      <span class="satellite-system-overview__icon" aria-hidden="true">◎</span>
+    </button>
+
+    <section id="satellite-atlas-directory" class="satellite-atlas-directory is-visible" aria-label="Complete satellite directory">
+      <header class="satellite-atlas-directory__header">
+        <span>
+          <small>Complete orbital atlas</small>
+          <strong id="satellite-atlas-directory-title">Jupiter · satellite system</strong>
+        </span>
+        <div class="satellite-atlas-directory__actions">
+          <label class="satellite-atlas-directory__search">
+            <input id="satellite-atlas-directory-search" type="search" placeholder="Find a moon…" aria-label="Find a satellite" autocomplete="off">
+          </label>
+          <button id="satellite-atlas-directory-close" class="satellite-atlas-directory__close" type="button" aria-label="Close">
+            <span aria-hidden="true">×</span>
+          </button>
+        </div>
+      </header>
+      <div id="satellite-atlas-directory-list" class="satellite-atlas-directory__list" aria-label="Satellites"></div>
+      <footer>
+        <span id="satellite-atlas-directory-status">95 satellites catalogued</span>
+        <span>Click a moon to inspect · Esc returns to this atlas</span>
+      </footer>
+    </section>
+
+    <div class="planet-orbit-hover-tooltip is-visible" style="left:56px;top:200px">
+      <span class="planet-orbit-hover-tooltip__eyebrow">Orbital path</span>
+      <strong>Neptune</strong>
+      <small>30.07 AU · 164.8 year period</small>
+    </div>
+
+    <div class="saturn-ring-hover-card is-visible" style="left:56px;top:300px">
+      <span class="saturn-ring-hover-card__eyebrow">Particle ring</span>
+      <span class="saturn-ring-hover-card__heading">
+        <strong>B Ring</strong>
+        <small>Brightest and most opaque</small>
+      </span>
+      <span class="saturn-ring-hover-card__character">Dense · opaque · banded</span>
+      <p>The densest of the main rings, packed with metre-scale ice particles and threaded by spokes that appear and fade over hours.</p>
+      <span class="saturn-ring-hover-card__range">92,000 – 117,580 km from Saturn's centre</span>
+      <span class="saturn-ring-hover-card__motion">Orbital velocity 16.5 km/s at the inner edge</span>
+    </div>
+
+    <button class="earth-return-button" type="button" aria-label="Travel back to Earth" style="left:auto;right:34px;bottom:34px">
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.3">
+        <circle cx="12" cy="12" r="6.4"></circle>
+        <path d="M5.6 12h12.8M12 5.6c2.4 2.6 2.4 10.2 0 12.8-2.4-2.6-2.4-10.2 0-12.8Z"></path>
+      </svg>
+    </button>
+
+    <div class="planet-details is-open is-card-visible">
+      <div class="planet-details__backdrop"></div>
+      <article class="planet-details__card" tabindex="-1">
+        <button class="planet-details__close" type="button" aria-label="Close">×</button>
+        <header class="planet-details__header">
+          <span class="planet-details__eyebrow">Milky Way Galaxy · Solar System</span>
+          <div class="planet-details__heading-row">
+            <div>
+              <h2>Saturn</h2>
+              <p>Gas giant · sixth planet from the Sun</p>
+            </div>
+          </div>
+        </header>
+        <dl class="planet-details__core">
+          <div class="planet-details__fact"><dt>Mass vs Earth</dt><dd>95.16 ×</dd></div>
+          <div class="planet-details__fact"><dt>Size vs Earth</dt><dd>9.45 ×</dd></div>
+          <div class="planet-details__fact"><dt>Physical diameter</dt><dd>120,536 km</dd></div>
+          <div class="planet-details__fact"><dt>Distance / position</dt><dd>9.54 AU</dd></div>
+          <div class="planet-details__fact"><dt>Orbital period</dt><dd>29.46 years</dd></div>
+          <div class="planet-details__fact"><dt>Moons catalogued</dt><dd>146</dd></div>
+        </dl>
+        <details class="planet-details__advanced" open>
+          <summary><span><strong>Deeper science</strong><small>Atmosphere, rings and interior</small></span><span class="planet-details__summary-icon"></span></summary>
+          <div class="planet-details__advanced-grid">
+            <div class="planet-details__advanced-item planet-details__advanced-item--rings">
+              <span>Ring system</span>
+              <p>Seven main divisions spanning 282,000 km, yet under a kilometre thick in most places — almost pure water ice.</p>
+            </div>
+            <div class="planet-details__advanced-item is-context-highlight">
+              <span>Atmosphere</span>
+              <p>96% hydrogen, 3% helium, with ammonia ice clouds and a persistent hexagonal jet stream at the north pole.</p>
+            </div>
+          </div>
+        </details>
+        <p class="planet-details__sources">Sources · <a href="#">NASA planetary fact sheet</a> · <a href="#">JPL Solar System Dynamics</a></p>
+      </article>
+    </div>
+
+    <div class="about-experience is-open is-card-visible is-brand-ready">
+      <div class="about-experience__backdrop"></div>
+      <article class="about-experience__card">
+        <button class="about-experience__close" type="button" aria-label="Close">×</button>
+        <div class="about-experience__eyebrow">
+          <span>Beyond Earth</span>
+          <span>An interactive universe, built to scale</span>
+        </div>
+        <h2 id="about-experience-title">
+          <span class="about-experience__cosmic-word">Almost none of us will ever leave the ground.</span>
+          <span class="about-experience__cosmic-word about-experience__cosmic-word--accent">Any one of us can leave the planet.</span>
+        </h2>
+        <p class="about-experience__intro about-experience__cosmic-copy">Beyond Earth is a place to go, not a page to read. The orbits are solved from real ephemerides, the worlds are the sizes and distances they genuinely are, and the belt between Mars and Jupiter holds the rocks it actually holds. Start at the world you know. Then keep going.</p>
+        <p class="about-experience__vision about-experience__cosmic-copy">Drift out past Mars into the debris of a planet that never formed. Watch Saturn's rings resolve from a band of light into a hundred thousand kilometres of ice. Fall beyond Neptune into the dark, where the Sun is only the brightest star. Stay as long as you like — nothing out here is in a hurry.</p>
+        <footer class="about-experience__author">
+          <span>Created with curiosity by <strong>Harsh Pandya</strong></span>
+          <span aria-hidden="true">·</span>
+          <a href="mailto:harshpandya0111@gmail.com">harshpandya0111@gmail.com</a>
+        </footer>
+      </article>
+    </div>
+
+    <script>
+      const MOONS = ["Io","Europa","Ganymede","Callisto","Amalthea","Himalia","Elara","Pasiphae","Sinope","Lysithea","Carme","Ananke","Leda","Thebe","Adrastea","Metis","Callirrhoe","Themisto","Megaclite","Taygete","Chaldene","Harpalyke","Kalyke","Iocaste","Erinome","Isonoe","Praxidike","Autonoe","Thyone","Hermippe"];
+      const list = document.querySelector("#satellite-atlas-directory-list");
+      MOONS.forEach((name, index) => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "satellite-atlas-directory__moon";
+        button.dataset.moonName = name;
+        button.innerHTML = `<span>${String(index + 1).padStart(2, "0")}</span><strong></strong>`;
+        button.querySelector("strong").textContent = name;
+        list.append(button);
+      });
+      document.querySelectorAll(".satellite-atlas-directory__moon")[2]
+        .classList.add("is-orbit-preview");
+    </script>
+  </body>
+</html>
