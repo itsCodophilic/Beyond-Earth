@@ -1933,6 +1933,75 @@ export function createCosmicIntro({ pixelRatio } = {}) {
     nebulae.push(sprite);
   }
 
+  /*
+   * The dust you actually fly through.
+   *
+   * Everything else in this field is held at a distance for a good reason --
+   * a galaxy or a nebula allowed up to the camera loses its structure and
+   * becomes a smear. This layer exists precisely to be flown through, and it
+   * has no structure to lose: no stars, no cores, no arms, just very large,
+   * very faint sheets of colour that wash across the frame as they pass.
+   *
+   * That is what sells travel. Objects going by tell you things are out there;
+   * something enveloping the camera and clearing again tells you that you are
+   * moving through a medium rather than past a backdrop. Kept between three
+   * and eight hundredths opacity -- individually almost invisible, which is
+   * the point: what registers is the tint of the frame changing, not a cloud.
+   */
+  /*
+   * Eighteen, not thirty-four.
+   *
+   * These are the only sprites in the scene allowed to fill the frame, and
+   * additive blending has no early-out -- every one of them costs a full-screen
+   * pass of the fragment shader whether it contributes 0.06 of colour or
+   * nothing at all. At thirty-four the layer alone was hundreds of millions of
+   * fragments a frame and the preview stopped responding. Half as many, rather
+   * smaller, and each a little brighter reads the same and costs a third.
+   */
+  const DRIFT_DUST = 18;
+  const DRIFT_DUST_COLOURS = [
+    [1.00, 0.36, 0.62], // magenta
+    [0.62, 0.36, 1.00], // violet
+    [0.28, 0.62, 1.00], // blue
+    [0.26, 0.88, 0.86], // teal
+    [1.00, 0.62, 0.30], // amber
+    [0.94, 0.44, 0.34], // ember red
+    [0.52, 0.44, 0.86], // dusty indigo
+  ];
+  const driftDust = [];
+  for (let i = 0; i < DRIFT_DUST; i += 1) {
+    const rgb = DRIFT_DUST_COLOURS[i % DRIFT_DUST_COLOURS.length];
+    const material = track(new THREE.SpriteMaterial({
+      map: cloudTextures[i % cloudTextures.length],
+      transparent: true,
+      depthWrite: false,
+      depthTest: false,
+      blending: THREE.AdditiveBlending,
+      opacity: 0,
+      color: new THREE.Color(rgb[0], rgb[1], rgb[2]),
+    }));
+    const sprite = new THREE.Sprite(material);
+    const angle = random() * TAU;
+    const radius = Math.pow(random(), 1.2) * FIELD_RADIUS * 0.75;
+    sprite.position.set(
+      Math.cos(angle) * radius,
+      Math.sin(angle) * radius * 0.7,
+      -random() * FIELD_DEPTH,
+    );
+    const scale = 380 + Math.pow(random(), 1.4) * 820;
+    sprite.scale.set(scale, scale * (0.34 + random() * 0.62), 1);
+    sprite.material.rotation = random() * Math.PI;
+    // Nearest layer in the field, so it passes fastest -- the parallax cue
+    // that puts it in front of everything else.
+    sprite.userData.drift = 1.25 + random() * 0.5;
+    sprite.userData.spin = (random() - 0.5) * 0.06;
+    sprite.userData.phase = random() * TAU;
+    sprite.userData.weight = 0.075 + random() * 0.105;
+    sprite.renderOrder = -4;
+    galaxyGroup.add(sprite);
+    driftDust.push(sprite);
+  }
+
   /**
    * Near galaxies, built star by star.
    *
@@ -2200,17 +2269,39 @@ export function createCosmicIntro({ pixelRatio } = {}) {
   let deepStarLevel = 0;
 
   /*
-   * How much of a galaxy survives its closest approach.
+   * A galaxy's visibility across its whole run.
    *
-   * Full strength until it is 260 units out, then down to nothing by the time
-   * it reaches the camera plane. Nothing snaps off: the galaxy grows, sweeps
-   * past -- usually to one side, since most of them are placed well off the
-   * flight path -- and dissolves as it goes by, the way something you fly
-   * through actually would.
+   * Two ends, and both of them used to be a cut. It was recycled to the back
+   * of the slab at full strength, so a galaxy did not arrive out of the dark
+   * -- it simply existed, mid-frame, where a moment before there had been
+   * nothing. That is the pop.
+   *
+   * It now rises out of the dark over the first 560 units of its run, holds
+   * through the approach while it grows, and dissolves over the last 300 as it
+   * sweeps past -- usually to one side, since most of them are placed well off
+   * the flight path. Nothing is ever seen to start or to stop.
    */
+  const DEEP_SLAB_FAR = -2050;
+  const DEEP_SLAB_NEAR = 150;
+  /*
+   * Smoothed at both ends, and the near one is long.
+   *
+   * A linear dissolve over 300 units is three quarters of a second, and three
+   * quarters of a second is exactly short enough to register as *something
+   * happening* -- a galaxy filling a quarter of the frame visibly losing its
+   * light. It read as a bulb being turned down rather than as an object going
+   * past. Six hundred units of smootherstep, beginning while it is still well
+   * ahead, is slow enough that the dimming is never the thing you notice; what
+   * you notice is that it got very close and then it was behind you.
+   */
+  const smootherstep = (t) => {
+    const x = t < 0 ? 0 : t > 1 ? 1 : t;
+    return x * x * x * (x * (x * 6 - 15) + 10);
+  };
   function deepNearFade(z) {
-    if (z < -260) return 1;
-    return Math.max(0, 1 - (z + 260) / 300);
+    const arriving = smootherstep((z - DEEP_SLAB_FAR) / 560);
+    const leaving = 1 - smootherstep((z + 620) / 600);
+    return arriving * leaving;
   }
 
   function applyDeepStarLevel() {
@@ -2290,7 +2381,7 @@ export function createCosmicIntro({ pixelRatio } = {}) {
     group.position.set(
       Math.cos(angle) * radius,
       Math.sin(angle) * radius * 0.7,
-      -520 - Math.pow(random(), 1.1) * 1560,
+      DEEP_SLAB_FAR + random() * (DEEP_SLAB_NEAR - DEEP_SLAB_FAR),
     );
     /*
      * Orientation is part of the identity, not a random roll. An edge-on
@@ -3046,12 +3137,21 @@ export function createCosmicIntro({ pixelRatio } = {}) {
       // Recycled behind the camera, not in front of it, so nothing is ever
       // seen to leave. By the time z is positive the object has already faded
       // out and is off the back of the shot.
-      if (points.position.z > 150) points.position.z -= 1730;
+      if (points.position.z > DEEP_SLAB_NEAR) {
+        points.position.z -= (DEEP_SLAB_NEAR - DEEP_SLAB_FAR);
+      }
     });
     applyDeepStarLevel();
     // Clouds are nearer than the galaxies behind them and pass faster, which
     // is the parallax that makes the shot read as movement through a volume
     // rather than movement of a backdrop.
+    driftDust.forEach((sprite) => {
+      sprite.position.z += step * sprite.userData.drift;
+      sprite.material.rotation += step * sprite.userData.spin * 0.0005;
+      // Recycled behind the camera: this layer is meant to be passed through,
+      // so it has to leave the way it would if it were real.
+      if (sprite.position.z > 260) sprite.position.z -= FIELD_DEPTH + 260;
+    });
     nebulae.forEach((sprite) => {
       sprite.position.z += step * (0.8 + sprite.userData.drift);
       sprite.material.rotation += step * sprite.userData.spin * 0.0004;
@@ -3066,12 +3166,44 @@ export function createCosmicIntro({ pixelRatio } = {}) {
    * the field brighten while others dim and it never looks like one object
    * being faded.
    */
+  /*
+   * Both ends of a recycled object's run.
+   *
+   * Fading it out before the near cutoff stops the recycle reading as the
+   * object blinking out -- but the object then reappears at the far edge at
+   * full strength, which is the same cut played backwards and is exactly what
+   * made galaxies seem to pop into existence mid-flight. Everything that loops
+   * through this field now rises at the far edge and dissolves at the near
+   * one, so a recycle is never a visible event.
+   */
+  const FIELD_FAR_EDGE = -FIELD_DEPTH;
+  function edgeFade(z, nearCutoff, nearSpan, farSpan) {
+    const leaving = z > nearCutoff ? 0 : Math.min(1, (nearCutoff - z) / nearSpan);
+    const arriving = Math.min(1, Math.max(0, (z - FIELD_FAR_EDGE) / farSpan));
+    return leaving * arriving;
+  }
+
   function setNebulaLevel(level, time) {
     const lit = Math.max(0, level);
     for (let i = 0; i < nebulae.length; i += 1) {
       const sprite = nebulae[i];
       const breath = 0.72 + Math.sin(time * 0.22 + sprite.userData.phase) * 0.28;
-      sprite.material.opacity = lit * sprite.userData.weight * breath;
+      sprite.material.opacity = lit * sprite.userData.weight * breath
+        * edgeFade(sprite.position.z, -420, 340, 520);
+    }
+    for (let i = 0; i < driftDust.length; i += 1) {
+      const sprite = driftDust[i];
+      const breath = 0.7 + Math.sin(time * 0.17 + sprite.userData.phase) * 0.3;
+      /*
+       * Faded at both ends of its own run, and thinned as it envelops the
+       * camera. A sheet a thousand units across sitting at z = -200 is the
+       * whole frame; at full weight that is a colour cast, not a cloud.
+       */
+      const z = sprite.position.z;
+      const arriving = Math.min(1, Math.max(0, (z + FIELD_DEPTH) / 420));
+      const enveloping = z > -520 ? Math.max(0.18, 1 - (z + 520) / 700) : 1;
+      sprite.material.opacity = lit * sprite.userData.weight * breath
+        * arriving * enveloping;
     }
     for (let i = 0; i < deepSprites.length; i += 1) {
       const sprite = deepSprites[i];
@@ -3266,8 +3398,10 @@ export function createCosmicIntro({ pixelRatio } = {}) {
       // Galaxies resolve out of the haze as we cross the wall.
       galaxyGroup.visible = true;
       const reveal = clamp01((eased - 0.4) * 1.7);
-      galaxySprites.forEach((sprite) => { sprite.material.opacity = reveal * 0.85; });
-      setDeepStarLevel(reveal * 0.9);
+      galaxySprites.forEach((sprite) => {
+        sprite.material.opacity = reveal * 0.8 * edgeFade(sprite.position.z, -380, 300, 420);
+      });
+      setDeepStarLevel(reveal * 0.95);
       setNebulaLevel(reveal, seconds);
       dust.rotation.z += deltaSeconds * 0.02;
       return elapsed / total;
@@ -3281,7 +3415,25 @@ export function createCosmicIntro({ pixelRatio } = {}) {
       bubbles.forEach((bubble, index) => { if (index > 0) setBubbleOpacity(bubble, 0); });
       driftField(lerp(360, 640, easeInOutSine(Math.min(1, local * 1.3))) * deltaSeconds);
       galaxySprites.forEach((sprite) => {
-        sprite.material.opacity = 0.62 + Math.sin((local + sprite.position.x) * 2.2) * 0.22;
+        /*
+         * The shimmer has to start from nothing.
+         *
+         * This used to be a flat 0.62 plus a sine, while the phase before it
+         * held these at 0.85 -- so at the seam the entire distant population
+         * stepped down by up to a third, in one frame, and read as the lights
+         * being dimmed. The base now matches what the neighbouring phases
+         * hold, and the sine is scaled in over the first quarter second so the
+         * shimmer begins rather than snaps on.
+         */
+        // Scaled in at the start of the phase and out again at the end, so
+        // both seams hand over at exactly the 0.8 the neighbours hold. A
+        // shimmer that is still at amplitude when the phase changes is a step,
+        // and a step across seventy-eight sprites at once reads as the lights
+        // being dimmed.
+        const shimmer = Math.min(1, local * 4) * Math.min(1, (1 - local) * 4);
+        sprite.material.opacity = (0.8 + Math.sin((local + sprite.position.x) * 2.2)
+          * 0.12 * shimmer)
+          * edgeFade(sprite.position.z, -380, 300, 420);
       });
       setDeepStarLevel(0.95);
       spirals.forEach((points) => { points.rotation.y += deltaSeconds * 0.04; });
@@ -3313,8 +3465,10 @@ export function createCosmicIntro({ pixelRatio } = {}) {
       const eased = easeInOutSine(local);
       // Everything else falls away: from here there is only one galaxy.
       const recede = clamp01(1 - local * 1.8);
-      galaxySprites.forEach((sprite) => { sprite.material.opacity = recede * 0.7; });
-      setDeepStarLevel(recede * 0.9);
+      galaxySprites.forEach((sprite) => {
+        sprite.material.opacity = recede * 0.8 * edgeFade(sprite.position.z, -380, 300, 420);
+      });
+      setDeepStarLevel(recede * 0.95);
       setNebulaLevel(recede, seconds);
       driftField(lerp(640, 200, easeOutCubic(local)) * deltaSeconds);
       dustMaterial.uniforms.uOpacity.value = lerp(1, 0.5, eased);
@@ -3485,11 +3639,18 @@ export function createCosmicIntro({ pixelRatio } = {}) {
      * when the light clears the system is simply already there -- with no
      * object to look at in between.
      *
-     * Cubed, so almost all of the growth lands in the final third: the star
-     * holds, then goes. A linear bloom reads as a zoom, not as a flare.
+     * Raised to the fifth, not cubed.
+     *
+     * Cubed put the frame at full white for something like six hundred
+     * milliseconds -- and a frame that has stopped changing is a frame that
+     * has stopped, whatever is causing it. That white hold was most of the
+     * "pause" in the hand-over; the rest of it was the veil that follows.
+     * A fifth power keeps the star a star for longer and blows it out in the
+     * last two hundred milliseconds, so the white is a flash rather than a
+     * held card.
      */
     sunStar.visible = true;
-    const flare = easeInCubic(local);
+    const flare = local * local * local * local * local;
     sunCore.scale.setScalar(lerp(30, 520, flare));
     sunCorona.scale.setScalar(lerp(96, 1250, flare));
     sunFlare.scale.setScalar(lerp(190, 900, flare));

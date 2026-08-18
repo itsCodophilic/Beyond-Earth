@@ -5519,14 +5519,18 @@ import { createCosmicIntro } from './scene/space/cosmicIntro.js';
           document.body.classList.remove("is-cosmic-intro");
           intro.dismiss();
         }
-        // One frame of the solar system now, under the veil, so the very next
-        // repaint already contains it.
-        try {
-          camera.updateMatrixWorld();
-          renderer.render(scene, camera);
-        } catch (error) {
-          console.error("[BeyondEarth] first arrival frame failed", error);
-        }
+        /*
+         * Deliberately *not* rendering the destination here.
+         *
+         * Drawing it in this tick sounds like a free frame, but the camera rig
+         * is only brought to the landing inside the main loop -- so what gets
+         * drawn is the solar system through whatever camera the last pre-intro
+         * frame left behind. On a first visit that is the Earth close-up the
+         * page opens at, which is exactly the flash of Earth reported before
+         * the view settled. The next real frame is one rAF away and the veil
+         * covers it; the cost of waiting is nothing, and the cost of not
+         * waiting is a wrong frame.
+         */
         const releaseOpening = () => {
           try {
             finishedIntro.dispose();
@@ -5956,11 +5960,16 @@ import { createCosmicIntro } from './scene/space/cosmicIntro.js';
       "One star, eight planets, and everything else it holds. You are six light-years out, looking back in.";
     document.body.append(caption);
 
-    // Cued on the next frame so the element has been laid out first and the
-    // opacity transition actually has two values to run between.
-    requestAnimationFrame(() => caption.classList.add("is-live"));
-    setTimeout(() => caption.classList.remove("is-live"), 7000);
-    setTimeout(() => caption.remove(), 9000);
+    /*
+     * Cued after the arrival flare has cleared, not on the next frame.
+     *
+     * Laid out first so the opacity transition has two values to run between
+     * -- but held back past the landfall as well, because a title card rising
+     * over a white screen names nothing. It should appear on the system.
+     */
+    setTimeout(() => caption.classList.add("is-live"), 560);
+    setTimeout(() => caption.classList.remove("is-live"), 7500);
+    setTimeout(() => caption.remove(), 9500);
   }
 
   /** Hand-off from the burst into the solar system. */
@@ -5981,6 +5990,18 @@ import { createCosmicIntro } from './scene/space/cosmicIntro.js';
     updateDistanceReadout(smoothProgress);
     document.body.classList.remove("is-cosmic-intro");
     intro.dismiss();
+    /*
+     * And deliberately not re-asserting the landing after this point.
+     *
+     * It looks like cheap insurance -- call `settleLandingView()` again once
+     * the post-intro layout is live, in case a scroll event overwrote the
+     * journey progress. It is not: while `is-cosmic-intro` is up the document
+     * cannot scroll, so the scroll write inside it is a no-op and the progress
+     * set directly is what holds. Called again *after* the class is removed
+     * the same write succeeds, the page really does scroll to the bottom, and
+     * the whole interface slides down with it. The direct assignment is the
+     * mechanism here; the scroll position is not.
+     */
     announceArrival();
     openingMotionStartedAt = performance.now() + 500;
     setTimeout(() => {
@@ -6004,6 +6025,32 @@ import { createCosmicIntro } from './scene/space/cosmicIntro.js';
     scheduleMajorSatelliteHydration();
 
     /*
+     * Compile the whole scene now, while the gate is up.
+     *
+     * A first visit and a reload are not the same run. Chrome keeps a
+     * *persistent* GPU program cache, so on a reload every shader the solar
+     * system needs is already compiled and the arrival is instant; on a first
+     * visit the programs are built the first time each material is actually
+     * drawn -- and the first frame that draws all of them at once is the
+     * arrival itself, at the far view where nothing is culled. That is the
+     * pause, and it is why it only ever happened once.
+     *
+     * `compileAsync` uses KHR_parallel_shader_compile where it exists, so this
+     * costs the gate nothing and the arrival everything it was paying.
+     */
+    if (typeof renderer.compileAsync === "function") {
+      renderer.compileAsync(scene, camera).catch((error) => {
+        console.warn("[BeyondEarth] scene precompile failed", error);
+      });
+    } else {
+      try {
+        renderer.compile(scene, camera);
+      } catch (error) {
+        console.warn("[BeyondEarth] scene precompile failed", error);
+      }
+    }
+
+    /*
      * Diagnostic: skip straight to the destination.
      *
      * The opening runs about seventy seconds from a cold load, which is right
@@ -6021,6 +6068,23 @@ import { createCosmicIntro } from './scene/space/cosmicIntro.js';
       // Frame the destination before the burst, so the cut lands on the view
       // the viewer is meant to arrive at rather than easing into it afterwards.
       settleLandingView();
+      /*
+       * And draw the destination once, here, behind the opaque gate.
+       *
+       * Compiling programs is most of the first-visit cost but not all of it:
+       * textures are uploaded lazily too, and the arrival frame is the first
+       * one that needs every one of them together. This renders exactly the
+       * frame the sequence will land on -- same camera, same distance, same
+       * visible set -- while the intro overlay is still fully opaque, so the
+       * work happens where it cannot be seen. Forty-five seconds later the
+       * same frame costs nothing.
+       */
+      camera.updateMatrixWorld();
+      try {
+        renderer.render(scene, camera);
+      } catch (error) {
+        console.warn("[BeyondEarth] arrival prewarm failed", error);
+      }
       document.body.classList.add("is-cosmic-intro");
       cosmicIntro = createCosmicIntro({ pixelRatio: cinematicPixelRatio });
       // `.loader` takes 700 ms to fade. Start the celestial entrance from the

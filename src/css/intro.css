@@ -536,11 +536,19 @@ body.is-cosmic-intro .progress {
   pointer-events: none !important;
 }
 
-/* Restored gently, so the interface arrives after the destination does. */
+/*
+ * Restored gently, and only once the light has gone.
+ *
+ * At a 260ms delay the distance readout began fading up while the arrival
+ * flare was still white -- so the first thing the viewer saw of the interface
+ * was a card floating on a blank screen, before there was anything for it to
+ * describe. The delay now clears the landfall (500ms) with a little margin,
+ * which puts the chrome after the destination rather than over the burst.
+ */
 .experience,
 .distance-cinematic-layer,
 .progress {
-  transition: opacity 900ms ease 260ms;
+  transition: opacity 900ms ease 620ms;
 }
 
 /*
@@ -678,7 +686,20 @@ body.is-cosmic-intro::-webkit-scrollbar { width: 0; height: 0; }
  * than in plain view. The overlay's own fade carries it out.
  */
 .intro.is-landing {
-  animation: intro-landfall 620ms cubic-bezier(0.16, 0.84, 0.3, 1) both;
+  animation: intro-landfall 500ms cubic-bezier(0.16, 0.84, 0.3, 1) both;
+}
+
+/*
+ * The overlay's own exit, during a landing only.
+ *
+ * `.intro` fades over 1,100ms everywhere else, which is right for the gate
+ * and far too slow here: the landfall keyframes and that fade multiply, so
+ * the white lingered well past the point where the keyframes said it was
+ * gone. Matched to the landfall so the two clear together.
+ */
+.intro.is-landing.is-hidden {
+  transition: opacity 500ms cubic-bezier(0.16, 0.84, 0.3, 1),
+    visibility 500ms linear;
 }
 
 /*
@@ -703,7 +724,7 @@ body.is-cosmic-intro::-webkit-scrollbar { width: 0; height: 0; }
  */
 @keyframes intro-landfall {
   0%   { background-color: rgba(255, 253, 250, 0.94); }
-  18%  { background-color: rgba(255, 252, 246, 0.46); }
-  46%  { background-color: rgba(248, 250, 255, 0.14); }
+  16%  { background-color: rgba(255, 252, 246, 0.40); }
+  44%  { background-color: rgba(248, 250, 255, 0.10); }
   100% { background-color: rgba(0, 1, 4, 0); }
 }
