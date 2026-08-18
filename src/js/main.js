@@ -5494,11 +5494,23 @@ import { createCosmicIntro } from './scene/space/cosmicIntro.js';
       }
 
       if (progress >= 1) {
-        try {
-          cosmicIntro.dispose();
-        } catch (error) {
-          console.error("[BeyondEarth] opening sequence dispose failed", error);
-        }
+        /*
+         * The join, in the right order.
+         *
+         * This used to dispose the opening sequence first and hand over
+         * afterwards -- which meant the last frame of the flare stayed on
+         * screen while a few hundred geometries, materials and textures were
+         * released, and then the solar system appeared. That gap is small in
+         * milliseconds and enormous to watch: the flare stops, nothing moves,
+         * and the arrival lands as a second event rather than as the same one.
+         *
+         * So: hand over immediately, draw the destination in this same tick
+         * while the white veil is still opaque, and release the opening's
+         * resources afterwards, when there is a moving scene to hide the cost
+         * behind. Nothing about the sequence is still needed once its last
+         * frame has been shown.
+         */
+        const finishedIntro = cosmicIntro;
         cosmicIntro = null;
         try {
           completeCosmicIntro();
@@ -5506,6 +5518,26 @@ import { createCosmicIntro } from './scene/space/cosmicIntro.js';
           console.error("[BeyondEarth] arrival failed", error);
           document.body.classList.remove("is-cosmic-intro");
           intro.dismiss();
+        }
+        // One frame of the solar system now, under the veil, so the very next
+        // repaint already contains it.
+        try {
+          camera.updateMatrixWorld();
+          renderer.render(scene, camera);
+        } catch (error) {
+          console.error("[BeyondEarth] first arrival frame failed", error);
+        }
+        const releaseOpening = () => {
+          try {
+            finishedIntro.dispose();
+          } catch (error) {
+            console.error("[BeyondEarth] opening sequence dispose failed", error);
+          }
+        };
+        if (typeof requestIdleCallback === "function") {
+          requestIdleCallback(releaseOpening, { timeout: 1500 });
+        } else {
+          setTimeout(releaseOpening, 900);
         }
       }
       requestAnimationFrame(animate);

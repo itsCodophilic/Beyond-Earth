@@ -678,7 +678,7 @@ body.is-cosmic-intro::-webkit-scrollbar { width: 0; height: 0; }
  * than in plain view. The overlay's own fade carries it out.
  */
 .intro.is-landing {
-  animation: intro-landfall 1150ms cubic-bezier(0.3, 0.7, 0.4, 1) both;
+  animation: intro-landfall 620ms cubic-bezier(0.16, 0.84, 0.3, 1) both;
 }
 
 /*
@@ -690,8 +690,20 @@ body.is-cosmic-intro::-webkit-scrollbar { width: 0; height: 0; }
  * and this carries that flare over the scene change so the system is simply
  * *there* when the light clears.
  */
+/*
+ * Short, and front-loaded.
+ *
+ * At 1,150 ms this veil was still at 72% white a quarter of a second in and
+ * did not clear for over a second -- so after the flare the viewer sat looking
+ * at a white screen while the destination was already being drawn behind it.
+ * That hold is what read as a pause. It now falls away in about six hundred
+ * milliseconds and is more than half gone by a fifth of that, which is long
+ * enough to cover the change of scene and short enough that the solar system
+ * arrives *with* the light rather than after it.
+ */
 @keyframes intro-landfall {
   0%   { background-color: rgba(255, 253, 250, 0.94); }
-  22%  { background-color: rgba(255, 252, 246, 0.72); }
+  18%  { background-color: rgba(255, 252, 246, 0.46); }
+  46%  { background-color: rgba(248, 250, 255, 0.14); }
   100% { background-color: rgba(0, 1, 4, 0); }
 }

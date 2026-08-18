@@ -180,6 +180,105 @@ function createRayTexture(spikes = 22) {
 }
 
 /**
+ * A distant galaxy.
+ *
+ * A radial gradient is a ball, and a sky full of balls is a sky full of
+ * bokeh -- which is exactly what the far field looked like once these were
+ * allowed anywhere near the camera. A galaxy too far away to resolve is still
+ * not round: it is an ellipse with a bright nucleus, usually with a hint of a
+ * disc round it, and often seen at an angle. Painted once, tinted per sprite,
+ * and squashed and rotated on placement.
+ */
+function createDistantGalaxyTexture() {
+  const size = 128;
+  const half = size / 2;
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const context = canvas.getContext("2d");
+  context.translate(half, half);
+  context.globalCompositeOperation = "lighter";
+
+  const ellipse = (rx, ry, alpha, inner) => {
+    context.save();
+    context.scale(1, ry / rx);
+    const gradient = context.createRadialGradient(0, 0, 0, 0, 0, rx);
+    gradient.addColorStop(0, `rgba(255,255,255,${alpha})`);
+    gradient.addColorStop(inner, `rgba(255,255,255,${(alpha * 0.34).toFixed(3)})`);
+    gradient.addColorStop(1, "rgba(255,255,255,0)");
+    context.fillStyle = gradient;
+    context.beginPath();
+    context.arc(0, 0, rx, 0, TAU);
+    context.fill();
+    context.restore();
+  };
+
+  ellipse(half * 0.92, half * 0.40, 0.16, 0.42);   // the disc
+  ellipse(half * 0.46, half * 0.24, 0.30, 0.40);   // the inner disc
+  ellipse(half * 0.14, half * 0.11, 0.95, 0.45);   // the nucleus
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  return texture;
+}
+
+/**
+ * A diffraction spike.
+ *
+ * In every deep exposure the brightest stars wear a cross. It is not a
+ * property of the star -- it is the telescope's secondary-mirror vanes
+ * diffracting the light -- but that is exactly why it belongs here: the cross
+ * is the visual signature of "this was photographed", and a field of plain
+ * round dots reads as a particle system no matter how many dots it has. Four
+ * long spikes with a fainter pair between them, which is roughly what Hubble's
+ * optics produce.
+ */
+function createSpikeTexture() {
+  const size = 256;
+  const half = size / 2;
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const context = canvas.getContext("2d");
+  context.translate(half, half);
+  context.globalCompositeOperation = "lighter";
+
+  const spike = (angle, length, width, alpha) => {
+    const gradient = context.createLinearGradient(0, 0, length, 0);
+    gradient.addColorStop(0, `rgba(255,255,255,${alpha})`);
+    gradient.addColorStop(0.12, `rgba(255,255,255,${(alpha * 0.5).toFixed(3)})`);
+    gradient.addColorStop(1, "rgba(255,255,255,0)");
+    context.save();
+    context.rotate(angle);
+    context.fillStyle = gradient;
+    context.beginPath();
+    context.moveTo(0, -width);
+    context.lineTo(length, 0);
+    context.lineTo(0, width);
+    context.closePath();
+    context.fill();
+    context.restore();
+  };
+
+  for (let i = 0; i < 4; i += 1) spike(i * (Math.PI / 2), half * 0.94, 2.6, 0.85);
+  for (let i = 0; i < 4; i += 1) {
+    spike(Math.PI / 4 + i * (Math.PI / 2), half * 0.42, 1.6, 0.3);
+  }
+  const core = context.createRadialGradient(0, 0, 0, 0, 0, half * 0.22);
+  core.addColorStop(0, "rgba(255,255,255,1)");
+  core.addColorStop(0.42, "rgba(255,255,255,0.72)");
+  core.addColorStop(1, "rgba(255,255,255,0)");
+  context.fillStyle = core;
+  context.beginPath();
+  context.arc(0, 0, half * 0.22, 0, TAU);
+  context.fill();
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  return texture;
+}
+
+/**
  * A cloud, not a ball.
  *
  * One radial gradient always looks like a radial gradient -- a perfectly round
@@ -203,23 +302,64 @@ function createCloudTexture(variant = 0) {
     return seed / 4294967296;
   };
 
-  const lobes = 7 + Math.floor(random() * 4);
+  /*
+   * Round lobes sum to a round cloud.
+   *
+   * Nine circles inside a disc is still, at a distance, a disc -- and a sky
+   * full of them reads as lens bokeh, which is precisely what the travelling
+   * shot looked like once these were allowed anywhere near the camera. Real
+   * nebulosity is anisotropic at every scale: it has a long axis, it frays,
+   * and it is threaded with filaments finer than its body. So each lobe is now
+   * an ellipse with its own aspect and angle, and a set of thin drawn
+   * filaments goes over the top -- the smallest structure in the cloud, which
+   * is what stops the eye resolving it as one soft shape.
+   */
+  const lobes = 9 + Math.floor(random() * 5);
   for (let i = 0; i < lobes; i += 1) {
-    const radius = size * (0.12 + random() * 0.26);
+    const radius = size * (0.11 + random() * 0.28);
     // Kept inside a disc so the lobes never clip the edge of the canvas,
     // which would show as a straight line across the cloud.
     const angle = random() * Math.PI * 2;
     const offset = random() * (size * 0.5 - radius);
     const x = size / 2 + Math.cos(angle) * offset;
     const y = size / 2 + Math.sin(angle) * offset;
-    const gradient = context.createRadialGradient(x, y, 0, x, y, radius);
-    gradient.addColorStop(0, `rgba(255,255,255,${(0.16 + random() * 0.2).toFixed(3)})`);
-    gradient.addColorStop(0.5, "rgba(255,255,255,0.06)");
+    const aspect = 0.28 + random() * 0.6;
+    context.save();
+    context.translate(x, y);
+    context.rotate(random() * Math.PI);
+    context.scale(1, aspect);
+    const gradient = context.createRadialGradient(0, 0, 0, 0, 0, radius);
+    gradient.addColorStop(0, `rgba(255,255,255,${(0.15 + random() * 0.2).toFixed(3)})`);
+    gradient.addColorStop(0.5, "rgba(255,255,255,0.055)");
     gradient.addColorStop(1, "rgba(255,255,255,0)");
     context.fillStyle = gradient;
     context.beginPath();
-    context.arc(x, y, radius, 0, Math.PI * 2);
+    context.arc(0, 0, radius, 0, Math.PI * 2);
     context.fill();
+    context.restore();
+  }
+
+  // Filaments: a few dozen short, thin, curved strokes.
+  context.lineCap = "round";
+  for (let i = 0; i < 34; i += 1) {
+    const a = random() * Math.PI * 2;
+    const off = random() * size * 0.34;
+    const x = size / 2 + Math.cos(a) * off;
+    const y = size / 2 + Math.sin(a) * off;
+    const dir = random() * Math.PI * 2;
+    const len = size * (0.08 + random() * 0.26);
+    const bend = (random() - 0.5) * len * 0.8;
+    context.strokeStyle = `rgba(255,255,255,${(0.04 + random() * 0.07).toFixed(3)})`;
+    context.lineWidth = 1 + random() * 4;
+    context.beginPath();
+    context.moveTo(x, y);
+    context.quadraticCurveTo(
+      x + Math.cos(dir) * len * 0.5 - Math.sin(dir) * bend,
+      y + Math.sin(dir) * len * 0.5 + Math.cos(dir) * bend,
+      x + Math.cos(dir) * len,
+      y + Math.sin(dir) * len,
+    );
+    context.stroke();
   }
 
   const texture = new THREE.CanvasTexture(canvas);
@@ -249,6 +389,47 @@ function createCloudTexture(variant = 0) {
  *   - the HII knots go on last and only along the ridges, which is where star
  *     formation actually happens: the leading edge of the density wave.
  */
+/*
+ * How defined each arm is, along its own length.
+ *
+ * Four arms of equal weight running unbroken from the bar to the rim is a
+ * pinwheel. In the reference no two arms are alike and not one of them is
+ * even: one is heavy and traceable the whole way round, one is crisp until
+ * about half a radius and then dissolves, one is bright near the bar, breaks
+ * up completely across the middle of the disc and re-forms further out, and
+ * one is never more than a faint over-density anywhere. All four are at their
+ * most concrete around the middle of the disc -- close in, the bulge swamps
+ * them; out at the rim they run out of gas.
+ *
+ * `armStrength` returns 0..1 and is the single control for all of that.
+ * Everything that follows an arm multiplies by it -- painted arm alpha, the
+ * dust lanes, the HII knots, the nebulae, and the important one: the
+ * probability that a disc star joins the arm at all rather than staying in
+ * the smooth disc between them. The painted texture and the point cloud both
+ * call it, so the two components agree about which arm is which.
+ */
+const ARM_SHAPE = [
+  // base level, then lobes of [centre, width, weight] along t: 0 at the bar, 1 at the rim
+  { base: 0.20, lobes: [[0.42, 0.30, 0.80], [0.86, 0.30, 0.62]] }, // carries to the rim
+  { base: 0.08, lobes: [[0.38, 0.26, 0.92]] },                     // dissolves past mid-disc
+  { base: 0.05, lobes: [[0.28, 0.13, 0.86], [0.80, 0.20, 0.72]] }, // breaks in the middle
+  { base: 0.09, lobes: [[0.55, 0.34, 0.30]] },                     // faint the whole way
+];
+
+function armStrength(arm, t) {
+  const shape = ARM_SHAPE[((arm % ARM_SHAPE.length) + ARM_SHAPE.length) % ARM_SHAPE.length];
+  let s = shape.base;
+  for (let i = 0; i < shape.lobes.length; i += 1) {
+    const lobe = shape.lobes[i];
+    const d = (t - lobe[0]) / lobe[1];
+    s += lobe[2] * Math.exp(-d * d);
+  }
+  // Definition peaks mid-disc for every arm, whatever its own profile says.
+  const mid = Math.exp(-(((t - 0.54) / 0.44) ** 2) * 0.85);
+  s *= 0.34 + 0.66 * mid;
+  return s < 0 ? 0 : s > 1 ? 1 : s;
+}
+
 function createGalaxyDiscTexture(size = 1024) {
   const canvas = document.createElement("canvas");
   canvas.width = size;
@@ -274,7 +455,19 @@ function createGalaxyDiscTexture(size = 1024) {
    */
   const R = half * 0.76;
   const ARMS = 4;
-  const SPIN = 4.6;
+  /*
+   * How far an arm wraps, in radians, from the bar to the rim.
+   *
+   * At 4.6 an arm turns only three quarters of the way round the galaxy, so
+   * successive windings never meet and the disc reads as four wide open
+   * ribbons with dark voids between them. Both references wrap about one and a
+   * half turns, which is what closes the gaps: the arms overlap in radius, and
+   * the eye sees a continuous textured disc rather than a pinwheel.
+   *
+   * The point cloud uses the same figure, so the painted arms and the resolved
+   * stars stay registered.
+   */
+  const SPIN = 9.5;
   const BAR = 0.42;
 
   const blob = (x, y, radius, colour, alpha) => {
@@ -304,6 +497,50 @@ function createGalaxyDiscTexture(size = 1024) {
 
   context.globalCompositeOperation = "lighter";
 
+  /*
+   * ---- the dust the galaxy sits in
+   *
+   * The disc does not end. In the reference it is wrapped in a cold, faintly
+   * lit haze that reaches most of a radius past the last arm -- the galaxy's
+   * own dust, scattering the light of a hundred billion stars back at the
+   * camera. Without it the galaxy is a decal on a black card, which is most
+   * of what made the old version read as a drawing. Painted first, so
+   * everything else lands on top of it, and broken up with irregular patches
+   * so the outline is never a circle.
+   */
+  /*
+   * And it is not blue.
+   *
+   * Interstellar dust is lit by whatever is nearest: hot young stars make it
+   * glow pink, the general starlight of the disc scatters violet out of it,
+   * and the thick cold parts simply redden everything behind them to brown.
+   * A uniformly blue envelope is the one colour it is never all of -- that is
+   * reflection nebulosity alone, and it is only part of the mix.
+   */
+  const envelope = context.createRadialGradient(0, 0, R * 0.42, 0, 0, R * 1.26);
+  envelope.addColorStop(0, "rgba(112,84,116,0.115)");
+  envelope.addColorStop(0.4, "rgba(94,72,104,0.085)");
+  envelope.addColorStop(0.72, "rgba(66,54,80,0.045)");
+  envelope.addColorStop(1, "rgba(34,30,52,0)");
+  context.fillStyle = envelope;
+  context.beginPath();
+  context.arc(0, 0, R * 1.26, 0, TAU);
+  context.fill();
+  for (let i = 0; i < 30; i += 1) {
+    const angle = random() * TAU;
+    const r = R * (0.82 + Math.pow(random(), 0.8) * 0.4);
+    blob(Math.cos(angle) * r, Math.sin(angle) * r,
+      R * (0.11 + random() * 0.2),
+      (() => {
+        const tone = random();
+        return tone < 0.34 ? "132,78,118"        // pink-violet
+          : tone < 0.62 ? "118,86,72"            // warm brown
+            : tone < 0.85 ? "88,74,124"          // dusty purple
+              : "64,84,126";                     // the blue that was all of it
+      })(),
+      0.028 + random() * 0.03);
+  }
+
   // ---- the outer halo, so the disc does not stop on a hard edge
   const halo = context.createRadialGradient(0, 0, R * 0.2, 0, 0, R * 1.16);
   halo.addColorStop(0, "rgba(146,166,200,0.13)");
@@ -316,27 +553,36 @@ function createGalaxyDiscTexture(size = 1024) {
 
   // ---- the smooth disc the arms sit in
   const disc = context.createRadialGradient(0, 0, 0, 0, 0, R);
-  disc.addColorStop(0, "rgba(228,206,172,0.30)");
-  disc.addColorStop(0.16, "rgba(196,190,186,0.21)");
-  disc.addColorStop(0.55, "rgba(158,176,206,0.15)");
+  disc.addColorStop(0, "rgba(232,212,180,0.34)");
+  disc.addColorStop(0.16, "rgba(206,198,192,0.27)");
+  disc.addColorStop(0.34, "rgba(178,188,208,0.23)");
+  disc.addColorStop(0.55, "rgba(158,176,206,0.21)");
+  disc.addColorStop(0.8, "rgba(134,152,190,0.14)");
   disc.addColorStop(1, "rgba(96,120,166,0)");
   context.fillStyle = disc;
   context.beginPath();
   context.arc(0, 0, R, 0, TAU);
   context.fill();
 
-  // ---- arms: broad cool base
-  alongArms(210, 0.10, 1.0, 0.16, 0, (x, y, t) => {
-    const width = R * (0.055 + t * 0.115);
+  /*
+   * ---- arms: broad cool base
+   *
+   * The alpha is the arm's own profile, not a constant. Where `armStrength`
+   * has fallen away the pass still lays a trace of light down -- a real disc
+   * is never empty between the arms -- but there is no ridge to see, so the
+   * arm simply stops being an arm for that stretch and the eye reads a break.
+   */
+  alongArms(210, 0.10, 1.0, 0.16, 0, (x, y, t, arm) => {
+    const width = R * (0.055 + t * 0.115) * (0.7 + 0.5 * armStrength(arm, t));
     const fade = Math.pow(Math.sin(Math.min(1, (t - 0.1) / 0.9) * Math.PI), 0.45);
-    blob(x, y, width, "170,190,222", 0.07 * fade);
+    blob(x, y, width, "170,190,222", 0.07 * fade * (0.30 + 1.05 * armStrength(arm, t)));
   });
 
-  // ---- arms: narrow bright ridge
-  alongArms(230, 0.13, 0.97, 0.05, 0.06, (x, y, t) => {
+  // ---- arms: narrow bright ridge, which is the part that vanishes entirely
+  alongArms(230, 0.13, 0.97, 0.05, 0.06, (x, y, t, arm) => {
     const width = R * (0.020 + t * 0.045);
     const fade = Math.pow(Math.sin(Math.min(1, (t - 0.13) / 0.84) * Math.PI), 0.5);
-    blob(x, y, width, "216,230,250", 0.068 * fade);
+    blob(x, y, width, "216,230,250", 0.056 * fade * (0.10 + 1.30 * armStrength(arm, t)));
   });
 
   /*
@@ -349,9 +595,11 @@ function createGalaxyDiscTexture(size = 1024) {
    * pinwheel. Each spur is a short spiral of its own, launched from a random
    * point on an arm.
    */
-  for (let i = 0; i < 46; i += 1) {
-    const arm = Math.floor(random() * ARMS) / ARMS;
+  for (let i = 0; i < 52; i += 1) {
+    const armIndex = Math.floor(random() * ARMS);
     const launch = 0.24 + random() * 0.62;
+    // A spur only exists where its parent arm does.
+    if (random() > armStrength(armIndex, launch)) continue;
     const lean = (random() - 0.5) * 0.9;
     const reach = 0.09 + random() * 0.2;
     const steps = 26;
@@ -359,7 +607,7 @@ function createGalaxyDiscTexture(size = 1024) {
       const u = k / steps;
       const t = launch + reach * u;
       if (t > 1.02) break;
-      const angle = arm * TAU + t * SPIN + 0.06 + lean * u * 0.7;
+      const angle = (armIndex / ARMS) * TAU + t * SPIN + 0.06 + lean * u * 0.7;
       const r = t * R;
       const width = R * (0.012 + t * 0.03) * (1 - u * 0.55);
       blob(Math.cos(angle) * r, Math.sin(angle) * r, width,
@@ -367,49 +615,149 @@ function createGalaxyDiscTexture(size = 1024) {
     }
   }
 
-  // ---- the bar and the bulge
-  context.save();
-  context.rotate(BAR);
-  context.scale(1, 0.34);
-  const bar = context.createRadialGradient(0, 0, 0, 0, 0, R * 0.34);
-  bar.addColorStop(0, "rgba(255,238,198,0.62)");
-  bar.addColorStop(0.4, "rgba(255,214,150,0.34)");
-  bar.addColorStop(1, "rgba(226,168,104,0)");
-  context.fillStyle = bar;
-  context.beginPath();
-  context.arc(0, 0, R * 0.34, 0, TAU);
-  context.fill();
-  context.restore();
+  /*
+   * The core: a glow, not a shape.
+   *
+   * This was a circle scaled to a third of its height and filled with a
+   * gradient -- which gives a hard elliptical edge where the gradient's last
+   * stop meets the clip, and at the centre of a galaxy that edge reads as a
+   * box. The reference has no edge anywhere near the middle: it is a bright
+   * cream sphere whose light simply runs out, with the bar visible only as a
+   * slight elongation inside it.
+   *
+   * So the bar is now a chain of soft blobs laid along its axis whose radius
+   * tapers to nothing at the ends -- a lens, with no boundary to see -- and
+   * the bulge on top of it is four concentric passes, brightest and whitest at
+   * the very centre. Overlapping soft-edged circles cannot produce a straight
+   * line, which is the entire point.
+   */
+  /*
+   * The bar is a structure, not a thickening of the bulge.
+   *
+   * In the reference it is unmistakable: a clean tan lens of old stars running
+   * straight out of the nucleus, about three times as long as the bright core
+   * is wide, and its two ends are exactly where the spiral arms begin. That
+   * straightness is the point -- everything else in a galaxy is scattered or
+   * curved, so a single linear feature through the middle reads instantly, and
+   * it is what tells the eye the arms are being fed from somewhere rather than
+   * just wound round a blob.
+   *
+   * So: narrower than before, longer, and browner. Painted as a chain of soft
+   * blobs whose radius closes to nothing at both ends, which gives the lens
+   * its shape without ever drawing an edge, plus a tighter, brighter spine
+   * down the middle of it.
+   */
+  const BAR_LENGTH = 0.32;
+  const barBlobs = 70;
+  for (let i = 0; i <= barBlobs; i += 1) {
+    const u = (i / barBlobs) * 2 - 1;               // -1 .. 1 along the bar
+    const taper = Math.sqrt(Math.max(0, 1 - u * u)); // zero at both ends
+    if (taper <= 0.02) continue;
+    const along = u * R * BAR_LENGTH;
+    const x = Math.cos(BAR) * along;
+    const y = Math.sin(BAR) * along;
+    /*
+     * Wide and faint, not narrow and bright.
+     *
+     * Close up, the reference has no bar as such -- only a soft cream
+     * elongation of the nucleus, dissolving into the dust before it reaches
+     * anything you could call an end. Every version of this that read as a
+     * distinct object was too narrow and too bright; the structure is real,
+     * but at this scale it is a bias in a glow, not a shape. Broad radii and
+     * a low alpha give the same elongation with nothing for the eye to catch.
+     */
+    const girth = Math.pow(taper, 0.5);
+    blob(x, y, R * (0.055 + 0.135 * girth), "214,178,138", 0.019 * taper ** 0.85);
+    blob(x, y, R * (0.026 + 0.062 * girth), "240,214,178", 0.017 * taper ** 0.75);
+  }
 
-  const bulge = context.createRadialGradient(0, 0, 0, 0, 0, R * 0.16);
-  bulge.addColorStop(0, "rgba(255,246,220,0.85)");
-  bulge.addColorStop(0.42, "rgba(255,216,156,0.4)");
-  bulge.addColorStop(1, "rgba(238,178,110,0)");
-  context.fillStyle = bulge;
-  context.beginPath();
-  context.arc(0, 0, R * 0.16, 0, TAU);
-  context.fill();
+  // The bulge itself: broad warm halo first, then progressively smaller and
+  // whiter passes, so the centre saturates to cream-white the way it does in
+  // a long exposure.
+  /*
+   * Deliberately short of saturation.
+   *
+   * Everything in this scene composites additively, so the painted core, the
+   * bulge sprites and twenty thousand bulge stars all sum in the same pixels.
+   * Push any of them too hard and the middle clips flat at white -- and the
+   * boundary of a clipped region is an iso-brightness contour, which where
+   * several elongated components overlap has *corners*. That is where the
+   * angular, machined-looking core came from: not a shape anywhere in the
+   * geometry, but the edge of a blown-out highlight.
+   *
+   * Each layer now leaves headroom, so the sum rolls off smoothly and the
+   * falloff of a sphere survives all the way to the middle.
+   */
+  /*
+   * And it is small.
+   *
+   * The bulge was painted out to 0.46 R, which on a disc that reaches 1.0 is
+   * nearly a quarter of the whole galaxy -- so the middle read as an enormous
+   * lamp with a spiral drawn round it. In the reference the bright core is
+   * under a tenth of the diameter: a small, intense sphere that the bar and
+   * the arm roots run out of. Halved, and the outer stops thinned, so the glow
+   * still reaches the inner arms without a dark ring but stops dominating.
+   */
+  const bulgeStops = [
+    [0.235, "255,216,168", 0.055], // outer halo -- still bridges to the arms
+    [0.155, "255,226,188", 0.09],
+    [0.098, "255,226,176", 0.14],
+    [0.060, "255,242,210", 0.20],
+    [0.032, "255,251,236", 0.27],
+    [0.015, "255,255,250", 0.36],
+  ];
+  for (const [radius, colour, alpha] of bulgeStops) {
+    blob(0, 0, R * radius, colour, alpha);
+  }
 
   // ---- dust lanes, carved out of everything above
   context.globalCompositeOperation = "destination-out";
   // Along the inner edge of each arm, where the density wave piles dust up.
-  alongArms(180, 0.16, 0.94, 0.05, -0.24, (x, y, t) => {
+  alongArms(180, 0.24, 0.94, 0.05, -0.24, (x, y, t, arm) => {
     const width = R * (0.014 + t * 0.042);
-    const fade = Math.pow(Math.sin(Math.min(1, (t - 0.16) / 0.78) * Math.PI), 0.6);
-    blob(x, y, width, "0,0,0", 0.66 * fade);
+    const fade = Math.pow(Math.sin(Math.min(1, (t - 0.24) / 0.7) * Math.PI), 0.6);
+    // No arm, no density wave, no lane.
+    blob(x, y, width, "0,0,0", 0.66 * fade * (0.22 + 0.9 * armStrength(arm, t)));
   });
   // The pair of lanes that wrap the bar -- the most recognisable feature of
   // the reference, and the thing that makes the core read as three-dimensional.
+  /*
+   * The lanes that wrap the bar start outside the bulge, not through it.
+   *
+   * Carving from a tenth of the radius put a dark notch straight across the
+   * middle of the core, and a bright shape with a bite out of it stops looking
+   * like a sphere and starts looking like a machined part -- which is what
+   * made the centre read as angular. They now begin where the bulge glow has
+   * already fallen away, and fade in rather than starting at full strength.
+   */
   for (let side = 0; side < 2; side += 1) {
     const flip = side === 0 ? 1 : -1;
-    for (let i = 0; i <= 90; i += 1) {
-      const t = i / 90;
-      const angle = BAR + flip * (0.55 + t * 2.5);
-      const r = R * (0.10 + t * 0.28);
+    const cosB = Math.cos(BAR);
+    const sinB = Math.sin(BAR);
+    for (let i = 0; i <= 130; i += 1) {
+      const u = (i / 130) * 2 - 1;                    // -1 .. 1 along the bar
+      const taper = Math.sqrt(Math.max(0, 1 - u * u));
+      if (taper <= 0.03) continue;
+      const along = u * R * (BAR_LENGTH + 0.04);
+      /*
+       * Flanking the bar, not bisecting it.
+       *
+       * At an offset of four hundredths of a radius the lane ran straight
+       * down the middle of the lens and carved it into two bright slivers
+       * with a black gash between them -- the bar stopped being a body of
+       * stars and became a blade. It now sits well off the axis, narrow and
+       * faint, and only bows in toward the bar at the ends where it really
+       * does hand the dust over to the arm.
+       */
+      const off = flip * R * (0.098 - 0.030 * (1 - taper));
+      // Held back near the middle: carving through the nucleus is what made
+      // the core look machined the last time, and one bite is enough to undo
+      // a sphere.
+      const guard = 0.1 + 0.9 * Math.min(1, Math.max(0, Math.abs(u) - 0.12) / 0.35);
       blob(
-        Math.cos(angle) * r, Math.sin(angle) * r,
-        R * (0.022 + t * 0.03), "0,0,0",
-        0.62 * Math.sin(t * Math.PI) ** 0.5,
+        cosB * along - sinB * off, sinB * along + cosB * off,
+        R * (0.008 + 0.017 * taper), "0,0,0",
+        0.26 * Math.pow(taper, 0.45) * guard,
       );
     }
   }
@@ -439,10 +787,61 @@ function createGalaxyDiscTexture(size = 1024) {
     }
   }
 
+  /*
+   * ---- warm dust, everywhere
+   *
+   * Close up the inner disc of the reference is not blue-white with lanes cut
+   * in it. It is mottled brown: warm, blotchy patches of dust lying over the
+   * arms at every scale, densest around the core and thinning outward, with
+   * the cooler starlight showing through the gaps between them. Four tidy
+   * carved lanes cannot produce that -- they give grooves, and what is wanted
+   * is texture. Two passes do it: warm blobs that tint the disc brown where
+   * they land, and a second, smaller set of carved ones so the dust has a
+   * shadowed side and the whole field breaks up.
+   */
+  /*
+   * Painted with `multiply`, which is the only operation here that can make
+   * something browner rather than merely brighter.
+   *
+   * Additive brown was the obvious thing to try and it is wrong: dust does
+   * not emit, it absorbs, and absorbing more blue than red is exactly what
+   * makes it look brown. Adding warm light to the inner disc only pushed an
+   * already bright region further toward white, which is the opposite of the
+   * reference. Multiplying by a warm colour takes the blue out and darkens at
+   * the same time, so the patches sit *in* the disc instead of on top of it.
+   */
+  context.globalCompositeOperation = "multiply";
+  for (let i = 0; i < 230; i += 1) {
+    const angle = random() * TAU;
+    const rr = 0.08 + Math.pow(random(), 0.85) * 0.76;
+    const r = rr * R;
+    const tone = random();
+    const colour = tone < 0.40 ? "206,158,110"
+      : tone < 0.74 ? "184,142,104"
+        : "222,182,140";
+    blob(Math.cos(angle) * r, Math.sin(angle) * r,
+      R * (0.030 + Math.pow(random(), 1.8) * 0.15),
+      colour,
+      0.5 * Math.max(0.16, 1.2 - rr * 1.05) * (0.45 + random() * 0.9));
+  }
+  // A little warm light back on the lit edges, so the dust is not only a stain.
+  context.globalCompositeOperation = "lighter";
+  for (let i = 0; i < 90; i += 1) {
+    const angle = random() * TAU;
+    const rr = 0.12 + Math.pow(random(), 0.9) * 0.6;
+    const r = rr * R;
+    blob(Math.cos(angle) * r, Math.sin(angle) * r,
+      R * (0.02 + Math.pow(random(), 2) * 0.07),
+      "196,150,104",
+      0.05 * (0.4 + random()));
+  }
+
   // ---- star-forming regions, on the ridges only
   context.globalCompositeOperation = "lighter";
-  alongArms(120, 0.18, 0.95, 0.035, 0.06, (x, y, t) => {
-    if (random() > 0.42) return;
+  alongArms(120, 0.18, 0.95, 0.035, 0.06, (x, y, t, arm) => {
+    // Star formation happens where the density wave is, so the knots trace
+    // the arm profile more sharply than anything else on the disc.
+    if (random() > 0.08 + 0.7 * armStrength(arm, t)) return;
     const size = R * (0.006 + random() * 0.014);
     const hot = random() < 0.4;
     blob(x, y, size, hot ? "255,150,196" : "255,110,150", 0.42 + random() * 0.34);
@@ -483,13 +882,55 @@ const GALAXY_COLOURS = [
   [0.94, 0.92, 0.86], // near-white
 ];
 
-/** Core / arm pairs for the resolved spirals the camera passes close to. */
-const SPIRAL_PAIRS = [
-  [[1.00, 0.78, 0.34], [0.46, 0.70, 1.00]],
-  [[1.00, 0.62, 0.24], [1.00, 0.40, 0.66]],
-  [[1.00, 0.88, 0.58], [0.28, 0.92, 0.90]],
-  [[1.00, 0.70, 0.30], [0.66, 0.44, 1.00]],
-  [[0.96, 0.84, 0.52], [0.40, 0.62, 1.00]],
+/**
+ * The objects the camera passes close to.
+ *
+ * Nine real ones, taken from the reference plate. The point of naming them is
+ * not trivia -- it is that "galaxy" is not one shape. A field built from nine
+ * copies of the same spiral with different hues is a wallpaper; the reason a
+ * real plate of deep-sky images is arresting is that a barred spiral, an
+ * edge-on starburst, a colliding pair and a young cluster look nothing alike,
+ * and the eye reads that variety as a survey of everything out there rather
+ * than as one asset repeated.
+ *
+ * `core` tints the old stars, `veil` the gas and young stars, `glow` the
+ * nebulosity sprites hung around each one.
+ */
+const DEEP_FIELD_OBJECTS = [
+  /*
+   * Weighted toward the kinds you can *read*.
+   *
+   * The first pass had one of each of seven kinds, which is a good survey and
+   * a bad shot: two thirds of what went past was cluster, nebula and merger --
+   * beautiful, but shapeless at a glance. The thing a viewer wants to catch
+   * sight of on a flight through intergalactic space is a spiral, so more than
+   * half of these are now discs with arms you can trace, and the amorphous
+   * kinds are the seasoning rather than the meal.
+   */
+  // Grand-design spirals: two arms, wide open, unmistakable even in passing.
+  { kind: "grandDesign", core: [1.00, 0.90, 0.66], veil: [0.62, 0.80, 1.00], glow: [0.50, 0.62, 1.00] },
+  { kind: "grandDesign", core: [1.00, 0.86, 0.58], veil: [1.00, 0.46, 0.70], glow: [0.86, 0.44, 0.92] },
+  { kind: "grandDesign", core: [0.98, 0.94, 0.84], veil: [0.44, 0.86, 0.94], glow: [0.34, 0.74, 0.96] },
+  // Barred spirals with pink star-forming knots strung along the arms.
+  { kind: "barred", core: [1.00, 0.88, 0.62], veil: [1.00, 0.48, 0.64], glow: [0.72, 0.50, 1.00] },
+  { kind: "barred", core: [1.00, 0.84, 0.54], veil: [0.70, 0.74, 1.00], glow: [0.46, 0.56, 1.00] },
+  // A ringed spiral: a bright circle of star formation round the nucleus.
+  { kind: "ringed", core: [0.98, 0.94, 0.86], veil: [1.00, 0.60, 0.26], glow: [0.60, 0.72, 1.00] },
+  { kind: "ringed", core: [1.00, 0.90, 0.72], veil: [0.72, 0.44, 1.00], glow: [0.62, 0.38, 1.00] },
+  // Flocculent and dusty, many short orange arms round a white nucleus.
+  { kind: "flocculent", core: [0.98, 0.94, 0.86], veil: [1.00, 0.60, 0.26], glow: [0.58, 0.72, 1.00] },
+  { kind: "flocculent", core: [1.00, 0.92, 0.78], veil: [0.86, 0.52, 1.00], glow: [0.66, 0.44, 1.00] },
+  // Edge-on, dust-laned, with a warm core burning through it.
+  { kind: "edgeOn", core: [1.00, 0.86, 0.60], veil: [0.74, 0.62, 1.00], glow: [0.46, 0.40, 0.94] },
+  { kind: "edgeOn", core: [1.00, 0.90, 0.70], veil: [0.60, 0.78, 1.00], glow: [0.40, 0.58, 1.00] },
+  // A starburst: a thin disc with plumes blown perpendicular out of it.
+  { kind: "starburst", core: [1.00, 0.82, 0.56], veil: [0.44, 0.38, 1.00], glow: [0.34, 0.30, 1.00] },
+  // A collision, two nuclei and a bridge of new stars between them.
+  { kind: "merger", core: [1.00, 0.96, 0.88], veil: [1.00, 0.38, 0.86], glow: [0.92, 0.42, 0.90] },
+  // A young cluster: hot blue stars inside the cloud that made them.
+  { kind: "cluster", core: [0.76, 0.88, 1.00], veil: [0.72, 0.36, 1.00], glow: [0.58, 0.30, 1.00] },
+  // An emission nebula: almost no resolved stars, all filament and glow.
+  { kind: "nebula", core: [1.00, 0.86, 0.90], veil: [1.00, 0.44, 0.72], glow: [0.94, 0.40, 0.78] },
 ];
 
 /** Bubble universes: iridescent shells, strongly varied in hue. */
@@ -844,7 +1285,17 @@ export function createCosmicIntro({ pixelRatio } = {}) {
 
   /* ------------------------------------------------------------ star dust */
 
-  const DUST_COUNT = 5600;
+  /*
+   * Dense enough to be a photograph.
+   *
+   * The reference is a Hubble field toward the galactic bulge and there is
+   * barely any black in it -- stars overlap stars, and the darkness is what
+   * shows *between* them rather than what they sit on. At 5,600 this field
+   * was a scattering of dots with a lot of empty space, which reads as a
+   * screensaver. The cost of tripling it is one float write per point per
+   * frame in `driftField`, which is nothing next to what it buys.
+   */
+  const DUST_COUNT = 26000;
   const dustOrigin = new Float32Array(DUST_COUNT * 3);
   const dustTarget = new Float32Array(DUST_COUNT * 3);
   const dustColours = new Float32Array(DUST_COUNT * 3);
@@ -871,11 +1322,12 @@ export function createCosmicIntro({ pixelRatio } = {}) {
      * tail, and a small warm minority for the ones that are genuinely red.
      */
     const roll = random();
-    const c = roll < 0.56 ? [1.00, 1.00, 1.00]
-      : roll < 0.78 ? [0.88, 0.94, 1.00]
-        : roll < 0.90 ? [0.70, 0.84, 1.00]
-          : roll < 0.97 ? [1.00, 0.98, 0.96]
-            : [1.00, 0.82, 0.62];
+    const c = roll < 0.34 ? [1.00, 1.00, 1.00]        // overexposed white
+      : roll < 0.55 ? [0.86, 0.93, 1.00]              // blue-white
+        : roll < 0.66 ? [0.62, 0.78, 1.00]            // hot blue
+          : roll < 0.82 ? [1.00, 0.95, 0.84]          // yellow-white
+            : roll < 0.93 ? [1.00, 0.74, 0.44]        // orange giant
+              : [1.00, 0.48, 0.30];                   // red giant
     dustColours[i3] = c[0];
     dustColours[i3 + 1] = c[1];
     dustColours[i3 + 2] = c[2];
@@ -923,6 +1375,57 @@ export function createCosmicIntro({ pixelRatio } = {}) {
   const dust = new THREE.Points(dustGeometry, dustMaterial);
   dust.frustumCulled = false;
   scene.add(dust);
+
+  /*
+   * The brightest few, with spikes.
+   *
+   * Drawn as a separate cloud rather than as part of the field, because they
+   * need a different map and a size that grows as they pass -- these are the
+   * stars close enough to the camera to register as objects, and a bright
+   * star that does not swell as you fly past it is a texture, not a star.
+   */
+  const SPIKE_COUNT = 150;
+  const spikePositions = new Float32Array(SPIKE_COUNT * 3);
+  const spikeColours = new Float32Array(SPIKE_COUNT * 3);
+  for (let i = 0; i < SPIKE_COUNT; i += 1) {
+    const i3 = i * 3;
+    const angle = random() * TAU;
+    const radius = Math.pow(random(), 0.5) * FIELD_RADIUS;
+    spikePositions[i3] = Math.cos(angle) * radius;
+    spikePositions[i3 + 1] = Math.sin(angle) * radius * 0.84;
+    // Kept in the near half of the field: at the far end the cross collapses
+    // to a couple of pixels and there is no point having drawn it.
+    spikePositions[i3 + 2] = -60 - random() * 1500;
+    // The colour is the whole reason these are worth drawing: in the
+    // reference the spiked stars are the ones that are visibly orange, red or
+    // blue, while everything fainter has burnt out to white.
+    const roll = random();
+    const c = roll < 0.26 ? [1.00, 0.62, 0.30]
+      : roll < 0.44 ? [1.00, 0.40, 0.24]
+        : roll < 0.66 ? [0.56, 0.74, 1.00]
+          : roll < 0.84 ? [1.00, 0.94, 0.82]
+            : [1.00, 1.00, 1.00];
+    spikeColours[i3] = c[0];
+    spikeColours[i3 + 1] = c[1];
+    spikeColours[i3 + 2] = c[2];
+  }
+  const spikeGeometry = track(new THREE.BufferGeometry());
+  spikeGeometry.setAttribute("position", new THREE.BufferAttribute(spikePositions, 3));
+  spikeGeometry.setAttribute("color", new THREE.BufferAttribute(spikeColours, 3));
+  const spikeMaterial = track(new THREE.PointsMaterial({
+    size: 55,
+    map: track(createSpikeTexture()),
+    vertexColors: true,
+    transparent: true,
+    depthWrite: false,
+    depthTest: false,
+    blending: THREE.AdditiveBlending,
+    sizeAttenuation: true,
+    opacity: 0,
+  }));
+  const spikeStars = new THREE.Points(spikeGeometry, spikeMaterial);
+  spikeStars.frustumCulled = false;
+  scene.add(spikeStars);
 
   /* -------------------------------------------------------- bubble universes */
 
@@ -1344,7 +1847,7 @@ export function createCosmicIntro({ pixelRatio } = {}) {
   // Neutral, not warm: this texture is multiplied by each galaxy's colour, and
   // a warm map dragged every hue back toward the same cream. Narrow core, wide
   // coloured falloff, so the tint is the thing you see rather than a white dot.
-  const galaxyTexture = track(createGlowTexture("rgba(255,255,255,0.92)", "rgba(255,255,255,0.5)", 0.2));
+  const galaxyTexture = track(createDistantGalaxyTexture());
   const galaxySprites = [];
   for (let i = 0; i < 78; i += 1) {
     const rgb = GALAXY_COLOURS[Math.floor(random() * GALAXY_COLOURS.length)];
@@ -1359,12 +1862,20 @@ export function createCosmicIntro({ pixelRatio } = {}) {
     const sprite = new THREE.Sprite(material);
     const angle = random() * TAU;
     const radius = 55 + Math.pow(random(), 0.7) * FIELD_RADIUS;
+    /*
+     * Held back beyond 380 units. These are the *unresolved* galaxies -- the
+     * ones the caption is counting -- and their whole job is to be specks. Let
+     * one drift up to the camera and it becomes a fifty-pixel smudge with no
+     * internal structure, which reads as a lens artefact rather than as an
+     * island of a hundred billion stars. The fifteen built star by star are
+     * the ones allowed to come close.
+     */
     sprite.position.set(
       Math.cos(angle) * radius,
       Math.sin(angle) * radius * 0.8,
-      -120 - random() * (FIELD_DEPTH - 120),
+      -380 - random() * (FIELD_DEPTH - 380),
     );
-    const scale = 14 + Math.pow(random(), 2.3) * 78;
+    const scale = 12 + Math.pow(random(), 2.3) * 54;
     sprite.scale.set(scale, scale * (0.4 + random() * 0.52), 1);
     sprite.material.rotation = random() * Math.PI;
     galaxyGroup.add(sprite);
@@ -1383,7 +1894,7 @@ export function createCosmicIntro({ pixelRatio } = {}) {
    */
   const cloudTextures = [0, 1, 2].map((variant) => track(createCloudTexture(variant)));
   const nebulae = [];
-  for (let i = 0; i < 30; i += 1) {
+  for (let i = 0; i < 22; i += 1) {
     const rgb = COSMIC_DUST_COLOURS[Math.floor(random() * COSMIC_DUST_COLOURS.length)];
     const material = track(new THREE.SpriteMaterial({
       map: cloudTextures[i % cloudTextures.length],
@@ -1396,19 +1907,28 @@ export function createCosmicIntro({ pixelRatio } = {}) {
     const sprite = new THREE.Sprite(material);
     const angle = random() * TAU;
     const radius = 40 + Math.pow(random(), 0.6) * FIELD_RADIUS * 1.15;
+    /*
+     * Held well back, and much wider than before.
+     *
+     * A cloud allowed up to the camera fills a third of the frame with one
+     * soft blob and the shot stops being a flight through anything -- it
+     * becomes a lens flare. Pushed out past 560 units and made half again as
+     * large, the same sprites read as sheets of nebulosity the galaxies are
+     * seen *through*, which is what they are for.
+     */
     sprite.position.set(
       Math.cos(angle) * radius,
       Math.sin(angle) * radius * 0.8,
-      -140 - random() * (FIELD_DEPTH - 140),
+      -560 - random() * (FIELD_DEPTH - 560),
     );
-    const scale = 190 + Math.pow(random(), 1.7) * 620;
-    sprite.scale.set(scale, scale * (0.5 + random() * 0.62), 1);
+    const scale = 340 + Math.pow(random(), 1.6) * 900;
+    sprite.scale.set(scale, scale * (0.3 + random() * 0.42), 1);
     sprite.material.rotation = random() * Math.PI;
     // Each cloud breathes at its own rate, so the field never pulses as one.
     sprite.userData.drift = 0.3 + random() * 0.55;
     sprite.userData.phase = random() * TAU;
     sprite.userData.spin = (random() - 0.5) * 0.05;
-    sprite.userData.weight = 0.09 + random() * 0.13;
+    sprite.userData.weight = 0.05 + random() * 0.075;
     galaxyGroup.add(sprite);
     nebulae.push(sprite);
   }
@@ -1418,38 +1938,242 @@ export function createCosmicIntro({ pixelRatio } = {}) {
    *
    * A sprite is a smudge; at close range the viewer should be able to see that
    * a galaxy is made of individual stars, because that is the fact the whole
-   * sequence is building toward. Each is a Points cloud with real arms, a
-   * denser core, and a thinner disc further out.
+   * sequence is building toward.
+   *
+   * What each one is made of depends on what it *is*. The reference plate is
+   * nine objects and no two of them share a silhouette -- a barred spiral, an
+   * edge-on disc cut by its own dust, a starburst blowing plumes out of its
+   * poles, a flocculent dusty disc, two young clusters, a collision, two
+   * emission nebulae. Nine tinted copies of one spiral would be a wallpaper;
+   * this is a survey.
    */
-  function buildSpiral(coreColour, armColour, count) {
+  const lerpNumber = (a, b, t) => a + (b - a) * t;
+
+  function buildDeepFieldGeometry(spec, count) {
     const positions = new Float32Array(count * 3);
     const colours = new Float32Array(count * 3);
-    const arms = 2 + Math.floor(random() * 3);
-    const spin = 3.4 + random() * 2.6;
-    const spread = 0.16 + random() * 0.16;
-    for (let i = 0; i < count; i += 1) {
-      const i3 = i * 3;
-      const t = Math.pow(random(), 0.72);
-      const arm = Math.floor(random() * arms) / arms;
-      const angle = arm * TAU + t * spin + gaussian() * spread;
-      const radius = t + gaussian() * 0.02;
-      positions[i3] = Math.cos(angle) * radius;
-      positions[i3 + 1] = gaussian() * 0.035 * (1.25 - t);
-      positions[i3 + 2] = Math.sin(angle) * radius;
-      const mix = Math.min(1, Math.pow(t, 0.6));
-      for (let c = 0; c < 3; c += 1) {
-        colours[i3 + c] = coreColour[c] + (armColour[c] - coreColour[c]) * mix;
+    const core = spec.core;
+    const veil = spec.veil;
+    let n = 0;
+    const put = (x, y, z, c, gain) => {
+      const i3 = n * 3;
+      positions[i3] = x;
+      positions[i3 + 1] = y;
+      positions[i3 + 2] = z;
+      colours[i3] = c[0] * gain;
+      colours[i3 + 1] = c[1] * gain;
+      colours[i3 + 2] = c[2] * gain;
+      n += 1;
+    };
+    const blend = (a, b, t) => [
+      a[0] + (b[0] - a[0]) * t,
+      a[1] + (b[1] - a[1]) * t,
+      a[2] + (b[2] - a[2]) * t,
+    ];
+    // A ball of stars, used by four of the seven kinds.
+    const spheroid = (cx, cy, cz, radius, flatten, concentration, colour, gain) => {
+      const r = Math.pow(random(), concentration) * radius;
+      const theta = random() * TAU;
+      const phi = Math.acos(2 * random() - 1);
+      const planar = Math.sin(phi);
+      put(cx + r * planar * Math.cos(theta),
+        cy + r * Math.cos(phi) * flatten,
+        cz + r * planar * Math.sin(theta), colour, gain);
+    };
+
+    const kind = spec.kind;
+
+    if (kind === "grandDesign" || kind === "ringed") {
+      /*
+       * The two shapes that survive being glanced at.
+       *
+       * A grand design is two arms, wide open, sweeping most of the way round
+       * -- the S you can trace in a single frame at any angle. A ringed spiral
+       * puts a bright circle of star formation round the nucleus and winds the
+       * arms off it. Both are much tighter than the flocculent kinds: the
+       * scatter that makes a galaxy look real up close is the same scatter
+       * that makes it unreadable in passing, so these keep their stars near
+       * the path on purpose.
+       */
+      const ringed = kind === "ringed";
+      const arms = 2;
+      const spin = ringed ? 6.4 + random() * 1.6 : 4.2 + random() * 1.2;
+      const ringAt = 0.34 + random() * 0.1;
+      while (n < count) {
+        const roll = random();
+        if (roll < 0.14) {
+          spheroid(0, 0, 0, 0.15, 0.62, 2.0, core, 1);
+        } else if (ringed && roll < 0.44) {
+          // The ring itself: narrow in radius, complete in angle.
+          const a = random() * TAU;
+          const r = ringAt + gaussian() * 0.035;
+          put(Math.cos(a) * r, gaussian() * 0.02, Math.sin(a) * r,
+            blend(core, veil, 0.75), 1.05);
+        } else {
+          const t = (ringed ? ringAt + 0.04 : 0.12)
+            + Math.pow(random(), 1.05) * (ringed ? 0.94 - ringAt : 0.88);
+          const arm = Math.floor(random() * arms) / arms;
+          const angle = arm * TAU + t * spin
+            + gaussian() * (random() < 0.18 ? 0.42 : 0.13) * (1 + t * 0.3);
+          const radius = t + gaussian() * 0.022;
+          const dim = 1 - 0.4 * Math.min(1, Math.max(0, t - 0.45) / 0.55);
+          put(Math.cos(angle) * radius,
+            gaussian() * 0.026 * (1.2 - t * 0.5),
+            Math.sin(angle) * radius,
+            blend(core, veil, Math.min(1, Math.pow(t, 0.55))), dim);
+        }
+      }
+    } else if (kind === "barred" || kind === "flocculent") {
+      const barred = kind === "barred";
+      const arms = barred ? 2 : 5 + Math.floor(random() * 3);
+      const spin = barred ? 5.2 + random() * 1.8 : 8.0 + random() * 3.0;
+      const spread = barred ? 0.15 : 0.26;
+      while (n < count) {
+        const roll = random();
+        if (roll < 0.15) {
+          spheroid(0, 0, 0, 0.17, 0.6, 1.9, core, 1);
+        } else if (barred && roll < 0.23) {
+          const u = random() * 2 - 1;
+          const taper = Math.pow(Math.sqrt(Math.max(0, 1 - u * u)), 0.6);
+          put(u * 0.34, gaussian() * 0.022 * taper, gaussian() * 0.05 * taper, core, 0.72);
+        } else {
+          const t = 0.12 + Math.pow(random(), 1.15) * 0.88;
+          const arm = Math.floor(random() * arms) / arms;
+          const angle = arm * TAU + t * spin
+            + gaussian() * (random() < 0.2 ? spread * 2.6 : spread) * (1 + t * 0.35);
+          const radius = t + gaussian() * 0.03;
+          // Faded outward, the same way the Milky Way is, so the disc has no
+          // hard boundary for the eye to find.
+          const dim = 1 - 0.45 * Math.min(1, Math.max(0, t - 0.4) / 0.6);
+          put(Math.cos(angle) * radius,
+            gaussian() * 0.032 * (1.2 - t * 0.5),
+            Math.sin(angle) * radius,
+            blend(core, veil, Math.min(1, Math.pow(t, 0.6))), dim);
+        }
+      }
+    } else if (kind === "edgeOn" || kind === "starburst") {
+      /*
+       * Built in the XZ plane and left there: the camera looks down -z, so a
+       * disc containing the view axis is already edge-on and needs no lucky
+       * rotation to read that way.
+       *
+       * The dust lane is a *gap*. Everything composites additively, so nothing
+       * in this scene can cast a shadow -- the only way to draw a dark band
+       * across a bright disc is to put no stars there, which is also what is
+       * physically happening: the near side of the disc is opaque.
+       */
+      const plume = kind === "starburst";
+      const lane = 0.022;
+      while (n < count) {
+        const roll = random();
+        if (roll < 0.14) {
+          spheroid(0, 0, 0, 0.15, 0.72, 2.0, core, 1);
+        } else if (plume && roll < 0.34) {
+          // Bipolar outflow: two cones of ionised gas out of the poles.
+          const up = random() < 0.5 ? 1 : -1;
+          const h = 0.08 + Math.pow(random(), 0.8) * 0.85;
+          const flare = 0.06 + h * 0.42;
+          const a = random() * TAU;
+          const rr = Math.pow(random(), 0.6) * flare;
+          put(Math.cos(a) * rr, up * h, Math.sin(a) * rr, veil,
+            0.85 * (1 - h * 0.6));
+        } else {
+          const t = 0.08 + Math.pow(random(), 0.85) * 0.92;
+          const a = random() * TAU;
+          const y = gaussian() * 0.05 * (1.1 - t * 0.5);
+          // The near-side dust lane: no stars inside it past the bulge.
+          if (t > 0.16 && Math.abs(y) < lane) continue;
+          const dim = 1 - 0.5 * Math.min(1, Math.max(0, t - 0.3) / 0.7);
+          put(Math.cos(a) * t, y, Math.sin(a) * t,
+            blend(core, veil, Math.min(1, Math.pow(t, 0.7))), dim);
+        }
+      }
+    } else if (kind === "cluster") {
+      /*
+       * A cluster is not a small galaxy. It has no disc, no arms and no
+       * gradient to speak of -- just a steep concentration of hot stars and a
+       * scatter of escapees, and the nebulosity around it is doing most of the
+       * visual work. Sampled with a much steeper power than a bulge, which is
+       * what makes the middle read as unresolvable rather than merely dense.
+       */
+      while (n < count) {
+        if (random() < 0.72) {
+          spheroid(0, 0, 0, 0.42, 0.9, 2.6, core, 0.9 + random() * 0.3);
+        } else {
+          spheroid(0, 0, 0, 1.0, 0.85, 0.9,
+            blend(core, veil, random() * 0.7), 0.4 + random() * 0.35);
+        }
+      }
+    } else if (kind === "merger") {
+      /*
+       * Two nuclei, a bridge of new stars between them, and tidal tails
+       * thrown off in opposite directions -- the shape is the whole story, and
+       * it is a shape no single-galaxy generator can produce.
+       */
+      const sep = 0.30;
+      while (n < count) {
+        const roll = random();
+        if (roll < 0.26) {
+          spheroid(-sep, 0, 0, 0.20, 0.8, 2.1, core, 1);
+        } else if (roll < 0.48) {
+          spheroid(sep * 0.9, 0.06, 0.05, 0.17, 0.8, 2.1, core, 0.92);
+        } else if (roll < 0.70) {
+          // The bridge: shocked gas between them, where the new stars are.
+          const u = random();
+          put(lerpNumber(-sep, sep * 0.9, u) + gaussian() * 0.06,
+            gaussian() * 0.05 + u * 0.06,
+            gaussian() * 0.07, veil, 0.75 + random() * 0.4);
+        } else {
+          // Tails: an arc that leaves the pair and keeps going.
+          const side = random() < 0.5 ? 1 : -1;
+          const u = Math.pow(random(), 0.7);
+          const a = side * (0.5 + u * 2.3);
+          const r = 0.35 + u * 0.95;
+          put(Math.cos(a) * r * side, gaussian() * 0.05 + side * u * 0.18,
+            Math.sin(a) * r,
+            blend(core, veil, u), 0.5 * (1 - u * 0.55));
+        }
+      }
+    } else {
+      /*
+       * A nebula, where almost nothing is resolved.
+       *
+       * A handful of hot stars in the middle -- the ones that lit it -- and
+       * the rest is a thin haze of points standing in for unresolved
+       * background. The sprites hung on this object are doing the real work,
+       * which is correct: this is gas, and gas is not made of dots.
+       */
+      while (n < count) {
+        if (random() < 0.2) {
+          spheroid(0, 0, 0, 0.30, 0.9, 1.4, core, 0.9 + random() * 0.4);
+        } else {
+          spheroid(0, 0, 0, 1.0, 0.85, 0.7,
+            blend(core, veil, 0.4 + random() * 0.6), 0.22 + random() * 0.3);
+        }
       }
     }
+
     const geometry = track(new THREE.BufferGeometry());
     geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
     geometry.setAttribute("color", new THREE.BufferAttribute(colours, 3));
     return geometry;
   }
 
-  const spiralMaterial = track(new THREE.PointsMaterial({
-    size: 2.1,
-    map: track(createGlowTexture("rgba(255,255,255,1)", "rgba(255,255,255,0.45)")),
+  /*
+   * One material per galaxy, not one for all of them.
+   *
+   * They have to fade individually. A galaxy is allowed to come all the way to
+   * the camera now -- that near miss is the best thing in the phase -- but the
+   * last fifty units of it are a featureless wall of points with no silhouette,
+   * and cutting it dead at that moment is worse than never letting it close.
+   * Each one dims out over its final stretch instead, so it passes rather than
+   * vanishes. A shared material could only fade the whole population at once,
+   * which is what forced the old distance limit.
+   */
+  const deepStarTexture = track(createGlowTexture("rgba(255,255,255,1)", "rgba(255,255,255,0.45)"));
+  const makeDeepStarMaterial = () => track(new THREE.PointsMaterial({
+    size: 2.7,
+    map: deepStarTexture,
     vertexColors: true,
     transparent: true,
     depthWrite: false,
@@ -1458,22 +2182,136 @@ export function createCosmicIntro({ pixelRatio } = {}) {
     opacity: 0,
   }));
 
+  /* How much nebulosity each kind carries, and how far it spreads. */
+  const DEEP_VEIL = {
+    grandDesign: { count: 4, size: 1.25, weight: 0.13 },
+    ringed: { count: 4, size: 1.25, weight: 0.14 },
+    barred: { count: 4, size: 1.25, weight: 0.14 },
+    flocculent: { count: 4, size: 1.25, weight: 0.13 },
+    edgeOn: { count: 3, size: 1.4, weight: 0.16 },
+    starburst: { count: 5, size: 1.5, weight: 0.19 },
+    cluster: { count: 6, size: 1.4, weight: 0.20 },
+    merger: { count: 5, size: 1.4, weight: 0.18 },
+    nebula: { count: 8, size: 1.7, weight: 0.24 },
+  };
+
   const spirals = [];
-  for (let i = 0; i < 9; i += 1) {
-    const [coreColour, armColour] = SPIRAL_PAIRS[i % SPIRAL_PAIRS.length];
-    const points = new THREE.Points(buildSpiral(coreColour, armColour, 4200), spiralMaterial);
+  const deepSprites = [];
+  let deepStarLevel = 0;
+
+  /*
+   * How much of a galaxy survives its closest approach.
+   *
+   * Full strength until it is 260 units out, then down to nothing by the time
+   * it reaches the camera plane. Nothing snaps off: the galaxy grows, sweeps
+   * past -- usually to one side, since most of them are placed well off the
+   * flight path -- and dissolves as it goes by, the way something you fly
+   * through actually would.
+   */
+  function deepNearFade(z) {
+    if (z < -260) return 1;
+    return Math.max(0, 1 - (z + 260) / 300);
+  }
+
+  function applyDeepStarLevel() {
+    for (let i = 0; i < spirals.length; i += 1) {
+      const group = spirals[i];
+      group.userData.nearFade = deepNearFade(group.position.z);
+      group.userData.material.opacity = deepStarLevel * group.userData.nearFade;
+    }
+  }
+
+  function setDeepStarLevel(level) {
+    deepStarLevel = Math.max(0, level);
+    applyDeepStarLevel();
+  }
+  for (let i = 0; i < DEEP_FIELD_OBJECTS.length; i += 1) {
+    const spec = DEEP_FIELD_OBJECTS[i];
+    const group = new THREE.Group();
+    const material = makeDeepStarMaterial();
+    const points = new THREE.Points(buildDeepFieldGeometry(spec, 7200), material);
+    points.frustumCulled = false;
+    group.userData.material = material;
+    group.userData.nearFade = 1;
+    group.add(points);
+
+    // The gas. Hung as children so it travels, tilts and spins with the stars.
+    const veilSpec = DEEP_VEIL[spec.kind];
+    for (let k = 0; k < veilSpec.count; k += 1) {
+      const rgb = random() < 0.55 ? spec.glow : spec.veil;
+      const material = track(new THREE.SpriteMaterial({
+        map: cloudTextures[k % cloudTextures.length],
+        transparent: true,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+        opacity: 0,
+        color: new THREE.Color(rgb[0], rgb[1], rgb[2]),
+      }));
+      const sprite = new THREE.Sprite(material);
+      const a = random() * TAU;
+      const rr = Math.pow(random(), 1.4) * 0.7;
+      sprite.position.set(Math.cos(a) * rr, gaussian() * 0.12, Math.sin(a) * rr);
+      const size = veilSpec.size * (0.45 + Math.pow(random(), 1.5) * 0.9);
+      sprite.scale.set(size, size * (0.55 + random() * 0.6), 1);
+      sprite.material.rotation = random() * Math.PI;
+      sprite.renderOrder = -1;
+      sprite.userData.weight = veilSpec.weight * (0.5 + random() * 0.7);
+      sprite.userData.phase = random() * TAU;
+      sprite.userData.owner = group;
+      group.add(sprite);
+      deepSprites.push(sprite);
+    }
+
+    /*
+     * Placed near the axis and biased toward the camera.
+     *
+     * Scattered evenly through a 2,600-deep field, most of these were a long
+     * way off to one side and half a mile back, which is to say invisible: the
+     * shot went past dust and the galaxies were specks. Pulling them in
+     * toward the flight path and weighting the depth toward the near end means
+     * several are always close enough to resolve, which is the entire point of
+     * building them star by star.
+     */
     const angle = random() * TAU;
-    const radius = 70 + random() * 380;
-    points.position.set(
+    /*
+     * Most of them well off the flight path. A galaxy dead ahead is one you
+     * fly into; a galaxy 300 units to the side is one that swells, fills the
+     * corner of the frame and sweeps by -- which is the shot worth having, and
+     * the one that makes the speed legible.
+     */
+    const radius = 90 + Math.pow(random(), 0.9) * 430;
+    /*
+     * Spread over a 1,500-deep slab rather than the whole 2,600, and recycled
+     * within it. Fifteen objects scattered through the full field put roughly
+     * one in resolving range at a time, which is why the shot read as dust
+     * with the occasional smudge; compressing the loop keeps three or four of
+     * them close enough to see structure in at any moment.
+     */
+    group.position.set(
       Math.cos(angle) * radius,
       Math.sin(angle) * radius * 0.7,
-      -260 - random() * (FIELD_DEPTH - 260),
+      -520 - Math.pow(random(), 1.1) * 1560,
     );
-    points.rotation.set(random() * Math.PI, random() * Math.PI, random() * Math.PI);
-    points.scale.setScalar(70 + random() * 150);
-    points.frustumCulled = false;
-    galaxyGroup.add(points);
-    spirals.push(points);
+    /*
+     * Orientation is part of the identity, not a random roll. An edge-on
+     * starburst rotated face-on is just a fuzzy blob; a disc built in XZ is
+     * already edge-on to a camera looking down -z, so the discs that are
+     * meant to be seen flat are the ones that need turning.
+     */
+    if (spec.kind === "edgeOn" || spec.kind === "starburst") {
+      group.rotation.set(gaussian() * 0.2, random() * Math.PI, (random() - 0.5) * 1.6);
+    } else if (spec.kind === "barred" || spec.kind === "flocculent") {
+      group.rotation.set(
+        (random() < 0.5 ? 1 : -1) * (Math.PI / 2) + gaussian() * 0.4,
+        random() * Math.PI,
+        random() * Math.PI,
+      );
+    } else {
+      group.rotation.set(random() * Math.PI, random() * Math.PI, random() * Math.PI);
+    }
+    group.scale.setScalar(95 + Math.pow(random(), 0.8) * 185);
+    galaxyGroup.add(group);
+    spirals.push(group);
   }
 
   /* -------------------------------------------------------------- Milky Way */
@@ -1487,7 +2325,7 @@ export function createCosmicIntro({ pixelRatio } = {}) {
    * gap between two of them, which is where the Orion Arm actually is.
    */
   const MILKY_WAY_ARMS = 4;
-  const MILKY_WAY_SPIN = 4.6;
+  const MILKY_WAY_SPIN = 9.5;  // must match SPIN in createGalaxyDiscTexture
   const BAR_ANGLE = 0.42;
   const SUN_RADIUS = 0.52;
   const SUN_ANGLE = 0.55 * TAU + SUN_RADIUS * MILKY_WAY_SPIN + 0.42;
@@ -1562,16 +2400,42 @@ export function createCosmicIntro({ pixelRatio } = {}) {
    * with the disc the eye immediately reads the whole thing as a decal.
    */
   const bulgeMaterial = track(new THREE.SpriteMaterial({
-    map: track(createGlowTexture("rgba(255,244,214,0.9)", "rgba(255,206,138,0.34)", 0.26)),
+    // Tight white centre, long warm falloff: a sphere seen through a long
+    // exposure, which is what a galactic bulge is.
+    map: track(createGlowTexture("rgba(255,255,250,1)", "rgba(255,230,190,0.42)", 0.14)),
     transparent: true,
     depthWrite: false,
     blending: THREE.AdditiveBlending,
     opacity: 0,
   }));
   const mwBulge = new THREE.Sprite(bulgeMaterial);
-  mwBulge.scale.setScalar(0.33);
+  mwBulge.scale.setScalar(0.20);
   mwBulge.renderOrder = -1;
   milkyWay.add(mwBulge);
+
+  /*
+   * A second, much wider bulge layer.
+   *
+   * One sprite gives a disc of light; two at different radii give a body. The
+   * wide one supplies the soft outer envelope the eye reads as the far side of
+   * a sphere falling away, and it also fills the gap between the core and the
+   * inner arms so the middle of the galaxy is continuous rather than a bright
+   * patch sitting in a dark hole.
+   *
+   * Both are sprites, so they stay circular however far the disc is tilted --
+   * which is the whole reason the core stops looking like a flat lozenge.
+   */
+  const bulgeHaloMaterial = track(new THREE.SpriteMaterial({
+    map: track(createGlowTexture("rgba(255,240,212,0.75)", "rgba(255,206,150,0.26)", 0.3)),
+    transparent: true,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+    opacity: 0,
+  }));
+  const mwBulgeHalo = new THREE.Sprite(bulgeHaloMaterial);
+  mwBulgeHalo.scale.setScalar(0.60);
+  mwBulgeHalo.renderOrder = -2;
+  milkyWay.add(mwBulgeHalo);
 
   // A companion, well off the plane. The reference has one, and an object
   // clearly outside the disc is another thing the eye can read depth from.
@@ -1587,37 +2451,124 @@ export function createCosmicIntro({ pixelRatio } = {}) {
   mwSatellite.scale.set(0.15, 0.1, 1);
   milkyWay.add(mwSatellite);
 
-  const MW_DISC = 46000;
+  /*
+   * Fewer stars than the disc can hold, on purpose.
+   *
+   * Past a certain density a point cloud stops reading as a galaxy and starts
+   * reading as glitter: every pixel resolves, nothing is diffuse, and the eye
+   * is given no unresolved light to interpret as distance. A real photograph
+   * of a spiral is mostly *not* stars -- it is dust and unresolved starlight,
+   * with resolved stars only as a sparkle on top of it, and that ratio is
+   * what the outer disc lives or dies by.
+   */
+  const MW_DISC = 44000;
   const mwPositions = new Float32Array(MW_DISC * 3);
   const mwColours = new Float32Array(MW_DISC * 3);
   for (let i = 0; i < MW_DISC; i += 1) {
     const i3 = i * 3;
     const roll = random();
-    if (roll < 0.13) {
-      // Bulge: a fat, warm, roughly spherical concentration.
-      const r = Math.abs(gaussian()) * 0.075;
+    if (roll < 0.115) {
+      /*
+       * The bulge: a real ball of stars.
+       *
+       * Sampled on the sphere with the radius raised to a power, which piles
+       * the stars into the middle the way a galactic bulge actually is -- the
+       * density climbs steeply toward the nucleus rather than filling a shell
+       * evenly. That concentration is what makes the centre read as a glowing
+       * sphere from any angle instead of as a patch of the disc, and it is the
+       * thing the old version was missing: it had a thin, evenly-spread bulge
+       * and a hard-edged bar, so the middle looked flat and boxy.
+       *
+       * Flattened slightly on the vertical axis, as a real bulge is.
+       */
+      const r = Math.pow(random(), 1.9) * 0.105;
       const theta = random() * TAU;
       const phi = Math.acos(2 * random() - 1);
-      mwPositions[i3] = r * Math.sin(phi) * Math.cos(theta);
-      mwPositions[i3 + 1] = r * Math.cos(phi) * 0.8;
-      mwPositions[i3 + 2] = r * Math.sin(phi) * Math.sin(theta);
-      mwColours[i3] = 1.0; mwColours[i3 + 1] = 0.76; mwColours[i3 + 2] = 0.44;
-    } else if (roll < 0.28) {
-      // The bar: elongated, and offset from the arms' handedness.
-      const along = (random() * 2 - 1) * 0.31;
-      const across = gaussian() * 0.045;
+      const planar = Math.sin(phi);
+      mwPositions[i3] = r * planar * Math.cos(theta);
+      mwPositions[i3 + 1] = r * Math.cos(phi) * 0.62;
+      mwPositions[i3 + 2] = r * planar * Math.sin(theta);
+      // Whiter at the nucleus, warmer at the edge of the bulge.
+      const heat = 1 - Math.min(1, r / 0.105);
+      mwColours[i3] = 1.0;
+      mwColours[i3 + 1] = 0.78 + heat * 0.2;
+      mwColours[i3 + 2] = 0.46 + heat * 0.46;
+    } else if (roll < 0.158) {
+      /*
+       * The bar, as a lens rather than a box.
+       *
+       * The old distribution was uniform along the bar's length with a
+       * constant cross-section, which gives flat ends and straight sides --
+       * literally a rectangle of stars, and exactly the "square" at the centre
+       * of the galaxy. Scaling the cross-section by sqrt(1 - u^2) closes it to
+       * a point at both ends, and biasing `u` toward the middle thins the
+       * extremities out so there is no edge to catch.
+       */
+      const u = (random() * 2 - 1);
+      const along = Math.sign(u) * Math.pow(Math.abs(u), 1.1) * 0.32;
+      const taper = Math.pow(Math.sqrt(Math.max(0, 1 - (along / 0.32) ** 2)), 0.55);
+      // Tight across, so the bar reads as a straight line of stars rather
+      // than as an oval smear continuous with the bulge. The near-uniform
+      // spacing along it is deliberate too: a bar is the one place in a
+      // galaxy where the stars are not scattered.
+      const across = gaussian() * 0.082 * taper;
       mwPositions[i3] = along * Math.cos(BAR_ANGLE) - across * Math.sin(BAR_ANGLE);
-      mwPositions[i3 + 1] = gaussian() * 0.014;
+      mwPositions[i3 + 1] = gaussian() * 0.017 * taper;
       mwPositions[i3 + 2] = along * Math.sin(BAR_ANGLE) + across * Math.cos(BAR_ANGLE);
-      mwColours[i3] = 1.0; mwColours[i3 + 1] = 0.82; mwColours[i3 + 2] = 0.55;
+      // Tan, not cream: the bar is old stars seen through the dust it carries.
+      /*
+       * And dim.
+       *
+       * At full brightness seven thousand stars in a volume this small summed
+       * straight past white and the bar clipped into a flat tan slab with a
+       * hard edge -- a blade again, by a different route. Held to about six
+       * tenths it stays below saturation, so what shows is the falloff of the
+       * lens instead of the outline of a clipped region. It is also the truth
+       * of the thing: a bar is old red stars seen through the dust it carries,
+       * and it is never brighter than the nucleus it runs out of.
+       */
+      const warm = 0.40 + random() * 0.13;
+      mwColours[i3] = 1.0 * warm;
+      mwColours[i3 + 1] = 0.82 * warm;
+      mwColours[i3 + 2] = 0.60 * warm;
     } else {
       // The disc and its arms.
-      const t = 0.14 + Math.pow(random(), 0.62) * 0.86;
-      const arm = Math.floor(random() * MILKY_WAY_ARMS) / MILKY_WAY_ARMS;
-      // Arms are over-densities, not walls -- a broad scatter keeps the disc
-      // continuous between them, which is what a real galaxy looks like.
-      const angle = arm * TAU + t * MILKY_WAY_SPIN + gaussian() * (0.19 + t * 0.1);
-      const radius = t + gaussian() * 0.018;
+      /*
+       * Concentrated inward. The old exponent gave a surface density that
+       * barely fell with radius, so the rim was as granular as the middle;
+       * this one drops it steeply, which is what leaves room for the dust to
+       * be the thing you see out there.
+       */
+      const t = 0.14 + Math.pow(random(), 1.3) * 0.86;
+      const armIndex = Math.floor(random() * MILKY_WAY_ARMS);
+      const strength = armStrength(armIndex, t);
+      /*
+       * Whether a star belongs to its arm at all is a coin weighted by how
+       * defined that arm is at this radius. Where the arm is strong most
+       * stars land on it; where it has dissolved they spread evenly round the
+       * disc and there is simply no arm at that radius to see. Nothing is
+       * ever drawn -- the spiral is what is left over once enough stars have
+       * been placed this way, which is also how it works in a real galaxy.
+       */
+      let angle;
+      if (random() < 0.22 + 0.68 * strength) {
+        /*
+         * And even on the arm, a star is not on the path.
+         *
+         * A tight scatter lays the stars in a ribbon and the arm becomes a
+         * drawn stroke -- which is exactly what made the old disc look like a
+         * diagram. Two gaussians, a narrow one for most stars and a wide one
+         * for a quarter of them, give an arm the tails it really has: a dense
+         * spine, a broad shoulder, and stragglers well out into the gap. The
+         * eye still assembles the spiral; it just cannot find its edge.
+         */
+        const spread = (random() < 0.26 ? 0.55 : 0.17) * (1 + t * 0.4);
+        angle = armIndex * (TAU / MILKY_WAY_ARMS) + t * MILKY_WAY_SPIN
+          + gaussian() * spread;
+      } else {
+        angle = random() * TAU;
+      }
+      const radius = t + gaussian() * 0.032;
       mwPositions[i3] = Math.cos(angle) * radius;
       /*
        * Thickness, and a warp.
@@ -1634,9 +2585,20 @@ export function createCosmicIntro({ pixelRatio } = {}) {
       mwPositions[i3 + 2] = Math.sin(angle) * radius;
       // Warm inside, blue-white outward, with scatter so it is not a ramp.
       const mix = Math.min(1, Math.pow(t, 0.75)) * (0.7 + random() * 0.5);
-      mwColours[i3] = 1.0 - mix * 0.46;
-      mwColours[i3 + 1] = 0.84 - mix * 0.1;
-      mwColours[i3 + 2] = 0.46 + mix * 0.54;
+      /*
+       * And they fade out into it rather than stopping.
+       *
+       * Stars of one brightness all the way to the rim give the disc a hard
+       * outer boundary, however soft the painted haze behind them is. Rolling
+       * the outer half down to about half brightness hands the edge of the
+       * galaxy over to the dust, which is where the reference hands it over
+       * too -- you cannot say where the disc ends in that photograph, and you
+       * should not be able to say it here.
+       */
+      const dim = 1 - 0.52 * Math.min(1, Math.max(0, t - 0.36) / 0.64);
+      mwColours[i3] = (1.0 - mix * 0.46) * dim;
+      mwColours[i3 + 1] = (0.84 - mix * 0.1) * dim;
+      mwColours[i3 + 2] = (0.46 + mix * 0.54) * dim;
     }
   }
   const mwGeometry = track(new THREE.BufferGeometry());
@@ -1669,14 +2631,26 @@ export function createCosmicIntro({ pixelRatio } = {}) {
 
   // Star-forming regions: the pink knots strung along the arms in every real
   // photograph of a spiral. Drawn separately so they can be bigger and hotter.
-  const MW_KNOTS = 900;
+  const MW_KNOTS = 620;
   const knotPositions = new Float32Array(MW_KNOTS * 3);
   const knotColours = new Float32Array(MW_KNOTS * 3);
   for (let i = 0; i < MW_KNOTS; i += 1) {
     const i3 = i * 3;
-    const t = 0.22 + Math.pow(random(), 0.7) * 0.76;
-    const arm = Math.floor(random() * MILKY_WAY_ARMS) / MILKY_WAY_ARMS;
-    const angle = arm * TAU + t * MILKY_WAY_SPIN + gaussian() * 0.07;
+    /*
+     * Rejection-sampled against the arm profile, so the knots cluster where
+     * the arms are actually defined and thin out across the breaks. They are
+     * the brightest thing on the disc, so if they ignored the profile they
+     * would draw four complete arms on their own and undo all of it.
+     */
+    let t = 0.5;
+    let armIndex = 0;
+    for (let attempt = 0; attempt < 14; attempt += 1) {
+      t = 0.22 + Math.pow(random(), 1.15) * 0.76;
+      armIndex = Math.floor(random() * MILKY_WAY_ARMS);
+      if (random() < armStrength(armIndex, t)) break;
+    }
+    const angle = armIndex * (TAU / MILKY_WAY_ARMS) + t * MILKY_WAY_SPIN
+      + gaussian() * 0.12;
     knotPositions[i3] = Math.cos(angle) * t;
     // Star formation happens in the thin gas layer, so the knots stay much
     // closer to the mid-plane than the stars do -- but they follow the warp.
@@ -1684,15 +2658,17 @@ export function createCosmicIntro({ pixelRatio } = {}) {
       + Math.sin(angle - 0.6) * Math.pow(Math.max(0, t - 0.45), 2) * 0.34;
     knotPositions[i3 + 2] = Math.sin(angle) * t;
     const hot = random() < 0.42;
-    knotColours[i3] = 1.0;
-    knotColours[i3 + 1] = hot ? 0.52 : 0.68;
-    knotColours[i3 + 2] = hot ? 0.72 : 0.92;
+    // Dimmed outward with the stars, so the rim goes over to dust together.
+    const dim = 1 - 0.45 * Math.min(1, Math.max(0, t - 0.36) / 0.64);
+    knotColours[i3] = 1.0 * dim;
+    knotColours[i3 + 1] = (hot ? 0.52 : 0.68) * dim;
+    knotColours[i3 + 2] = (hot ? 0.72 : 0.92) * dim;
   }
   const knotGeometry = track(new THREE.BufferGeometry());
   knotGeometry.setAttribute("position", new THREE.BufferAttribute(knotPositions, 3));
   knotGeometry.setAttribute("color", new THREE.BufferAttribute(knotColours, 3));
   const knotMaterial = track(new THREE.PointsMaterial({
-    size: px(3.6),
+    size: px(2.9),
     map: track(createGlowTexture("rgba(255,255,255,1)", "rgba(255,150,205,0.45)")),
     vertexColors: true,
     transparent: true,
@@ -1733,6 +2709,177 @@ export function createCosmicIntro({ pixelRatio } = {}) {
   const mwHalo = new THREE.Points(haloGeometry, haloMaterial);
   mwHalo.frustumCulled = false;
   milkyWay.add(mwHalo);
+
+  /*
+   * The dust the galaxy sits in.
+   *
+   * The painted texture carries a haze out past the last arm, but a painted
+   * haze is on the same sheet as everything else -- it cannot pass the camera
+   * at its own rate, so it reads as a vignette rather than as material. These
+   * are the same dust as volume: a flattened shell of large, very dim, cold
+   * clouds starting inside the rim and reaching almost a radius beyond it,
+   * thickest in the plane and thinning upward.
+   *
+   * Additive, so this can only add light. That is the right physics anyway:
+   * what is visible out here is reflection nebulosity, dust throwing the
+   * light of a hundred billion stars back at the camera. Kept very faint
+   * individually -- the effect is meant to be noticed only when it is missing.
+   */
+  /*
+   * Many, large and very faint rather than few and visible: at sixty-six
+   * clouds each one could be picked out as a separate smudge beside the
+   * galaxy, which is worse than no dust at all. Overlapping this heavily,
+   * none of them has an edge and what is left is a field.
+   */
+  const MW_ENVELOPE = 170;
+  const envelopeTexture = track(createCloudTexture(0));
+  const mwEnvelope = [];
+  for (let i = 0; i < MW_ENVELOPE; i += 1) {
+    const angle = random() * TAU;
+    const r = 0.66 + Math.pow(random(), 0.8) * 0.92;
+    const material = track(new THREE.SpriteMaterial({
+      map: envelopeTexture,
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      opacity: 0,
+      color: (() => {
+        const roll = random();
+        return roll < 0.30 ? new THREE.Color(0.62, 0.34, 0.56)   // pink-violet
+          : roll < 0.56 ? new THREE.Color(0.56, 0.40, 0.30)      // warm brown
+            : roll < 0.80 ? new THREE.Color(0.42, 0.34, 0.62)    // dusty purple
+              : new THREE.Color(0.30, 0.40, 0.66);               // cold blue
+      })(),
+    }));
+    const sprite = new THREE.Sprite(material);
+    sprite.position.set(
+      Math.cos(angle) * r,
+      gaussian() * 0.14 * (0.35 + r * 0.55),
+      Math.sin(angle) * r,
+    );
+    const size = 0.62 + Math.pow(random(), 1.5) * 1.5;
+    sprite.scale.set(size, size * (0.5 + random() * 0.5), 1);
+    sprite.material.rotation = random() * Math.PI;
+    sprite.renderOrder = -3;
+    // Thinner further out, so the envelope runs out rather than stopping.
+    sprite.userData.weight = (0.032 + random() * 0.052)
+      * Math.max(0.22, 1.45 - r * 0.6);
+    milkyWay.add(sprite);
+    mwEnvelope.push(sprite);
+  }
+
+  /*
+   * Nebulae inside the disc.
+   *
+   * The painted sheets and the star cloud both sit at essentially one depth,
+   * so from any single frame the galaxy could still be a picture of a galaxy.
+   * These are objects at real positions within the disc, on the arms, riding
+   * the same warp -- so the moment the shot rolls or drops toward the plane
+   * they slide against the painted arms behind them at their own rate. That
+   * parallax is the thing the eye actually uses to decide something is a
+   * volume rather than an image, and no amount of shading substitutes for it.
+   *
+   * Sprites rather than points, because sprites scale with the group: they
+   * grow as the galaxy is approached, which points with fixed pixel sizes
+   * would not.
+   */
+  const MW_CLOUDS = 135;
+  const cloudTexture = track(createCloudTexture(1));
+  const mwClouds = [];
+  for (let i = 0; i < MW_CLOUDS; i += 1) {
+    let t = 0.5;
+    let armIndex = 0;
+    for (let attempt = 0; attempt < 14; attempt += 1) {
+      t = 0.24 + Math.pow(random(), 0.7) * 0.72;
+      armIndex = Math.floor(random() * MILKY_WAY_ARMS);
+      if (random() < armStrength(armIndex, t)) break;
+    }
+    const angle = armIndex * (TAU / MILKY_WAY_ARMS) + t * MILKY_WAY_SPIN
+      + gaussian() * 0.16;
+    const warp = Math.sin(angle - 0.6) * Math.pow(Math.max(0, t - 0.45), 2) * 0.34;
+
+    // Emission pink dominates on the arms; reflection blue and a little warm
+    // dust fill in between, which is the palette of every arm in the reference.
+    const roll = random();
+    const rgb = roll < 0.46 ? [1.0, 0.42, 0.66]
+      : roll < 0.78 ? [0.46, 0.66, 1.0]
+        : roll < 0.92 ? [0.7, 0.5, 1.0]
+          : [1.0, 0.74, 0.44];
+    const material = track(new THREE.SpriteMaterial({
+      map: cloudTexture,
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      opacity: 0,
+      color: new THREE.Color(rgb[0], rgb[1], rgb[2]),
+    }));
+    const sprite = new THREE.Sprite(material);
+    sprite.position.set(
+      Math.cos(angle) * t,
+      gaussian() * 0.012 + warp,
+      Math.sin(angle) * t,
+    );
+    const size = 0.05 + Math.pow(random(), 1.9) * 0.115;
+    sprite.scale.set(size, size * (0.6 + random() * 0.55), 1);
+    sprite.material.rotation = random() * Math.PI;
+    sprite.userData.weight = 0.34 + random() * 0.62;
+    milkyWay.add(sprite);
+    mwClouds.push(sprite);
+  }
+
+  /*
+   * Warm dust over the inner disc.
+   *
+   * The painted mottling is behind sixty thousand blue-white points, and in
+   * the inner disc -- which is exactly where the reference is brownest -- the
+   * points win. These sit in the same volume as the stars instead of under
+   * them, so the brown lands on top of the bright inner arms rather than
+   * beneath them. They are also the closest thing in the scene to the camera
+   * during the dive, so they carry most of the parallax on the way down.
+   */
+  const MW_WARM_DUST = 110;
+  const warmDustTexture = track(createCloudTexture(2));
+  for (let i = 0; i < MW_WARM_DUST; i += 1) {
+    const angle = random() * TAU;
+    const rr = 0.10 + Math.pow(random(), 0.85) * 0.55;
+    const tone = random();
+    const rgb = tone < 0.42 ? [0.72, 0.50, 0.32]
+      : tone < 0.76 ? [0.62, 0.45, 0.31]
+        : [0.80, 0.60, 0.40];
+    const material = track(new THREE.SpriteMaterial({
+      map: warmDustTexture,
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      opacity: 0,
+      color: new THREE.Color(rgb[0], rgb[1], rgb[2]),
+    }));
+    const sprite = new THREE.Sprite(material);
+    sprite.position.set(
+      Math.cos(angle) * rr,
+      gaussian() * 0.014,
+      Math.sin(angle) * rr,
+    );
+    const size = 0.05 + Math.pow(random(), 1.7) * 0.16;
+    sprite.scale.set(size, size * (0.55 + random() * 0.6), 1);
+    sprite.material.rotation = random() * Math.PI;
+    // Thickest around the core, thinning outward, as in the reference.
+    sprite.userData.weight = (0.055 + random() * 0.075)
+      * Math.max(0.2, 1.15 - rr * 1.0);
+    milkyWay.add(sprite);
+    mwClouds.push(sprite);
+  }
+
+  /** Fades the in-disc nebulae and the surrounding dust with the galaxy. */
+  function setMilkyWayCloudLevel(level) {
+    const lit = Math.max(0, level);
+    for (let i = 0; i < mwClouds.length; i += 1) {
+      mwClouds[i].material.opacity = lit * mwClouds[i].userData.weight;
+    }
+    for (let i = 0; i < mwEnvelope.length; i += 1) {
+      mwEnvelope[i].material.opacity = lit * mwEnvelope[i].userData.weight;
+    }
+  }
 
   // The Sun's position, and a mark on it. This is the thing the whole
   // sequence has been travelling toward.
@@ -1880,22 +3027,35 @@ export function createCosmicIntro({ pixelRatio } = {}) {
       if (attribute.array[zi] > 40) attribute.array[zi] -= FIELD_DEPTH;
     }
     attribute.needsUpdate = true;
+    // The spiked stars are nearer, so they pass faster -- which is the whole
+    // reason to draw them separately.
+    const spikeAttribute = spikeGeometry.attributes.position;
+    for (let i = 0; i < SPIKE_COUNT; i += 1) {
+      const zi = i * 3 + 2;
+      spikeAttribute.array[zi] += step * 1.25;
+      if (spikeAttribute.array[zi] > 40) spikeAttribute.array[zi] -= FIELD_DEPTH;
+    }
+    spikeAttribute.needsUpdate = true;
     galaxySprites.forEach((sprite) => {
       sprite.position.z += step * 0.6;
-      if (sprite.position.z > 60) sprite.position.z -= FIELD_DEPTH;
+      if (sprite.position.z > -380) sprite.position.z -= FIELD_DEPTH - 380;
     });
     spirals.forEach((points) => {
-      points.position.z += step * 0.5;
+      points.position.z += step * 0.78;
       points.rotation.y += step * 0.00012;
-      if (points.position.z > 140) points.position.z -= FIELD_DEPTH;
+      // Recycled behind the camera, not in front of it, so nothing is ever
+      // seen to leave. By the time z is positive the object has already faded
+      // out and is off the back of the shot.
+      if (points.position.z > 150) points.position.z -= 1730;
     });
+    applyDeepStarLevel();
     // Clouds are nearer than the galaxies behind them and pass faster, which
     // is the parallax that makes the shot read as movement through a volume
     // rather than movement of a backdrop.
     nebulae.forEach((sprite) => {
       sprite.position.z += step * (0.8 + sprite.userData.drift);
       sprite.material.rotation += step * sprite.userData.spin * 0.0004;
-      if (sprite.position.z > 220) sprite.position.z -= FIELD_DEPTH;
+      if (sprite.position.z > -420) sprite.position.z -= FIELD_DEPTH - 420;
     });
   }
 
@@ -1907,10 +3067,17 @@ export function createCosmicIntro({ pixelRatio } = {}) {
    * being faded.
    */
   function setNebulaLevel(level, time) {
+    const lit = Math.max(0, level);
     for (let i = 0; i < nebulae.length; i += 1) {
       const sprite = nebulae[i];
       const breath = 0.72 + Math.sin(time * 0.22 + sprite.userData.phase) * 0.28;
-      sprite.material.opacity = Math.max(0, level) * sprite.userData.weight * breath;
+      sprite.material.opacity = lit * sprite.userData.weight * breath;
+    }
+    for (let i = 0; i < deepSprites.length; i += 1) {
+      const sprite = deepSprites[i];
+      const breath = 0.8 + Math.sin(time * 0.3 + sprite.userData.phase) * 0.2;
+      sprite.material.opacity = lit * sprite.userData.weight * breath
+        * sprite.userData.owner.userData.nearFade;
     }
   }
 
@@ -1957,6 +3124,7 @@ export function createCosmicIntro({ pixelRatio } = {}) {
       }
       attribute.needsUpdate = true;
       dustMaterial.uniforms.uOpacity.value = Math.min(1, t * 2.4);
+      spikeMaterial.opacity = Math.min(1, t * 2.4) * 0.9;
 
       /*
        * The light curve.
@@ -2099,7 +3267,7 @@ export function createCosmicIntro({ pixelRatio } = {}) {
       galaxyGroup.visible = true;
       const reveal = clamp01((eased - 0.4) * 1.7);
       galaxySprites.forEach((sprite) => { sprite.material.opacity = reveal * 0.85; });
-      spiralMaterial.opacity = reveal * 0.9;
+      setDeepStarLevel(reveal * 0.9);
       setNebulaLevel(reveal, seconds);
       dust.rotation.z += deltaSeconds * 0.02;
       return elapsed / total;
@@ -2115,7 +3283,7 @@ export function createCosmicIntro({ pixelRatio } = {}) {
       galaxySprites.forEach((sprite) => {
         sprite.material.opacity = 0.62 + Math.sin((local + sprite.position.x) * 2.2) * 0.22;
       });
-      spiralMaterial.opacity = 0.95;
+      setDeepStarLevel(0.95);
       spirals.forEach((points) => { points.rotation.y += deltaSeconds * 0.04; });
       setNebulaLevel(Math.min(1, local * 2.5), seconds);
       dust.rotation.z += deltaSeconds * 0.04;
@@ -2127,7 +3295,9 @@ export function createCosmicIntro({ pixelRatio } = {}) {
         milkyWay.visible = true;
         frameMilkyWay(-1.16, 0.4, 0.22, 1500, lerp(9000, 5600, rise), 0);
         setDiscOpacity(rise * 0.72);
+        setMilkyWayCloudLevel(rise * 0.5);
         bulgeMaterial.opacity = rise * 0.5;
+        bulgeHaloMaterial.opacity = rise * 0.28;
         satelliteMaterial.opacity = rise * 0.35;
         mwMaterial.opacity = rise * 0.2;
         knotMaterial.opacity = rise * 0.14;
@@ -2144,10 +3314,11 @@ export function createCosmicIntro({ pixelRatio } = {}) {
       // Everything else falls away: from here there is only one galaxy.
       const recede = clamp01(1 - local * 1.8);
       galaxySprites.forEach((sprite) => { sprite.material.opacity = recede * 0.7; });
-      spiralMaterial.opacity = recede * 0.9;
+      setDeepStarLevel(recede * 0.9);
       setNebulaLevel(recede, seconds);
       driftField(lerp(640, 200, easeOutCubic(local)) * deltaSeconds);
       dustMaterial.uniforms.uOpacity.value = lerp(1, 0.5, eased);
+      spikeMaterial.opacity = lerp(0.9, 0.45, eased);
 
       milkyWay.visible = true;
       /*
@@ -2169,9 +3340,11 @@ export function createCosmicIntro({ pixelRatio } = {}) {
         aim,
       );
       setDiscOpacity(lerp(0.72, 1.25, clamp01(local * 2)));
+      setMilkyWayCloudLevel(lerp(0.5, 0.9, clamp01(local * 2)));
       bulgeMaterial.opacity = lerp(0.5, 1.0, clamp01(local * 2));
+      bulgeHaloMaterial.opacity = lerp(0.28, 0.5, clamp01(local * 2));
       satelliteMaterial.opacity = lerp(0.35, 0.6, clamp01(local * 2));
-      mwMaterial.opacity = lerp(0.2, 0.42, clamp01(local * 2));
+      mwMaterial.opacity = lerp(0.2, 0.34, clamp01(local * 2));
       knotMaterial.opacity = lerp(0.14, 0.46, clamp01(local * 2));
       haloMaterial.opacity = lerp(0.2, 0.42, clamp01(local * 2));
       sunMarkMaterial.opacity = clamp01((local - 0.45) / 0.55) * 0.9;
@@ -2184,12 +3357,13 @@ export function createCosmicIntro({ pixelRatio } = {}) {
       const local = 1 - (mark - elapsed) / T.orionArm;
       const eased = easeInCubic(clamp01(local));
       galaxySprites.forEach((sprite) => { sprite.material.opacity = 0; });
-      spiralMaterial.opacity = 0;
+      setDeepStarLevel(0);
       setNebulaLevel(0, seconds);
       // Local stars streaming past, the only cue that the camera is moving
       // once the galaxy fills the frame.
       driftField(lerp(200, 1500, eased) * deltaSeconds);
       dustMaterial.uniforms.uOpacity.value = lerp(0.5, 0.9, eased);
+      spikeMaterial.opacity = lerp(0.45, 0.8, eased);
 
       /*
        * The dive. Continues exactly where the pan left off -- same rotation,
@@ -2209,10 +3383,12 @@ export function createCosmicIntro({ pixelRatio } = {}) {
       // from inside the disc there is no face-on view to have. It retires and
       // the stars carry the shot.
       setDiscOpacity(lerp(1.25, 0, clamp01(local * 1.7)));
+      setMilkyWayCloudLevel(lerp(0.9, 0, clamp01(local * 1.5)));
       bulgeMaterial.opacity = lerp(1.0, 0, clamp01(local * 1.4));
+      bulgeHaloMaterial.opacity = lerp(0.5, 0, clamp01(local * 1.4));
       satelliteMaterial.opacity = lerp(0.6, 0, clamp01(local * 1.2));
       mwMaterial.size = px(lerp(1.25, 3.4, eased));
-      mwMaterial.opacity = lerp(0.42, 1, clamp01(local * 1.6));
+      mwMaterial.opacity = lerp(0.34, 1, clamp01(local * 1.6));
       knotMaterial.opacity = lerp(0.46, 0.24, eased);
       haloMaterial.opacity = lerp(0.42, 0, eased);
       sunMarkMaterial.opacity = 0.9;
@@ -2251,6 +3427,7 @@ export function createCosmicIntro({ pixelRatio } = {}) {
 
       driftField(lerp(1500, 240, easeOutCubic(local)) * deltaSeconds);
       dustMaterial.uniforms.uOpacity.value = lerp(0.9, 0.55, eased);
+      spikeMaterial.opacity = lerp(0.8, 0.5, eased);
 
       sunStar.visible = true;
       const grow = easeInCubic(local);
@@ -2281,8 +3458,11 @@ export function createCosmicIntro({ pixelRatio } = {}) {
     const fade = Math.max(0, 1 - local * 3);
     driftField(lerp(240, 0, easeOutCubic(local)) * deltaSeconds);
     dustMaterial.uniforms.uOpacity.value = fade * 0.55;
+    spikeMaterial.opacity = fade * 0.5;
     setDiscOpacity(0);
+    setMilkyWayCloudLevel(0);
     bulgeMaterial.opacity = 0;
+    bulgeHaloMaterial.opacity = 0;
     satelliteMaterial.opacity = 0;
     mwMaterial.opacity = fade * 0.42;
     knotMaterial.opacity = fade * 0.1;
