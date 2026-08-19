@@ -5461,6 +5461,154 @@ import { createCosmicIntro } from './scene/space/cosmicIntro.js';
     }
   });
 
+  /* ------------------------------------------------- warming the destination */
+
+  /*
+   * Why this exists.
+   *
+   * The opening runs for forty-five seconds and then hands over to a solar
+   * system that has never been drawn in the state it is about to be drawn in.
+   * Everything WebGL does lazily -- compiling a program, uploading a texture,
+   * uploading a vertex buffer -- happens on the first draw that needs it, and
+   * on a first visit that first draw is the arrival frame. Several hundred
+   * milliseconds of it, in one frame, exactly where the sequence is supposed
+   * to land.
+   *
+   * On a reload none of it shows, for two independent reasons: Chrome keeps a
+   * persistent GPU program cache, and the satellite textures are already in
+   * the HTTP cache so hydration has finished long before the hand-over. Both
+   * of those are true only the second time, which is why the pause looked
+   * intermittent and untraceable.
+   *
+   * Three kinds of work, and each needs a different lever:
+   *
+   *   programs   `compileAsync` traverses the whole scene ignoring the camera,
+   *              so it covers every material regardless of what is in frame.
+   *   textures   `initTexture` uploads one, camera-independent. Collected by
+   *              walking the materials rather than by drawing them.
+   *   geometry   only a real draw uploads a vertex buffer -- so there is one,
+   *              into a one-pixel render target, with frustum culling disabled
+   *              so that nothing is skipped for being out of frame. One pixel
+   *              of fragment work; the point is the buffers, not the picture.
+   *
+   * And it repeats while the opening plays, because moon hydration is still
+   * running: anything built after the first pass would otherwise be uploaded
+   * at the arrival, which is the whole problem again with a smaller cast. It
+   * stops doing the expensive part on its own once nothing new appears.
+   */
+  const WARM_TEXTURE_KEYS = [
+    "map", "alphaMap", "aoMap", "bumpMap", "displacementMap", "emissiveMap",
+    "envMap", "lightMap", "metalnessMap", "normalMap", "roughnessMap",
+    "specularMap", "clearcoatMap", "clearcoatNormalMap", "clearcoatRoughnessMap",
+    "iridescenceMap", "sheenColorMap", "transmissionMap", "thicknessMap",
+  ];
+  const WARM_INTERVAL_MS = 900;
+  const warmedTextures = new WeakSet();
+  let warmRenderTarget = null;
+  let lastWarmAt = -Infinity;
+  let lastWarmObjectCount = -1;
+  const arrivalDebug = new URLSearchParams(location.search).get("arrivalDebug") === "1"
+    ? (window.__arrival = { warms: [], frames: [], landed: false })
+    : null;
+
+  function warmDestination(now, { force = false } = {}) {
+    if (!force && now - lastWarmAt < WARM_INTERVAL_MS) return;
+    lastWarmAt = now;
+    const warmStartedAt = arrivalDebug ? performance.now() : 0;
+
+    /*
+     * Capped, so no single pass is a stall of its own.
+     *
+     * The first pass after hydration has been running for a while found close
+     * to ninety unseen textures, and uploading them together cost about a
+     * second and a half. Spread eight at a time across passes 900ms apart, the
+     * same work is finished within a few seconds and no frame notices.
+     */
+    const WARM_TEXTURES_PER_PASS = 8;
+    let objectCount = 0;
+    const pendingTextures = [];
+    scene.traverse((object) => {
+      objectCount += 1;
+      const material = object.material;
+      if (!material) return;
+      if (pendingTextures.length >= WARM_TEXTURES_PER_PASS) return;
+      const list = Array.isArray(material) ? material : [material];
+      for (let i = 0; i < list.length; i += 1) {
+        for (let k = 0; k < WARM_TEXTURE_KEYS.length; k += 1) {
+          const texture = list[i][WARM_TEXTURE_KEYS[k]];
+          if (texture && texture.isTexture && !warmedTextures.has(texture)) {
+            pendingTextures.push(texture);
+          }
+        }
+      }
+    });
+
+    for (let i = 0; i < pendingTextures.length; i += 1) {
+      try {
+        renderer.initTexture(pendingTextures[i]);
+        // Marked only once it is actually on the GPU, so a texture that was
+        // not ready is simply picked up by the next pass.
+        warmedTextures.add(pendingTextures[i]);
+      } catch (error) {
+        // Non-fatal: try again next time.
+      }
+    }
+
+    // Nothing new since last time means nothing left to warm. The draw and the
+    // compile are the expensive half, so they are skipped once the scene has
+    // settled -- which it does a few seconds after hydration finishes.
+    const changed = force
+      || pendingTextures.length > 0
+      || objectCount !== lastWarmObjectCount;
+    lastWarmObjectCount = objectCount;
+    if (!changed) {
+      if (arrivalDebug) {
+        arrivalDebug.warms.push({
+          t: Math.round(now), objects: objectCount, textures: pendingTextures.length,
+          programs: renderer.info.programs?.length ?? -1,
+          ms: Math.round(performance.now() - warmStartedAt), skipped: true,
+        });
+      }
+      return;
+    }
+
+    if (typeof renderer.compileAsync === "function") {
+      renderer.compileAsync(scene, camera).catch(() => {});
+    } else {
+      try { renderer.compile(scene, camera); } catch (error) { /* non-fatal */ }
+    }
+
+    if (!warmRenderTarget) warmRenderTarget = new THREE.WebGLRenderTarget(1, 1);
+    const restore = [];
+    scene.traverse((object) => {
+      if (object.frustumCulled) {
+        object.frustumCulled = false;
+        restore.push(object);
+      }
+    });
+    const previousTarget = renderer.getRenderTarget();
+    try {
+      camera.updateMatrixWorld();
+      renderer.setRenderTarget(warmRenderTarget);
+      renderer.render(scene, camera);
+    } catch (error) {
+      console.warn("[BeyondEarth] destination warm-up failed", error);
+    } finally {
+      renderer.setRenderTarget(previousTarget);
+      for (let i = 0; i < restore.length; i += 1) restore[i].frustumCulled = true;
+    }
+
+    if (arrivalDebug) {
+      arrivalDebug.warms.push({
+        t: Math.round(now),
+        objects: objectCount,
+        textures: pendingTextures.length,
+        programs: renderer.info.programs?.length ?? -1,
+        ms: Math.round(performance.now() - warmStartedAt),
+      });
+    }
+  }
+
   /*
     animate
     - Main render loop that updates the camera, rotates bodies, animates particles, and renders the scene.
@@ -5484,6 +5632,10 @@ import { createCosmicIntro } from './scene/space/cosmicIntro.js';
       // opening throws, the viewer must still arrive at the solar system --
       // never be left on a black screen, which is exactly what happened when
       // dispose() threw here and killed the loop.
+      // Anything hydrated since the last pass gets uploaded now rather than
+      // on the arrival frame.
+      warmDestination(frameTime);
+
       let progress = 1;
       try {
         progress = cosmicIntro.update(introDelta);
@@ -5510,6 +5662,9 @@ import { createCosmicIntro } from './scene/space/cosmicIntro.js';
          * behind. Nothing about the sequence is still needed once its last
          * frame has been shown.
          */
+        // Last chance, with everything the sequence built now present.
+        warmDestination(frameTime, { force: true });
+        if (arrivalDebug) arrivalDebug.landed = true;
         const finishedIntro = cosmicIntro;
         cosmicIntro = null;
         try {
@@ -5556,7 +5711,20 @@ import { createCosmicIntro } from './scene/space/cosmicIntro.js';
       requestAnimationFrame(animate);
       return;
     }
+    if (arrivalDebug && arrivalDebug.landed && arrivalDebug.frames.length < 30) {
+      arrivalDebug.frames.push(Math.round(frameTime - lastCinematicFrameTime));
+    }
     lastCinematicFrameTime = frameTime;
+    /*
+     * Warm the destination through the gate as well as through the opening.
+     *
+     * Satellite hydration runs from the moment the universe is renderable, and
+     * the gate is where the viewer spends the most idle time -- so this is the
+     * cheapest place in the whole session to absorb it. Doing it here also
+     * means the click itself has nothing left to do, which matters because the
+     * click is the one moment where a stall is visible.
+     */
+    if (!intro.isDismissed()) warmDestination(frameTime);
     timer.update(frameTime);
     const deltaTime = Math.min(timer.getDelta(), 0.05);
     if (!isPageVisible || isInformationOverlayOpen()) {
@@ -6024,31 +6192,7 @@ import { createCosmicIntro } from './scene/space/cosmicIntro.js';
     intro.step("ready");
     scheduleMajorSatelliteHydration();
 
-    /*
-     * Compile the whole scene now, while the gate is up.
-     *
-     * A first visit and a reload are not the same run. Chrome keeps a
-     * *persistent* GPU program cache, so on a reload every shader the solar
-     * system needs is already compiled and the arrival is instant; on a first
-     * visit the programs are built the first time each material is actually
-     * drawn -- and the first frame that draws all of them at once is the
-     * arrival itself, at the far view where nothing is culled. That is the
-     * pause, and it is why it only ever happened once.
-     *
-     * `compileAsync` uses KHR_parallel_shader_compile where it exists, so this
-     * costs the gate nothing and the arrival everything it was paying.
-     */
-    if (typeof renderer.compileAsync === "function") {
-      renderer.compileAsync(scene, camera).catch((error) => {
-        console.warn("[BeyondEarth] scene precompile failed", error);
-      });
-    } else {
-      try {
-        renderer.compile(scene, camera);
-      } catch (error) {
-        console.warn("[BeyondEarth] scene precompile failed", error);
-      }
-    }
+    warmDestination(performance.now(), { force: true });
 
     /*
      * Diagnostic: skip straight to the destination.
@@ -6067,25 +6211,30 @@ import { createCosmicIntro } from './scene/space/cosmicIntro.js';
     intro.ready().then(() => {
       // Frame the destination before the burst, so the cut lands on the view
       // the viewer is meant to arrive at rather than easing into it afterwards.
-      settleLandingView();
       /*
-       * And draw the destination once, here, behind the opaque gate.
+       * Hide the destination before doing anything that blocks.
        *
-       * Compiling programs is most of the first-visit cost but not all of it:
-       * textures are uploaded lazily too, and the arrival frame is the first
-       * one that needs every one of them together. This renders exactly the
-       * frame the sequence will land on -- same camera, same distance, same
-       * visible set -- while the intro overlay is still fully opaque, so the
-       * work happens where it cannot be seen. Forty-five seconds later the
-       * same frame costs nothing.
+       * `resolve()` fires 700ms into an 1,100ms CSS blowout -- and that
+       * animation runs on the compositor, so it keeps going to its final
+       * frame (fully transparent) even while the main thread is busy building
+       * the opening. Anything slow here therefore happens *behind an overlay
+       * that is in the act of disappearing*, and what it uncovers is whatever
+       * the canvas last held: the solar system, with the whole interface over
+       * it. Which is precisely what the viewer reported seeing between the
+       * collapse and the burst.
+       *
+       * So the chrome is hidden and the canvas blanked as the first two
+       * statements in this block, before a single millisecond is spent on
+       * anything else. Nothing that follows can be seen.
        */
-      camera.updateMatrixWorld();
-      try {
-        renderer.render(scene, camera);
-      } catch (error) {
-        console.warn("[BeyondEarth] arrival prewarm failed", error);
-      }
       document.body.classList.add("is-cosmic-intro");
+      try {
+        renderer.setRenderTarget(null);
+        renderer.clear();
+      } catch (error) {
+        console.warn("[BeyondEarth] could not blank the frame before the burst", error);
+      }
+      settleLandingView();
       cosmicIntro = createCosmicIntro({ pixelRatio: cinematicPixelRatio });
       // `.loader` takes 700 ms to fade. Start the celestial entrance from the
       // end of that transition—not from the moment its class changes—otherwise

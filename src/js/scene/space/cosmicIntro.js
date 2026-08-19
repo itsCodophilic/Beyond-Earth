@@ -2281,7 +2281,17 @@ export function createCosmicIntro({ pixelRatio } = {}) {
    * sweeps past -- usually to one side, since most of them are placed well off
    * the flight path. Nothing is ever seen to start or to stop.
    */
-  const DEEP_SLAB_FAR = -2050;
+  /*
+   * Shallower, because the field is slower.
+   *
+   * Distances here are only meaningful as times. At 640 units a second a
+   * 2,200-unit slab was three and a half seconds of approach; at 175 it would
+   * be twelve, which is longer than the phase. Everything below is scaled to
+   * keep the *timing* of an approach the same now that the speed has changed:
+   * a galaxy still rises over about two seconds, holds while it grows, and
+   * dissolves over about two as it goes by.
+   */
+  const DEEP_SLAB_FAR = -1500;
   const DEEP_SLAB_NEAR = 150;
   /*
    * Smoothed at both ends, and the near one is long.
@@ -2299,8 +2309,8 @@ export function createCosmicIntro({ pixelRatio } = {}) {
     return x * x * x * (x * (x * 6 - 15) + 10);
   };
   function deepNearFade(z) {
-    const arriving = smootherstep((z - DEEP_SLAB_FAR) / 560);
-    const leaving = 1 - smootherstep((z + 620) / 600);
+    const arriving = smootherstep((z - DEEP_SLAB_FAR) / 300);
+    const leaving = 1 - smootherstep((z + 380) / 380);
     return arriving * leaving;
   }
 
@@ -3372,7 +3382,7 @@ export function createCosmicIntro({ pixelRatio } = {}) {
       // One bubble swells until the camera passes through its wall.
       const local = (elapsed - T.detonation - T.multiverse) / T.approach;
       const eased = easeInOutSine(local);
-      driftField(lerp(150, 340, eased) * deltaSeconds);
+      driftField(lerp(150, 300, eased) * deltaSeconds);
       if (approachStartZ === null) approachStartZ = ours.group.position.z;
       ours.group.position.z = lerp(approachStartZ, 360, eased);
       const swell = lerp(620, 4600, eased);
@@ -3413,7 +3423,18 @@ export function createCosmicIntro({ pixelRatio } = {}) {
       const local = 1 - (mark - elapsed) / T.galaxies;
       setBubbleOpacity(ours, Math.max(0, 0.95 * (1 - local * 2.6)));
       bubbles.forEach((bubble, index) => { if (index > 0) setBubbleOpacity(bubble, 0); });
-      driftField(lerp(360, 640, easeInOutSine(Math.min(1, local * 1.3))) * deltaSeconds);
+      /*
+       * A cruise, not a sprint.
+       *
+       * This ran at 360 to 640 units a second while the multiverse before it
+       * travelled at 70 to 150 -- four times faster through the part of the
+       * journey that has the most to look at, so galaxies that took real work
+       * to build went past before the eye could settle on one. It now decays
+       * out of the approach's exit speed to 175, which is the top of the
+       * multiverse's own band, so the two acts read as one continuous move at
+       * one pace.
+       */
+      driftField(lerp(300, 175, easeOutCubic(Math.min(1, local * 1.5))) * deltaSeconds);
       galaxySprites.forEach((sprite) => {
         /*
          * The shimmer has to start from nothing.
@@ -3470,7 +3491,7 @@ export function createCosmicIntro({ pixelRatio } = {}) {
       });
       setDeepStarLevel(recede * 0.95);
       setNebulaLevel(recede, seconds);
-      driftField(lerp(640, 200, easeOutCubic(local)) * deltaSeconds);
+      driftField(lerp(175, 120, easeOutCubic(local)) * deltaSeconds);
       dustMaterial.uniforms.uOpacity.value = lerp(1, 0.5, eased);
       spikeMaterial.opacity = lerp(0.9, 0.45, eased);
 
@@ -3515,7 +3536,7 @@ export function createCosmicIntro({ pixelRatio } = {}) {
       setNebulaLevel(0, seconds);
       // Local stars streaming past, the only cue that the camera is moving
       // once the galaxy fills the frame.
-      driftField(lerp(200, 1500, eased) * deltaSeconds);
+      driftField(lerp(120, 1500, eased) * deltaSeconds);
       dustMaterial.uniforms.uOpacity.value = lerp(0.5, 0.9, eased);
       spikeMaterial.opacity = lerp(0.45, 0.8, eased);
 
