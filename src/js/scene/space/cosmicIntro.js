@@ -14,7 +14,7 @@ import * as THREE from "three";
  * retimed, reordered or cut without a camera path needing to be re-solved.
  *
  * Acts:
- *   detonation  the burst -- core, rays, shockwaves, rock thrown outward
+ *   detonation  the burst -- a fireball of plasma, its core, and its rays
  *   multiverse  bubble universes drifting in the false vacuum
  *   approach    one bubble swells until the camera passes inside it: ours
  *   galaxies    the fall through resolved galaxies and star dust
@@ -36,13 +36,13 @@ import * as THREE from "three";
  * Current total is a little over 40 seconds.
  */
 export const INTRO_TIMING = {
-  detonation: 3000,
-  multiverse: 8500,
-  approach: 4200,
-  galaxies: 8500,
-  milkyWay: 8500,
-  orionArm: 5500,
-  sunApproach: 5000,
+  detonation: 5000,
+  multiverse: 11000,
+  approach: 6000,
+  galaxies: 12000,
+  milkyWay: 11000,
+  orionArm: 6800,
+  sunApproach: 6200,
   // Short on purpose: this is a flare and a cut, not a scene.
   arrive: 1500,
 };
@@ -62,34 +62,77 @@ const TAU = Math.PI * 2;
  * Short, plain, and factual. Anything longer than this cannot be read while
  * the frame is moving, and anything vaguer than this is decoration.
  */
+/**
+ * The captions.
+ *
+ * Short, plain, factual -- and now several per act rather than one.
+ *
+ * A single paragraph held for eight seconds is read in two and then sits
+ * there; the viewer finishes it and waits. A sequence of one-line thoughts,
+ * cross-faded, gives the act a pulse: you finish a line, the shot moves, and
+ * the next thought arrives. Every line has to survive being read once, at a
+ * glance, while the frame is moving -- so nothing here is longer than it needs
+ * to be, and nothing is decorative.
+ *
+ * The number of lines is set by how long the act runs, not by how much there
+ * is to say. Roughly three seconds a line is the floor for comfortable
+ * reading.
+ */
 const CAPTIONS = {
   detonation: {
     title: "The Big Bang",
-    body: "Not an explosion in space. Space itself, expanding — from smaller than an atom to larger than a galaxy, in under a second.",
+    lines: [
+      "Not an explosion in space. Space itself, expanding.",
+      "Smaller than an atom to larger than a galaxy, in less than a second.",
+      "For 380,000 years it stayed too hot for atoms — a fog of light and bare particles.",
+    ],
   },
   multiverse: {
     title: "The Multiverse",
-    body: "That expansion may never have stopped. Where it did, a bubble cooled into a universe — each one filled with its own stars, its own galaxies, its own physics.",
+    lines: [
+      "That expansion may never have stopped.",
+      "Where it did, a bubble cooled — and became a universe.",
+      "Each one with its own stars, its own galaxies, perhaps its own physics.",
+    ],
   },
   approach: {
     title: "Our Universe",
-    body: "This is the bubble we cooled into. 13.8 billion years old, 93 billion light-years across, and still growing.",
+    lines: [
+      "This is the bubble we cooled into.",
+      "13.8 billion years old, and 93 billion light-years across.",
+      "Still growing — and the growing is getting faster.",
+    ],
   },
   galaxies: {
     title: "Two Trillion Galaxies",
-    body: "Every mote of light here is an island of a hundred billion stars.",
+    lines: [
+      "Every mote of light here is an island of a hundred billion stars.",
+      "Spirals, starbursts, collisions — no two of them alike.",
+      "The dust between them is older than any of the stars in it.",
+    ],
   },
   milkyWay: {
     title: "The Milky Way",
-    body: "A barred spiral 100,000 light-years across. Ours.",
+    lines: [
+      "A barred spiral, a hundred thousand light-years across.",
+      "Four great arms, wound around a bar of ancient stars.",
+      "Ours.",
+    ],
   },
   orionArm: {
     title: "The Orion Arm",
-    body: "26,000 light-years from the centre, on the inner rim of a minor arm, between Perseus and Carina-Sagittarius.",
+    lines: [
+      "26,000 light-years from the centre, on the inner rim of a minor arm.",
+      "Between Perseus and Carina–Sagittarius. Nowhere special.",
+    ],
   },
   sunApproach: {
     title: "Our Star",
-    body: "A G-type main-sequence star, 4.6 billion years old. Everything you are about to see is held by it.",
+    lines: [
+      "A G-type main-sequence star, 4.6 billion years old.",
+      "It holds 99.86% of all the mass around it.",
+      "Everything else — every world you are about to see — is the rest.",
+    ],
   },
   arrive: null,
 };
@@ -1104,22 +1147,87 @@ export function createCosmicIntro({ pixelRatio } = {}) {
   document.body.append(caption);
 
   let captionKey = null;
-  function showCaption(key) {
-    if (key === captionKey) return;
-    captionKey = key;
+  /*
+   * The body line is faded by hand, not by CSS.
+   *
+   * A keyframe animation would have to be restarted by removing a class,
+   * forcing a reflow and re-adding it, once per line -- and it would freeze
+   * outright in a backgrounded tab, which is where this is usually being
+   * looked at during development. Driving it from the frame delta costs two
+   * floats, restarts cleanly, and behaves identically in the preview harness
+   * where time is stepped rather than elapsed.
+   *
+   * Out, swap, in -- never a cut. The old line has to be gone before the new
+   * one arrives or the eye tries to read both.
+   */
+  let captionLine = -1;
+  let captionPending = null;
+  let captionFade = 0;
+  let captionShown = -1;
+
+  function showCaption(key, local = 1, deltaSeconds = 0) {
     const entry = CAPTIONS[key];
     if (!entry) {
       caption.classList.remove("is-live");
+      captionKey = key;
       return;
     }
-    // Retire, then re-cue, so consecutive captions cross-fade rather than
-    // swapping their text mid-opacity.
-    caption.classList.remove("is-live");
-    captionTitle.textContent = entry.title;
-    captionBody.textContent = entry.body;
-    // Force a reflow so the animation restarts for the new text.
-    void caption.offsetWidth;
-    caption.classList.add("is-live");
+    if (key !== captionKey) {
+      captionKey = key;
+      captionLine = -1;
+      captionPending = null;
+      captionFade = 0;
+      captionTitle.textContent = entry.title;
+      // Retire, then re-cue, so consecutive acts cross-fade rather than
+      // swapping their title mid-opacity.
+      caption.classList.remove("is-live");
+      void caption.offsetWidth;
+      caption.classList.add("is-live");
+    }
+
+    const lines = entry.lines;
+    // The last line is held to the end of the act rather than cycling out.
+    const index = Math.min(lines.length - 1, Math.max(0, Math.floor(local * lines.length)));
+    if (index !== captionLine && captionPending === null) {
+      if (captionLine === -1) {
+        captionLine = index;
+        captionBody.textContent = lines[index];
+      } else {
+        captionPending = index;
+      }
+    }
+
+    if (captionPending !== null) {
+      captionFade -= deltaSeconds * 2.8;
+      if (captionFade <= 0) {
+        captionFade = 0;
+        captionLine = captionPending;
+        captionPending = null;
+        captionBody.textContent = lines[captionLine];
+      }
+    } else {
+      captionFade = Math.min(1, captionFade + deltaSeconds * 1.7);
+    }
+
+    /*
+     * Written only when it has actually moved.
+     *
+     * Setting an inline style is a style invalidation, and the caption is a
+     * large fixed-position element with several text shadows on it -- so doing
+     * it unconditionally means a recalculate and a repaint on every frame of
+     * the sequence, for the ninety-odd per cent of frames where the value has
+     * not changed at all. That is where the periodic hitch through the galaxy
+     * came back from. Quantised to a hundredth and skipped when it matches.
+     */
+    const eased = captionFade * captionFade * (3 - 2 * captionFade);
+    const step = Math.round(eased * 100) / 100;
+    if (step !== captionShown) {
+      captionShown = step;
+      captionBody.style.opacity = step === 1 ? "" : step.toFixed(2);
+      captionBody.style.transform = step === 1
+        ? ""
+        : `translateY(${((1 - step) * -7).toFixed(2)}px)`;
+    }
   }
 
   /* --------------------------------------------------------- the detonation */
@@ -1127,17 +1235,21 @@ export function createCosmicIntro({ pixelRatio } = {}) {
   const blast = new THREE.Group();
   scene.add(blast);
 
-  // Rock is shaded, not emissive -- it has to be lit by the blast to read as
-  // matter rather than as more light. This is the only lighting in the scene;
-  // everything else is additive and ignores it.
-  const blastLight = new THREE.PointLight(0xdce8ff, 0, 4200, 1.4);
-  blastLight.position.set(0, 0, -18);
-  scene.add(blastLight);
-  const fillLight = new THREE.AmbientLight(0x36486e, 1.7);
-  scene.add(fillLight);
+  /*
+   * No lights at all in this scene any more.
+   *
+   * They existed for one reason: a field of shaded rock fragments thrown out
+   * of the blast, which needed something to light it. There was no rock in the
+   * Big Bang -- no atoms for a hundred thousand years, let alone minerals --
+   * and it looked exactly as wrong as it was: flat-shaded shards tumbling
+   * across an additive flash read as paper, not as matter. The fireball is a
+   * plasma fog now, which is both what it was and what it looks like, and
+   * plasma is emissive. Everything in the scene composites additively and
+   * ignores lighting entirely.
+   */
 
   const coreMaterial = track(new THREE.SpriteMaterial({
-    map: track(createGlowTexture("rgba(255,255,255,1)", "rgba(186,222,255,0.72)", 0.26)),
+    map: track(createGlowTexture("rgba(255,255,255,1)", "rgba(255,214,146,0.78)", 0.26)),
     transparent: true,
     depthWrite: false,
     blending: THREE.AdditiveBlending,
@@ -1159,7 +1271,7 @@ export function createCosmicIntro({ pixelRatio } = {}) {
       depthWrite: false,
       blending: THREE.AdditiveBlending,
       opacity: 0,
-      color: new THREE.Color(index === 0 ? 0xffffff : 0x9ec6ff),
+      color: new THREE.Color(index === 0 ? 0xffffff : 0xffb257),
     }));
     material.depthTest = false;
     const sprite = new THREE.Sprite(material);
@@ -1171,32 +1283,30 @@ export function createCosmicIntro({ pixelRatio } = {}) {
     return sprite;
   });
 
-  // Expanding shockwave rings, staggered so the front looks like it is being
-  // driven rather than drawn once.
-  const ringGeometry = track(new THREE.RingGeometry(0.86, 1, 128));
-  const shockwaves = [0, 1, 2].map((index) => {
-    const material = track(new THREE.MeshBasicMaterial({
-      color: new THREE.Color(index === 1 ? 0xbcd8ff : 0xffffff),
-      transparent: true,
-      opacity: 0,
-      depthWrite: false,
-      depthTest: false,
-      blending: THREE.AdditiveBlending,
-      side: THREE.DoubleSide,
-    }));
-    const mesh = new THREE.Mesh(ringGeometry, material);
-    mesh.renderOrder = 4;
-    mesh.position.set(0, 0, -20);
-    mesh.scale.setScalar(1);
-    blast.add(mesh);
-    return { mesh, material, delay: index * 0.17 };
-  });
+  /*
+   * No shockwave rings.
+   *
+   * There were three, staggered, expanding -- a perfectly circular annulus of
+   * constant width, which is the single most computer-generated shape it is
+   * possible to draw. It got away with it while the blast was eighteen units
+   * from the lens and everything was blown out anyway; the moment the burst
+   * was moved back far enough to be seen as an object, it became a clean white
+   * hoop laid over the fireball. The fog has a front of its own, and that
+   * front is granular and uneven, which is what a shock actually looks like.
+   */
 
-  // The nebulous cloud the reference images show around the core: cold blue
-  // haze, not a second flash.
-  const hazeTexture = track(createGlowTexture("rgba(196,224,255,0.55)", "rgba(90,140,230,0.22)", 0.4));
+  /*
+   * The smoke around the fireball.
+   *
+   * Warm, not cold. The old haze was blue -- a reasonable guess for deep space
+   * and completely wrong for this moment: the early universe was an opaque
+   * plasma glowing at thousands of degrees, and every rendering of it looks
+   * like a furnace, not like a nebula. Amber through to ember, and there are
+   * more of them, because in the reference the fog is the frame.
+   */
+  const hazeTexture = track(createGlowTexture("rgba(255,220,158,0.5)", "rgba(226,102,32,0.26)", 0.42));
   const haze = [];
-  for (let i = 0; i < 7; i += 1) {
+  for (let i = 0; i < 13; i += 1) {
     const material = track(new THREE.SpriteMaterial({
       map: hazeTexture,
       transparent: true,
@@ -1219,69 +1329,114 @@ export function createCosmicIntro({ pixelRatio } = {}) {
     haze.push(sprite);
   }
 
-  // Rocky debris. One instanced draw call for the whole ejecta field.
-  const DEBRIS_COUNT = 520;
-  const debrisGeometry = track(new THREE.IcosahedronGeometry(1, 0));
-  // Rough the faces up so each fragment catches the light unevenly.
-  {
-    const position = debrisGeometry.attributes.position;
-    for (let i = 0; i < position.count; i += 1) {
-      const jitter = 0.72 + random() * 0.56;
-      position.setXYZ(i, position.getX(i) * jitter, position.getY(i) * jitter, position.getZ(i) * jitter);
-    }
-    debrisGeometry.computeVertexNormals();
-  }
-  const debrisMaterial = track(new THREE.MeshLambertMaterial({
-    color: 0xffffff,
-    emissive: 0x120c08,
-    flatShading: true,
-  }));
-  const debris = new THREE.InstancedMesh(debrisGeometry, debrisMaterial, DEBRIS_COUNT);
-  debris.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-  debris.frustumCulled = false;
-  blast.add(debris);
-
-  const debrisState = [];
-  for (let i = 0; i < DEBRIS_COUNT; i += 1) {
-    // Uniform on the sphere, then biased forward so a good share of it comes
-    // past the camera instead of all of it receding.
+  /*
+   * The fireball, as plasma.
+   *
+   * The reference is a wall of incandescent fog: countless grains, brightest
+   * where the light is coming from, cooling from white through amber to a deep
+   * ember at the front, with a defined rim and long spokes of light escaping
+   * through the gaps. What it very much is not is objects. There were no
+   * objects -- for the first few hundred thousand years the universe was too
+   * hot for an atom to hold together, never mind a rock.
+   *
+   * So: a very large number of very small additive points, thrown from one
+   * place, coloured by where they sit in the fog.
+   *
+   * Two details do most of the work. The radius is sampled as a low power of a
+   * uniform, which piles the grains toward the outside and gives the fireball
+   * an edge rather than a soft falloff -- that rim is the single most
+   * recognisable thing in the reference. And every grain carries its own
+   * brightness jitter, so the fog is granular at the pixel level instead of
+   * smooth; smooth is what makes a particle system look like a gradient.
+   */
+  const PLASMA_COUNT = 38000;
+  const plasmaVelocity = new Float32Array(PLASMA_COUNT * 3);
+  const plasmaColours = new Float32Array(PLASMA_COUNT * 3);
+  for (let i = 0; i < PLASMA_COUNT; i += 1) {
+    const i3 = i * 3;
+    // Uniform on the sphere, then biased forward so a good share of the fog
+    // comes past the camera instead of all of it receding.
     const theta = random() * TAU;
     const z = random() * 2 - 1;
     const planar = Math.sqrt(Math.max(0, 1 - z * z));
-    const direction = new THREE.Vector3(planar * Math.cos(theta), planar * Math.sin(theta), z * 0.75 + 0.28);
-    direction.normalize();
-    debrisState.push({
-      direction,
-      speed: 20 + Math.pow(random(), 1.7) * 235,
-      scale: 0.07 + Math.pow(random(), 3.1) * 0.82,
-      spinAxis: new THREE.Vector3(random() - 0.5, random() - 0.5, random() - 0.5).normalize(),
-      spinRate: (random() - 0.5) * 5.5,
-      phase: random() * TAU,
-    });
-    const tint = 0.5 + random() * 0.5;
-    debris.setColorAt(i, new THREE.Color(tint * 0.56, tint * 0.47, tint * 0.38));
-  }
-  if (debris.instanceColor) debris.instanceColor.needsUpdate = true;
+    const dx = planar * Math.cos(theta);
+    const dy = planar * Math.sin(theta);
+    const dz = z * 0.86 + 0.08;
+    const length = Math.hypot(dx, dy, dz) || 1;
 
-  const debrisMatrix = new THREE.Matrix4();
-  const debrisQuaternion = new THREE.Quaternion();
-  const debrisPosition = new THREE.Vector3();
-  const debrisScale = new THREE.Vector3();
+    const shell = Math.pow(random(), 0.34);
+    const speed = 24 + shell * 238 * (0.72 + random() * 0.56);
+    plasmaVelocity[i3] = (dx / length) * speed;
+    plasmaVelocity[i3 + 1] = (dy / length) * speed;
+    plasmaVelocity[i3 + 2] = (dz / length) * speed;
 
-  function layOutDebris(travel, spin, scaleFactor) {
-    for (let i = 0; i < DEBRIS_COUNT; i += 1) {
-      const state = debrisState[i];
-      const distance = state.speed * travel;
-      debrisPosition.copy(state.direction).multiplyScalar(distance);
-      debrisPosition.z -= 18;
-      debrisQuaternion.setFromAxisAngle(state.spinAxis, state.phase + state.spinRate * spin);
-      debrisScale.setScalar(state.scale * scaleFactor);
-      debrisMatrix.compose(debrisPosition, debrisQuaternion, debrisScale);
-      debris.setMatrixAt(i, debrisMatrix);
+    // White-hot at the middle, amber through the body, ember at the front.
+    let cr;
+    let cg;
+    let cb;
+    if (shell < 0.5) {
+      const u = shell / 0.5;
+      cr = 1.0;
+      cg = 0.96 - 0.42 * u;
+      cb = 0.82 - 0.68 * u;
+    } else {
+      const u = (shell - 0.5) / 0.5;
+      cr = 1.0 - 0.34 * u;
+      cg = 0.54 - 0.36 * u;
+      cb = 0.14 - 0.10 * u;
     }
-    debris.instanceMatrix.needsUpdate = true;
+    const flicker = 0.5 + Math.pow(random(), 1.6) * 0.85;
+    plasmaColours[i3] = Math.min(1, cr * flicker);
+    plasmaColours[i3 + 1] = Math.min(1, cg * flicker);
+    plasmaColours[i3 + 2] = Math.min(1, cb * flicker);
   }
-  layOutDebris(0, 0, 0.001);
+
+  const plasmaGeometry = track(new THREE.BufferGeometry());
+  plasmaGeometry.setAttribute(
+    "position", new THREE.BufferAttribute(new Float32Array(PLASMA_COUNT * 3), 3),
+  );
+  plasmaGeometry.setAttribute("color", new THREE.BufferAttribute(plasmaColours, 3));
+  /*
+   * Fixed pixel size, not attenuated.
+   *
+   * With attenuation on, a grain that ends up near the camera is drawn tens of
+   * pixels across -- and since the fog expands past the camera, that is most of
+   * them by the end. The first attempt filled the frame with gold blobs the
+   * size of coins: glitter, not fog. A grain of plasma has no size worth
+   * resolving at any of these distances; what varies is how many of them land
+   * in a pixel, which is exactly what makes the reference granular.
+   */
+  const plasmaMaterial = track(new THREE.PointsMaterial({
+    size: px(2.0),
+    map: track(createGlowTexture("rgba(255,255,255,1)", "rgba(255,186,96,0.4)", 0.3)),
+    vertexColors: true,
+    transparent: true,
+    depthWrite: false,
+    depthTest: false,
+    blending: THREE.AdditiveBlending,
+    sizeAttenuation: false,
+    opacity: 0,
+  }));
+  const plasma = new THREE.Points(plasmaGeometry, plasmaMaterial);
+  plasma.frustumCulled = false;
+  plasma.renderOrder = 2;
+  blast.add(plasma);
+
+  function layOutPlasma(travel, level) {
+    const value = level > 0 ? level : 0;
+    plasmaMaterial.opacity = value;
+    plasma.visible = value > 0.002;
+    if (!plasma.visible) return;
+    const array = plasmaGeometry.attributes.position.array;
+    for (let i = 0; i < PLASMA_COUNT; i += 1) {
+      const i3 = i * 3;
+      array[i3] = plasmaVelocity[i3] * travel;
+      array[i3 + 1] = plasmaVelocity[i3 + 1] * travel;
+      array[i3 + 2] = plasmaVelocity[i3 + 2] * travel - 18;
+    }
+    plasmaGeometry.attributes.position.needsUpdate = true;
+  }
+  layOutPlasma(0.001, 0);
 
   /* ------------------------------------------------------------ star dust */
 
@@ -1711,11 +1866,11 @@ export function createCosmicIntro({ pixelRatio } = {}) {
     }
   }
 
-  function setBubbleOpacity(bubble, value) {
+  function setBubbleOpacity(bubble, value, gain = 1) {
     const v = Math.max(0, value);
     bubble.shellMaterial.opacity = v;
-    bubble.knotMaterial.opacity = v;
-    bubble.galaxyMaterial.opacity = v * 0.85;
+    bubble.knotMaterial.opacity = Math.min(1, v * gain);
+    bubble.galaxyMaterial.opacity = Math.min(1, v * 0.85 * gain);
     bubble.rimMaterial.uniforms.uOpacity.value = v * 0.34;
   }
 
@@ -3279,7 +3434,7 @@ export function createCosmicIntro({ pixelRatio } = {}) {
 
     let mark = T.detonation;
     if (elapsed <= mark) {
-      showCaption("detonation");
+      showCaption("detonation", clamp01(elapsed / T.detonation), deltaSeconds);
       const t = clamp01(elapsed / T.detonation);
       const out = easeOutCubic(t);
 
@@ -3308,31 +3463,57 @@ export function createCosmicIntro({ pixelRatio } = {}) {
        * ejecta. Behind it, the rock was silhouetted against the flash instead
        * of being lit by it.
        */
+      /*
+       * The camera starts outside it.
+       *
+       * The burst used to detonate eighteen units in front of the lens, which
+       * meant there was never a fireball to look at -- the first frame was
+       * already inside it. The reference is a *ball*: a bright rim, a dark
+       * churning edge, spokes of light coming out through the gaps. You cannot
+       * see any of that from inside.
+       *
+       * So the whole blast starts two hundred units back and is driven at the
+       * camera, arriving past it by the end of the act. You watch it form,
+       * then it takes the frame. Everything drawn at a fixed screen size --
+       * core and rays -- is scaled by the distance so its apparent
+       * size is unchanged as the group closes; only the fog, which has a real
+       * radius, grows the way it should.
+       */
+      const blastZ = lerp(-215, 12, easeInCubic(t));
+      blast.position.z = blastZ;
+      const blastDistance = Math.max(7, 18 - blastZ);
+      const closing = blastDistance / 18;
+
       const flash = Math.exp(-t * 7.5);
-      coreMaterial.opacity = Math.min(1, flash * 1.6);
-      core.scale.setScalar(4 + easeOutCubic(Math.min(1, t * 3.4)) * 42);
+      /*
+       * The core is a highlight, not the subject.
+       *
+       * Once the fog is doing the work, a full-strength flare on top of it
+       * simply erases the middle of the fireball -- and with it the rim, the
+       * churn and the caption. Held well below saturation so the plasma's own
+       * white-hot centre shows through it.
+       */
+      coreMaterial.opacity = Math.min(0.8, flash * 1.05);
+      core.scale.setScalar((4 + easeOutCubic(Math.min(1, t * 3.4)) * 22) * closing);
 
       // Rays: fastest to appear, first to go, counter-rotating as they spread.
       rays.forEach((sprite, index) => {
         const local = clamp01((t - index * 0.04) * 2.6);
-        sprite.material.opacity = Math.exp(-t * (index === 0 ? 5.2 : 4.0)) * (index === 0 ? 1 : 0.62);
-        sprite.scale.setScalar(6 + easeOutCubic(local) * (index === 0 ? 150 : 240));
+        sprite.material.opacity = Math.exp(-t * (index === 0 ? 5.2 : 4.0)) * (index === 0 ? 0.7 : 0.44);
+        sprite.scale.setScalar((6 + easeOutCubic(local) * (index === 0 ? 150 : 240)) * closing);
         sprite.material.rotation += deltaSeconds * (index === 0 ? 0.22 : -0.15);
       });
 
-      // Shockwaves: three fronts, staggered, each thinning as it expands.
-      shockwaves.forEach(({ mesh, material, delay }) => {
-        const local = clamp01((t - delay) / Math.max(0.05, 1 - delay));
-        const radius = easeOutCubic(local) * 190;
-        mesh.scale.setScalar(Math.max(0.001, radius));
-        material.opacity = local <= 0 ? 0 : Math.pow(1 - local, 2.4) * 0.7;
-      });
-
-      // Rock, thrown outward and tumbling. It keeps travelling after the light
-      // has gone, which is what sells the burst as an event with mass in it.
-      layOutDebris(t * 1.15, t * 2.4, Math.min(1, t * 5));
-      blastLight.intensity = Math.pow(1 - t, 1.2) * 3400;
-      blastLight.distance = 400 + t * 3200;
+      /*
+       * The fog, thrown outward. It keeps travelling long after the flash has
+       * gone, which is what sells the burst as an event with something in it
+       * rather than as a light being switched on and off.
+       *
+       * Its brightness is a cooling curve, not the flash curve: the plasma is
+       * its own light source, so it dims as it expands and thins rather than
+       * disappearing with the flare.
+       */
+      layOutPlasma(t * 0.92, Math.min(1, t * 6) * Math.pow(1 - t * 0.66, 1.5) * 0.72);
 
       // Cold haze blooming behind the light.
       /*
@@ -3345,7 +3526,7 @@ export function createCosmicIntro({ pixelRatio } = {}) {
        */
       haze.forEach((sprite) => {
         sprite.material.opacity = Math.sin(clamp01(t * 1.15) * Math.PI) * 0.3;
-        sprite.scale.setScalar(sprite.userData.base * (1 + t * sprite.userData.drift));
+        sprite.scale.setScalar(sprite.userData.base * (1 + t * sprite.userData.drift) * closing);
       });
 
       bubbles.forEach((bubble) => setBubbleOpacity(bubble, 0));
@@ -3359,18 +3540,16 @@ export function createCosmicIntro({ pixelRatio } = {}) {
       const fade = 1 - sinceBlast;
       coreMaterial.opacity = 0;
       rays.forEach((sprite) => { sprite.material.opacity = 0; });
-      shockwaves.forEach(({ material }) => { material.opacity = 0; });
       haze.forEach((sprite) => { sprite.material.opacity *= fade; });
-      blastLight.intensity = Math.pow(fade, 2) * 900;
-      layOutDebris(1.15 + (1 - fade) * 1.9, 2.4 + (1 - fade) * 2, fade);
+      layOutPlasma(1.05 + (1 - fade) * 1.6, Math.pow(fade, 1.5) * 0.26);
     } else if (blast.visible) {
       blast.visible = false;
-      blastLight.intensity = 0;
+      layOutPlasma(2.65, 0);
     }
 
     mark += T.multiverse;
     if (elapsed <= mark) {
-      showCaption("multiverse");
+      showCaption("multiverse", (elapsed - T.detonation) / T.multiverse, deltaSeconds);
       // Drifting among vast, dim shells. Galaxies are not yet resolvable.
       const local = (elapsed - T.detonation) / T.multiverse;
       driftField(lerp(70, 150, local) * deltaSeconds);
@@ -3405,7 +3584,7 @@ export function createCosmicIntro({ pixelRatio } = {}) {
 
     mark += T.approach;
     if (elapsed <= mark) {
-      showCaption("approach");
+      showCaption("approach", 1 - (mark - elapsed) / T.approach, deltaSeconds);
       // One bubble swells until the camera passes through its wall.
       const local = (elapsed - T.detonation - T.multiverse) / T.approach;
       const eased = easeInOutSine(local);
@@ -3418,7 +3597,18 @@ export function createCosmicIntro({ pixelRatio } = {}) {
       // Stars come in as fast as the surface they sit on grows, so the
       // density on screen stays put while the bubble goes from a dot to a sky.
       setBubbleDetail(ours, lerp(0.1, 1, easeInCubic(local)));
-      setBubbleOpacity(ours, lerp(0.8, 0.95, eased));
+      /*
+       * And ours is lit brighter than the ones it drifted past.
+       *
+       * At the same brightness as its neighbours it stayed a dim shell right
+       * up to the moment the camera went through it -- which is the wrong
+       * emphasis entirely. This is the one the whole journey is about, and it
+       * is the one act where a universe is close enough to see anything inside
+       * of. The gain lifts the stars and the galaxies within it without
+       * touching the shell, so the surface stays a membrane rather than
+       * becoming a lamp.
+       */
+      setBubbleOpacity(ours, lerp(0.85, 1, eased), lerp(1.1, 1.9, eased));
       /*
        * Clear the field before the dive, not during it.
        *
@@ -3446,7 +3636,7 @@ export function createCosmicIntro({ pixelRatio } = {}) {
 
     mark += T.galaxies;
     if (elapsed <= mark) {
-      showCaption("galaxies");
+      showCaption("galaxies", 1 - (mark - elapsed) / T.galaxies, deltaSeconds);
       const local = 1 - (mark - elapsed) / T.galaxies;
       setBubbleOpacity(ours, Math.max(0, 0.95 * (1 - local * 2.6)));
       bubbles.forEach((bubble, index) => { if (index > 0) setBubbleOpacity(bubble, 0); });
@@ -3508,7 +3698,7 @@ export function createCosmicIntro({ pixelRatio } = {}) {
 
     mark += T.milkyWay;
     if (elapsed <= mark) {
-      showCaption("milkyWay");
+      showCaption("milkyWay", 1 - (mark - elapsed) / T.milkyWay, deltaSeconds);
       const local = 1 - (mark - elapsed) / T.milkyWay;
       const eased = easeInOutSine(local);
       // Everything else falls away: from here there is only one galaxy.
@@ -3555,7 +3745,7 @@ export function createCosmicIntro({ pixelRatio } = {}) {
 
     mark += T.orionArm;
     if (elapsed <= mark) {
-      showCaption("orionArm");
+      showCaption("orionArm", 1 - (mark - elapsed) / T.orionArm, deltaSeconds);
       const local = 1 - (mark - elapsed) / T.orionArm;
       const eased = easeInCubic(clamp01(local));
       galaxySprites.forEach((sprite) => { applyFade(sprite, 0); });
@@ -3602,7 +3792,7 @@ export function createCosmicIntro({ pixelRatio } = {}) {
 
     mark += T.sunApproach;
     if (elapsed <= mark) {
-      showCaption("sunApproach");
+      showCaption("sunApproach", 1 - (mark - elapsed) / T.sunApproach, deltaSeconds);
       const local = 1 - (mark - elapsed) / T.sunApproach;
       const eased = easeInOutSine(local);
 
@@ -3656,7 +3846,7 @@ export function createCosmicIntro({ pixelRatio } = {}) {
      * place makes the two scenes read as one continuous move rather than as a
      * transition.
      */
-    showCaption("arrive");
+    showCaption("arrive", 1, deltaSeconds);
     const local = clamp01(1 - (total - elapsed) / T.arrive);
     // Everything that is not the star is gone by a third of the way in, so the
     // bloom happens against nothing.

@@ -615,6 +615,18 @@ body.is-cosmic-intro .body-connector {
 
 .cosmic-caption.is-live { opacity: 1; }
 
+/*
+ * No scrim.
+ *
+ * A dark wash behind the text made it perfectly legible over the fireball and
+ * looked like exactly what it was: a black smear laid over the picture. The
+ * frame is the point; a caption is not worth spoiling it for. Contrast now
+ * comes entirely from the type -- near-white at full opacity, with a tight
+ * shadow for edge definition and a wide one for separation -- which holds on
+ * everything this journey passes through without putting anything on top of
+ * it.
+ */
+
 .cosmic-caption__title {
   margin: 0;
   font-size: 0.72rem;
@@ -622,18 +634,33 @@ body.is-cosmic-intro .body-connector {
   font-weight: 400;
   letter-spacing: 0.44em;
   text-transform: uppercase;
-  color: rgba(255, 232, 200, 0.86);
-  text-shadow: 0 0 26px rgba(0, 0, 0, 0.85);
+  position: relative;
+  color: rgba(255, 243, 224, 0.99);
+  /* Two shadows: a tight one for edge definition, a wide one for the wash. */
+  text-shadow:
+    0 1px 1px rgba(0, 0, 0, 0.95),
+    0 0 6px rgba(0, 0, 0, 0.9),
+    0 0 20px rgba(0, 0, 0, 0.8),
+    0 0 44px rgba(0, 0, 0, 0.6);
 }
 
 .cosmic-caption__body {
   margin: 1.05rem 0 0;
-  font-size: 0.85rem;
+  font-size: 0.92rem;
   font-weight: 300;
   line-height: 1.72;
   letter-spacing: 0.03em;
-  color: rgba(222, 214, 206, 0.56);
-  text-shadow: 0 0 24px rgba(0, 0, 0, 0.9);
+  position: relative;
+  /*
+   * Was 56% opaque grey -- elegant on black, invisible on anything else, and
+   * this journey passes through a lot that is not black.
+   */
+  color: rgba(250, 248, 244, 1);
+  text-shadow:
+    0 1px 1px rgba(0, 0, 0, 0.95),
+    0 0 6px rgba(0, 0, 0, 0.9),
+    0 0 18px rgba(0, 0, 0, 0.82),
+    0 0 40px rgba(0, 0, 0, 0.6);
 }
 
 /* A hairline between the two, drawn outward each time the caption changes. */
@@ -651,8 +678,25 @@ body.is-cosmic-intro .body-connector {
   animation: cosmic-caption-in 1600ms cubic-bezier(0.16, 0.84, 0.3, 1) both;
 }
 
-.cosmic-caption.is-live .cosmic-caption__body {
-  animation: cosmic-caption-in 1600ms cubic-bezier(0.16, 0.84, 0.3, 1) 280ms both;
+/*
+ * The body has no animation of its own.
+ *
+ * It carries several lines per act now, cross-faded, and the fade is driven
+ * from the render loop rather than from a keyframe -- partly so it can restart
+ * per line without the remove-reflow-re-add dance, and partly because an
+ * animated value beats an inline style, so a keyframe here would silently win
+ * over the opacity JavaScript is setting.
+ */
+
+/*
+ * The arrival card paces itself with CSS rather than from a render loop.
+ *
+ * The travelling captions set their own opacity every frame, so a transition
+ * here would fight them -- hence the opt-in class. Only the arrival, which is
+ * driven by timers and not by a phase clock, wears it.
+ */
+.cosmic-caption.is-paced .cosmic-caption__body {
+  transition: opacity 420ms ease;
 }
 
 @keyframes cosmic-caption-in {
@@ -661,8 +705,7 @@ body.is-cosmic-intro .body-connector {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .cosmic-caption.is-live .cosmic-caption__title,
-  .cosmic-caption.is-live .cosmic-caption__body { animation: none; }
+  .cosmic-caption.is-live .cosmic-caption__title { animation: none; }
 }
 
 /*

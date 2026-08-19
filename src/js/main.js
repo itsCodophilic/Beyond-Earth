@@ -5514,6 +5514,13 @@ import { createCosmicIntro } from './scene/space/cosmicIntro.js';
    * under an opaque veil.
    */
   const WARM_INTERVAL_MS = 500;
+  /*
+   * The light pass still walks three thousand objects looking for textures it
+   * has not seen. That is a couple of milliseconds -- nothing on its own, and
+   * two or three dropped frames an hour is not worth a stutter budget in the
+   * middle of a camera move. Five seconds apart while the opening is playing.
+   */
+  const WARM_LIGHT_INTERVAL_MS = 5000;
   const WARM_QUIET_INTERVAL_MS = 4000;
   const WARM_QUIET_AFTER = 3;
   const warmedTextures = new WeakSet();
@@ -5526,9 +5533,11 @@ import { createCosmicIntro } from './scene/space/cosmicIntro.js';
     : null;
 
   function warmDestination(now, { force = false, heavy = true } = {}) {
-    const interval = quietWarmPasses >= WARM_QUIET_AFTER
-      ? WARM_QUIET_INTERVAL_MS
-      : WARM_INTERVAL_MS;
+    const interval = !heavy
+      ? WARM_LIGHT_INTERVAL_MS
+      : quietWarmPasses >= WARM_QUIET_AFTER
+        ? WARM_QUIET_INTERVAL_MS
+        : WARM_INTERVAL_MS;
     if (!force && now - lastWarmAt < interval) return;
     lastWarmAt = now;
     const warmStartedAt = arrivalDebug ? performance.now() : 0;
@@ -6161,9 +6170,27 @@ import { createCosmicIntro } from './scene/space/cosmicIntro.js';
       <p class="cosmic-caption__title"></p>
       <p class="cosmic-caption__body"></p>
     `;
+    caption.classList.add("is-paced");
     caption.querySelector(".cosmic-caption__title").textContent = "The Solar System";
-    caption.querySelector(".cosmic-caption__body").textContent =
-      "One star, eight planets, and everything else it holds. You are six light-years out, looking back in.";
+    const arrivalBody = caption.querySelector(".cosmic-caption__body");
+    /*
+     * Three lines, not one.
+     *
+     * Every act of the journey names what it is passing through and then says
+     * one more thing about it; the destination was the only place that got a
+     * single sentence and then went quiet. These are the facts a viewer
+     * actually wants at the moment the system appears: how much of it there is,
+     * where it came from, and where they are standing.
+     */
+    const ARRIVAL_LINES = [
+      "One star, eight planets — and at least five dwarf planets, with more found every few years.",
+      "All of it condensed out of one collapsing cloud of gas and dust, 4.6 billion years ago.",
+      "You are six light-years out, looking back in.",
+    ];
+    const ARRIVAL_LINE_MS = 5200;
+    const ARRIVAL_FADE_MS = 440;
+    arrivalBody.textContent = ARRIVAL_LINES[0];
+    arrivalBody.style.opacity = "1";
     document.body.append(caption);
 
     /*
@@ -6174,8 +6201,23 @@ import { createCosmicIntro } from './scene/space/cosmicIntro.js';
      * over a white screen names nothing. It should appear on the system.
      */
     setTimeout(() => caption.classList.add("is-live"), 560);
-    setTimeout(() => caption.classList.remove("is-live"), 7500);
-    setTimeout(() => caption.remove(), 9500);
+
+    let arrivalLine = 0;
+    const advanceArrivalLine = () => {
+      arrivalLine += 1;
+      if (arrivalLine >= ARRIVAL_LINES.length) {
+        caption.classList.remove("is-live");
+        setTimeout(() => caption.remove(), 1600);
+        return;
+      }
+      arrivalBody.style.opacity = "0";
+      setTimeout(() => {
+        arrivalBody.textContent = ARRIVAL_LINES[arrivalLine];
+        arrivalBody.style.opacity = "1";
+        setTimeout(advanceArrivalLine, ARRIVAL_LINE_MS);
+      }, ARRIVAL_FADE_MS);
+    };
+    setTimeout(advanceArrivalLine, 560 + ARRIVAL_LINE_MS);
   }
 
   /** Hand-off from the burst into the solar system. */
