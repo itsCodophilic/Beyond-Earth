@@ -5502,17 +5502,34 @@ import { createCosmicIntro } from './scene/space/cosmicIntro.js';
     "specularMap", "clearcoatMap", "clearcoatNormalMap", "clearcoatRoughnessMap",
     "iridescenceMap", "sheenColorMap", "transmissionMap", "thicknessMap",
   ];
-  const WARM_INTERVAL_MS = 900;
+  /*
+   * Two speeds, because the two halves cost very different amounts.
+   *
+   * Uploading a few textures is a couple of milliseconds. Compiling and then
+   * drawing the entire scene with culling disabled is twenty to forty, which
+   * is two or three dropped frames -- invisible while the gate is up and
+   * nothing else is rendering, and very visible indeed in the middle of a
+   * camera move through the galaxy. So the heavy half is only allowed when the
+   * opening is *not* on screen, plus once at the hand-over, where it is hidden
+   * under an opaque veil.
+   */
+  const WARM_INTERVAL_MS = 500;
+  const WARM_QUIET_INTERVAL_MS = 4000;
+  const WARM_QUIET_AFTER = 3;
   const warmedTextures = new WeakSet();
   let warmRenderTarget = null;
   let lastWarmAt = -Infinity;
   let lastWarmObjectCount = -1;
+  let quietWarmPasses = 0;
   const arrivalDebug = new URLSearchParams(location.search).get("arrivalDebug") === "1"
     ? (window.__arrival = { warms: [], frames: [], landed: false })
     : null;
 
-  function warmDestination(now, { force = false } = {}) {
-    if (!force && now - lastWarmAt < WARM_INTERVAL_MS) return;
+  function warmDestination(now, { force = false, heavy = true } = {}) {
+    const interval = quietWarmPasses >= WARM_QUIET_AFTER
+      ? WARM_QUIET_INTERVAL_MS
+      : WARM_INTERVAL_MS;
+    if (!force && now - lastWarmAt < interval) return;
     lastWarmAt = now;
     const warmStartedAt = arrivalDebug ? performance.now() : 0;
 
@@ -5524,7 +5541,7 @@ import { createCosmicIntro } from './scene/space/cosmicIntro.js';
      * second and a half. Spread eight at a time across passes 900ms apart, the
      * same work is finished within a few seconds and no frame notices.
      */
-    const WARM_TEXTURES_PER_PASS = 8;
+    const WARM_TEXTURES_PER_PASS = heavy ? 8 : 4;
     let objectCount = 0;
     const pendingTextures = [];
     scene.traverse((object) => {
@@ -5560,7 +5577,20 @@ import { createCosmicIntro } from './scene/space/cosmicIntro.js';
     const changed = force
       || pendingTextures.length > 0
       || objectCount !== lastWarmObjectCount;
+    quietWarmPasses = changed ? 0 : quietWarmPasses + 1;
     lastWarmObjectCount = objectCount;
+    // The textures are already up; without the heavy half there is nothing
+    // left to do this pass.
+    if (changed && !heavy) {
+      if (arrivalDebug) {
+        arrivalDebug.warms.push({
+          t: Math.round(now), objects: objectCount, textures: pendingTextures.length,
+          programs: renderer.info.programs?.length ?? -1,
+          ms: Math.round(performance.now() - warmStartedAt), light: true,
+        });
+      }
+      return;
+    }
     if (!changed) {
       if (arrivalDebug) {
         arrivalDebug.warms.push({
@@ -5632,9 +5662,17 @@ import { createCosmicIntro } from './scene/space/cosmicIntro.js';
       // opening throws, the viewer must still arrive at the solar system --
       // never be left on a black screen, which is exactly what happened when
       // dispose() threw here and killed the loop.
-      // Anything hydrated since the last pass gets uploaded now rather than
-      // on the arrival frame.
-      warmDestination(frameTime);
+      /*
+       * Textures only while the opening is on screen.
+       *
+       * Uploading a handful of maps is a couple of milliseconds and nobody
+       * sees it. Recompiling and redrawing the whole solar system is twenty to
+       * forty, and doing that every second through the approach to the galaxy
+       * is exactly the stutter that showed up in the Milky Way and the Orion
+       * Arm dive. The heavy half waits for the hand-over, where a white veil
+       * covers it.
+       */
+      warmDestination(frameTime, { heavy: false });
 
       let progress = 1;
       try {

@@ -2318,7 +2318,7 @@ export function createCosmicIntro({ pixelRatio } = {}) {
     for (let i = 0; i < spirals.length; i += 1) {
       const group = spirals[i];
       group.userData.nearFade = deepNearFade(group.position.z);
-      group.userData.material.opacity = deepStarLevel * group.userData.nearFade;
+      applyFade(group.userData.points, deepStarLevel * group.userData.nearFade);
     }
   }
 
@@ -2333,6 +2333,7 @@ export function createCosmicIntro({ pixelRatio } = {}) {
     const points = new THREE.Points(buildDeepFieldGeometry(spec, 7200), material);
     points.frustumCulled = false;
     group.userData.material = material;
+    group.userData.points = points;
     group.userData.nearFade = 1;
     group.add(points);
 
@@ -2480,13 +2481,30 @@ export function createCosmicIntro({ pixelRatio } = {}) {
     mesh.scale.setScalar(layer.scale);
     mesh.renderOrder = -1;
     milkyWay.add(mesh);
-    return { material, weight: layer.weight };
+    return { mesh, material, weight: layer.weight };
   });
+
+  /*
+   * Fading is not the same as not drawing.
+   *
+   * An additive sprite at opacity zero contributes nothing and costs exactly
+   * as much as one at full strength: the quad is still rasterised and every
+   * fragment under it is still shaded. With four hundred-odd sprites in the
+   * galaxy alone -- several of them scaled with a group that reaches fifteen
+   * thousand, so each covers the screen many times over -- that is a very
+   * large bill for something invisible. Anything below a quarter of a percent
+   * is taken out of the draw entirely.
+   */
+  const applyFade = (object, opacity) => {
+    const value = opacity > 0 ? opacity : 0;
+    object.material.opacity = value;
+    object.visible = value > 0.0025;
+  };
 
   function setDiscOpacity(level) {
     const value = Math.max(0, level);
     for (let i = 0; i < discLayers.length; i += 1) {
-      discLayers[i].material.opacity = value * discLayers[i].weight;
+      applyFade(discLayers[i].mesh, value * discLayers[i].weight);
     }
   }
 
@@ -2971,14 +2989,24 @@ export function createCosmicIntro({ pixelRatio } = {}) {
     mwClouds.push(sprite);
   }
 
-  /** Fades the in-disc nebulae and the surrounding dust with the galaxy. */
-  function setMilkyWayCloudLevel(level) {
+  /*
+   * Fades the in-disc nebulae and the surrounding dust with the galaxy.
+   *
+   * The envelope takes its own level. It is the halo *outside* the galaxy, and
+   * once the camera is diving into the disc it is behind the shot and cannot
+   * be looked at -- but it is scaled with the group, so at the bottom of the
+   * dive each of its hundred and seventy sprites is tens of thousands of units
+   * across and covers the frame several times. Keeping it lit through the dive
+   * costs more than everything else in the phase put together.
+   */
+  function setMilkyWayCloudLevel(level, envelopeLevel = level) {
     const lit = Math.max(0, level);
+    const halo = Math.max(0, envelopeLevel);
     for (let i = 0; i < mwClouds.length; i += 1) {
-      mwClouds[i].material.opacity = lit * mwClouds[i].userData.weight;
+      applyFade(mwClouds[i], lit * mwClouds[i].userData.weight);
     }
     for (let i = 0; i < mwEnvelope.length; i += 1) {
-      mwEnvelope[i].material.opacity = lit * mwEnvelope[i].userData.weight;
+      applyFade(mwEnvelope[i], halo * mwEnvelope[i].userData.weight);
     }
   }
 
@@ -3198,8 +3226,8 @@ export function createCosmicIntro({ pixelRatio } = {}) {
     for (let i = 0; i < nebulae.length; i += 1) {
       const sprite = nebulae[i];
       const breath = 0.72 + Math.sin(time * 0.22 + sprite.userData.phase) * 0.28;
-      sprite.material.opacity = lit * sprite.userData.weight * breath
-        * edgeFade(sprite.position.z, -420, 340, 520);
+      applyFade(sprite, lit * sprite.userData.weight * breath
+        * edgeFade(sprite.position.z, -420, 340, 520));
     }
     for (let i = 0; i < driftDust.length; i += 1) {
       const sprite = driftDust[i];
@@ -3212,14 +3240,13 @@ export function createCosmicIntro({ pixelRatio } = {}) {
       const z = sprite.position.z;
       const arriving = Math.min(1, Math.max(0, (z + FIELD_DEPTH) / 420));
       const enveloping = z > -520 ? Math.max(0.18, 1 - (z + 520) / 700) : 1;
-      sprite.material.opacity = lit * sprite.userData.weight * breath
-        * arriving * enveloping;
+      applyFade(sprite, lit * sprite.userData.weight * breath * arriving * enveloping);
     }
     for (let i = 0; i < deepSprites.length; i += 1) {
       const sprite = deepSprites[i];
       const breath = 0.8 + Math.sin(time * 0.3 + sprite.userData.phase) * 0.2;
-      sprite.material.opacity = lit * sprite.userData.weight * breath
-        * sprite.userData.owner.userData.nearFade;
+      applyFade(sprite, lit * sprite.userData.weight * breath
+        * sprite.userData.owner.userData.nearFade);
     }
   }
 
@@ -3409,7 +3436,7 @@ export function createCosmicIntro({ pixelRatio } = {}) {
       galaxyGroup.visible = true;
       const reveal = clamp01((eased - 0.4) * 1.7);
       galaxySprites.forEach((sprite) => {
-        sprite.material.opacity = reveal * 0.8 * edgeFade(sprite.position.z, -380, 300, 420);
+        applyFade(sprite, reveal * 0.8 * edgeFade(sprite.position.z, -380, 300, 420));
       });
       setDeepStarLevel(reveal * 0.95);
       setNebulaLevel(reveal, seconds);
@@ -3452,9 +3479,9 @@ export function createCosmicIntro({ pixelRatio } = {}) {
         // and a step across seventy-eight sprites at once reads as the lights
         // being dimmed.
         const shimmer = Math.min(1, local * 4) * Math.min(1, (1 - local) * 4);
-        sprite.material.opacity = (0.8 + Math.sin((local + sprite.position.x) * 2.2)
+        applyFade(sprite, (0.8 + Math.sin((local + sprite.position.x) * 2.2)
           * 0.12 * shimmer)
-          * edgeFade(sprite.position.z, -380, 300, 420);
+          * edgeFade(sprite.position.z, -380, 300, 420));
       });
       setDeepStarLevel(0.95);
       spirals.forEach((points) => { points.rotation.y += deltaSeconds * 0.04; });
@@ -3487,7 +3514,7 @@ export function createCosmicIntro({ pixelRatio } = {}) {
       // Everything else falls away: from here there is only one galaxy.
       const recede = clamp01(1 - local * 1.8);
       galaxySprites.forEach((sprite) => {
-        sprite.material.opacity = recede * 0.8 * edgeFade(sprite.position.z, -380, 300, 420);
+        applyFade(sprite, recede * 0.8 * edgeFade(sprite.position.z, -380, 300, 420));
       });
       setDeepStarLevel(recede * 0.95);
       setNebulaLevel(recede, seconds);
@@ -3531,7 +3558,7 @@ export function createCosmicIntro({ pixelRatio } = {}) {
       showCaption("orionArm");
       const local = 1 - (mark - elapsed) / T.orionArm;
       const eased = easeInCubic(clamp01(local));
-      galaxySprites.forEach((sprite) => { sprite.material.opacity = 0; });
+      galaxySprites.forEach((sprite) => { applyFade(sprite, 0); });
       setDeepStarLevel(0);
       setNebulaLevel(0, seconds);
       // Local stars streaming past, the only cue that the camera is moving
@@ -3558,7 +3585,10 @@ export function createCosmicIntro({ pixelRatio } = {}) {
       // from inside the disc there is no face-on view to have. It retires and
       // the stars carry the shot.
       setDiscOpacity(lerp(1.25, 0, clamp01(local * 1.7)));
-      setMilkyWayCloudLevel(lerp(0.9, 0, clamp01(local * 1.5)));
+      setMilkyWayCloudLevel(
+        lerp(0.9, 0, clamp01(local * 1.5)),
+        lerp(0.9, 0, clamp01(local * 4)),
+      );
       bulgeMaterial.opacity = lerp(1.0, 0, clamp01(local * 1.4));
       bulgeHaloMaterial.opacity = lerp(0.5, 0, clamp01(local * 1.4));
       satelliteMaterial.opacity = lerp(0.6, 0, clamp01(local * 1.2));
