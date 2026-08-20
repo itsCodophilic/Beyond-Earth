@@ -36,13 +36,13 @@ import * as THREE from "three";
  * Current total is a little over 40 seconds.
  */
 export const INTRO_TIMING = {
-  detonation: 5000,
+  detonation: 12000,
   multiverse: 11000,
-  approach: 6000,
+  approach: 6400,
   galaxies: 12000,
   milkyWay: 11000,
   orionArm: 6800,
-  sunApproach: 6200,
+  sunApproach: 6600,
   // Short on purpose: this is a flare and a cut, not a scene.
   arrive: 1500,
 };
@@ -84,7 +84,7 @@ const CAPTIONS = {
     lines: [
       "Not an explosion in space. Space itself, expanding.",
       "Smaller than an atom to larger than a galaxy, in less than a second.",
-      "For 380,000 years it stayed too hot for atoms — a fog of light and bare particles.",
+      "Then a fog of plasma, too hot for atoms, for 380,000 years.",
     ],
   },
   multiverse: {
@@ -99,8 +99,7 @@ const CAPTIONS = {
     title: "Our Universe",
     lines: [
       "This is the bubble we cooled into.",
-      "13.8 billion years old, and 93 billion light-years across.",
-      "Still growing — and the growing is getting faster.",
+      "13.8 billion years old, 93 billion light-years across — and still growing.",
     ],
   },
   galaxies: {
@@ -130,8 +129,7 @@ const CAPTIONS = {
     title: "Our Star",
     lines: [
       "A G-type main-sequence star, 4.6 billion years old.",
-      "It holds 99.86% of all the mass around it.",
-      "Everything else — every world you are about to see — is the rest.",
+      "It holds 99.86% of the mass here. Everything else is the rest.",
     ],
   },
   arrive: null,
@@ -3434,19 +3432,49 @@ export function createCosmicIntro({ pixelRatio } = {}) {
 
     let mark = T.detonation;
     if (elapsed <= mark) {
-      showCaption("detonation", clamp01(elapsed / T.detonation), deltaSeconds);
-      const t = clamp01(elapsed / T.detonation);
+      /*
+       * The flash and the act are two different clocks.
+       *
+       * This is the one place where pacing the animation and pacing the text
+       * genuinely conflict. A detonation is over in a moment -- stretch it and
+       * it stops being a detonation -- but three lines of caption need twelve
+       * seconds to be read. Tying them together meant either a burst in slow
+       * motion or text nobody could finish, and both were tried.
+       *
+       * So the burst runs on a fixed five-second clock and the act runs for
+       * twelve. What fills the remaining seven is exactly what filled them in
+       * reality: the fog. The universe stayed an opaque plasma for a very long
+       * time after the beginning, and the shot now sits inside it, drifting
+       * and cooling, while the text is read.
+       */
+      const BURST_MS = 5000;
+      const spread = elapsed / BURST_MS;
+      const t = clamp01(spread);
+      const act = clamp01(elapsed / T.detonation);
+      showCaption("detonation", act, deltaSeconds);
       const out = easeOutCubic(t);
 
       // Dust is the primordial matter, thrown from the same point.
-      const attribute = dustGeometry.attributes.position;
-      for (let i = 0; i < DUST_COUNT; i += 1) {
-        const i3 = i * 3;
-        attribute.array[i3] = dustOrigin[i3] + (dustTarget[i3] - dustOrigin[i3]) * out;
-        attribute.array[i3 + 1] = dustOrigin[i3 + 1] + (dustTarget[i3 + 1] - dustOrigin[i3 + 1]) * out;
-        attribute.array[i3 + 2] = dustOrigin[i3 + 2] + (dustTarget[i3 + 2] - dustOrigin[i3 + 2]) * out;
+      if (t < 1) {
+        const attribute = dustGeometry.attributes.position;
+        for (let i = 0; i < DUST_COUNT; i += 1) {
+          const i3 = i * 3;
+          attribute.array[i3] = dustOrigin[i3] + (dustTarget[i3] - dustOrigin[i3]) * out;
+          attribute.array[i3 + 1] = dustOrigin[i3 + 1] + (dustTarget[i3 + 1] - dustOrigin[i3 + 1]) * out;
+          attribute.array[i3 + 2] = dustOrigin[i3 + 2] + (dustTarget[i3 + 2] - dustOrigin[i3 + 2]) * out;
+        }
+        attribute.needsUpdate = true;
+      } else {
+        /*
+         * Once it has arrived, it drifts.
+         *
+         * The interpolation writes the same target every frame after t = 1, so
+         * anything else that moved the field would be undone; handing over to
+         * the drift here is what stops the last seven seconds of the act from
+         * being a still photograph with text on it.
+         */
+        driftField(lerp(0, 62, clamp01((spread - 1) / 0.55)) * deltaSeconds);
       }
-      attribute.needsUpdate = true;
       dustMaterial.uniforms.uOpacity.value = Math.min(1, t * 2.4);
       spikeMaterial.opacity = Math.min(1, t * 2.4) * 0.9;
 
@@ -3513,7 +3541,10 @@ export function createCosmicIntro({ pixelRatio } = {}) {
        * its own light source, so it dims as it expands and thins rather than
        * disappearing with the flare.
        */
-      layOutPlasma(t * 0.92, Math.min(1, t * 6) * Math.pow(1 - t * 0.66, 1.5) * 0.72);
+      layOutPlasma(
+        Math.min(2.5, spread * 0.92),
+        Math.min(1, spread * 6) * Math.pow(Math.max(0, 1 - act * 0.96), 1.4) * 0.72,
+      );
 
       // Cold haze blooming behind the light.
       /*
@@ -3525,8 +3556,11 @@ export function createCosmicIntro({ pixelRatio } = {}) {
        * elapsed time bounds it, and makes it frame-rate independent as well.
        */
       haze.forEach((sprite) => {
-        sprite.material.opacity = Math.sin(clamp01(t * 1.15) * Math.PI) * 0.3;
-        sprite.scale.setScalar(sprite.userData.base * (1 + t * sprite.userData.drift) * closing);
+        // The haze breathes across the whole act, not just the flash.
+        sprite.material.opacity = Math.sin(clamp01(act * 1.04) * Math.PI) * 0.32;
+        sprite.scale.setScalar(
+          sprite.userData.base * (1 + Math.min(1.8, spread) * sprite.userData.drift) * closing,
+        );
       });
 
       bubbles.forEach((bubble) => setBubbleOpacity(bubble, 0));
@@ -3541,7 +3575,7 @@ export function createCosmicIntro({ pixelRatio } = {}) {
       coreMaterial.opacity = 0;
       rays.forEach((sprite) => { sprite.material.opacity = 0; });
       haze.forEach((sprite) => { sprite.material.opacity *= fade; });
-      layOutPlasma(1.05 + (1 - fade) * 1.6, Math.pow(fade, 1.5) * 0.26);
+      layOutPlasma(2.5 + (1 - fade) * 0.5, Math.pow(fade, 1.6) * 0.05);
     } else if (blast.visible) {
       blast.visible = false;
       layOutPlasma(2.65, 0);
