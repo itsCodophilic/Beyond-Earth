@@ -91,6 +91,7 @@ export function createIntroSequence({ root } = {}) {
   gate.innerHTML = `
     <button class="intro__singularity" type="button"
             aria-label="Begin the journey through the universe">
+      <span class="intro__spiral" aria-hidden="true"></span>
       <span class="intro__core" aria-hidden="true"></span>
     </button>
     <div class="intro__caption">
@@ -122,6 +123,85 @@ export function createIntroSequence({ root } = {}) {
     // Staggered so the two lines arrive as a thought rather than a block.
     line.style.animationDelay = `${index * 900}ms`;
   });
+
+  /*
+   * The spiral the singularity winds up before it goes.
+   *
+   * Physically this is the accretion beat: something spinning up, shedding
+   * light as it does, faster and faster until it cannot hold. Dramatically it
+   * is the wind-up a detonation needs -- the old gate went from a resting dot
+   * straight into a tremble, which reads as a button being pressed rather than
+   * as something losing its grip.
+   *
+   * The trick is that each spark only ever moves *outward*. The spiral is not
+   * drawn: the emitter rotates, so a spark released a moment ago is further
+   * round than one released now, and the whole set traces an Archimedean
+   * spiral for free. Advance each spark's base angle in step with its head
+   * start and the arms fall out of the arithmetic.
+   *
+   * Deterministic pseudo-random -- modular arithmetic, no `Math.random` -- so
+   * the same arms appear on every run and this module keeps its promise of
+   * doing no work at all per frame. Every value below is a custom property
+   * read by one CSS animation; nothing here runs again after setup.
+   */
+  const SPARK_COUNT = 96;
+  const SPARK_ARMS = 2;
+  const SPARK_LIFE_MS = 2600;
+  const SPARK_BIRTH_PX = 3;
+
+  /*
+   * The three beats, declared up here rather than at the click because the
+   * hand-off from the outward flight to the fall is solved on paper below and
+   * needs to know how long the wind-up runs.
+   */
+  const WIND_MS = 3200;
+  const COLLAPSE_MS = 1400;
+  const CHARGE_TO_PEAK_MS = 700;
+
+  // The opacity curve of `intro-spark`, evaluated in JS. Kept in step with the
+  // keyframes by hand; if those move, move these.
+  const sparkOpacityAt = (phase, peak) => {
+    if (phase < 0.14) return (phase / 0.14) * peak;
+    if (phase < 0.7) return peak - ((phase - 0.14) / 0.56) * peak * 0.5;
+    return peak * 0.5 * (1 - (phase - 0.7) / 0.3);
+  };
+
+  const spiral = gate.querySelector(".intro__spiral");
+  for (let i = 0; i < SPARK_COUNT; i += 1) {
+    const spark = document.createElement("span");
+    spark.className = "intro__spark";
+    const along = i / SPARK_COUNT;
+    // How far into its own flight this spark starts. A negative delay of the
+    // same size draws the arms complete on the first frame rather than growing
+    // them out of a point.
+    const head = along * SPARK_LIFE_MS;
+    const reach = 74 + ((i * 37) % 46);
+    const peak = 0.36 + ((i * 53) % 58) / 100;
+    spark.style.setProperty("--a", `${(along * 360 * SPARK_ARMS).toFixed(2)}deg`);
+    spark.style.setProperty("--d", `${Math.round(-head)}ms`);
+    spark.style.setProperty("--life", `${SPARK_LIFE_MS}ms`);
+    spark.style.setProperty("--reach", `${reach}px`);
+    spark.style.setProperty("--peak", peak.toFixed(2));
+
+    /*
+     * Where this spark actually *is* when the wind-up ends.
+     *
+     * Without this the fall animation restarts every spark at `--reach`, so on
+     * the first frame of the collapse the whole set teleports to the rim and
+     * the spiral reads as a ring. Both timelines are deterministic, so the
+     * position at the seam is arithmetic, not measurement: no layout is read,
+     * nothing runs per frame, and the fall picks up exactly where the flight
+     * left off.
+     */
+    const phase = ((WIND_MS + head) % SPARK_LIFE_MS) / SPARK_LIFE_MS;
+    const from = SPARK_BIRTH_PX + phase * (reach - SPARK_BIRTH_PX);
+    spark.style.setProperty("--from", `${from.toFixed(1)}px`);
+    spark.style.setProperty("--from-s", (0.5 - phase * 0.25).toFixed(3));
+    spark.style.setProperty("--from-o", sparkOpacityAt(phase, peak).toFixed(3));
+    // Outermost first, so the arms are reeled in from the rim as a wave.
+    spark.style.setProperty("--fall", `${Math.round((1 - phase) * 200)}ms`);
+    spiral.append(spark);
+  }
 
   container.append(gate);
 
@@ -228,24 +308,26 @@ export function createIntroSequence({ root } = {}) {
       button.addEventListener("animationend", arrive);
 
       /*
-       * Click -> tremble -> collapse -> detonation.
+       * Click -> wind up -> collapse -> detonation.
        *
-       * The tremble is the whole point of this beat. A mark that simply
-       * brightens and vanishes reads as a button being pressed; a mark that
-       * starts shaking, shakes harder, and then cannot hold itself together
-       * reads as something about to fail catastrophically. The amplitude grows
-       * across SHAKE_MS and the collapse begins at its peak, so the two motions
-       * are continuous rather than sequential.
+       * Three beats, and the order matters. It spins up calmly first, throwing
+       * off light in spiral arms -- nothing is wrong yet, something is only
+       * gathering. Then it loses hold: the arms are dragged back in, the mark
+       * convulses, and it *shrinks* rather than swelling, which is the reading
+       * that makes the blowout after it feel earned. A thing that gets bigger
+       * and bigger and then explodes is a balloon; a thing that collapses to
+       * nothing and then explodes is a singularity.
+       *
+       * The rotation runs across both of the first two beats as one animation,
+       * accelerating throughout, so the collapse is the same motion carrying
+       * on rather than a new one starting.
        */
-      const SHAKE_MS = 1500;
-      const CHARGE_TO_PEAK_MS = 700;
-
       const begin = () => {
         if (button.disabled) return;
         button.removeEventListener("click", begin);
         button.disabled = true;
 
-        button.classList.add("is-shaking");
+        button.classList.add("is-imploding", "is-winding");
         prompt.classList.add("is-spent");
         lore.classList.add("is-entering");
         loreLines.forEach((line, index) => {
@@ -254,17 +336,23 @@ export function createIntroSequence({ root } = {}) {
         });
 
         setTimeout(() => {
+          // It stops holding. The arms come back in and the mark convulses.
+          button.classList.remove("is-winding");
+          button.classList.add("is-collapsing");
+          lore.classList.add("is-spent");
+        }, WIND_MS);
+
+        setTimeout(() => {
           // Charge, then detonate. resolve() fires at the white peak so the
           // WebGL burst starts inside the blowout and the seam is never seen.
-          button.classList.remove("is-shaking");
+          button.classList.remove("is-imploding", "is-collapsing");
           button.classList.add("is-charging");
           container.classList.add("is-detonating");
-          lore.classList.add("is-spent");
           setTimeout(() => {
             gate.classList.remove("is-live");
             resolve();
           }, CHARGE_TO_PEAK_MS);
-        }, SHAKE_MS);
+        }, WIND_MS + COLLAPSE_MS);
       };
       button.addEventListener("click", begin);
 
