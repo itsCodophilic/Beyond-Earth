@@ -14,7 +14,7 @@ import * as THREE from "three";
  * retimed, reordered or cut without a camera path needing to be re-solved.
  *
  * Acts:
- *   detonation  the burst -- a fireball of plasma, its core, and its rays
+ *   inflation   the beginning -- space stretching, then cooling into fire
  *   multiverse  bubble universes drifting in the false vacuum
  *   approach    one bubble swells until the camera passes inside it: ours
  *   galaxies    the fall through resolved galaxies and star dust
@@ -33,24 +33,69 @@ import * as THREE from "three";
 /**
  * Phase durations in milliseconds. Tune freely -- this is the only place
  * timing lives, and the total is derived, so nothing else needs changing.
- * Current total is a little over 40 seconds.
+ *
+ * **Every duration is its caption line count times SECONDS_PER_LINE.**
+ *
+ * That is not a coincidence to be preserved by hand, it is the rule. The acts
+ * used to be timed by what looked right for the animation, which left the text
+ * running anywhere from 3.0 to 4.3 seconds a line -- and a reader who has just
+ * settled into one act's pace and is then given a third less time in the next
+ * one does not experience that as variety, they experience it as not being
+ * able to keep up. The burst was the worst of them and was reported as exactly
+ * that. One rate everywhere means the reader learns the cadence once.
+ *
+ * Adding or cutting a caption line therefore *changes the act's duration*.
+ * That is the correct direction of causation: these are captions with a shot
+ * behind them, not a shot with captions laid over it.
  */
+const SECONDS_PER_LINE = 4.0;
+
 export const INTRO_TIMING = {
-  detonation: 12000,
-  multiverse: 11000,
-  approach: 6400,
-  galaxies: 12000,
-  milkyWay: 11000,
-  orionArm: 6800,
-  sunApproach: 6600,
+  inflation: 12000,     // 3 lines
+  condense: 8000,       // 2
+  multiverse: 8000,     // 2
+  approach: 12000,      // 3
+  cosmicWeb: 12000,     // 3
+  galaxies: 12000,      // 3
+  milkyWay: 12000,      // 3
+  orionArm: 12000,      // 3
+  sunApproach: 8000,    // 2
   // Short on purpose: this is a flare and a cut, not a scene.
   arrive: 1500,
 };
 
 const PHASE_ORDER = [
-  "detonation", "multiverse", "approach", "galaxies",
+  "inflation", "condense", "multiverse", "approach", "cosmicWeb", "galaxies",
   "milkyWay", "orionArm", "sunApproach", "arrive",
 ];
+
+/*
+ * One speed for the whole journey.
+ *
+ * Every act used to set its own, and ramp within it -- 70 to 150 through the
+ * multiverse, 150 to 300 across the crossing, 300 to 470 through the web, 300
+ * back to 175 among the galaxies. Each was reasonable on its own and the set
+ * of them was not: the shot lurched at every boundary, and a change of pace
+ * that nothing in the scene motivates reads as a fault rather than as a move.
+ *
+ * It is now a cruise. Acts vary it only where the physics does -- the burst
+ * expands, the dive into the disc accelerates -- and everything between here
+ * and the Milky Way travels at one steady rate.
+ */
+const CRUISE = 150;
+
+/*
+ * Geometric interpolation: the shape of constant travel.
+ *
+ * Closing on something at a steady speed does not make it grow linearly, it
+ * makes it grow by a constant *factor* per second -- so a linear lerp of a
+ * camera range reads as decelerating, and an eased one reads as stopping.
+ * Every approach in the sequence is written this way now, which is also what
+ * makes their rates comparable: d(ln size)/dt is one number per act, and
+ * matching those numbers is what "the same speed everywhere" actually means
+ * across eleven orders of magnitude of scale.
+ */
+const geometric = (from, to, u) => from * Math.pow(to / from, u);
 
 const FIELD_DEPTH = 2600;
 const FIELD_RADIUS = 640;
@@ -79,35 +124,70 @@ const TAU = Math.PI * 2;
  * reading.
  */
 const CAPTIONS = {
-  detonation: {
+  /*
+   * Four lines, and each one lands on the beat it describes. The third is the
+   * one the act exists for: it arrives while the frame is a uniform field
+   * redshifting with no middle to it, which is the only moment in the whole
+   * sequence where "no centre" can be *seen* rather than asserted.
+   */
+  inflation: {
     title: "The Big Bang",
     lines: [
-      "Not an explosion in space. Space itself, expanding.",
-      "Smaller than an atom to larger than a galaxy, in less than a second.",
-      "Then a fog of plasma, too hot for atoms, for 380,000 years.",
+      "Not an explosion. There was nowhere for it to explode into.",
+      "Space itself stretched — by a factor of 10²⁶, in 10⁻³² of a second.",
+      "Everything recedes from everything. No centre to it, and no edge.",
+    ],
+  },
+  /*
+   * The act that was missing.
+   *
+   * The bubbles used to grow during the last beat of the burst, which meant
+   * they simply started existing while the fog cleared -- the plasma expanded,
+   * and then, unrelatedly, universes were there. The cause was never shown, so
+   * the eye read it as a fade-in with nothing behind it.
+   *
+   * Eternal inflation is the honest account and it is also the better shot:
+   * inflation does not stop everywhere at once, it stops in patches, and each
+   * patch that stops cools and closes off. So the fog is given somewhere to
+   * go -- it gathers, and what it gathers into is the field of universes the
+   * next act drifts through.
+   */
+  condense: {
+    title: "Where It Stopped",
+    lines: [
+      "The stretching did not stop everywhere. It stopped in patches.",
+      "Each patch that stopped cooled, settled, and closed off.",
     ],
   },
   multiverse: {
     title: "The Multiverse",
     lines: [
-      "That expansion may never have stopped.",
-      "Where it did, a bubble cooled — and became a universe.",
+      "Everywhere else, it is still going — and still making more of them.",
       "Each one with its own stars, its own galaxies, perhaps its own physics.",
     ],
   },
   approach: {
     title: "Our Universe",
     lines: [
+      "One of them is ours.",
       "This is the bubble we cooled into.",
       "13.8 billion years old, 93 billion light-years across — and still growing.",
     ],
   },
-  galaxies: {
-    title: "Two Trillion Galaxies",
+  cosmicWeb: {
+    title: "The Cosmic Web",
     lines: [
-      "Every mote of light here is an island of a hundred billion stars.",
+      "Matter never spread out evenly. It fell into threads.",
+      "Nothing here is a galaxy. Every knot is a cluster of thousands of them.",
+      "And between the threads, voids — the emptiest places that exist.",
+    ],
+  },
+  galaxies: {
+    title: "Laniakea",
+    lines: [
+      "We have dropped into one crossing of the web.",
+      "A hundred thousand galaxies, all falling toward the same place.",
       "Spirals, starbursts, collisions — no two of them alike.",
-      "The dust between them is older than any of the stars in it.",
     ],
   },
   milkyWay: {
@@ -118,10 +198,17 @@ const CAPTIONS = {
       "Ours.",
     ],
   },
+  /*
+   * Three lines, and the act is a third longer for it -- which is the point.
+   * This is the steepest change of scale in the sequence by a wide margin, and
+   * at two lines it had to be taken at nearly three times the rate of the act
+   * before it. The extra line buys the time to slow the dive down.
+   */
   orionArm: {
     title: "The Orion Arm",
     lines: [
       "26,000 light-years from the centre, on the inner rim of a minor arm.",
+      "The disc is a thousand light-years thick. We are dropping into it.",
       "Between Perseus and Carina–Sagittarius. Nowhere special.",
     ],
   },
@@ -138,6 +225,25 @@ const CAPTIONS = {
 function phaseTotal() {
   return PHASE_ORDER.reduce((sum, key) => sum + INTRO_TIMING[key], 0);
 }
+
+/*
+ * The reading rate, enforced.
+ *
+ * Durations and caption line counts drift apart the moment either is edited on
+ * its own, and the symptom -- one act reading a third faster than its
+ * neighbours -- is much easier to feel than to spot. One line at start-up, and
+ * it names the act and the duration it should have had.
+ */
+PHASE_ORDER.forEach((key) => {
+  const lines = CAPTIONS[key]?.lines?.length ?? 0;
+  if (!lines) return;
+  const expected = Math.round(lines * SECONDS_PER_LINE * 1000);
+  if (INTRO_TIMING[key] === expected) return;
+  console.warn(
+    `[BeyondEarth] ${key}: ${INTRO_TIMING[key]}ms for ${lines} caption lines`
+    + ` — ${expected}ms is ${SECONDS_PER_LINE}s a line`,
+  );
+});
 
 /* ------------------------------------------------------------- textures */
 
@@ -161,11 +267,11 @@ function createGlowTexture(core = "rgba(255,255,255,1)", mid = "rgba(255,206,150
 /**
  * The spike flare.
  *
- * This is what separates an explosion from a light being switched on. A pure
- * radial gradient can only ever brighten; rays give the burst a direction and
- * a shape, and it is the thing every photograph of a detonation actually
- * shows. Spikes are drawn at uneven angles and uneven lengths on purpose --
- * evenly spaced ones read as a lens artefact rather than as light escaping.
+ * What separates a star from a light being switched on. A pure radial
+ * gradient can only ever brighten; spikes give a source a shape, and they are
+ * what any real lens does with something far too bright for it. Drawn at
+ * uneven angles and uneven lengths on purpose -- evenly spaced ones read as a
+ * rendering artefact rather than as light overwhelming an aperture.
  */
 function createRayTexture(spikes = 22) {
   const size = 512;
@@ -889,7 +995,7 @@ function createGalaxyDiscTexture(size = 1024) {
   });
 
   // ---- a scatter of resolved foreground stars over the whole disc
-  for (let i = 0; i < 420; i += 1) {
+  for (let i = 0; i < 260; i += 1) {
     const angle = random() * TAU;
     const r = Math.pow(random(), 0.5) * R * 1.05;
     blob(Math.cos(angle) * r, Math.sin(angle) * r, R * (0.002 + random() * 0.005),
@@ -975,6 +1081,215 @@ const DEEP_FIELD_OBJECTS = [
 ];
 
 /** Bubble universes: iridescent shells, strongly varied in hue. */
+/*
+ * A universe, painted.
+ *
+ * The bubbles were a shell of points, which gave two problems at once. They
+ * were see-through, so one in front of another showed the one behind and the
+ * field read as soap film rather than as the fullest objects that exist. And
+ * they were all the same: one star distribution, one palette rule, so the only
+ * thing telling them apart was a tint on the rim.
+ *
+ * They are painted discs now -- one texture each, drawn once at setup, every
+ * one a different kind of universe. Some are all nebula; some are a fine even
+ * speckle; some are threaded with filaments; some burn; some are almost empty
+ * with one bright core. That is the point of a multiverse: not many copies of
+ * this one, but many that are *not* this one, with their own contents and
+ * possibly their own physics.
+ *
+ * Painted into a circle with nothing outside it, so the material can use
+ * alphaTest and render in the opaque pass -- which is the only way one bubble
+ * occludes another (see the note on the transparent pass in createBubble).
+ */
+const UNIVERSE_KINDS = [
+  "nebula", "speckle", "filament", "ember", "veil", "swarm", "core", "ring", "shards", "clouded",
+];
+
+function createUniverseTexture(kind, palette, seed) {
+  const size = 256;
+  const half = size / 2;
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const context = canvas.getContext("2d");
+
+  // Deterministic per texture: the same universe every run.
+  let state = (seed * 9301 + 49297) % 233280;
+  const rnd = () => { state = (state * 9301 + 49297) % 233280; return state / 233280; };
+
+  const [a, b] = palette;
+  const rgb = (c, alpha) => `rgba(${Math.round(c[0] * 255)},${Math.round(c[1] * 255)},${Math.round(c[2] * 255)},${alpha})`;
+  const mix = (p, q, t) => [p[0] + (q[0] - p[0]) * t, p[1] + (q[1] - p[1]) * t, p[2] + (q[2] - p[2]) * t];
+
+  context.save();
+  context.beginPath();
+  context.arc(half, half, half - 2, 0, TAU);
+  context.clip();
+
+  // The ground it is all drawn on: nearly black, faintly of its own colour.
+  context.fillStyle = rgb(mix(a, [0, 0, 0], 0.92), 1);
+  context.fillRect(0, 0, size, size);
+
+  const blob = (x, y, r, colour, alpha) => {
+    const gradient = context.createRadialGradient(x, y, 0, x, y, r);
+    gradient.addColorStop(0, rgb(colour, alpha));
+    gradient.addColorStop(0.45, rgb(colour, alpha * 0.42));
+    gradient.addColorStop(1, rgb(colour, 0));
+    context.fillStyle = gradient;
+    context.fillRect(x - r, y - r, r * 2, r * 2);
+  };
+
+  context.globalCompositeOperation = "lighter";
+
+  if (kind === "nebula") {
+    for (let i = 0; i < 14; i += 1) {
+      blob(rnd() * size, rnd() * size, 40 + rnd() * 120, mix(a, b, rnd()), 0.30 + rnd() * 0.3);
+    }
+    for (let i = 0; i < 60; i += 1) {
+      context.strokeStyle = rgb(mix(a, b, rnd()), 0.12 + rnd() * 0.16);
+      context.lineWidth = 1 + rnd() * 3;
+      context.beginPath();
+      const x = rnd() * size;
+      const y = rnd() * size;
+      context.moveTo(x, y);
+      context.quadraticCurveTo(x + (rnd() - 0.5) * 150, y + (rnd() - 0.5) * 150,
+        x + (rnd() - 0.5) * 220, y + (rnd() - 0.5) * 220);
+      context.stroke();
+    }
+  } else if (kind === "speckle") {
+    for (let i = 0; i < 2400; i += 1) {
+      const c = mix(a, b, rnd());
+      context.fillStyle = rgb(c, 0.25 + rnd() * 0.6);
+      const r = 0.6 + rnd() * 1.8;
+      context.fillRect(rnd() * size, rnd() * size, r, r);
+    }
+    blob(half, half, half, mix(a, b, 0.5), 0.1);
+  } else if (kind === "filament") {
+    for (let i = 0; i < 90; i += 1) {
+      const c = mix(a, b, rnd());
+      context.strokeStyle = rgb(c, 0.2 + rnd() * 0.5);
+      context.lineWidth = 0.6 + rnd() * 1.6;
+      context.beginPath();
+      /*
+       * Curves, not segments. A polyline of four straight hops reads as
+       * wireframe -- which is exactly what it looked like -- and nothing in a
+       * universe is made of straight lines meeting at corners.
+       */
+      let x = rnd() * size;
+      let y = rnd() * size;
+      context.moveTo(x, y);
+      for (let k = 0; k < 3; k += 1) {
+        const cx = x + (rnd() - 0.5) * 110;
+        const cy = y + (rnd() - 0.5) * 110;
+        x += (rnd() - 0.5) * 150;
+        y += (rnd() - 0.5) * 150;
+        context.quadraticCurveTo(cx, cy, x, y);
+      }
+      context.stroke();
+    }
+    for (let i = 0; i < 22; i += 1) blob(rnd() * size, rnd() * size, 12 + rnd() * 34, b, 0.4);
+  } else if (kind === "ember") {
+    for (let i = 0; i < 26; i += 1) {
+      blob(rnd() * size, rnd() * size, 30 + rnd() * 90, mix(a, b, rnd() * 0.6), 0.4 + rnd() * 0.4);
+    }
+    /*
+     * The dark lanes between the cells: the only place anything subtracts.
+     * Kept faint and round-capped -- at half alpha with square ends they cut
+     * hard black gashes through the disc that read as tears in the image
+     * rather than as anything inside a universe.
+     */
+    context.globalCompositeOperation = "destination-out";
+    context.lineCap = "round";
+    context.lineJoin = "round";
+    for (let i = 0; i < 34; i += 1) {
+      context.strokeStyle = "rgba(0,0,0,0.16)";
+      context.lineWidth = 3 + rnd() * 9;
+      context.beginPath();
+      const x = rnd() * size;
+      const y = rnd() * size;
+      context.moveTo(x, y);
+      context.quadraticCurveTo(x + (rnd() - 0.5) * 120, y + (rnd() - 0.5) * 120,
+        x + (rnd() - 0.5) * 190, y + (rnd() - 0.5) * 190);
+      context.stroke();
+    }
+    context.globalCompositeOperation = "lighter";
+  } else if (kind === "veil") {
+    blob(half + (rnd() - 0.5) * 90, half + (rnd() - 0.5) * 90, half * 1.1, mix(a, b, 0.4), 0.34);
+    for (let i = 0; i < 4; i += 1) blob(rnd() * size, rnd() * size, 30 + rnd() * 60, b, 0.3);
+  } else if (kind === "core") {
+    // Nearly empty, with one thing burning in the middle of it.
+    blob(half, half, half * 0.95, mix(a, b, 0.3), 0.12);
+    blob(half + (rnd() - 0.5) * 40, half + (rnd() - 0.5) * 40, 20 + rnd() * 40, [1, 1, 1], 0.85);
+    blob(half, half, 70 + rnd() * 50, b, 0.32);
+  } else if (kind === "ring") {
+    // A bright annulus: everything gathered on one shell and the middle dark.
+    const ring = context.createRadialGradient(half, half, half * 0.34, half, half, half * 0.92);
+    ring.addColorStop(0, rgb(a, 0));
+    ring.addColorStop(0.55, rgb(mix(a, b, 0.5), 0.34));
+    ring.addColorStop(0.86, rgb(b, 0.8));
+    ring.addColorStop(1, rgb(b, 0.05));
+    context.fillStyle = ring;
+    context.fillRect(0, 0, size, size);
+    for (let i = 0; i < 16; i += 1) blob(rnd() * size, rnd() * size, 14 + rnd() * 34, a, 0.28);
+  } else if (kind === "shards") {
+    // Broken up: many small hard-edged patches rather than any continuum.
+    for (let i = 0; i < 190; i += 1) {
+      context.fillStyle = rgb(mix(a, b, rnd()), 0.16 + rnd() * 0.42);
+      context.save();
+      context.translate(rnd() * size, rnd() * size);
+      context.rotate(rnd() * TAU);
+      const w = 3 + rnd() * 22;
+      context.fillRect(-w / 2, -w / 8, w, Math.max(1, w / 4));
+      context.restore();
+    }
+  } else if (kind === "clouded") {
+    // Thick and smooth, almost overcast: very little structure resolves.
+    for (let i = 0; i < 7; i += 1) {
+      blob(half + (rnd() - 0.5) * 150, half + (rnd() - 0.5) * 150,
+        90 + rnd() * 130, mix(a, b, rnd()), 0.26 + rnd() * 0.2);
+    }
+  } else {
+    // swarm: a very dense fine grain, almost monochrome.
+    for (let i = 0; i < 4600; i += 1) {
+      const bright = 0.35 + rnd() * 0.65;
+      context.fillStyle = `rgba(255,255,255,${(0.12 + rnd() * 0.4).toFixed(3)})`;
+      context.fillRect(rnd() * size, rnd() * size, bright, bright);
+    }
+    blob(half, half, half * 0.9, mix(a, b, rnd()), 0.12);
+  }
+
+  // Stars, in every one of them.
+  for (let i = 0; i < 260; i += 1) {
+    const alpha = 0.25 + Math.pow(rnd(), 2) * 0.75;
+    context.fillStyle = `rgba(255,255,255,${alpha.toFixed(3)})`;
+    const r = 0.5 + Math.pow(rnd(), 3) * 2.2;
+    context.beginPath();
+    context.arc(rnd() * size, rnd() * size, r, 0, TAU);
+    context.fill();
+  }
+
+  /*
+   * The limb.
+   *
+   * A flat disc of texture is a coin. Real ones in the reference all carry a
+   * bright ring hard against the edge -- the film seen edge-on, where the line
+   * of sight passes through most of it -- and that single detail is what makes
+   * a circle read as a sphere.
+   */
+  const limb = context.createRadialGradient(half, half, half * 0.62, half, half, half);
+  limb.addColorStop(0, rgb(b, 0));
+  limb.addColorStop(0.82, rgb(b, 0.14));
+  limb.addColorStop(0.95, rgb(b, 0.5));
+  limb.addColorStop(1, rgb(mix(b, [1, 1, 1], 0.4), 0.75));
+  context.fillStyle = limb;
+  context.fillRect(0, 0, size, size);
+  context.restore();
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  return texture;
+}
+
 const UNIVERSE_PAIRS = [
   [[0.52, 0.36, 0.96], [0.24, 0.82, 0.92]],
   [[0.20, 0.68, 0.86], [0.66, 0.94, 0.78]],
@@ -982,6 +1297,11 @@ const UNIVERSE_PAIRS = [
   [[0.32, 0.74, 0.52], [0.84, 0.92, 0.44]],
   [[0.84, 0.36, 0.70], [0.44, 0.44, 0.98]],
   [[0.28, 0.42, 0.92], [0.86, 0.62, 0.98]],
+  [[1.00, 0.62, 0.16], [1.00, 0.90, 0.44]],
+  [[0.96, 0.24, 0.52], [1.00, 0.62, 0.86]],
+  [[0.16, 0.86, 0.72], [0.62, 1.00, 0.90]],
+  [[0.70, 0.72, 0.78], [0.94, 0.96, 1.00]],
+  [[0.58, 0.22, 0.90], [0.30, 0.60, 1.00]],
 ];
 
 /**
@@ -1021,6 +1341,169 @@ const COSMIC_DUST_COLOURS = [
  * along with brightness, because a real star appears to grow when it scintillates
  * -- the airy disc is fixed, but the bloom around it is not.
  */
+/*
+ * The expanding universe, as a vertex shader.
+ *
+ * Every grain holds a fixed *comoving* coordinate -- a direction and a log
+ * radius -- and its proper position is that coordinate scaled by a(t). One
+ * multiply, and Hubble's law falls out of it: differentiate x = chi * a and
+ * you get dx/dt = (a'/a) * x = H * x. A grain twice as far recedes twice as
+ * fast, because the fabric between it and everything else is stretching, not
+ * because it is travelling. Nothing here is thrown.
+ *
+ * Radius is carried as a logarithm and wrapped, because expansion is a
+ * *translation* in log space: ln r = ln r0 + ln a. Wrapping a translation
+ * gives a distribution that is exactly stationary, so the field stays evenly
+ * filled forever, at every rate of expansion, with no edge and no rim and
+ * nothing to recycle on the CPU. A grain leaving the far end reappears at the
+ * near end on its own ray, and the fade window at each end means it is never
+ * seen to do it.
+ *
+ * `uK` is the wavenumber of the primordial fluctuation field. It *falls* over
+ * the act, so a fine quantum speckle coarsens into patches degrees across --
+ * which is not a decoration, it is the single most consequential thing that
+ * happened here. Those patches are the seeds every galaxy grew from, and they
+ * are still on the sky as the anisotropies of the microwave background.
+ */
+const EXPANSION_VERTEX = /* glsl */`
+  attribute vec3 aDir;
+  attribute float aLog;
+  attribute float aJitter;
+  uniform float uLogA;
+  uniform float uSpan;
+  uniform float uNear;
+  uniform float uOriginZ;
+  uniform float uSize;
+  uniform float uTemp;
+  uniform float uCold;
+  uniform float uRipple;
+  uniform float uK;
+  uniform float uGain;
+  varying float vFade;
+  varying vec3 vColour;
+
+  float fluctuation(vec3 d, float k) {
+    float a = sin(d.x * k * 3.1 + 1.7) * sin(d.y * k * 2.3 - 0.4) * sin(d.z * k * 2.9 + 2.2);
+    float b = sin(d.x * k * 7.3 - 2.1) * sin(d.y * k * 6.1 + 0.9) * sin(d.z * k * 5.7 - 1.3);
+    return a + b * 0.5;
+  }
+
+  void main() {
+    float l = mod(aLog + uLogA, uSpan);
+    float r = exp(uNear + l);
+    vec3 p = aDir * r + vec3(0.0, 0.0, uOriginZ);
+
+    float u = l / uSpan;
+    vFade = smoothstep(0.0, 0.10, u) * (1.0 - smoothstep(0.70, 1.0, u));
+
+    // The whole field redshifts together. This is the signature of expansion
+    // seen from inside it -- and the observation Hubble's law was read off.
+    vec3 hot  = vec3(1.000, 0.955, 0.885);
+    vec3 warm = vec3(1.000, 0.706, 0.310);
+    vec3 cool = vec3(0.850, 0.244, 0.110);
+    /*
+     * Every grain sits at its own point on the curve, spread around the mean.
+     * A fire is never one colour; a field that is drives straight past plasma
+     * and lands on television static, which is what the first pass looked
+     * like -- correct in brightness, monochrome, and completely inert.
+     */
+    float t = clamp(uTemp + (aJitter - 0.42) * 0.62, 0.0, 1.0);
+    vec3 c = t < 0.5 ? mix(hot, warm, t * 2.0) : mix(warm, cool, (t - 0.5) * 2.0);
+    // Inflation leaves the universe cold, empty and dark. It is not a fire
+    // yet; the fire is what the vacuum decays into when the stretching stops.
+    c = mix(c, vec3(0.517, 0.596, 0.905), uCold);
+
+    float ripple = 1.0 + fluctuation(aDir, uK) * uRipple;
+    // uGain is allowed above one. Additive blending clips the excess to white,
+    // which is the only honest way to draw something too bright to look at --
+    // and reheating is exactly that: the whole of space catching fire at once.
+    vColour = c * (0.52 + aJitter * 0.78) * max(0.0, ripple) * uGain;
+
+    vec4 viewPosition = modelViewMatrix * vec4(p, 1.0);
+    float depth = max(1.0, -viewPosition.z);
+    /*
+     * A gentle depth cue, deliberately clamped hard at both ends. Full
+     * attenuation makes the near grains coin-sized and drives the far ones
+     * below a pixel, which turns a fog into a tunnel with a vanishing point in
+     * the middle of it -- and a vanishing point reads as a centre.
+     */
+    gl_PointSize = uSize * (0.55 + aJitter * 0.9) * clamp(150.0 / depth, 1.15, 2.0);
+    gl_Position = projectionMatrix * viewPosition;
+  }
+`;
+
+const EXPANSION_FRAGMENT = /* glsl */`
+  uniform sampler2D uMap;
+  uniform float uOpacity;
+  varying float vFade;
+  varying vec3 vColour;
+  void main() {
+    vec4 texel = texture2D(uMap, gl_PointCoord);
+    float alpha = texel.a * uOpacity * vFade;
+    if (alpha <= 0.004) discard;
+    gl_FragColor = vec4(vColour, alpha);
+  }
+`;
+
+/*
+ * The cosmic web's own shader.
+ *
+ * It cannot use the dust one. That derives point size from view depth with no
+ * floor, which is right for a field a few hundred units deep and useless for a
+ * structure that runs to twelve thousand: every thread past the first couple of
+ * knots comes out under a pixel and the whole web renders as an empty sky. The
+ * only change that matters is the clamp -- attenuation still gives the near
+ * filaments their weight, but nothing is ever allowed to vanish.
+ *
+ * No twinkle either. The dust twinkles because it is stars; a filament is gas
+ * and dark matter, and it does not do anything.
+ */
+const WEB_VERTEX = /* glsl */`
+  attribute vec3 aColour;
+  attribute float aScale;
+  uniform float uSize;
+  uniform float uAtten;
+  uniform float uMinPx;
+  uniform float uMaxPx;
+  uniform float uBall;
+  uniform vec3 uBallCentre;
+  uniform float uBallRadius;
+  varying vec3 vColour;
+  varying float vBall;
+  void main() {
+    vColour = aColour;
+    /*
+     * Rounded off at the edges while it is nested inside a universe.
+     *
+     * The web is built as a slab -- wide, shallow, rectangular -- which is
+     * invisible from inside it and unmistakable from outside: scaled down to
+     * sit within a bubble it read as a bright rectangle floating in the middle
+     * of the shot. Nothing in the universe has corners. This dissolves the
+     * corners into a sphere when it is being seen from outside, and does
+     * nothing at all once the camera is within it.
+     */
+    float reach = length(position - uBallCentre) / uBallRadius;
+    vBall = mix(1.0, 1.0 - smoothstep(0.55, 1.0, reach), uBall);
+    vec4 viewPosition = modelViewMatrix * vec4(position, 1.0);
+    float depth = max(1.0, -viewPosition.z);
+    gl_PointSize = clamp(uSize * aScale * (uAtten / depth), uMinPx, uMaxPx);
+    gl_Position = projectionMatrix * viewPosition;
+  }
+`;
+
+const WEB_FRAGMENT = /* glsl */`
+  uniform sampler2D uMap;
+  uniform float uOpacity;
+  varying vec3 vColour;
+  varying float vBall;
+  void main() {
+    vec4 texel = texture2D(uMap, gl_PointCoord);
+    float alpha = texel.a * uOpacity * vBall;
+    if (alpha <= 0.004) discard;
+    gl_FragColor = vec4(vColour, alpha);
+  }
+`;
+
 const DUST_VERTEX = /* glsl */`
   attribute vec3 aColour;
   attribute float aPhase;
@@ -1132,6 +1615,25 @@ export function createCosmicIntro({ pixelRatio } = {}) {
   const disposables = [];
   const track = (resource) => { disposables.push(resource); return resource; };
 
+  /*
+   * Build stopwatch, on ?introBuild=1 only.
+   *
+   * The click cannot yield while this function runs, so every millisecond in
+   * here is a millisecond the viewer spends looking at a cover. Knowing which
+   * section owns them is the difference between trimming the right thing and
+   * guessing.
+   */
+  const buildLog = new URLSearchParams(location.search).get("introBuild") === "1"
+    ? (window.__introBuild = [])
+    : null;
+  let buildAt = buildLog ? performance.now() : 0;
+  const buildMark = (name) => {
+    if (!buildLog) return;
+    const now = performance.now();
+    buildLog.push(name + " " + Math.round(now - buildAt) + "ms");
+    buildAt = now;
+  };
+
   /* ------------------------------------------------------------ captions */
 
   const caption = document.createElement("div");
@@ -1228,214 +1730,226 @@ export function createCosmicIntro({ pixelRatio } = {}) {
     }
   }
 
-  /* --------------------------------------------------------- the detonation */
+  buildMark("before the beginning");
+  /* ---------------------------------------------------------- the beginning */
+
+  /*
+   * The Big Bang was not an explosion, and this used to be drawn as one.
+   *
+   * There was a bright core, two flares, a ring of haze and 38,000 grains
+   * thrown outward from one place with fixed velocities. Every one of those
+   * is a claim about the physics and every one of them is false. An explosion
+   * has a centre, a front, and somewhere to expand *into*; the early universe
+   * had none of the three. What happened was metric expansion -- space itself
+   * stretching, everywhere at once -- and that is not the same event told
+   * differently. It looks different, so it has to be drawn differently.
+   *
+   * What went, and why:
+   *
+   *   the core     a bright middle is a centre, and there is no centre
+   *   the rays     spokes radiate *from* somewhere
+   *   the haze     a ring at a fixed radius is a shock front
+   *   velocities   things travelling through space, which is the wrong verb
+   *
+   * What is left is a field at fixed comoving coordinates, scaled by a(t) in
+   * the vertex shader. See EXPANSION_VERTEX above for the arithmetic.
+   */
 
   const blast = new THREE.Group();
   scene.add(blast);
 
   /*
-   * No lights at all in this scene any more.
+   * The observer is offset from the origin of the scaling, and which way round
+   * matters more than it looks.
    *
-   * They existed for one reason: a field of shaded rock fragments thrown out
-   * of the blast, which needed something to light it. There was no rock in the
-   * Big Bang -- no atoms for a hundred thousand years, let alone minerals --
-   * and it looked exactly as wrong as it was: flat-shaded shards tumbling
-   * across an additive flash read as paper, not as matter. The fireball is a
-   * plasma fog now, which is both what it was and what it looks like, and
-   * plasma is emissive. Everything in the scene composites additively and
-   * ignores lighting entirely.
+   * First, why offset at all. Under exact Hubble flow centred on the observer,
+   * *nothing moves on screen*: scaling a point by a leaves x/z unchanged, and
+   * x/z is its screen position. A literal implementation renders a field that
+   * recedes without ever appearing to -- which is a true statement about a
+   * comoving observer and a dead one about a shot. Real observers are not
+   * exactly comoving anyway; our own galaxy runs at some six hundred
+   * kilometres a second with respect to the microwave background. The offset
+   * is that peculiar velocity, and it is what makes the flow visible.
+   *
+   * Second, the sign. The first attempt put the origin *behind* the lens, and
+   * the field converged: work the projection through and the screen angle of a
+   * grain falls from ninety degrees toward its asymptote as its radius grows,
+   * so everything drifted inward and the shot read as flying backwards. The
+   * origin has to be in front. Then the angle rises to the asymptote instead
+   * and the field opens outward, which is what expansion looks like from a
+   * point that is not the centre of it.
+   *
+   * Third, the near radius is larger than the offset, deliberately. If grains
+   * could exist closer to the origin than the camera is, they would all stream
+   * out of one bright spot in the middle of the frame -- a radiant, which is a
+   * centre, which is the whole thing this act exists to deny. Starting the
+   * shell outside the offset means the nearest grains are already spread
+   * across the frame and past its edges, and there is nowhere for the eye to
+   * find a middle.
    */
+  const EXPANSION_COUNT = 88000;
+  const EXPANSION_ORIGIN_Z = -30;
+  const EXPANSION_NEAR = 34;
+  const EXPANSION_SPAN = 3.0;      // ln(far / near): about 20x in radius
 
-  const coreMaterial = track(new THREE.SpriteMaterial({
-    map: track(createGlowTexture("rgba(255,255,255,1)", "rgba(255,214,146,0.78)", 0.26)),
-    transparent: true,
-    depthWrite: false,
-    blending: THREE.AdditiveBlending,
-    opacity: 0,
-  }));
-  coreMaterial.depthTest = false;
-  const core = new THREE.Sprite(coreMaterial);
-  core.renderOrder = 6;
-  core.position.set(0, 0, -18);
-  core.scale.setScalar(3);
-  blast.add(core);
-
-  // Two flares, counter-rotating. One alone reads as a static graphic.
-  const rayTexture = track(createRayTexture(22));
-  const rays = [0, 1].map((index) => {
-    const material = track(new THREE.SpriteMaterial({
-      map: rayTexture,
-      transparent: true,
-      depthWrite: false,
-      blending: THREE.AdditiveBlending,
-      opacity: 0,
-      color: new THREE.Color(index === 0 ? 0xffffff : 0xffb257),
-    }));
-    material.depthTest = false;
-    const sprite = new THREE.Sprite(material);
-    sprite.renderOrder = 5;
-    sprite.position.set(0, 0, -19);
-    sprite.scale.setScalar(3);
-    sprite.material.rotation = index * 0.7;
-    blast.add(sprite);
-    return sprite;
-  });
-
-  /*
-   * No shockwave rings.
-   *
-   * There were three, staggered, expanding -- a perfectly circular annulus of
-   * constant width, which is the single most computer-generated shape it is
-   * possible to draw. It got away with it while the blast was eighteen units
-   * from the lens and everything was blown out anyway; the moment the burst
-   * was moved back far enough to be seen as an object, it became a clean white
-   * hoop laid over the fireball. The fog has a front of its own, and that
-   * front is granular and uneven, which is what a shock actually looks like.
-   */
-
-  /*
-   * The smoke around the fireball.
-   *
-   * Warm, not cold. The old haze was blue -- a reasonable guess for deep space
-   * and completely wrong for this moment: the early universe was an opaque
-   * plasma glowing at thousands of degrees, and every rendering of it looks
-   * like a furnace, not like a nebula. Amber through to ember, and there are
-   * more of them, because in the reference the fog is the frame.
-   */
-  const hazeTexture = track(createGlowTexture("rgba(255,220,158,0.5)", "rgba(226,102,32,0.26)", 0.42));
-  const haze = [];
-  for (let i = 0; i < 13; i += 1) {
-    const material = track(new THREE.SpriteMaterial({
-      map: hazeTexture,
-      transparent: true,
-      depthWrite: false,
-      depthTest: false,
-      blending: THREE.AdditiveBlending,
-      opacity: 0,
-    }));
-    const sprite = new THREE.Sprite(material);
-    sprite.renderOrder = 3;
-    const angle = random() * TAU;
-    // Pushed out to a ring rather than sat on the core, so the cloud frames
-    // the light instead of drowning it.
-    const radius = 18 + random() * 46;
-    sprite.position.set(Math.cos(angle) * radius, Math.sin(angle) * radius * 0.8, -26 - random() * 44);
-    sprite.userData.base = 26 + random() * 54;
-    sprite.userData.drift = 0.9 + random() * 1.5;
-    sprite.scale.setScalar(sprite.userData.base);
-    blast.add(sprite);
-    haze.push(sprite);
-  }
-
-  /*
-   * The fireball, as plasma.
-   *
-   * The reference is a wall of incandescent fog: countless grains, brightest
-   * where the light is coming from, cooling from white through amber to a deep
-   * ember at the front, with a defined rim and long spokes of light escaping
-   * through the gaps. What it very much is not is objects. There were no
-   * objects -- for the first few hundred thousand years the universe was too
-   * hot for an atom to hold together, never mind a rock.
-   *
-   * So: a very large number of very small additive points, thrown from one
-   * place, coloured by where they sit in the fog.
-   *
-   * Two details do most of the work. The radius is sampled as a low power of a
-   * uniform, which piles the grains toward the outside and gives the fireball
-   * an edge rather than a soft falloff -- that rim is the single most
-   * recognisable thing in the reference. And every grain carries its own
-   * brightness jitter, so the fog is granular at the pixel level instead of
-   * smooth; smooth is what makes a particle system look like a gradient.
-   */
-  const PLASMA_COUNT = 38000;
-  const plasmaVelocity = new Float32Array(PLASMA_COUNT * 3);
-  const plasmaColours = new Float32Array(PLASMA_COUNT * 3);
-  for (let i = 0; i < PLASMA_COUNT; i += 1) {
+  const expansionDir = new Float32Array(EXPANSION_COUNT * 3);
+  const expansionLog = new Float32Array(EXPANSION_COUNT);
+  const expansionJitter = new Float32Array(EXPANSION_COUNT);
+  for (let i = 0; i < EXPANSION_COUNT; i += 1) {
     const i3 = i * 3;
-    // Uniform on the sphere, then biased forward so a good share of the fog
-    // comes past the camera instead of all of it receding.
+    /*
+     * Directions cover the forward hemisphere and a good way round the sides,
+     * not the whole sphere. The field is isotropic -- that is not negotiable,
+     * homogeneity and isotropy are the assumption the whole model rests on --
+     * but the half of it behind the lens is never rasterised, so drawing it
+     * costs a vertex each and buys nothing. A culling decision, not a claim
+     * about the universe.
+     */
     const theta = random() * TAU;
-    const z = random() * 2 - 1;
+    // Forward, and a good way past the sides. Not the whole sphere: the field
+    // is isotropic -- homogeneity and isotropy are the assumption the entire
+    // model rests on -- but the part of it behind the lens is never
+    // rasterised, so drawing it costs a vertex each and buys nothing.
+    const z = -(random() * 1.2 - 0.2);
     const planar = Math.sqrt(Math.max(0, 1 - z * z));
-    const dx = planar * Math.cos(theta);
-    const dy = planar * Math.sin(theta);
-    const dz = z * 0.86 + 0.08;
-    const length = Math.hypot(dx, dy, dz) || 1;
-
-    const shell = Math.pow(random(), 0.34);
-    const speed = 24 + shell * 238 * (0.72 + random() * 0.56);
-    plasmaVelocity[i3] = (dx / length) * speed;
-    plasmaVelocity[i3 + 1] = (dy / length) * speed;
-    plasmaVelocity[i3 + 2] = (dz / length) * speed;
-
-    // White-hot at the middle, amber through the body, ember at the front.
-    let cr;
-    let cg;
-    let cb;
-    if (shell < 0.5) {
-      const u = shell / 0.5;
-      cr = 1.0;
-      cg = 0.96 - 0.42 * u;
-      cb = 0.82 - 0.68 * u;
-    } else {
-      const u = (shell - 0.5) / 0.5;
-      cr = 1.0 - 0.34 * u;
-      cg = 0.54 - 0.36 * u;
-      cb = 0.14 - 0.10 * u;
-    }
-    const flicker = 0.5 + Math.pow(random(), 1.6) * 0.85;
-    plasmaColours[i3] = Math.min(1, cr * flicker);
-    plasmaColours[i3 + 1] = Math.min(1, cg * flicker);
-    plasmaColours[i3 + 2] = Math.min(1, cb * flicker);
+    expansionDir[i3] = planar * Math.cos(theta);
+    expansionDir[i3 + 1] = planar * Math.sin(theta);
+    expansionDir[i3 + 2] = z;
+    /*
+     * Uniform in *log* radius, which is what makes the wrap seamless: the
+     * expansion translates this value, and a uniform distribution is the only
+     * one a translation leaves alone. Sampling radius uniformly -- the obvious
+     * thing -- gives a field that visibly thins between one wrap and the next.
+     */
+    expansionLog[i] = random() * EXPANSION_SPAN;
+    expansionJitter[i] = Math.pow(random(), 1.5);
   }
 
-  const plasmaGeometry = track(new THREE.BufferGeometry());
-  plasmaGeometry.setAttribute(
-    "position", new THREE.BufferAttribute(new Float32Array(PLASMA_COUNT * 3), 3),
+  const expansionGeometry = track(new THREE.BufferGeometry());
+  expansionGeometry.setAttribute(
+    "position", new THREE.BufferAttribute(new Float32Array(EXPANSION_COUNT * 3), 3),
   );
-  plasmaGeometry.setAttribute("color", new THREE.BufferAttribute(plasmaColours, 3));
-  /*
-   * Fixed pixel size, not attenuated.
-   *
-   * With attenuation on, a grain that ends up near the camera is drawn tens of
-   * pixels across -- and since the fog expands past the camera, that is most of
-   * them by the end. The first attempt filled the frame with gold blobs the
-   * size of coins: glitter, not fog. A grain of plasma has no size worth
-   * resolving at any of these distances; what varies is how many of them land
-   * in a pixel, which is exactly what makes the reference granular.
-   */
-  const plasmaMaterial = track(new THREE.PointsMaterial({
-    size: px(2.0),
-    map: track(createGlowTexture("rgba(255,255,255,1)", "rgba(255,186,96,0.4)", 0.3)),
-    vertexColors: true,
+  expansionGeometry.setAttribute("aDir", new THREE.BufferAttribute(expansionDir, 3));
+  expansionGeometry.setAttribute("aLog", new THREE.BufferAttribute(expansionLog, 1));
+  expansionGeometry.setAttribute("aJitter", new THREE.BufferAttribute(expansionJitter, 1));
+
+  const expansionMaterial = track(new THREE.ShaderMaterial({
+    vertexShader: EXPANSION_VERTEX,
+    fragmentShader: EXPANSION_FRAGMENT,
+    uniforms: {
+      /*
+       * A grain of fog, not a grain of light.
+       *
+       * The old map had a hard white core at a third of the radius, which
+       * draws a *dot* -- and forty thousand dots is a star field, however
+       * warm they are. Fog is made of soft blobs that overlap: no core to
+       * speak of, a long shallow falloff, and low enough alpha that a single
+       * one is nearly invisible and it takes a dozen stacked to make a
+       * highlight. That is also, literally, what an optically thick medium
+       * is -- brightness is depth through it, not any one grain in it.
+       */
+      uMap: { value: track(createGlowTexture("rgba(255,255,255,0.62)", "rgba(255,226,186,0.3)", 0.52)) },
+      uOpacity: { value: 0 },
+      uLogA: { value: 0 },
+      uSpan: { value: EXPANSION_SPAN },
+      uNear: { value: Math.log(EXPANSION_NEAR) },
+      uOriginZ: { value: EXPANSION_ORIGIN_Z },
+      uSize: { value: px(4.4) },
+      uGain: { value: 1 },
+      uTemp: { value: 0 },
+      uCold: { value: 0 },
+      uRipple: { value: 0 },
+      uK: { value: 24 },
+    },
     transparent: true,
     depthWrite: false,
     depthTest: false,
     blending: THREE.AdditiveBlending,
-    sizeAttenuation: false,
+  }));
+  const expansion = new THREE.Points(expansionGeometry, expansionMaterial);
+  expansion.frustumCulled = false;
+  expansion.renderOrder = 2;
+  blast.add(expansion);
+
+  /*
+   * The veil: one flat quad, no texture, no gradient.
+   *
+   * It covers two moments. At t = 0 there is no separation between any two
+   * points, so there is no structure to draw -- the frame is uniformly
+   * saturated, and that is what hands over from the gate's blowout without a
+   * seam. And at the end of inflation the vacuum decays into a hot plasma
+   * everywhere at once, which is a flash with no source in it.
+   *
+   * A Sprite with no map rasterises as a flat colour, which is exactly the
+   * point: a radial glow has a middle, and a middle is a centre. That was the
+   * old core sprite's whole problem.
+   */
+  const veilMaterial = track(new THREE.SpriteMaterial({
+    color: 0xffffff,
+    transparent: true,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
     opacity: 0,
   }));
-  const plasma = new THREE.Points(plasmaGeometry, plasmaMaterial);
-  plasma.frustumCulled = false;
-  plasma.renderOrder = 2;
-  blast.add(plasma);
+  veilMaterial.depthTest = false;
+  const veil = new THREE.Sprite(veilMaterial);
+  veil.renderOrder = 7;
+  veil.position.set(0, 0, -4);
+  veil.scale.setScalar(260);
+  veil.visible = false;
+  blast.add(veil);
 
-  function layOutPlasma(travel, level) {
+  const setVeil = (level) => {
     const value = level > 0 ? level : 0;
-    plasmaMaterial.opacity = value;
-    plasma.visible = value > 0.002;
-    if (!plasma.visible) return;
-    const array = plasmaGeometry.attributes.position.array;
-    for (let i = 0; i < PLASMA_COUNT; i += 1) {
-      const i3 = i * 3;
-      array[i3] = plasmaVelocity[i3] * travel;
-      array[i3 + 1] = plasmaVelocity[i3 + 1] * travel;
-      array[i3 + 2] = plasmaVelocity[i3 + 2] * travel - 18;
-    }
-    plasmaGeometry.attributes.position.needsUpdate = true;
-  }
-  layOutPlasma(0.001, 0);
+    veilMaterial.opacity = value;
+    veil.visible = value > 0.002;
+  };
 
+  const setExpansion = (level) => {
+    const value = level > 0 ? level : 0;
+    expansionMaterial.uniforms.uOpacity.value = value;
+    expansion.visible = value > 0.002;
+  };
+  setExpansion(0);
+
+  /*
+   * a(t), in closed form, as a logarithm.
+   *
+   * Two eras, and the difference between them is the point of the act.
+   * Inflation is exponential -- ln a linear in t, a constant Hubble parameter,
+   * the frame torn through faster than the eye can follow. What follows is the
+   * radiation era, a ~ sqrt(t), which in log terms is a crawl. Watching the
+   * one become the other is watching the universe stop inflating.
+   *
+   * Written from elapsed time rather than accumulated per frame: bounded,
+   * frame-rate independent, and seekable, which is what makes the preview
+   * harness honest.
+   */
+  const INFLATE_MS = 2200;
+  /*
+   * INFLATE_LOG is a *reading rate*, not the real number.
+   *
+   * Inflation grew the universe by something like 10^26, which is 60 in these
+   * units, and 60 renders as static: each grain would cross its whole visible
+   * range in a tenth of a second, and a point sprite cannot streak, so the
+   * frame becomes noise rather than motion. At 7.5 a grain takes about half a
+   * second to cross, which is the fastest the eye can still follow something
+   * rather than merely notice that it flickered. The caption carries the real
+   * figure; the picture has to carry the sensation.
+   */
+  const INFLATE_LOG = 7.5;
+  const SLOW_LOG = 1.25;
+  function logScaleFactor(ms) {
+    if (ms <= INFLATE_MS) {
+      // Eased from rest: the first frames are a point, not a field already at
+      // speed. Smootherstep, so the ramp has no corner at either end.
+      const u = ms / INFLATE_MS;
+      return INFLATE_LOG * u * u * u * (u * (u * 6 - 15) + 10);
+    }
+    return INFLATE_LOG + SLOW_LOG * Math.log(1 + (ms - INFLATE_MS) / 2400);
+  }
+
+  buildMark("before star dust");
   /* ------------------------------------------------------------ star dust */
 
   /*
@@ -1449,7 +1963,6 @@ export function createCosmicIntro({ pixelRatio } = {}) {
    * frame in `driftField`, which is nothing next to what it buys.
    */
   const DUST_COUNT = 26000;
-  const dustOrigin = new Float32Array(DUST_COUNT * 3);
   const dustTarget = new Float32Array(DUST_COUNT * 3);
   const dustColours = new Float32Array(DUST_COUNT * 3);
 
@@ -1460,9 +1973,6 @@ export function createCosmicIntro({ pixelRatio } = {}) {
     dustTarget[i3] = Math.cos(angle) * radius;
     dustTarget[i3 + 1] = Math.sin(angle) * radius * 0.84;
     dustTarget[i3 + 2] = -random() * FIELD_DEPTH;
-    dustOrigin[i3] = (random() - 0.5) * 0.6;
-    dustOrigin[i3 + 1] = (random() - 0.5) * 0.6;
-    dustOrigin[i3 + 2] = -18 + (random() - 0.5) * 0.6;
 
     /*
      * White and bright, with only a whisper of tint.
@@ -1500,7 +2010,7 @@ export function createCosmicIntro({ pixelRatio } = {}) {
   }
 
   const dustGeometry = track(new THREE.BufferGeometry());
-  dustGeometry.setAttribute("position", new THREE.BufferAttribute(dustOrigin.slice(), 3));
+  dustGeometry.setAttribute("position", new THREE.BufferAttribute(dustTarget.slice(), 3));
   dustGeometry.setAttribute("aColour", new THREE.BufferAttribute(dustColours, 3));
   dustGeometry.setAttribute("aPhase", new THREE.BufferAttribute(dustPhase, 1));
   dustGeometry.setAttribute("aRate", new THREE.BufferAttribute(dustRate, 1));
@@ -1580,6 +2090,7 @@ export function createCosmicIntro({ pixelRatio } = {}) {
   spikeStars.frustumCulled = false;
   scene.add(spikeStars);
 
+  buildMark("before bubble universes");
   /* -------------------------------------------------------- bubble universes */
 
   /*
@@ -1634,9 +2145,18 @@ export function createCosmicIntro({ pixelRatio } = {}) {
       const theta = random() * TAU;
       const z = random() * 2 - 1;
       const planar = Math.sqrt(Math.max(0, 1 - z * z));
-      // Hugged to the surface. A solid ball reads as fog; a shell reads as a
-      // world with an edge to it.
-      const r = 1 - Math.pow(random(), 2.4) * 0.28;
+      /*
+       * A thin skin, and the reason is occlusion.
+       *
+       * The stars used to fill the outer third, which meant an opaque core
+       * could only ever be small enough to hide about a fifth of the disc --
+       * and a universe you can see another universe *through* is not a dense
+       * thing, it is a soap bubble. Concentrated into a skin, the core can sit
+       * just inside it and block nine tenths of the area, so a nearer bubble
+       * genuinely hides a further one and only the very limb stays
+       * translucent, which is what the edge of anything ought to do.
+       */
+      const r = 0.955 + random() * 0.045;
       positions[i3] = planar * Math.cos(theta) * r;
       positions[i3 + 1] = planar * Math.sin(theta) * r;
       positions[i3 + 2] = z * r;
@@ -1659,7 +2179,7 @@ export function createCosmicIntro({ pixelRatio } = {}) {
       const theta = random() * TAU;
       const z = random() * 2 - 1;
       const planar = Math.sqrt(Math.max(0, 1 - z * z));
-      const r = 0.55 + random() * 0.42;
+      const r = 0.952 + random() * 0.048;
       positions[i3] = planar * Math.cos(theta) * r;
       positions[i3 + 1] = planar * Math.sin(theta) * r;
       positions[i3 + 2] = z * r;
@@ -1692,7 +2212,7 @@ export function createCosmicIntro({ pixelRatio } = {}) {
       const theta = random() * TAU;
       const z = random() * 2 - 1;
       const planar = Math.sqrt(Math.max(0, 1 - z * z));
-      const r = 0.45 + random() * 0.5;
+      const r = 0.948 + random() * 0.05;
       positions[i3] = planar * Math.cos(theta) * r;
       positions[i3 + 1] = planar * Math.sin(theta) * r;
       positions[i3 + 2] = z * r;
@@ -1729,7 +2249,25 @@ export function createCosmicIntro({ pixelRatio } = {}) {
   const oursKnotGeometry = buildBubbleKnots(260);
   const oursGalaxyGeometry = buildBubbleGalaxies(90);
 
-  const BUBBLE_COUNT = 9;
+  /*
+   * Twenty, not nine.
+   *
+   * The act is eleven seconds of travelling and the drift carries the field
+   * some three and a half thousand units through it, so at nine bubbles spaced
+   * six hundred apart only the first few ever passed the camera and the rest
+   * merely swelled in the distance. Packed tighter and carried faster, most of
+   * the population now sweeps by.
+   */
+  const BUBBLE_COUNT = 58;
+  /*
+   * The first forty-four are the field the journey passes *through*. The rest
+   * are placed beyond our own universe, and they are there for one reason:
+   * ours was the last thing in the shot. Everything else drifted past it and
+   * left nothing behind, so the approach ended on a single object against an
+   * empty void -- which reads as the edge of the set rather than as one bubble
+   * among uncountably many. A multiverse has no last one.
+   */
+  const BUBBLE_NEAR_COUNT = 44;
   // Depth at which a bubble has finished its pass and goes back to its slot.
   const BUBBLE_RETIRE_DEPTH = 620;
 
@@ -1737,6 +2275,43 @@ export function createCosmicIntro({ pixelRatio } = {}) {
    * Builds one bubble: shell, knots and film, in a group that can be scaled
    * and positioned as a unit.
    */
+  /*
+   * The opaque interior.
+   *
+   * It has to be in the *opaque* pass, not merely a transparent mesh that
+   * writes depth. Transparent objects are sorted back to front, so a far
+   * bubble's stars would already have been drawn by the time a near bubble's
+   * core got its chance to reject them; only something drawn in the opaque
+   * pass, before any of them, occludes reliably.
+   *
+   * Which is why it cannot fade. When a bubble dissolves on its way past the
+   * camera the core shrinks instead, so the far hemisphere is revealed from
+   * the limb inward as the near one dims, and the two changes cancel.
+   */
+  /*
+   * One painted universe per variant, and enough variants that no two
+   * neighbours in the field are ever the same kind.
+   */
+  /*
+   * One texture per bubble, not one per variant.
+   *
+   * Twelve textures across forty-four universes meant every third or fourth
+   * was a duplicate, and a repeated universe is worse than a dull one: the eye
+   * finds the pair immediately and the whole field stops being a population of
+   * distinct things. Each is its own kind, its own palette and its own seed,
+   * so no two are alike. They are 256px rather than 384 to pay for it.
+   */
+  const BUBBLE_VARIANT_COUNT = BUBBLE_COUNT;
+  const universeTextures = [];
+  for (let i = 0; i < BUBBLE_VARIANT_COUNT; i += 1) {
+    universeTextures.push(track(createUniverseTexture(
+      UNIVERSE_KINDS[(i * 7) % UNIVERSE_KINDS.length],
+      UNIVERSE_PAIRS[(i * 5 + 1) % UNIVERSE_PAIRS.length],
+      i * 7919 + 13,
+    )));
+  }
+  const bubbleHaloTexture = track(createGlowTexture("rgba(255,255,255,0)", "rgba(255,255,255,0.30)", 0.79));
+
   function createBubble(variant, palette, dense) {
     const [a, b] = palette;
     const group = new THREE.Group();
@@ -1756,7 +2331,9 @@ export function createCosmicIntro({ pixelRatio } = {}) {
     const shell = new THREE.Points(
       dense ? oursShellGeometry : shellGeometries[variant], shellMaterial,
     );
-    group.add(shell);
+    // Only ours keeps a star population of its own; the rest are painted, and
+    // a point cloud on top of a painted disc is two universes in one place.
+    if (dense) group.add(shell);
 
     const knotMaterial = track(new THREE.PointsMaterial({
       size: px(dense ? 4.4 : 3.6),
@@ -1771,7 +2348,7 @@ export function createCosmicIntro({ pixelRatio } = {}) {
     const knots = new THREE.Points(
       dense ? oursKnotGeometry : knotGeometries[variant], knotMaterial,
     );
-    group.add(knots);
+    if (dense) group.add(knots);
 
     const galaxyMaterial = track(new THREE.PointsMaterial({
       size: px(dense ? 11 : 8.5),
@@ -1783,9 +2360,11 @@ export function createCosmicIntro({ pixelRatio } = {}) {
       sizeAttenuation: false,
       opacity: 0,
     }));
-    group.add(new THREE.Points(
-      dense ? oursGalaxyGeometry : galaxyGeometries[variant], galaxyMaterial,
-    ));
+    if (dense) {
+      group.add(new THREE.Points(
+        dense ? oursGalaxyGeometry : galaxyGeometries[variant], galaxyMaterial,
+      ));
+    }
 
     const rimMaterial = track(new THREE.ShaderMaterial({
       vertexShader: BUBBLE_VERTEX,
@@ -1801,10 +2380,61 @@ export function createCosmicIntro({ pixelRatio } = {}) {
       blending: THREE.AdditiveBlending,
       side: THREE.DoubleSide,
     }));
-    group.add(new THREE.Mesh(bubbleRimGeometry, rimMaterial));
+    if (dense) group.add(new THREE.Mesh(bubbleRimGeometry, rimMaterial));
+
+    /*
+     * Every bubble but ours. Ours is the one the journey goes inside, and the
+     * one whose contents -- the cosmic web forming within it -- have to be
+     * visible from outside long before we get there.
+     */
+    let body = null;
+    let halo = null;
+    if (!dense) {
+      /*
+       * `alphaTest` rather than `transparent`, and that is the whole trick.
+       *
+       * A transparent sprite is sorted with the transparent pass, back to
+       * front, so a far bubble's stars are already drawn by the time a near
+       * bubble gets its turn and nothing is ever occluded. With alphaTest and
+       * transparent off, the sprite renders in the *opaque* pass -- before any
+       * of them, writing depth -- and everything behind it is rejected. The
+       * cost is a hard edge, which is why the texture carries its own bright
+       * limb and a soft halo is added over the top.
+       */
+      const bodyMaterial = track(new THREE.SpriteMaterial({
+        map: universeTextures[variant],
+        transparent: false,
+        alphaTest: 0.45,
+        depthWrite: true,
+        depthTest: true,
+      }));
+      body = new THREE.Sprite(bodyMaterial);
+      body.scale.setScalar(2);
+      body.material.rotation = random() * TAU;
+      body.renderOrder = -1;
+      group.add(body);
+
+      const haloMaterial = track(new THREE.SpriteMaterial({
+        map: bubbleHaloTexture,
+        transparent: true,
+        depthWrite: false,
+        depthTest: true,
+        blending: THREE.AdditiveBlending,
+        opacity: 0,
+        color: new THREE.Color(b[0], b[1], b[2]),
+      }));
+      halo = new THREE.Sprite(haloMaterial);
+      halo.scale.setScalar(2.5);
+      halo.renderOrder = 1;
+      group.add(halo);
+    }
 
     scene.add(group);
-    return { group, shell, knots, shellMaterial, knotMaterial, galaxyMaterial, rimMaterial };
+    return {
+      group, shell, knots, body, halo, palette,
+      shellMaterial, knotMaterial, galaxyMaterial, rimMaterial,
+      haloMaterial: halo ? halo.material : null,
+    };
   }
 
   /*
@@ -1818,6 +2448,7 @@ export function createCosmicIntro({ pixelRatio } = {}) {
    * is around us. Same buffer either way, so this costs nothing to change.
    */
   function setBubbleDetail(bubble, fraction) {
+    if (!bubble.shell.parent) return;
     const shellCount = bubble.shell.geometry.attributes.position.count;
     const knotCount = bubble.knots.geometry.attributes.position.count;
     const f = Math.max(0.02, Math.min(1, fraction));
@@ -1843,13 +2474,77 @@ export function createCosmicIntro({ pixelRatio } = {}) {
    * Note this deliberately does not apply to ours -- it sits far beyond the
    * loop and never recycles, because it is the destination rather than scenery.
    */
+  /*
+   * The arrival ramp is for re-entries only.
+   *
+   * It exists so that a bubble returned to its slot does not snap on at full
+   * strength in the middle of the shot. Applied to the *first* pass as well --
+   * which is what it did -- it means every universe in the field fades up out
+   * of nothing a moment after the act starts, and the whole population reads
+   * as popping into existence rather than as having been there all along.
+   * They are lit before the act begins now, during the recombination beat, so
+   * on the first pass there is nothing to ramp.
+   */
+  /*
+   * Nothing arrives; things only leave.
+   *
+   * The fade is now one-sided. A bubble is at full strength from the moment
+   * the act opens and dissolves over the last stretch before it reaches the
+   * camera, so it goes past rather than through -- which is the only edit the
+   * shot needs, because a universe passing the lens and a universe appearing
+   * in front of it are very different events and only one of them is wanted.
+   */
+  /*
+   * Nothing arrives, and nothing leaves either.
+   *
+   * This used to dissolve a bubble over the last stretch before the camera.
+   * Combined with a body that cannot fade -- and therefore shrank instead --
+   * it read as universes deflating as they came closer. They are placed off
+   * the axis and their offset is fixed, so as depth falls the angle off axis
+   * only grows: they carry themselves out of the frame, and nothing has to
+   * remove them.
+   */
+  /*
+   * ...except at the very end of a pass, and that turned out to be fixable.
+   *
+   * The reason nothing was allowed to leave is that a painted universe draws
+   * in the *opaque* pass -- alphaTest, depthWrite -- which is what lets one
+   * hide another, and an opaque material has no opacity to turn down. So the
+   * only retire available was `visible = false`, which is a blink.
+   *
+   * It has one: fade the alphaTest cutoff with the opacity and the silhouette
+   * survives the whole dissolve, because the map is a hard-edged disc and the
+   * test is measured against the same value it is scaling. A bubble on its way
+   * out drops into the transparent pass while it goes -- it stops occluding at
+   * exactly the point where it is too faint to occlude anything anyway.
+   *
+   * With that, a bubble can be dissolved over its own last stretch, on its own
+   * radius, rather than having to be carried off the edge of the frame. One
+   * that comes down the middle now goes past instead of through.
+   */
   function bubbleJourneyFade(bubble) {
     const depth = -bubble.group.position.z;
-    const span = bubble.startDepth - BUBBLE_RETIRE_DEPTH;
-    const travelled = (bubble.startDepth - depth) / Math.max(1, span);
-    const arriving = travelled / 0.16;
-    const leaving = (1 - travelled) / 0.18;
-    return Math.max(0, Math.min(1, arriving, leaving));
+    const radius = Math.max(1, bubble.group.scale.x);
+    return clamp01((depth - radius * 0.65) / (radius * 1.7));
+  }
+
+  /*
+   * And a universe behind ours goes out as ours grows over it.
+   *
+   * The field now runs deeper than the destination, which is the whole point
+   * -- ours stopped being the last thing in the shot. But ours is a membrane
+   * of points rather than a painted disc, so it does not occlude, and a
+   * distant universe would otherwise shine straight through the one we are
+   * flying into. Fading by angle does what the depth buffer cannot: as ours
+   * swells, whatever its disc has grown over dissolves behind it.
+   */
+  function occludedByOurs(bubble, reach) {
+    const depth = -bubble.group.position.z;
+    if (depth <= -ours.group.position.z) return 1;
+    const off = Math.hypot(bubble.group.position.x, bubble.group.position.y);
+    const angle = Math.atan2(off, Math.max(1, depth));
+    const alpha = Math.atan(Math.min(8, reach));
+    return clamp01((angle - alpha * 0.92) / Math.max(0.06, alpha * 0.55));
   }
 
   /**
@@ -1857,10 +2552,39 @@ export function createCosmicIntro({ pixelRatio } = {}) {
    *
    * Returns true while it still has somewhere to go.
    */
+  /*
+   * They travel, and they never come back.
+   *
+   * Recycling was the whole reason universes appeared out of nowhere: a bubble
+   * that reached the camera was returned to its slot at the far end and had to
+   * fade in there, which from inside the shot is something arriving in empty
+   * space. With the field deep enough to last the act there is nothing to
+   * recycle -- every bubble the viewer ever sees is on screen from the first
+   * frame of the act, and the only thing that happens to any of them is that
+   * they get closer and then pass.
+   */
   function driftBubble(bubble, step) {
     bubble.group.position.z += step;
-    if (-bubble.group.position.z <= BUBBLE_RETIRE_DEPTH) {
-      bubble.group.position.copy(bubble.slot);
+  }
+
+  /*
+   * Universes condensing out of the fog.
+   *
+   * They used only to fade up, which is a thing appearing rather than a thing
+   * forming. Growing them out of nothing over the same beat that the plasma
+   * clears makes the reveal causal: the grains of the expanding field thin
+   * out, and what is left standing in their place are the bubbles. Called
+   * only during that beat -- afterwards they hold their size for life, because
+   * a universe that changes size while you travel toward it is the wrong
+   * thing entirely.
+   */
+  function setBubbleGrowth(bubble, growth) {
+    const g = Math.max(0.001, Math.min(1, growth));
+    if (bubble.body) {
+      bubble.body.scale.setScalar(2 * g);
+      bubble.halo.scale.setScalar(2.5 * g);
+    } else {
+      bubble.group.scale.setScalar(bubble.baseScale * g);
     }
   }
 
@@ -1869,7 +2593,44 @@ export function createCosmicIntro({ pixelRatio } = {}) {
     bubble.shellMaterial.opacity = v;
     bubble.knotMaterial.opacity = Math.min(1, v * gain);
     bubble.galaxyMaterial.opacity = Math.min(1, v * 0.85 * gain);
-    bubble.rimMaterial.uniforms.uOpacity.value = v * 0.34;
+    // Softer than it was: with an opaque interior only the near half of the
+    // film draws, so what used to read as an iridescent edge became a flat
+    // wash of colour across the whole disc.
+    bubble.rimMaterial.uniforms.uOpacity.value = v * 0.15;
+    if (bubble.body) {
+      /*
+       * Never resized, and only ever faded as a whole field.
+       *
+       * The previous version shrank each bubble as it approached, to retire it
+       * without breaking the opaque pass -- and a universe that gets smaller
+       * the closer you come to it is the most conspicuous wrong thing in the
+       * shot. They keep their size for their whole life now and are simply
+       * travelled past: every one is placed off the axis, and its offset is
+       * fixed while its depth falls, so it moves *away* from the middle of the
+       * frame as it nears and leaves at the edge without ever being retired.
+       */
+      const lit = Math.min(1, v / 0.85);
+      /*
+       * Opaque while it is a universe; transparent while it is leaving.
+       *
+       * At full strength it stays in the opaque pass, which is what makes the
+       * field read as solid: a near bubble hides a far one. Below that it
+       * moves to the transparent pass and the alphaTest cutoff comes down with
+       * the opacity, so the disc keeps its hard edge all the way to nothing
+       * instead of being clipped away the moment the fill drops under the
+       * fixed cutoff. Nothing here needs a recompile: `transparent` only picks
+       * the render list, and the cutoff is a uniform.
+       */
+      const bodyMaterial = bubble.body.material;
+      const solid = lit > 0.995;
+      bodyMaterial.transparent = !solid;
+      bodyMaterial.depthWrite = solid;
+      bodyMaterial.opacity = lit;
+      bodyMaterial.alphaTest = Math.max(0.02, 0.45 * lit);
+      bubble.body.visible = lit > 0.012;
+      bubble.halo.visible = lit > 0.012;
+      bubble.haloMaterial.opacity = lit * 0.42;
+    }
   }
 
   const bubbles = [];
@@ -1902,13 +2663,26 @@ export function createCosmicIntro({ pixelRatio } = {}) {
        */
       const cosine = (x * slot.x + y * slot.y + z * slot.z) / (length * slot.length);
       const between = Math.acos(Math.min(1, Math.max(-1, cosine)));
-      if (between < (alpha + slot.alpha) * 1.35) return false;
+      /*
+       * ...but only against bubbles at a comparable distance.
+       *
+       * Applied to every pair regardless of depth -- which is what it did --
+       * this caps the whole population at whatever will pack onto the sky
+       * without touching, about two dozen, and forbids ever putting one behind
+       * another. The field then empties as the journey travels through it,
+       * which is why bubbles had to be recycled, which is why they appeared
+       * out of nothing. Two universes at very different depths overlapping on
+       * screen reads perfectly well -- distant things are behind near things.
+       */
+      const nearer = Math.min(-z, -slot.z);
+      const further = Math.max(-z, -slot.z);
+      if (nearer / further > 0.58 && between < (alpha + slot.alpha) * 1.2) return false;
 
       // And a true 3D test as well.
       const dx = x - slot.x;
       const dy = y - slot.y;
       const dz = z - slot.z;
-      const needed = (radius + slot.radius) * 1.5;
+      const needed = (radius + slot.radius) * 1.15;
       if (dx * dx + dy * dy + dz * dz < needed * needed) return false;
     }
     return true;
@@ -1929,6 +2703,7 @@ export function createCosmicIntro({ pixelRatio } = {}) {
    */
   const OURS_START_Z = -6200;
   const ours = createBubble(0, UNIVERSE_PAIRS[0], true);
+  ours.baseScale = 620;
   ours.group.position.set(0, 0, OURS_START_Z);
   ours.group.scale.setScalar(620);
   bubbles.push(ours);
@@ -1938,10 +2713,13 @@ export function createCosmicIntro({ pixelRatio } = {}) {
   const OURS_ALPHA = 620 / -OURS_START_Z;
 
   for (let i = 1; i < BUBBLE_COUNT; i += 1) {
-    const bubble = createBubble(i % BUBBLE_VARIANTS, UNIVERSE_PAIRS[i % UNIVERSE_PAIRS.length], false);
+    const bubble = createBubble(i, UNIVERSE_PAIRS[i % UNIVERSE_PAIRS.length], false);
     let slot = null;
     for (let attempt = 0; attempt < 90 && !slot; attempt += 1) {
-      const z = -2000 - (i - 1) * 620 - random() * 280;
+      const deep = i >= BUBBLE_NEAR_COUNT;
+      const z = deep
+        ? OURS_START_Z - 700 - (i - BUBBLE_NEAR_COUNT) * 360 - random() * 300
+        : -1050 - Math.floor((i - 1) / 4) * 780 - random() * 260;
       const depth = -z;
       /*
        * Size and offset both scale with depth, so every bubble subtends a
@@ -1957,13 +2735,26 @@ export function createCosmicIntro({ pixelRatio } = {}) {
       const angle = i * 2.39996 + (random() - 0.5) * 0.9;
       // A wide band of off-axis angles, not a narrow ring. Packed into a thin
       // annulus there is simply not enough sky to separate them in.
-      const radial = depth * (0.48 + random() * 0.78);
-      const radius = depth * (0.13 + random() * 0.10);
+      /*
+       * The far set is held in a narrower cone and drawn smaller. Out at nine
+       * or ten thousand the frustum is enormous, and the near set's angular
+       * band -- which runs out past fifty degrees off axis -- puts most of a
+       * population that far back outside the frame entirely, which is why the
+       * bubbles already placed behind ours were never actually seen. These sit
+       * between about eighteen and thirty-five degrees: clear of the corridor
+       * ours occupies, and inside the shot for the whole approach.
+       */
+      const radial = deep
+        ? depth * (0.32 + random() * 0.38)
+        : depth * (0.48 + random() * 0.78);
+      const radius = deep
+        ? depth * (0.075 + random() * 0.055)
+        : depth * (0.13 + random() * 0.10);
       const x = Math.cos(angle) * radial;
       const y = Math.sin(angle) * radial * 0.82;
       // Stay out of the corridor ours occupies down the axis.
       const fromAxis = Math.atan2(Math.hypot(x, y), depth);
-      if (fromAxis < radius / depth + OURS_ALPHA * 1.8) continue;
+      if (fromAxis < radius / depth + OURS_ALPHA * 1.25) continue;
       if (bubbleFits(x, y, z, radius)) slot = { x, y, z, radius };
     }
     // If 90 tries could not find room, that bubble simply is not placed --
@@ -1990,6 +2781,229 @@ export function createCosmicIntro({ pixelRatio } = {}) {
     bubbles.push(bubble);
   }
 
+  /* --------------------------------------------------- the fog gathering */
+
+  /*
+   * How a universe gets made, drawn as the thing that makes it.
+   *
+   * The bubbles used to grow during the last beat of the burst and that was
+   * all: the plasma cleared, and separately, universes were present. Nothing
+   * connected the two, so the field read as having been faded in -- which is
+   * exactly what the viewer said it looked like.
+   *
+   * What is missing from that account is the *cause*, and eternal inflation
+   * supplies one that is both true and photogenic. Inflation does not switch
+   * off everywhere at once; it stops in patches, and each patch that stops
+   * cools and closes off into a universe while the stretching carries on
+   * around it. So the fog is given somewhere to go. Every bubble is seeded
+   * with a cloud of grains drawn from the same plasma, at the same colour,
+   * and over the act each cloud falls inward onto the sphere it is going to
+   * become -- warm and diffuse at the start, the universe's own colours by
+   * the time it arrives, gone by the time the painted body is solid.
+   *
+   * One geometry and one draw call for the whole field. Each grain carries
+   * where it starts, where it ends, when it goes and what colour it becomes,
+   * and the vertex shader does the rest; nothing here touches the CPU per
+   * frame beyond a single uniform.
+   */
+  const CONDENSE_PER_BUBBLE = 420;
+  const condenseCount = bubbles.length * CONDENSE_PER_BUBBLE;
+  const condenseStart = new Float32Array(condenseCount * 3);
+  const condenseEnd = new Float32Array(condenseCount * 3);
+  const condenseTiming = new Float32Array(condenseCount * 2);
+  const condenseTint = new Float32Array(condenseCount * 3);
+  const condenseSeed = new Float32Array(condenseCount);
+
+  const onSphere = (out, index) => {
+    const theta = random() * TAU;
+    const z = random() * 2 - 1;
+    const planar = Math.sqrt(Math.max(0, 1 - z * z));
+    out[index] = planar * Math.cos(theta);
+    out[index + 1] = planar * Math.sin(theta);
+    out[index + 2] = z;
+  };
+  const scratch = new Float32Array(3);
+
+  bubbles.forEach((bubble, index) => {
+    const centre = bubble.group.position;
+    const radius = bubble.group.scale.x;
+    const palette = bubble.palette || UNIVERSE_PAIRS[0];
+    for (let k = 0; k < CONDENSE_PER_BUBBLE; k += 1) {
+      const i = index * CONDENSE_PER_BUBBLE + k;
+      const i3 = i * 3;
+      /*
+       * Out of a cloud several times the bubble's own size, because that is
+       * the shape of the thing: a patch of fog far larger than what it ends
+       * up as, falling together. A shell of grains already at the final
+       * radius would only be the bubble's own limb, brightened.
+       */
+      onSphere(scratch, 0);
+      const reach = radius * (2.4 + random() * 4.2);
+      condenseStart[i3] = centre.x + scratch[0] * reach;
+      condenseStart[i3 + 1] = centre.y + scratch[1] * reach;
+      condenseStart[i3 + 2] = centre.z + scratch[2] * reach;
+
+      onSphere(scratch, 0);
+      const settle = radius * (0.88 + random() * 0.14);
+      condenseEnd[i3] = centre.x + scratch[0] * settle;
+      condenseEnd[i3 + 1] = centre.y + scratch[1] * settle;
+      condenseEnd[i3 + 2] = centre.z + scratch[2] * settle;
+
+      // Staggered per grain and per bubble, so the field does not arrive on
+      // one frame -- but every grain is home before the act ends.
+      condenseTiming[i * 2] = ((index % 6) * 0.045 + random() * 0.26) * 0.9;
+      condenseTiming[i * 2 + 1] = 0.5 + random() * 0.16;
+
+      // Written out: `lerp` is declared further down the file and this runs
+      // while the module body is still executing. See the traps list.
+      const mix = random();
+      condenseTint[i3] = palette[0][0] + (palette[1][0] - palette[0][0]) * mix;
+      condenseTint[i3 + 1] = palette[0][1] + (palette[1][1] - palette[0][1]) * mix;
+      condenseTint[i3 + 2] = palette[0][2] + (palette[1][2] - palette[0][2]) * mix;
+      condenseSeed[i] = random();
+    }
+  });
+
+  const condenseGeometry = track(new THREE.BufferGeometry());
+  condenseGeometry.setAttribute("position", new THREE.BufferAttribute(condenseStart, 3));
+  condenseGeometry.setAttribute("aStart", new THREE.BufferAttribute(condenseStart, 3));
+  condenseGeometry.setAttribute("aEnd", new THREE.BufferAttribute(condenseEnd, 3));
+  condenseGeometry.setAttribute("aTiming", new THREE.BufferAttribute(condenseTiming, 2));
+  condenseGeometry.setAttribute("aTint", new THREE.BufferAttribute(condenseTint, 3));
+  condenseGeometry.setAttribute("aSeed", new THREE.BufferAttribute(condenseSeed, 1));
+
+  const condenseMaterial = track(new THREE.ShaderMaterial({
+    vertexShader: /* glsl */`
+      attribute vec3 aStart;
+      attribute vec3 aEnd;
+      attribute vec2 aTiming;
+      attribute vec3 aTint;
+      attribute float aSeed;
+      uniform float uT;
+      uniform float uSize;
+      varying float vFade;
+      varying vec3 vColour;
+      void main() {
+        float t = clamp((uT - aTiming.x) / aTiming.y, 0.0, 1.0);
+        float e = t * t * (3.0 - 2.0 * t);
+        vec3 p = mix(aStart, aEnd, e);
+        // Plasma on the way in, the universe's own light once it is there.
+        vColour = mix(vec3(1.0, 0.76, 0.44), aTint, e);
+        // Never seen to appear and never seen to leave: it fades up out of
+        // the fog it belongs to and out again under the body it becomes.
+        vFade = smoothstep(0.0, 0.14, t) * (1.0 - smoothstep(0.70, 1.0, t));
+        vec4 viewPosition = modelViewMatrix * vec4(p, 1.0);
+        /*
+         * Flat in screen space, deliberately.
+         *
+         * The usual 1/depth attenuation is wrong for this field: these clouds
+         * are placed at depths from one thousand to eleven, and every bubble's
+         * radius scales with its own depth so that they all subtend a similar
+         * angle. Attenuating by distance therefore shrinks the far clouds
+         * relative to the bubbles they belong to -- and at eleven thousand it
+         * put every grain under a pixel, which is why the first pass at this
+         * looked like nothing was happening at all.
+         */
+        gl_PointSize = clamp(uSize * (0.6 + aSeed * 1.1), 2.0, 13.0);
+        gl_Position = projectionMatrix * viewPosition;
+      }
+    `,
+    fragmentShader: /* glsl */`
+      uniform sampler2D uMap;
+      uniform float uOpacity;
+      varying float vFade;
+      varying vec3 vColour;
+      void main() {
+        vec4 texel = texture2D(uMap, gl_PointCoord);
+        float alpha = texel.a * uOpacity * vFade;
+        if (alpha <= 0.004) discard;
+        gl_FragColor = vec4(vColour, alpha);
+      }
+    `,
+    uniforms: {
+      uMap: { value: track(createGlowTexture("rgba(255,255,255,0.9)", "rgba(255,214,164,0.34)", 0.42)) },
+      uOpacity: { value: 0 },
+      uT: { value: 0 },
+      uSize: { value: px(4.4) },
+    },
+    transparent: true,
+    depthWrite: false,
+    depthTest: false,
+    blending: THREE.AdditiveBlending,
+  }));
+  const condensate = new THREE.Points(condenseGeometry, condenseMaterial);
+  condensate.frustumCulled = false;
+  condensate.visible = false;
+  scene.add(condensate);
+
+  function setCondense(t, level = 1) {
+    const value = clamp01(level);
+    condenseMaterial.uniforms.uT.value = t;
+    condenseMaterial.uniforms.uOpacity.value = value;
+    condensate.visible = value > 0.003 && t < 1.02;
+  }
+
+  /*
+   * One approach, spread across two acts.
+   *
+   * It used to be two separate moves. Ours crawled forward at a fraction of
+   * the drift for eleven seconds -- close enough to standing still that the
+   * destination did not appear to be getting any nearer -- and then the
+   * approach took over and covered the remaining five thousand units in eight,
+   * while simultaneously swelling the bubble sevenfold. Both rates jumped at
+   * the seam, one of them by a factor of seven, and what that looks like from
+   * inside the shot is being yanked toward the thing you were drifting past.
+   *
+   * So there is no seam. Distance falls linearly across the whole nineteen and
+   * a half seconds -- one closing rate, never changing -- and the radius grows
+   * *exponentially* over the same span, which is the only growth law that
+   * looks like constant travel: a constant relative rate. Angular size then
+   * rises smoothly from about six degrees to filling the sky, with no moment
+   * anywhere in it where the shot changes gear.
+   *
+   * The radius is a cheat and remains one. A universe cannot be flown into at
+   * two hundred units a second; the scale compression has to go somewhere, and
+   * putting all of it in a smooth exponential is what keeps it invisible.
+   */
+  const OURS_FULL_SCALE = 4600;
+  const OURS_ARRIVAL_Z = 360;
+  const OURS_GROWTH = Math.log(OURS_FULL_SCALE / 620);
+
+  // Written out rather than reaching for lerp: this file's helpers are
+  // declared further down, and OURS_CROSSING below is solved at build time.
+  const oursDistanceAt = (t) => -OURS_START_Z + (-OURS_ARRIVAL_Z - -OURS_START_Z) * t;
+
+  function placeOurs(u) {
+    const t = clamp01(u);
+    const distance = oursDistanceAt(t);
+    const scale = 620 * Math.exp(OURS_GROWTH * t);
+    ours.group.position.z = -distance;
+    ours.baseScale = scale;
+    ours.group.scale.setScalar(scale);
+    // Angular radius as a fraction of the distance: 1 is the wall.
+    return scale / distance;
+  }
+
+  /*
+   * Where the camera crosses the wall, solved rather than guessed.
+   *
+   * The old act faded the interior up over a fixed slice of its own local
+   * time, which was only ever right for the numbers it was tuned against.
+   * Radius and distance are both known functions of u, so the crossing is
+   * simply where they meet, and every fade that belongs to being *inside* can
+   * be keyed off it and stay correct if either curve is ever changed.
+   */
+  const OURS_CROSSING = (() => {
+    let lo = 0;
+    let hi = 1;
+    for (let i = 0; i < 48; i += 1) {
+      const mid = (lo + hi) / 2;
+      if (620 * Math.exp(OURS_GROWTH * mid) < oursDistanceAt(mid)) lo = mid; else hi = mid;
+    }
+    return lo;
+  })();
+
+  buildMark("before galaxies");
   /* --------------------------------------------------------------- galaxies */
 
   const galaxyGroup = new THREE.Group();
@@ -2569,6 +3583,541 @@ export function createCosmicIntro({ pixelRatio } = {}) {
     spirals.push(group);
   }
 
+  buildMark("before cosmic web");
+  /* ------------------------------------------------------------ cosmic web */
+
+  /*
+   * What you actually meet on the way into a universe.
+   *
+   * Galaxies are not scattered through space at random. They sit on a
+   * structure -- the largest one there is -- of long filaments of gas and dark
+   * matter enclosing enormous, almost perfectly empty voids, with clusters of
+   * galaxies at the points where filaments meet. Surveys that plot hundreds of
+   * thousands of galaxies all come back with the same picture: threads, knots,
+   * and holes. It is the shape the primordial fluctuations grew into, so it is
+   * also the direct descendant of the mottling drawn in the first act.
+   *
+   * Drawing it as scattered galaxies, which is what this did, throws away the
+   * one fact about large-scale structure that anybody knows.
+   *
+   * Built as a graph, not as noise:
+   *
+   *   nodes       rejection-sampled with a minimum separation, which is what
+   *               opens the voids -- uniform sampling has no holes in it
+   *   filaments   each node joined to its nearest few neighbours within reach,
+   *               deduplicated, then drawn as a curved chain of points that is
+   *               thinnest in the middle and flares where it meets a node
+   *   knots       a denser, warmer spheroid at each node, brightest where the
+   *               most filaments converge, because that is what a cluster is
+   */
+  const webGroup = new THREE.Group();
+  webGroup.visible = false;
+  scene.add(webGroup);
+
+  /*
+   * The scale is the whole difficulty.
+   *
+   * Built small and near -- which it was first -- the camera is inside a knot
+   * within a second or two, and what reaches the screen is a few enormous
+   * blobs joined by bright bands. The structure is only structure if enough of
+   * it fits in the frame at once, so the web is an order of magnitude larger
+   * than every other population here and starts well ahead of the lens. It is
+   * also stepped at a little over half the field's rate, because it is much
+   * further away and moving it at the same speed flattens the parallax that
+   * tells the eye how big it is.
+   */
+  /*
+   * Wide and shallow, not deep.
+   *
+   * A deep box cannot fill the frame. The frustum widens with distance -- at
+   * eight thousand units it is fifteen thousand across -- so a web nineteen
+   * hundred wide occupies a quarter of the screen at its far end and reads as
+   * a blob of structure floating in empty space, which is the exact opposite
+   * of the claim. Flattening the volume into a slab that is wider than the
+   * frustum at every depth it actually occupies means the web reaches the
+   * edges of the frame, on every side, the whole way through -- and it takes
+   * *fewer* nodes to do it, because they are at distances where each one
+   * subtends something.
+   */
+  const WEB_NODES = 3000;
+  const WEB_SPAN_XY = 3200;
+  /*
+   * The near edge is *behind* the lens, deliberately.
+   *
+   * There is no outside to the cosmic web -- it is not a thing sitting in
+   * space ahead of us, it is the arrangement of everything, in every
+   * direction, all the way out. Starting it in front of the camera made it a
+   * wall being approached; starting it behind means the journey is already
+   * inside it before the act begins, and filaments pass on both sides and
+   * overhead rather than only receding ahead.
+   */
+  const WEB_NEAR_Z = 1600;
+  const WEB_FAR_Z = -6200;
+  const WEB_MIN_GAP = 230;      // the void scale
+  const WEB_LINK_REACH = 690;
+  const WEB_LINKS_PER_NODE = 3;
+  /*
+   * The web's share of the cruise, chosen so the seam out of the web act has
+   * nothing to step over.
+   *
+   * The web act marches from Laniakea's opening depth to the lens over its own
+   * duration, which works out at very close to two hundred units a second, and
+   * the act after it damps toward CRUISE * WEB_DRIFT. At 0.55 that target was
+   * eighty-two, so the shot halved its pace at the moment the galaxies
+   * resolved -- one of the two places the journey still changed gear. Set from
+   * the arithmetic instead of by eye.
+   */
+  const WEB_DRIFT = 1.32;
+
+  const webNodePositions = [];
+  /*
+   * Rejection sampling with a floor on separation, on a grid.
+   *
+   * The floor is what opens the voids -- uniform sampling has no holes in it --
+   * but comparing every candidate against every node already placed is
+   * quadratic, and at four hundred nodes with a high occupancy that is tens of
+   * millions of distance checks during construction. Bucketing by the
+   * separation itself means only the twenty-seven neighbouring cells can ever
+   * contain a conflict, which makes each candidate constant time.
+   *
+   * The attempt cap is still there. Near the end the last few nodes can take
+   * thousands of tries each, and a loop that runs until the box is full has no
+   * bound at all if the box cannot be filled.
+   */
+  {
+    const cells = new Map();
+    const key = (a, b, c) => `${a}|${b}|${c}`;
+    const gapSq = WEB_MIN_GAP * WEB_MIN_GAP;
+    let attempts = 0;
+    while (webNodePositions.length < WEB_NODES && attempts < WEB_NODES * 140) {
+      attempts += 1;
+      const x = (random() * 2 - 1) * WEB_SPAN_XY;
+      const y = (random() * 2 - 1) * WEB_SPAN_XY * 0.78;
+      const z = WEB_NEAR_Z + random() * (WEB_FAR_Z - WEB_NEAR_Z);
+      const cx = Math.floor(x / WEB_MIN_GAP);
+      const cy = Math.floor(y / WEB_MIN_GAP);
+      const cz = Math.floor(z / WEB_MIN_GAP);
+      let ok = true;
+      for (let dx = -1; dx <= 1 && ok; dx += 1) {
+        for (let dy = -1; dy <= 1 && ok; dy += 1) {
+          for (let dz = -1; dz <= 1 && ok; dz += 1) {
+            const bucket = cells.get(key(cx + dx, cy + dy, cz + dz));
+            if (!bucket) continue;
+            for (let i = 0; i < bucket.length; i += 1) {
+              const n = bucket[i];
+              const ex = n.x - x;
+              const ey = n.y - y;
+              const ez = n.z - z;
+              if (ex * ex + ey * ey + ez * ez < gapSq) { ok = false; break; }
+            }
+          }
+        }
+      }
+      if (!ok) continue;
+      const node = { x, y, z, degree: 0 };
+      webNodePositions.push(node);
+      const id = key(cx, cy, cz);
+      const bucket = cells.get(id);
+      if (bucket) bucket.push(node); else cells.set(id, [node]);
+    }
+  }
+
+  const webLinks = [];
+  {
+    const seen = new Set();
+    for (let i = 0; i < webNodePositions.length; i += 1) {
+      const a = webNodePositions[i];
+      const near = [];
+      for (let j = 0; j < webNodePositions.length; j += 1) {
+        if (j === i) continue;
+        const b = webNodePositions[j];
+        const d = Math.hypot(b.x - a.x, b.y - a.y, b.z - a.z);
+        if (d < WEB_LINK_REACH) near.push({ j, d });
+      }
+      near.sort((p1, p2) => p1.d - p2.d);
+      for (let k = 0; k < Math.min(WEB_LINKS_PER_NODE, near.length); k += 1) {
+        const j = near[k].j;
+        const key = i < j ? `${i}:${j}` : `${j}:${i}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        webLinks.push({ a: i, b: j, length: near[k].d });
+        webNodePositions[i].degree += 1;
+        webNodePositions[j].degree += 1;
+      }
+    }
+  }
+
+  /*
+   * Two populations, because they are two different things.
+   *
+   * The threads are cold and faint -- most of what is in them is dark and the
+   * gas between is thin and unlit. The knots are warm and bright, because they
+   * are galaxies. Drawing both at one colour and one size collapses the
+   * structure into a cloud, and the whole point of the web is that it has
+   * places in it where things gather.
+   */
+  /*
+   * And it is not one colour.
+   *
+   * The threads ran a narrow band of blues, which is a fair guess at gas in
+   * the dark and a waste of the only act where the structure is the whole
+   * frame. Filaments are lit by whatever is in them -- shocked gas, the
+   * outskirts of clusters, quasars behind them -- and a survey plot of the
+   * real thing is full of colour. Six hues through the threads and six through
+   * the knots, with a small fraction of grains drawn much brighter and larger,
+   * so the web sparkles rather than glowing evenly.
+   */
+  const WEB_THREAD_COLOURS = [
+    [0.46, 0.58, 0.96],   // cold blue
+    [0.38, 0.76, 0.94],   // cyan
+    [0.66, 0.52, 0.98],   // violet
+    [0.90, 0.56, 0.88],   // magenta
+    [0.50, 0.88, 0.82],   // teal
+    [0.84, 0.74, 1.00],   // pale lilac
+  ];
+  const WEB_KNOT_COLOURS = [
+    [1.00, 0.74, 0.36],   // gold
+    [1.00, 0.54, 0.28],   // amber
+    [1.00, 0.88, 0.66],   // warm white
+    [0.70, 0.90, 1.00],   // ice
+    [1.00, 0.60, 0.72],   // rose
+    [0.76, 1.00, 0.88],   // green-white
+  ];
+
+  function buildWebPopulation(fill) {
+    const positions = [];
+    const colours = [];
+    const scales = [];
+    const phases = [];
+    const rates = [];
+    fill((x, y, z, rgb, scale) => {
+      positions.push(x, y, z);
+      colours.push(rgb[0], rgb[1], rgb[2]);
+      scales.push(scale);
+      phases.push(random() * TAU);
+      rates.push(0.3 + random() * 0.9);
+    });
+    const geometry = track(new THREE.BufferGeometry());
+    geometry.setAttribute("position", new THREE.BufferAttribute(new Float32Array(positions), 3));
+    geometry.setAttribute("aColour", new THREE.BufferAttribute(new Float32Array(colours), 3));
+    geometry.setAttribute("aScale", new THREE.BufferAttribute(new Float32Array(scales), 1));
+    geometry.setAttribute("aPhase", new THREE.BufferAttribute(new Float32Array(phases), 1));
+    geometry.setAttribute("aRate", new THREE.BufferAttribute(new Float32Array(rates), 1));
+    return geometry;
+  }
+
+  const webThreadGeometry = buildWebPopulation((put) => {
+    for (let i = 0; i < webLinks.length; i += 1) {
+      const link = webLinks[i];
+      const a = webNodePositions[link.a];
+      const b = webNodePositions[link.b];
+      /*
+       * A curved thread, not a line segment.
+       *
+       * Straight lines between points is a wireframe, and a wireframe of the
+       * universe is a diagram of it. One quadratic control point offset
+       * perpendicular to the run is enough to make each filament sag its own
+       * way, which is what stops the graph reading as a graph.
+       */
+      const mx = (a.x + b.x) / 2;
+      const my = (a.y + b.y) / 2;
+      const mz = (a.z + b.z) / 2;
+      const bow = link.length * 0.16;
+      const cx = mx + gaussian() * bow;
+      const cy = my + gaussian() * bow;
+      const cz = mz + gaussian() * bow;
+      const count = Math.min(220, Math.round(link.length * 0.26));
+      for (let k = 0; k < count; k += 1) {
+        const t = random();
+        const u = 1 - t;
+        const px = u * u * a.x + 2 * u * t * cx + t * t * b.x;
+        const py = u * u * a.y + 2 * u * t * cy + t * t * b.y;
+        const pz = u * u * a.z + 2 * u * t * cz + t * t * b.z;
+        // Thinnest at mid-span, flaring into whatever it is joining.
+        const waist = 1 - 4 * t * (1 - t);
+        const spread = 8 + waist * waist * 44;
+        const rgb = WEB_THREAD_COLOURS[(i + k) % WEB_THREAD_COLOURS.length];
+        /*
+         * Faint on purpose -- most of what is in a filament is dark, and the
+         * gas between knots is thin and barely lit -- except for a few in a
+         * hundred, which are drawn at full strength and several times the
+         * size. Those are what make the thread read as something granular
+         * catching the light rather than as a drawn line.
+         */
+        const sparkle = random() < 0.06;
+        const dim = sparkle ? 1.05 : 0.42 + random() * 0.5;
+        put(
+          px + gaussian() * spread,
+          py + gaussian() * spread,
+          pz + gaussian() * spread,
+          [rgb[0] * dim, rgb[1] * dim, rgb[2] * dim],
+          sparkle ? 1.7 + random() * 1.5 : 0.42 + Math.pow(random(), 2.4) * 0.72,
+        );
+      }
+    }
+  });
+
+  const webKnotGeometry = buildWebPopulation((put) => {
+    for (let i = 0; i < webNodePositions.length; i += 1) {
+      const node = webNodePositions[i];
+      // The more filaments meet here, the bigger the cluster sitting on it.
+      const weight = Math.min(1, node.degree / 5);
+      const radius = 18 + weight * 34;
+      /*
+       * Fewer points in the knots than in the threads, which is the opposite
+       * of the first attempt and the thing that made it read. Weight it the
+       * other way and the web becomes a scattering of bright balls with some
+       * haze between them -- the knots win the eye, and the network, which is
+       * the whole subject, is what gets lost.
+       */
+      const count = Math.round(16 + weight * 34);
+      for (let k = 0; k < count; k += 1) {
+        const theta = random() * TAU;
+        const zc = random() * 2 - 1;
+        const planar = Math.sqrt(Math.max(0, 1 - zc * zc));
+        const r = Math.pow(random(), 0.55) * radius;
+        const rgb = WEB_KNOT_COLOURS[(i + k) % WEB_KNOT_COLOURS.length];
+        const centre = 1 - r / radius;
+        const dim = 0.4 + centre * 0.75 + random() * 0.25;
+        put(
+          node.x + planar * Math.cos(theta) * r,
+          node.y + planar * Math.sin(theta) * r * 0.9,
+          node.z + zc * r,
+          [Math.min(1, rgb[0] * dim), Math.min(1, rgb[1] * dim), Math.min(1, rgb[2] * dim)],
+          0.8 + Math.pow(random(), 1.6) * 1.9,
+        );
+      }
+    }
+  });
+
+  // Collected so the ball-fade uniform can be driven across all of them at
+  // once. Declared here, above the factory that fills it: `const` is not
+  // hoisted, and the factory runs during setup.
+  const webMaterials = [];
+
+  function makeWebMaterial(map, size, minPx, maxPx) {
+    const material = track(new THREE.ShaderMaterial({
+      vertexShader: WEB_VERTEX,
+      fragmentShader: WEB_FRAGMENT,
+      uniforms: {
+        uMap: { value: map },
+        uOpacity: { value: 0 },
+        uSize: { value: px(size) },
+        // Unity at this distance; nearer filaments swell, further ones shrink
+        // until the clamp catches them.
+        uAtten: { value: 2600 },
+        uMinPx: { value: px(minPx) },
+        uMaxPx: { value: px(maxPx) },
+        uBall: { value: 0 },
+        uBallCentre: { value: new THREE.Vector3(0, 0, -1100) },
+        uBallRadius: { value: 3600 },
+      },
+      transparent: true,
+      depthWrite: false,
+      depthTest: false,
+      blending: THREE.AdditiveBlending,
+    }));
+    webMaterials.push(material);
+    return material;
+  }
+
+  const webThreadMaterial = makeWebMaterial(
+    track(createGlowTexture("rgba(255,255,255,1)", "rgba(186,198,255,0.32)", 0.22)), 2.7, 1.3, 3.6,
+  );
+  const webKnotMaterial = makeWebMaterial(
+    track(createGlowTexture("rgba(255,255,255,1)", "rgba(255,206,142,0.5)", 0.28)), 2.2, 1.0, 3.2,
+  );
+
+  const webThreads = new THREE.Points(webThreadGeometry, webThreadMaterial);
+  webThreads.frustumCulled = false;
+  webThreads.renderOrder = 1;
+  webGroup.add(webThreads);
+
+  const webKnots = new THREE.Points(webKnotGeometry, webKnotMaterial);
+  webKnots.frustumCulled = false;
+  webKnots.renderOrder = 2;
+  webGroup.add(webKnots);
+
+  /*
+   * And nothing resolvable on it.
+   *
+   * There were 22 galaxy sprites sitting on the busiest nodes, and they were a
+   * category error. The web is the view from far enough out that a *cluster*
+   * is a point -- a knot here is a thousand galaxies, not one -- so a
+   * recognisable spiral disc drawn on a filament is like drawing a house on a
+   * map of a continent. Galaxies belong to the act after this one, which is
+   * what dropping into a single crossing is for.
+   */
+
+  /*
+   * Laniakea.
+   *
+   * One crossing in the web, picked out and lit far brighter than the rest,
+   * because the journey has to arrive somewhere and an arrival needs a
+   * destination you could see coming. It is chosen rather than placed: the
+   * busiest node -- the one the most filaments run into, which is what a rich
+   * cluster physically is -- among those close enough to the axis that
+   * steering onto it is a drift rather than a swerve, and at a depth the act's
+   * own travel will actually reach.
+   */
+  const laniakea = (() => {
+    let best = null;
+    for (let i = 0; i < webNodePositions.length; i += 1) {
+      const node = webNodePositions[i];
+      if (Math.abs(node.x) > 950 || Math.abs(node.y) > 700) continue;
+      if (node.z > -3600 || node.z < -4600) continue;
+      if (!best || node.degree > best.degree) best = node;
+    }
+    // Never null in practice, but the act must not depend on the sampler
+    // having put a node in that window.
+    return best ?? { x: 0, y: 0, z: -4100, degree: 4 };
+  })();
+
+  const laniakeaGeometry = buildWebPopulation((put) => {
+    /*
+     * Wide and grainy rather than tight and bright.
+     *
+     * The first version piled four thousand large points into a hundred and
+     * fifty units with the brightness climbing toward the middle, and additive
+     * blending did the rest: a featureless white disc that read as a star. A
+     * cluster is a *concentration*, not a source -- it has to stay granular
+     * all the way in, which means spreading it out, holding every grain well
+     * below saturation, and letting the density alone make the middle bright.
+     */
+    const RADIUS = 260;
+    for (let i = 0; i < 3600; i += 1) {
+      const theta = random() * TAU;
+      const zc = random() * 2 - 1;
+      const planar = Math.sqrt(Math.max(0, 1 - zc * zc));
+      const r = Math.pow(random(), 1.15) * RADIUS;
+      const centre = 1 - r / RADIUS;
+      const rgb = WEB_KNOT_COLOURS[i % WEB_KNOT_COLOURS.length];
+      const dim = 0.34 + centre * 0.34 + random() * 0.26;
+      put(
+        laniakea.x + planar * Math.cos(theta) * r,
+        laniakea.y + planar * Math.sin(theta) * r * 0.92,
+        laniakea.z + zc * r * 0.9,
+        [rgb[0] * dim, rgb[1] * dim, rgb[2] * dim],
+        0.6 + Math.pow(random(), 1.7) * 1.5,
+      );
+    }
+  });
+
+  const laniakeaMaterial = makeWebMaterial(
+    track(createGlowTexture("rgba(255,255,255,1)", "rgba(255,226,178,0.5)", 0.3)), 2.3, 1.2, 4.2,
+  );
+  const laniakeaKnot = new THREE.Points(laniakeaGeometry, laniakeaMaterial);
+  laniakeaKnot.frustumCulled = false;
+  laniakeaKnot.renderOrder = 3;
+  webGroup.add(laniakeaKnot);
+
+  // The haze it sits in, so it reads as lit rather than as more points.
+  const laniakeaGlowMaterial = track(new THREE.SpriteMaterial({
+    map: track(createGlowTexture("rgba(255,244,222,0.55)", "rgba(255,196,120,0.22)", 0.34)),
+    transparent: true,
+    depthWrite: false,
+    depthTest: false,
+    blending: THREE.AdditiveBlending,
+    opacity: 0,
+  }));
+  const laniakeaGlow = new THREE.Sprite(laniakeaGlowMaterial);
+  laniakeaGlow.position.set(laniakea.x, laniakea.y, laniakea.z);
+  laniakeaGlow.scale.setScalar(760);
+  laniakeaGlow.renderOrder = 2;
+  webGroup.add(laniakeaGlow);
+
+  function setLaniakeaLevel(level, bloom = 0) {
+    const value = level > 0 ? (level > 1 ? 1 : level) : 0;
+    const lit = bloom > 0 ? (bloom > 1 ? 1 : bloom) : 0;
+    /*
+     * It has to be gone before it reaches the lens.
+     *
+     * The haze is a single sprite, and a sprite is culled by its centre: the
+     * frame its origin crosses z = 0 the whole thing disappears at once. With
+     * the bloom at full strength that is the brightest object in the shot
+     * blinking out in one frame -- a measured drop of forty levels out of two
+     * hundred and fifty-five, which is a flash, not a transition. The point
+     * cloud around it does not have the problem, because points are culled one
+     * at a time and thousands of them spread over hundreds of units dissolve
+     * gradually all by themselves.
+     */
+    const worldZ = laniakea.z + webGroup.position.z;
+    const clear = clamp01((-worldZ - 70) / 430);
+    laniakeaMaterial.uniforms.uOpacity.value = value * (0.8 + lit * 0.2);
+    laniakeaKnot.visible = value > 0.003;
+    applyFade(laniakeaGlow, value * (0.26 + lit * 0.5) * clear);
+  }
+
+  /*
+   * The web starts out *inside* our universe, and grows into being all of it.
+   *
+   * This is the same object throughout. Seen from the multiverse it is scaled
+   * down to a tangle a few hundred units across, sitting inside the bubble the
+   * journey is heading for -- so a viewer can see, from outside and from a
+   * long way off, that this universe has structure in it. As the bubble swells
+   * through the approach the web is scaled with it, one to one, until at the
+   * moment the camera crosses the membrane the web is at full size around it
+   * and the nesting is simply switched off. Nothing appears; the thing that
+   * was a speck inside a distant bubble is now the sky.
+   *
+   * The fit is anchored so that at the end of the approach the scale is
+   * exactly 1 -- ours swells to a known radius, so the divisor is that radius
+   * and the hand-over needs no blend at all.
+   */
+  const WEB_NEST_FULL_RADIUS = 4600;
+  const WEB_NEST_ANCHOR_Z = -1100;
+  function setWebBall(value) {
+    for (let i = 0; i < webMaterials.length; i += 1) {
+      webMaterials[i].uniforms.uBall.value = value;
+    }
+  }
+  function nestWebInside(bubble) {
+    const scale = bubble.group.scale.x / WEB_NEST_FULL_RADIUS;
+    webGroup.scale.setScalar(scale);
+    webGroup.position.set(
+      bubble.group.position.x,
+      bubble.group.position.y,
+      bubble.group.position.z - WEB_NEST_ANCHOR_Z * scale,
+    );
+    // Round it off while it is a thing being looked at, and stop once the
+    // camera is close enough that its edges are off the frame anyway.
+    setWebBall(1 - clamp01((scale - 0.4) / 0.55));
+    return scale;
+  }
+
+  /*
+   * How bright the nested web is allowed to be.
+   *
+   * Additive blending accumulates, and squeezing six hundred thousand points
+   * into a disc a couple of hundred pixels across means every pixel collects
+   * hundreds of them -- so at any ordinary opacity the whole thing saturates
+   * to a flat white lozenge however faint each grain is. Scaling the level
+   * with the square of the nesting keeps the *accumulated* brightness roughly
+   * constant instead of the per-grain one, which is the quantity that
+   * actually reaches the screen.
+   */
+  function nestedWebLevel(scale) {
+    return Math.min(1, Math.max(0.012, scale * scale * 1.15));
+  }
+
+  function setWebLevel(level, time) {
+    const value = level > 0 ? (level > 1 ? 1 : level) : 0;
+    webGroup.visible = value > 0.003;
+    if (!webGroup.visible) return;
+    /*
+     * The threads carry the act; the knots only mark where they meet.
+     *
+     * Weighted the other way -- which is where this started, and again after
+     * the knots were made warm -- the frame is a field of bright blobs and the
+     * network between them is invisible. A cluster is small and a filament is
+     * a hundred million light-years long, so the picture that reads is mostly
+     * thread.
+     */
+    webThreadMaterial.uniforms.uOpacity.value = value * 0.95;
+    webKnotMaterial.uniforms.uOpacity.value = value * 0.42;
+  }
+
+  buildMark("before Milky Way");
   /* -------------------------------------------------------------- Milky Way */
 
   /**
@@ -3230,8 +4779,18 @@ export function createCosmicIntro({ pixelRatio } = {}) {
   sunCorona.renderOrder = 7;
   sunStar.add(sunCorona);
 
-  // The same flare the detonation uses, tinted warm. A star this close without
-  // one reads as a bare disc rather than as something too bright to look at.
+  /*
+   * The spike flare, and the only place left that uses one.
+   *
+   * It used to be shared with the burst, where two counter-rotating copies
+   * stood in for light escaping the fireball -- and where, once the burst
+   * became an expansion rather than an explosion, spokes radiating from a
+   * point were exactly the wrong claim. A star is the honest home for it: a
+   * source this bright genuinely does throw spikes across a lens, and without
+   * them the Sun reads as a bare disc rather than as something too bright to
+   * look at.
+   */
+  const rayTexture = track(createRayTexture(22));
   const sunFlareMaterial = track(new THREE.SpriteMaterial({
     map: rayTexture,
     transparent: true,
@@ -3288,17 +4847,42 @@ export function createCosmicIntro({ pixelRatio } = {}) {
     sunMark.scale.setScalar((distance * SUN_MARK_ANGULAR_SIZE) / groupScale);
   }
 
+  buildMark("before run");
   /* ----------------------------------------------------------------- run */
 
   let elapsed = 0;
   let primeFrames = 2;
-  // Captured on the first approach frame, so the rush inward starts from
-  // wherever the drift actually left our bubble rather than from a constant.
-  let approachStartZ = null;
+  // Whatever the burst left standing, captured on the first frame of the act
+  // that disposes of it -- so the two are continuous however either is tuned.
+  let condenseHandover = null;
+  let webDriftZ = 0;
+  let webApproachStart = null;
+  let lastWebZ = 0;
+  let webEntrySpeed = 0;
+  let webSpeed = 0;
   const easeOutCubic = (t) => 1 - Math.pow(1 - t, 3);
   const easeInCubic = (t) => t * t * t;
   const easeInOutSine = (t) => -(Math.cos(Math.PI * t) - 1) / 2;
   const clamp01 = (t) => (t < 0 ? 0 : t > 1 ? 1 : t);
+  /*
+   * A unit Hermite, and its slope.
+   *
+   * Every leg of the journey is one of these. An ease that starts or ends at
+   * zero slope brings the shot to a stop, and a stop between two moving legs
+   * is a pause however smooth the curve is either side of it -- which is what
+   * kept happening at the act boundaries. Specifying the endpoint velocities
+   * instead means each leg can be handed the speed the one before it finished
+   * at, and hand on the speed the one after it needs.
+   */
+  const hermite01 = (u, m0, m1) => {
+    const u2 = u * u;
+    const u3 = u2 * u;
+    return (u3 - 2 * u2 + u) * m0 + (-2 * u3 + 3 * u2) + (u3 - u2) * m1;
+  };
+  const hermiteRate01 = (u, m0, m1) => {
+    const u2 = u * u;
+    return (3 * u2 - 4 * u + 1) * m0 + (-6 * u2 + 6 * u) + (3 * u2 - 2 * u) * m1;
+  };
   const lerp = THREE.MathUtils.lerp;
 
   function driftField(step) {
@@ -3430,189 +5014,263 @@ export function createCosmicIntro({ pixelRatio } = {}) {
     const T = INTRO_TIMING;
     bubbles.forEach((bubble) => { bubble.rimMaterial.uniforms.uPhase.value += deltaSeconds * 0.55; });
 
-    let mark = T.detonation;
+    let mark = T.inflation;
     if (elapsed <= mark) {
       /*
-       * The flash and the act are two different clocks.
+       * Five beats, and not one of them is an explosion.
        *
-       * This is the one place where pacing the animation and pacing the text
-       * genuinely conflict. A detonation is over in a moment -- stretch it and
-       * it stops being a detonation -- but three lines of caption need twelve
-       * seconds to be read. Tying them together meant either a burst in slow
-       * motion or text nobody could finish, and both were tried.
+       *   0.00 - 0.34  the singularity   nothing is separated from anything
+       *                                  else, so there is no structure yet
+       *   0.34 - 2.20  inflation         exponential stretching, which empties
+       *                                  the universe and supercools it
+       *   2.20 - 3.10  reheating         the vacuum energy decays into a hot
+       *                                  plasma -- everywhere, at once
+       *   3.10 - 9.30  metric expansion  the crawl: deceleration, and the
+       *                                  redshift Hubble's law was read off
+       *   9.30 - 12.0  recombination     the fog clears and the sky appears
        *
-       * So the burst runs on a fixed five-second clock and the act runs for
-       * twelve. What fills the remaining seven is exactly what filled them in
-       * reality: the fog. The universe stayed an opaque plasma for a very long
-       * time after the beginning, and the shot now sits inside it, drifting
-       * and cooling, while the text is read.
+       * The animation and the text share one clock here, which the fireball
+       * version could not do -- a detonation is over in a moment and had to be
+       * run on a second, faster clock. Expansion has never stopped, so there
+       * is nothing to hurry: the act can take the twelve seconds the captions
+       * need and still be telling the truth the whole way through.
        */
-      const BURST_MS = 5000;
-      const spread = elapsed / BURST_MS;
-      const t = clamp01(spread);
-      const act = clamp01(elapsed / T.detonation);
-      showCaption("detonation", act, deltaSeconds);
-      const out = easeOutCubic(t);
+      const act = clamp01(elapsed / T.inflation);
+      showCaption("inflation", act, deltaSeconds);
 
-      // Dust is the primordial matter, thrown from the same point.
-      if (t < 1) {
-        const attribute = dustGeometry.attributes.position;
-        for (let i = 0; i < DUST_COUNT; i += 1) {
-          const i3 = i * 3;
-          attribute.array[i3] = dustOrigin[i3] + (dustTarget[i3] - dustOrigin[i3]) * out;
-          attribute.array[i3 + 1] = dustOrigin[i3 + 1] + (dustTarget[i3 + 1] - dustOrigin[i3 + 1]) * out;
-          attribute.array[i3 + 2] = dustOrigin[i3 + 2] + (dustTarget[i3 + 2] - dustOrigin[i3 + 2]) * out;
-        }
-        attribute.needsUpdate = true;
-      } else {
-        /*
-         * Once it has arrived, it drifts.
-         *
-         * The interpolation writes the same target every frame after t = 1, so
-         * anything else that moved the field would be undone; handing over to
-         * the drift here is what stops the last seven seconds of the act from
-         * being a still photograph with text on it.
-         */
-        driftField(lerp(0, 62, clamp01((spread - 1) / 0.55)) * deltaSeconds);
-      }
-      dustMaterial.uniforms.uOpacity.value = Math.min(1, t * 2.4);
-      spikeMaterial.opacity = Math.min(1, t * 2.4) * 0.9;
+      const uniforms = expansionMaterial.uniforms;
+      uniforms.uLogA.value = logScaleFactor(elapsed);
+
+      const inflating = clamp01(elapsed / INFLATE_MS);
+      const reheat = clamp01((elapsed - INFLATE_MS) / 900);
+      const cooling = clamp01((elapsed - 3100) / 6200);
+      const clearing = clamp01((elapsed - 9300) / 2700);
 
       /*
-       * The light curve.
+       * A third of a second of flat white, and nothing else.
        *
-       * A detonation is over in a fraction of a second and then keeps
-       * glowing; holding the frame white for a third of the phase, which is
-       * what a linear fade did, reads as a lamp being switched on. The
-       * exponential is the shape an actual flash has: effectively gone by
-       * t = 0.4, with a long dim tail after it.
+       * At t = 0 the separation between any two points is zero, so there is no
+       * structure to draw and no vantage point to draw it from. A saturated
+       * frame is the honest picture of that, and it is also what the gate's
+       * blowout hands over, so the join cannot be seen.
        *
-       * These draw with depthTest off and on top, so they wash across the
-       * ejecta. Behind it, the rock was silhouetted against the flash instead
-       * of being lit by it.
+       * Reheating used to be drawn here too, as a second flash of the same
+       * quad. It read as a sheet of flat grey laid over the shot, because that
+       * is what a partial white wash over black is. The fire belongs in the
+       * field, where it is granular -- see uGain below.
        */
-      /*
-       * The camera starts outside it.
-       *
-       * The burst used to detonate eighteen units in front of the lens, which
-       * meant there was never a fireball to look at -- the first frame was
-       * already inside it. The reference is a *ball*: a bright rim, a dark
-       * churning edge, spokes of light coming out through the gaps. You cannot
-       * see any of that from inside.
-       *
-       * So the whole blast starts two hundred units back and is driven at the
-       * camera, arriving past it by the end of the act. You watch it form,
-       * then it takes the frame. Everything drawn at a fixed screen size --
-       * core and rays -- is scaled by the distance so its apparent
-       * size is unchanged as the group closes; only the fog, which has a real
-       * radius, grows the way it should.
-       */
-      const blastZ = lerp(-215, 12, easeInCubic(t));
-      blast.position.z = blastZ;
-      const blastDistance = Math.max(7, 18 - blastZ);
-      const closing = blastDistance / 18;
-
-      const flash = Math.exp(-t * 7.5);
-      /*
-       * The core is a highlight, not the subject.
-       *
-       * Once the fog is doing the work, a full-strength flare on top of it
-       * simply erases the middle of the fireball -- and with it the rim, the
-       * churn and the caption. Held well below saturation so the plasma's own
-       * white-hot centre shows through it.
-       */
-      coreMaterial.opacity = Math.min(0.8, flash * 1.05);
-      core.scale.setScalar((4 + easeOutCubic(Math.min(1, t * 3.4)) * 22) * closing);
-
-      // Rays: fastest to appear, first to go, counter-rotating as they spread.
-      rays.forEach((sprite, index) => {
-        const local = clamp01((t - index * 0.04) * 2.6);
-        sprite.material.opacity = Math.exp(-t * (index === 0 ? 5.2 : 4.0)) * (index === 0 ? 0.7 : 0.44);
-        sprite.scale.setScalar((6 + easeOutCubic(local) * (index === 0 ? 150 : 240)) * closing);
-        sprite.material.rotation += deltaSeconds * (index === 0 ? 0.22 : -0.15);
-      });
+      setVeil(1 - clamp01(elapsed / 340));
 
       /*
-       * The fog, thrown outward. It keeps travelling long after the flash has
-       * gone, which is what sells the burst as an event with something in it
-       * rather than as a light being switched on and off.
-       *
-       * Its brightness is a cooling curve, not the flash curve: the plasma is
-       * its own light source, so it dims as it expands and thins rather than
-       * disappearing with the flare.
+       * Inflation *empties* the universe -- that is not a footnote, it is why
+       * there had to be a reheating at all. The field thins toward nothing and
+       * turns cold and blue while it stretches, and only then catches fire.
        */
-      layOutPlasma(
-        Math.min(2.5, spread * 0.92),
-        Math.min(1, spread * 6) * Math.pow(Math.max(0, 1 - act * 0.96), 1.4) * 0.72,
+      const emptied = lerp(1, 0.10, easeInCubic(inflating));
+      const lit = reheat * reheat * (3 - 2 * reheat);
+      /*
+       * Not cleared to nothing here any more.
+       *
+       * The act used to end on an empty frame and the bubbles were faded up
+       * over the top of it. Slightly under half the fog is left standing at
+       * the end of the beat instead, and the act that follows is what
+       * disposes of it -- by gathering it into the universes. Nothing that
+       * appears later is allowed to appear out of an empty frame.
+       */
+      setExpansion(lerp(emptied, 1, lit) * lerp(1, 0.72, cooling) * (1 - clearing * 0.34));
+      // The cold burns off fast once the vacuum starts decaying; it does not
+      // fade out politely over the whole of reheating.
+      uniforms.uCold.value = inflating * Math.pow(1 - reheat, 2.0);
+      uniforms.uTemp.value = cooling;
+      /*
+       * Grains swell twice: once at the peak of the stretching, and once when
+       * the plasma lights, because an opaque fog is made of grains that
+       * *overlap*. Points that do not touch each other read as a star field
+       * however many of them there are, which is what the first pass at this
+       * looked like -- and a star field is the one thing the universe
+       * demonstrably was not for its first 380,000 years.
+       */
+      uniforms.uSize.value = px(
+        4.4 + Math.sin(inflating * Math.PI) * 2.0 + Math.sin(lit * Math.PI) * 2.2 + lit * 1.6,
       );
-
-      // Cold haze blooming behind the light.
       /*
-       * Growth is written from t, not compounded per frame.
-       *
-       * Multiplying the scale every frame is a geometric series -- it looked
-       * right for half a second and then filled the entire frame with white
-       * haze, which is what buried the burst on the first pass. Solving from
-       * elapsed time bounds it, and makes it frame-rate independent as well.
+       * The fire. Pushed hard past one for a moment so the additive pass
+       * clips: the universe does not brighten at reheating, it becomes
+       * something you could not have looked at, everywhere, with no source in
+       * it anywhere. Then it settles back and starts losing energy to the
+       * stretching, which is all a redshift is.
        */
-      haze.forEach((sprite) => {
-        // The haze breathes across the whole act, not just the flash.
-        sprite.material.opacity = Math.sin(clamp01(act * 1.04) * Math.PI) * 0.32;
-        sprite.scale.setScalar(
-          sprite.userData.base * (1 + Math.min(1.8, spread) * sprite.userData.drift) * closing,
-        );
-      });
+      uniforms.uGain.value = 1 + Math.sin(lit * Math.PI) * 1.9 - cooling * 0.3;
 
-      bubbles.forEach((bubble) => setBubbleOpacity(bubble, 0));
+      /*
+       * The fluctuations.
+       *
+       * Amplitude rises as the plasma cools, because they are only visible as
+       * temperature differences and there is no temperature to differ until
+       * reheating. Wavenumber *falls*, which is inflation's real legacy: a
+       * quantum speckle stretched until its patches are degrees across, and
+       * every one of them a galaxy later. This is the same pattern that is
+       * still on the sky as the anisotropies of the microwave background.
+       */
+      uniforms.uRipple.value = lit * (0.34 + cooling * 0.34);
+      uniforms.uK.value = lerp(26, 3.4, easeOutCubic(cooling));
+
+      /*
+       * The sky is not thrown out. It is *revealed*.
+       *
+       * The old act interpolated all 26,000 stars from a single point out to
+       * their positions, which is the explosion again wearing a different
+       * coat. Matter was already everywhere -- it had nowhere else to be. What
+       * changed at recombination is that the fog stopped being opaque, and the
+       * light that had been scattering since the beginning went free. That
+       * light is still arriving; it is the oldest thing anyone has ever seen.
+       */
+      /*
+       * What the clearing fog reveals is the *bubbles*, not a star field.
+       *
+       * Two things were wrong with revealing the sky here. It contradicted the
+       * act that follows, which is set outside our universe where there is no
+       * sky to see -- so the stars came up at recombination and went straight
+       * back out a second later, which is the flash of dust and spiked stars
+       * that was visible right after the burst. And it wasted the reveal: the
+       * fog going transparent is the one moment in the sequence that can carry
+       * a change of scale, and pulling back to find our universe is one bubble
+       * among many is a far better thing to find than more of the same.
+       *
+       * They are brought all the way up here, so the multiverse act opens on a
+       * field that is already lit and already in place. Nothing arrives.
+       */
+      dustMaterial.uniforms.uOpacity.value = 0;
+      spikeMaterial.opacity = 0;
+
+      /*
+       * And nothing is grown here. The universes belong to the next act,
+       * where there is something for them to be made *out of*.
+       */
+      setWebLevel(0, seconds);
+      setLaniakeaLevel(0);
       setBubbleDetail(ours, 0.1);
+      bubbles.forEach((bubble) => {
+        setBubbleGrowth(bubble, 0.02);
+        setBubbleOpacity(bubble, 0);
+      });
+      setCondense(0, 0);
       return elapsed / total;
     }
 
-    // Everything from the blast decays over the first stretch of the drift.
-    const sinceBlast = (elapsed - T.detonation) / 1400;
-    if (sinceBlast < 1) {
-      const fade = 1 - sinceBlast;
-      coreMaterial.opacity = 0;
-      rays.forEach((sprite) => { sprite.material.opacity = 0; });
-      haze.forEach((sprite) => { sprite.material.opacity *= fade; });
-      layOutPlasma(2.5 + (1 - fade) * 0.5, Math.pow(fade, 1.6) * 0.05);
-    } else if (blast.visible) {
-      blast.visible = false;
-      layOutPlasma(2.65, 0);
+    mark += T.condense;
+    if (elapsed <= mark) {
+      /*
+       * The fog gathers, and what it gathers into is the multiverse.
+       *
+       * This is the act that was missing. Everything in it is one motion seen
+       * from two sides: the plasma left over from the burst goes out, and the
+       * clouds seeded from it fall inward onto the spheres they become. The
+       * painted bodies come up underneath as the grains land, so at no point
+       * is anything introduced -- the universes are assembled on screen out
+       * of the only material the shot has.
+       */
+      const local = clamp01((elapsed - T.inflation) / T.condense);
+      showCaption("condense", local, deltaSeconds);
+      setVeil(0);
+      expansionMaterial.uniforms.uLogA.value = logScaleFactor(elapsed);
+      // Continuous by construction: whatever the burst left is what goes out.
+      if (condenseHandover === null) {
+        condenseHandover = expansionMaterial.uniforms.uOpacity.value;
+      }
+      setExpansion(condenseHandover * (1 - smootherstep(clamp01(local / 0.78))));
+      // Full strength throughout: each grain carries its own fade in and out,
+      // and dimming the whole field on top of that only hides the motion.
+      setCondense(local, 1);
+
+      dustMaterial.uniforms.uOpacity.value = 0;
+      spikeMaterial.opacity = 0;
+
+      /*
+       * The bodies follow the grains, a little behind them. Started at the
+       * same instant they would look like two things happening at once; a
+       * fifth of the act later they look like the consequence.
+       */
+      const formed = clamp01((local - 0.2) / 0.64);
+      const solid = formed * formed * (3 - 2 * formed);
+      setBubbleGrowth(ours, Math.max(0.02, solid));
+      setBubbleOpacity(ours, 0.8 * solid);
+      setBubbleDetail(ours, 0.1);
+      setWebLevel(nestedWebLevel(nestWebInside(ours)) * solid, seconds);
+      setLaniakeaLevel(0);
+      bubbles.forEach((bubble, index) => {
+        if (index === 0) return;
+        const own = clamp01((solid - (index % 6) * 0.035) / 0.83);
+        setBubbleGrowth(bubble, Math.max(0.02, own));
+        setBubbleOpacity(bubble, 0.85 * own);
+      });
+      return elapsed / total;
     }
+
+    // Everything from the beginning is gone by here: the fog was spent on the
+    // universes, and the grains that carried it went out under them.
+    if (blast.visible) {
+      blast.visible = false;
+      setExpansion(0);
+      setVeil(0);
+    }
+    setCondense(1, 0);
 
     mark += T.multiverse;
     if (elapsed <= mark) {
-      showCaption("multiverse", (elapsed - T.detonation) / T.multiverse, deltaSeconds);
+      showCaption("multiverse", (elapsed - T.inflation - T.condense) / T.multiverse, deltaSeconds);
       // Drifting among vast, dim shells. Galaxies are not yet resolvable.
-      const local = (elapsed - T.detonation) / T.multiverse;
-      driftField(lerp(70, 150, local) * deltaSeconds);
-      const rising = Math.min(1, local * 3);
-      // Ours closes slowly and never recycles: it is the destination, and the
-      // approach that follows has to start from wherever it has got to.
-      ours.group.position.z += 90 * deltaSeconds;
+      /*
+       * A void, and it was already a void before this act began.
+       *
+       * There is no star field out here -- this is outside our universe, in
+       * the false vacuum the bubbles are nucleating in, and there is no matter
+       * in it to shine. Nothing is faded on or off at the seam: the sky was
+       * never lit and the bubbles came up during the recombination beat, so
+       * the act opens on exactly the frame the one before it ended on.
+       *
+       * `driftField` is not called at all. Every population it moves is at
+       * zero opacity for the next four acts.
+       */
+      dustMaterial.uniforms.uOpacity.value = 0;
+      spikeMaterial.opacity = 0;
+      /*
+       * Ours is not scenery and never recycles: it is the destination, and it
+       * is closing the entire time. The same curve carries straight on through
+       * the act that follows -- see placeOurs -- so nothing about the way it
+       * moves changes at the seam.
+       */
+      const oursJourney = (elapsed - T.inflation - T.condense) / (T.multiverse + T.approach);
+      const oursReach = placeOurs(oursJourney);
       ours.group.rotation.y += deltaSeconds * 0.05;
-      setBubbleOpacity(ours, 0.8 * rising);
-      setBubbleDetail(ours, 0.1);
+      setBubbleOpacity(ours, lerp(0.8, 1, oursJourney), lerp(1, 1.9, oursJourney));
+      setBubbleDetail(ours, lerp(0.1, 1, easeInCubic(oursJourney)));
+      // Structure inside the universe we are heading for, seen from outside it.
+      setWebLevel(nestedWebLevel(nestWebInside(ours)), seconds);
+      setLaniakeaLevel(0);
       bubbles.forEach((bubble, index) => {
         if (index === 0) return;
         // Fast enough that several actually sweep past the camera during the
         // phase, rather than the whole field merely swelling in place.
-        driftBubble(bubble, lerp(190, 470, local) * deltaSeconds);
+        setBubbleGrowth(bubble, 1);
+        driftBubble(bubble, CRUISE * deltaSeconds);
         bubble.group.rotation.y += deltaSeconds * 0.05;
         /*
-         * Retired before the phase is over, not after.
+         * Nothing is retired on a clock any more.
          *
-         * The dive that follows goes inside one universe, and a neighbour
-         * still lingering at the edge of frame while that happens reads as a
-         * second universe appearing out of nowhere -- which is exactly what it
-         * looked like. Clearing them in the last fifth of the drift means the
-         * approach begins on a frame that already holds nothing but ours.
+         * They used to be cleared over the last fifth of the drift, so that
+         * the approach opened on a frame holding nothing but ours -- which is
+         * how ours came to be the last object in the shot. Each one now leaves
+         * for a reason of its own instead: because it has reached the lens, or
+         * because ours has grown over it. Both are things the viewer can see
+         * the cause of, and both carry on into the act that follows without
+         * anything happening at the seam.
          */
-        const retiring = clamp01((1 - local) / 0.2);
-        setBubbleOpacity(bubble, 0.85 * rising * retiring * bubbleJourneyFade(bubble));
+        setBubbleOpacity(
+          bubble,
+          0.85 * bubbleJourneyFade(bubble) * occludedByOurs(bubble, oursReach),
+        );
       });
-      dust.rotation.z += deltaSeconds * 0.014;
       return elapsed / total;
     }
 
@@ -3620,17 +5278,63 @@ export function createCosmicIntro({ pixelRatio } = {}) {
     if (elapsed <= mark) {
       showCaption("approach", 1 - (mark - elapsed) / T.approach, deltaSeconds);
       // One bubble swells until the camera passes through its wall.
-      const local = (elapsed - T.detonation - T.multiverse) / T.approach;
-      const eased = easeInOutSine(local);
-      driftField(lerp(150, 300, eased) * deltaSeconds);
-      if (approachStartZ === null) approachStartZ = ours.group.position.z;
-      ours.group.position.z = lerp(approachStartZ, 360, eased);
-      const swell = lerp(620, 4600, eased);
-      ours.group.scale.setScalar(swell);
+      /*
+       * There is no easing curve here at all any more.
+       *
+       * Every one that was tried had the same failing in a different place: a
+       * slope that did not match what the act before it handed over, or one
+       * that fell to zero before the act after it picked up. The approach is
+       * not a move of its own -- it is the second half of one that started
+       * eleven seconds earlier -- so it is driven by that move's parameter and
+       * there is nothing left to ease.
+       */
+      // The same parameter the multiverse was running on, carried straight on.
+      const oursJourney = (elapsed - T.inflation - T.condense) / (T.multiverse + T.approach);
+      const step = CRUISE * deltaSeconds;
+      driftField(step);
+      /*
+       * The web travels with the field, but on its own line.
+       *
+       * `driftField` moves each population at its own rate -- the spiked stars
+       * faster, the distant sprites slower -- which is what gives the field
+       * parallax. The web has to move at exactly one rate or its filaments
+       * would shear apart, so it is stepped here instead.
+       */
+      /*
+       * The web stays nested for the whole crossing.
+       *
+       * It used to be placed in the world and faded up from a tenth of the way
+       * in, which put filaments across the frame while the bubble's own shell
+       * was still in front of them -- so the structure appeared to be outside
+       * the universe, stretching past its wall, which is the opposite of what
+       * it is. Now it is simply carried by the bubble: ours swells from a
+       * speck to a sky over this act, and the web scaled to it does exactly
+       * the same thing. There is no moment where anything is introduced.
+       *
+       * Only the brightness changes, and it changes with the crossing -- what
+       * was a faint tangle inside a distant object resolves as the camera
+       * arrives among it.
+       */
+      /*
+       * Placed first, then the web nested onto it. The other way round -- which
+       * is how it was -- carries the web on the previous frame's position and
+       * scale, so the structure inside the bubble trails its own wall by one
+       * frame for the whole crossing.
+       */
+      const oursReach = placeOurs(oursJourney);
+      const nested = nestWebInside(ours);
+      /*
+       * Keyed off the geometry, not off a slice of the act's local time: this
+       * is the moment radius overtakes distance, which is the moment the
+       * camera is actually inside.
+       */
+      const inside = smootherstep((oursJourney - OURS_CROSSING) / (1 - OURS_CROSSING));
+      setWebLevel(lerp(nestedWebLevel(nested), 1, inside), seconds);
+      setLaniakeaLevel(0);
       ours.group.rotation.y += deltaSeconds * 0.06;
       // Stars come in as fast as the surface they sit on grows, so the
       // density on screen stays put while the bubble goes from a dot to a sky.
-      setBubbleDetail(ours, lerp(0.1, 1, easeInCubic(local)));
+      setBubbleDetail(ours, lerp(0.1, 1, easeInCubic(oursJourney)));
       /*
        * And ours is lit brighter than the ones it drifted past.
        *
@@ -3642,29 +5346,174 @@ export function createCosmicIntro({ pixelRatio } = {}) {
        * touching the shell, so the surface stays a membrane rather than
        * becoming a lamp.
        */
-      setBubbleOpacity(ours, lerp(0.85, 1, eased), lerp(1.1, 1.9, eased));
+      setBubbleOpacity(ours, lerp(0.8, 1, oursJourney) * (1 - inside), lerp(1, 1.9, oursJourney));
+      webSpeed = (webGroup.position.z - lastWebZ) / Math.max(1e-4, deltaSeconds);
+      lastWebZ = webGroup.position.z;
       /*
-       * Clear the field before the dive, not during it.
+       * The field keeps travelling right through the dive.
        *
-       * Once ours has been chosen the others are scenery, and a bubble still
-       * lingering while the camera is going inside another one reads as a
-       * second universe turning up out of nowhere. They are gone inside the
-       * first fifth of the phase, and they no longer recycle -- nothing may
-       * arrive from the far end once the destination is set.
+       * It used to be switched off on the first frame of this act, and that
+       * single line is most of what made the approach read as a lurch: the
+       * moment the neighbours went, the only thing left moving on screen was
+       * ours, looming. Everything the eye had been reading speed from was gone,
+       * so the shot appeared to accelerate without anything actually changing
+       * pace. They stay, at the same drift as every other act, and they leave
+       * one at a time for reasons of their own -- reaching the lens, or being
+       * covered by the universe we are entering -- until the wall crossing
+       * takes what is left of the outside with it.
        */
+      /*
+       * ...and the outside is gone by the crossing, not after it.
+       *
+       * Retiring the field over the whole act meant neighbours were still half
+       * in frame while the camera was already among our own filaments, which
+       * is the most obvious wrong thing a shot can contain: we are inside one
+       * universe, and there is another one hanging over the edge of it. The
+       * dissolve now finishes exactly where being *inside* begins.
+       */
+      const outside = 1 - smootherstep(
+        clamp01((oursJourney - (OURS_CROSSING - 0.24)) / 0.24),
+      );
       bubbles.forEach((bubble, index) => {
         if (index === 0) return;
-        setBubbleOpacity(bubble, 0);
+        driftBubble(bubble, step);
+        bubble.group.rotation.y += deltaSeconds * 0.05;
+        setBubbleOpacity(
+          bubble,
+          0.85 * bubbleJourneyFade(bubble) * occludedByOurs(bubble, oursReach) * outside,
+        );
       });
-      // Galaxies resolve out of the haze as we cross the wall.
-      galaxyGroup.visible = true;
-      const reveal = clamp01((eased - 0.4) * 1.7);
-      galaxySprites.forEach((sprite) => {
-        applyFade(sprite, reveal * 0.8 * edgeFade(sprite.position.z, -380, 300, 420));
-      });
-      setDeepStarLevel(reveal * 0.95);
-      setNebulaLevel(reveal, seconds);
+      /*
+       * Still no sky.
+       *
+       * It went out at the top of the multiverse and stays out through the
+       * whole of the web. Nothing between here and the descent into Laniakea
+       * is at a scale where a star is a thing you could see -- at these
+       * distances a cluster of a thousand galaxies is a point of light.
+       */
+      dustMaterial.uniforms.uOpacity.value = 0;
+      spikeMaterial.opacity = 0;
+      galaxyGroup.visible = false;
+      setDeepStarLevel(0);
+      setNebulaLevel(0, seconds);
       dust.rotation.z += deltaSeconds * 0.02;
+      return elapsed / total;
+    }
+
+    /* ------------------------------------------------------- the cosmic web */
+
+    mark += T.cosmicWeb;
+    if (elapsed <= mark) {
+      const local = 1 - (mark - elapsed) / T.cosmicWeb;
+      showCaption("cosmicWeb", local, deltaSeconds);
+      /*
+       * Eleven seconds inside the structure, and nothing else on screen at all.
+       *
+       * Not even the star field. The web is the largest thing there is and it
+       * is made of very faint threads; anything brighter in the frame simply
+       * takes the eye, and every attempt at showing it alongside stars or
+       * galaxies ended with the web invisible. It is also the honest picture:
+       * at this scale a knot is a cluster of a thousand galaxies, so there is
+       * nothing in view that could be resolved into a star.
+       *
+       * `driftField` is not called here for the same reason -- with every
+       * other population at zero opacity there is nothing for it to move, and
+       * skipping it saves some eighty thousand float writes a frame.
+       */
+      setWebLevel(1, seconds);
+      /*
+       * Steering onto Laniakea, and closing on it.
+       *
+       * The camera does not move -- it never does outside the detonation -- so
+       * the whole web is slid instead: sideways until the chosen crossing sits
+       * on the axis, and forward until it fills the frame. Same manoeuvre in a
+       * different frame of reference, and every other position in the scene
+       * stays where it was.
+       *
+       * The forward part is a *solved trajectory*, not an accumulated drift.
+       * The first version accumulated a drift and then added however much
+       * extra was needed to park the crossing at a fixed distance -- which
+       * meant that once it had got there the web stopped dead and sat still
+       * for the rest of the act. That was a visible pause, and it was
+       * structural: any scheme that targets a position and reaches it early
+       * has to stop.
+       *
+       * So the crossing's depth is interpolated directly from wherever it
+       * happened to be when the act opened to where it needs to end, on
+       * `local^1.8` -- an ease-in whose slope at the end is 1.8, not zero. It
+       * arrives *at speed*, and the act after it picks that speed up and eases
+       * it down, so nothing anywhere on the join is standing still.
+       */
+      /*
+       * A Hermite, because both ends of the trajectory have a speed to match.
+       *
+       * `local^1.8` had the right finish -- a slope of 1.8 rather than zero, so
+       * the arrival hands a live velocity to the act after it -- but its slope
+       * at the *start* is zero, so the web came to a dead stop the instant this
+       * act opened and had to get going again. That was the pause on entering.
+       *
+       * A cubic Hermite is the curve that takes an endpoint velocity at each
+       * end, which is what lets one leg be handed the speed the last one
+       * finished at. Nothing anywhere on either seam changes speed abruptly.
+       */
+      if (webApproachStart === null) {
+        /*
+         * Picked up from wherever the nesting actually left it, rather than
+         * from a placement of its own. The scale is 1 by construction at this
+         * point and the position is whatever carrying it inside the bubble
+         * produced, so the act simply continues from there and there is
+         * nothing to reconcile.
+         */
+        webGroup.scale.setScalar(1);
+        webDriftZ = webGroup.position.z;
+        webApproachStart = laniakea.z + webDriftZ;
+        webEntrySpeed = webSpeed;
+      }
+      const LANIAKEA_ARRIVAL_Z = -260;
+      const spanSeconds = T.cosmicWeb / 1000;
+      const travel = LANIAKEA_ARRIVAL_Z - webApproachStart;
+      /*
+       * A cruise, not a run-up.
+       *
+       * `m1` used to be 1.8, which meant the act spent its first half barely
+       * moving and its last half rushing -- and a slow first half next to a
+       * decelerating approach is indistinguishable from a stall. Held near one
+       * at both ends the whole leg travels at close to a constant rate: the
+       * web goes by steadily, the crossing grows steadily, and the arrival
+       * settles onto it rather than charging it.
+       */
+      /*
+       * Held close to one at both ends, so the leg is as near a constant rate
+       * as a curve with matched endpoints can be. m0 is whatever the crossing
+       * was closing at, clamped so an unusual entry cannot make the first
+       * half crawl or the second half sprint.
+       */
+      const m0 = Math.min(1.25, Math.max(0.75, (webEntrySpeed * spanSeconds) / travel));
+      const m1 = 1.0;
+      const march = hermite01(local, m0, m1);
+      const marchRate = hermiteRate01(local, m0, m1);
+      webDriftZ = webApproachStart + travel * march - laniakea.z;
+      webSpeed = (travel * marchRate) / spanSeconds;
+      // Steering starts early and finishes late, so the crossing drifts onto
+      // the axis over most of the act instead of being swung onto it at the end.
+      const focus = smootherstep(local * 0.96);
+      webGroup.position.z = webDriftZ;
+      webGroup.position.x = -laniakea.x * focus;
+      webGroup.position.y = -laniakea.y * focus;
+      // It lights early, so the destination is something seen coming rather
+      // than something the shot turns out to have been pointed at. The bloom
+      // at the end is the arrival itself: the crossing fills the frame and the
+      // galaxies inside it come up through the light.
+      setLaniakeaLevel(clamp01((local - 0.08) / 0.3), smootherstep((local - 0.76) / 0.24));
+
+      // Everything else stays down. The bubble we came through is behind us.
+      setBubbleOpacity(ours, Math.max(0, 0.9 * (1 - local * 3)));
+      bubbles.forEach((bubble, index) => { if (index > 0) setBubbleOpacity(bubble, 0); });
+      galaxyGroup.visible = false;
+      dustMaterial.uniforms.uOpacity.value = 0;
+      spikeMaterial.opacity = 0;
+      setDeepStarLevel(0);
+      setNebulaLevel(0, seconds);
       return elapsed / total;
     }
 
@@ -3672,7 +5521,22 @@ export function createCosmicIntro({ pixelRatio } = {}) {
     if (elapsed <= mark) {
       showCaption("galaxies", 1 - (mark - elapsed) / T.galaxies, deltaSeconds);
       const local = 1 - (mark - elapsed) / T.galaxies;
-      setBubbleOpacity(ours, Math.max(0, 0.95 * (1 - local * 2.6)));
+      setBubbleOpacity(ours, 0);
+      /*
+       * Dropping inside one knot of the web.
+       *
+       * The web goes out over the first two seconds and does not come back --
+       * it is the view from outside a cluster, and this act is the view from
+       * within one. Everything that was switched off crossing into the
+       * universe comes back on the same beat, which is what makes the two read
+       * as one move: a scale change out, and a scale change back in.
+       */
+      const descent = clamp01(local / 0.17);
+      setWebLevel(1 - descent, seconds);
+      setLaniakeaLevel(1 - descent, 1 - descent);
+      dustMaterial.uniforms.uOpacity.value = descent;
+      spikeMaterial.opacity = descent * 0.9;
+      galaxyGroup.visible = true;
       bubbles.forEach((bubble, index) => { if (index > 0) setBubbleOpacity(bubble, 0); });
       /*
        * A cruise, not a sprint.
@@ -3685,7 +5549,17 @@ export function createCosmicIntro({ pixelRatio } = {}) {
        * multiverse's own band, so the two acts read as one continuous move at
        * one pace.
        */
-      driftField(lerp(300, 175, easeOutCubic(Math.min(1, local * 1.5))) * deltaSeconds);
+      const step = CRUISE * deltaSeconds;
+      driftField(step);
+      /*
+       * The web carries its own speed across the seam and is damped down to
+       * the field's, rather than being handed the field's speed on frame one.
+       * Exact exponential damping, so the rate is the same at any frame rate.
+       */
+      const webTarget = (step / Math.max(1e-4, deltaSeconds)) * WEB_DRIFT;
+      webSpeed += (webTarget - webSpeed) * (1 - Math.exp(-4.5 * deltaSeconds));
+      webDriftZ += webSpeed * deltaSeconds;
+      webGroup.position.z = webDriftZ;
       galaxySprites.forEach((sprite) => {
         /*
          * The shimmer has to start from nothing.
@@ -3703,13 +5577,13 @@ export function createCosmicIntro({ pixelRatio } = {}) {
         // and a step across seventy-eight sprites at once reads as the lights
         // being dimmed.
         const shimmer = Math.min(1, local * 4) * Math.min(1, (1 - local) * 4);
-        applyFade(sprite, (0.8 + Math.sin((local + sprite.position.x) * 2.2)
+        applyFade(sprite, descent * (0.8 + Math.sin((local + sprite.position.x) * 2.2)
           * 0.12 * shimmer)
           * edgeFade(sprite.position.z, -380, 300, 420));
       });
-      setDeepStarLevel(0.95);
+      setDeepStarLevel(descent * 0.95);
       spirals.forEach((points) => { points.rotation.y += deltaSeconds * 0.04; });
-      setNebulaLevel(Math.min(1, local * 2.5), seconds);
+      setNebulaLevel(descent, seconds);
       dust.rotation.z += deltaSeconds * 0.04;
 
       // Our galaxy resolves out of the field in the last third, so the next
@@ -3734,7 +5608,20 @@ export function createCosmicIntro({ pixelRatio } = {}) {
     if (elapsed <= mark) {
       showCaption("milkyWay", 1 - (mark - elapsed) / T.milkyWay, deltaSeconds);
       const local = 1 - (mark - elapsed) / T.milkyWay;
-      const eased = easeInOutSine(local);
+      /*
+       * One rate, and it is the same rate the rest of the journey runs at.
+       *
+       * The galaxy leg used to be the least uniform stretch in the sequence.
+       * This act closed on the galaxy at 0.07 e-folds a second and the dive
+       * that follows ran at 0.84 -- twelve times faster, from a standing
+       * start, which is both the pause at the seam and the reason the galaxies
+       * felt as though they were being travelled through faster than the
+       * universe was. The two are now rebalanced against each other and both
+       * are geometric, so the growth rate is constant *within* each act as
+       * well as comparable between them: about 0.22 here against 0.23 for the
+       * approach through the multiverse.
+       */
+      const eased = local;
       // Everything else falls away: from here there is only one galaxy.
       const recede = clamp01(1 - local * 1.8);
       galaxySprites.forEach((sprite) => {
@@ -3742,7 +5629,7 @@ export function createCosmicIntro({ pixelRatio } = {}) {
       });
       setDeepStarLevel(recede * 0.95);
       setNebulaLevel(recede, seconds);
-      driftField(lerp(175, 120, easeOutCubic(local)) * deltaSeconds);
+      driftField(CRUISE * deltaSeconds);
       dustMaterial.uniforms.uOpacity.value = lerp(1, 0.5, eased);
       spikeMaterial.opacity = lerp(0.9, 0.45, eased);
 
@@ -3761,8 +5648,10 @@ export function createCosmicIntro({ pixelRatio } = {}) {
         lerp(-1.16, -0.94, eased),
         lerp(0.4, 0.16, eased),
         lerp(0.22, 0.08, eased),
-        lerp(1500, 1780, eased),
-        lerp(5600, 3150, eased),
+        // Scale and range are both geometric: a linear range lerp reads as
+        // decelerating, because apparent size goes as its reciprocal.
+        geometric(1500, 3200, eased),
+        geometric(5600, 1600, eased),
         aim,
       );
       setDiscOpacity(lerp(0.72, 1.25, clamp01(local * 2)));
@@ -3781,13 +5670,36 @@ export function createCosmicIntro({ pixelRatio } = {}) {
     if (elapsed <= mark) {
       showCaption("orionArm", 1 - (mark - elapsed) / T.orionArm, deltaSeconds);
       const local = 1 - (mark - elapsed) / T.orionArm;
-      const eased = easeInCubic(clamp01(local));
+      /*
+       * This was `easeInCubic`, and that single call was the pause.
+       *
+       * A cubic ease-in has zero slope at u = 0, so the dive began at a dead
+       * stop -- the act before it had been closing steadily, and the first
+       * second of this one moved almost nothing at all. It then made the time
+       * back by accelerating to twelve times the cruise, which is why the
+       * descent read as a lurch after a hang.
+       *
+       * What replaces it is a Hermite in *log* space whose starting slope is
+       * the rate the pan before it was closing at -- about 0.17 e-folds a
+       * second -- building to roughly half an e-fold by the end. So the dive
+       * begins at exactly the speed the shot was already travelling and
+       * accelerates into it, which is what a dive is; the old one stopped and
+       * then bolted.
+       */
+      const eased = hermite01(clamp01(local), 0.46, 1.35);
       galaxySprites.forEach((sprite) => { applyFade(sprite, 0); });
       setDeepStarLevel(0);
       setNebulaLevel(0, seconds);
       // Local stars streaming past, the only cue that the camera is moving
       // once the galaxy fills the frame.
-      driftField(lerp(120, 1500, eased) * deltaSeconds);
+      /*
+       * The dive used to accelerate to twelve times the cruise here, which was
+       * the largest speed change anywhere in the sequence and read as the shot
+       * being skipped forward. The descent into the disc is now the same rate
+       * as everything else; what makes it feel like a dive is the camera
+       * rolling onto the disc plane, not the throttle.
+       */
+      driftField(CRUISE * deltaSeconds);
       dustMaterial.uniforms.uOpacity.value = lerp(0.5, 0.9, eased);
       spikeMaterial.opacity = lerp(0.45, 0.8, eased);
 
@@ -3800,8 +5712,8 @@ export function createCosmicIntro({ pixelRatio } = {}) {
         lerp(-0.94, -0.32, eased),
         lerp(0.16, -0.22, eased),
         lerp(0.08, 0.02, eased),
-        lerp(1780, 15000, eased),
-        lerp(3150, 90, eased),
+        geometric(3200, 15000, eased),
+        geometric(1600, 90, eased),
         1,
       );
 
@@ -3828,7 +5740,17 @@ export function createCosmicIntro({ pixelRatio } = {}) {
     if (elapsed <= mark) {
       showCaption("sunApproach", 1 - (mark - elapsed) / T.sunApproach, deltaSeconds);
       const local = 1 - (mark - elapsed) / T.sunApproach;
-      const eased = easeInOutSine(local);
+      /*
+       * Picks up the dive's exit rate and eases off it.
+       *
+       * In log space, so the number that has to match across the seam is the
+       * *relative* growth rate: the dive leaves at about half an e-fold a
+       * second and this act would run at 0.38 flat, which is a step down at
+       * the join. Taking the incoming rate as the start slope removes it, and
+       * settling to 0.85 of average by the end is the one deceleration in the
+       * sequence that is earned -- the shot is arriving.
+       */
+      const eased = hermite01(clamp01(local), 1.3, 0.85);
 
       /*
        * The last leg: one star, growing.
@@ -3844,7 +5766,7 @@ export function createCosmicIntro({ pixelRatio } = {}) {
         lerp(-0.32, -0.24, eased),
         lerp(-0.22, -0.3, eased),
         0.02,
-        lerp(15000, 19000, eased),
+        geometric(15000, 19000, eased),
         90,
         1,
       );
@@ -3854,16 +5776,22 @@ export function createCosmicIntro({ pixelRatio } = {}) {
       mwMaterial.opacity = lerp(1, 0.42, eased);
       knotMaterial.opacity = lerp(0.24, 0.1, eased);
 
-      driftField(lerp(1500, 240, easeOutCubic(local)) * deltaSeconds);
+      driftField(CRUISE * deltaSeconds);
       dustMaterial.uniforms.uOpacity.value = lerp(0.9, 0.55, eased);
       spikeMaterial.opacity = lerp(0.8, 0.5, eased);
 
       sunStar.visible = true;
-      const grow = easeInCubic(local);
+      /*
+       * Geometric here too, and for the same reason as everywhere else: the
+       * cubic ease-in held the star at its opening size for the first second
+       * and a half of the act and then rushed it, which after a dive that had
+       * just been fixed for exactly that fault was the last place it survived.
+       */
+      const grow = eased;
       const breath = 1 + Math.sin(seconds * 2.1) * 0.018;
-      sunCore.scale.setScalar(lerp(1.4, 30, grow) * breath);
-      sunCorona.scale.setScalar(lerp(3.4, 96, grow) * breath);
-      sunFlare.scale.setScalar(lerp(6, 190, grow));
+      sunCore.scale.setScalar(geometric(1.4, 30, grow) * breath);
+      sunCorona.scale.setScalar(geometric(3.4, 96, grow) * breath);
+      sunFlare.scale.setScalar(geometric(6, 190, grow));
       sunFlareMaterial.rotation += deltaSeconds * 0.05;
       sunCoreMaterial.opacity = settle;
       sunCoronaMaterial.opacity = settle * 0.72;
@@ -3885,7 +5813,11 @@ export function createCosmicIntro({ pixelRatio } = {}) {
     // Everything that is not the star is gone by a third of the way in, so the
     // bloom happens against nothing.
     const fade = Math.max(0, 1 - local * 3);
-    driftField(lerp(240, 0, easeOutCubic(local)) * deltaSeconds);
+    /*
+     * The only deceleration in the journey, and the only one that is earned:
+     * the shot is coming to rest on the star it has been travelling toward.
+     */
+    driftField(lerp(CRUISE, 0, easeOutCubic(local)) * deltaSeconds);
     dustMaterial.uniforms.uOpacity.value = fade * 0.55;
     spikeMaterial.opacity = fade * 0.5;
     setDiscOpacity(0);
@@ -3943,6 +5875,22 @@ export function createCosmicIntro({ pixelRatio } = {}) {
     dustMaterial.uniforms.uScale.value = Math.max(1, height) * dpr * 0.5;
   }
 
+  /*
+   * Detach at once; free in slices.
+   *
+   * Detaching is what actually ends the sequence and it costs nothing -- a few
+   * hundred parent pointers. Freeing is the expensive half: this scene holds
+   * upwards of a million and a half points across a dozen large buffers, and
+   * releasing them in one pass means the driver frees tens of megabytes of
+   * vertex data synchronously. That lands in the same frame as the cut to the
+   * solar system, which is exactly where a stall is least affordable, and it
+   * is the reason the arrival pause came back after the web was added: the
+   * cost of this function scales with everything put into the opening.
+   *
+   * So the queue is drained a few milliseconds at a time. Nothing else is
+   * waiting on it -- the objects are already out of the scene graph and the
+   * memory is unreachable either way; the only question is which frames pay.
+   */
   function dispose() {
     caption.remove();
     // Collect first, then detach. Removing objects during traverse() corrupts
@@ -3951,9 +5899,26 @@ export function createCosmicIntro({ pixelRatio } = {}) {
     const objects = [];
     scene.traverse((object) => { if (object !== scene) objects.push(object); });
     objects.forEach((object) => object.removeFromParent?.());
-    disposables.forEach((resource) => resource.dispose?.());
-    disposables.length = 0;
     scene.clear();
+
+    const queue = disposables.slice();
+    disposables.length = 0;
+    const SLICE_MS = 3;
+    const drain = () => {
+      const started = performance.now();
+      while (queue.length > 0 && performance.now() - started < SLICE_MS) {
+        queue.pop()?.dispose?.();
+      }
+      if (queue.length > 0) schedule();
+    };
+    const schedule = () => {
+      if (typeof requestIdleCallback === "function") {
+        requestIdleCallback(drain, { timeout: 240 });
+      } else {
+        setTimeout(drain, 32);
+      }
+    };
+    schedule();
   }
 
   return { scene, camera, update, resize, dispose, get durationMs() { return phaseTotal(); } };

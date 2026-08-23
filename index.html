@@ -122,6 +122,40 @@
           window.cancelAnimationFrame = (handle) => pending.delete(handle);
           Object.defineProperty(document, "hidden", { get: () => false });
           Object.defineProperty(document, "visibilityState", { get: () => "visible" });
+
+          /*
+           * Timers as well, and for a reason that cost an afternoon to find.
+           *
+           * Clamping background timers to a second is survivable. Freezing
+           * them is not, and Chrome does freeze them outright once a page has
+           * been hidden for a few minutes -- so the gate, whose whole
+           * click-to-detonation chain is nested setTimeouts, simply never
+           * reaches resolve(). Under automation that reads as "the click does
+           * nothing", which is a very convincing and entirely false bug.
+           *
+           * Driven off the same frame clock, every timer fires on schedule
+           * however long the tab has been out of sight. Diagnostic only: this
+           * is inside the ?raf=poll branch.
+           */
+          const timers = new Map();
+          let nextTimer = 1;
+          window.setTimeout = (callback, delay) => {
+            if (typeof callback !== "function") return 0;
+            const handle = nextTimer++;
+            timers.set(handle, { due: performance.now() + Math.max(0, delay || 0), callback });
+            return handle;
+          };
+          window.clearTimeout = (handle) => timers.delete(handle);
+          const pump = () => {
+            const now = performance.now();
+            timers.forEach((timer, handle) => {
+              if (timer.due > now) return;
+              timers.delete(handle);
+              try { timer.callback(); } catch (error) { console.error(error); }
+            });
+            window.requestAnimationFrame(pump);
+          };
+          window.requestAnimationFrame(pump);
         }());
       }
     </script>

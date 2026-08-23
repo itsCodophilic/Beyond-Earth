@@ -1,0 +1,98 @@
+<!doctype html>
+<!--
+  Scrub harness for the singularity gate. Not part of the site.
+
+  The gate lives behind the whole application's boot -- shaders, textures and
+  belt geometry all compile before the manifest finishes, which is upwards of
+  forty seconds on a cold cache and was the only way to look at it. This runs
+  the manifest and the gate on their own, with nothing else in the page.
+
+    gate-preview.html            real time
+    gate-preview.html?fast=1     skip the manifest, land the mark immediately
+    gate-preview.html?hold=<ms>  freeze every animation at <ms> after arrival
+
+  `hold` is the useful one: the interesting frames of the shockwaves and of the
+  wind-up are tens of milliseconds wide, and clicking and watching cannot catch
+  them.
+-->
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>gate preview</title>
+    <link rel="stylesheet" href="./src/css/intro.css" />
+    <style>
+      html, body { margin: 0; height: 100%; background: #000104; overflow: hidden; }
+      #hud {
+        position: fixed; left: 12px; bottom: 10px; z-index: 90;
+        font: 11px ui-monospace, Menlo, monospace; color: #7fe3a0;
+        text-shadow: 0 0 8px #000;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="loader" class="intro"></div>
+    <div id="hud"></div>
+    <script type="module">
+      import { createIntroSequence } from "./src/js/ui/introSequence.js";
+
+      const params = new URLSearchParams(location.search);
+      const fast = params.get("fast") === "1";
+      const hold = params.get("hold") === null ? null : Number(params.get("hold"));
+      const hud = document.querySelector("#hud");
+
+      const intro = createIntroSequence();
+      const STEPS = [
+        "boot", "ephemeris", "textures", "sun", "corona", "moon", "satellites",
+        "environment", "beltPool", "beltMajor", "beltFamilies", "beltBoulders",
+        "beltDebris", "compile", "ready",
+      ];
+      STEPS.forEach((name) => intro.step(name));
+
+      window.__intro = intro;
+      window.__gate = () => document.querySelector(".intro__gate");
+
+      // Freeze the whole gate at a chosen moment. Every animation in it is
+      // declarative, so seeking is just setting currentTime -- but only on the
+      // ones being inspected: rewinding the mark's own arrival fade as well
+      // brings the button back at 16% opacity, which looks exactly like a
+      // rendering bug and is not one.
+      const SEEKABLE = /^intro-(shock|wind|spark|spark-fall|convulse|kindle|breathe|charge)/;
+      function freeze(at) {
+        const gate = window.__gate();
+        if (!gate) return;
+        gate.getAnimations({ subtree: true }).forEach((a) => {
+          if (SEEKABLE.test(a.animationName)) { a.currentTime = at; a.pause(); }
+          else { try { a.finish(); } catch (e) { /* infinite: leave it */ } }
+        });
+        hud.textContent = `held at ${at}ms after arrival`;
+      }
+
+      if (fast) {
+        // Skip the descent: land the mark as soon as the gate is live.
+        const watch = new MutationObserver(() => {
+          const gate = window.__gate();
+          if (gate && gate.classList.contains("is-live")) {
+            watch.disconnect();
+            gate.querySelector(".intro__singularity")
+              ?.dispatchEvent(new AnimationEvent("animationend", { bubbles: true }));
+          }
+        });
+        watch.observe(document.querySelector("#loader"), { subtree: true, attributes: true, childList: true });
+      }
+
+      intro.ready().then(() => { hud.textContent = "clicked"; });
+
+      if (hold !== null) {
+        const watch = new MutationObserver(() => {
+          const gate = window.__gate();
+          if (gate && gate.classList.contains("is-arrived")) {
+            watch.disconnect();
+            setTimeout(() => freeze(hold), 120);
+          }
+        });
+        watch.observe(document.querySelector("#loader"), { subtree: true, attributes: true, childList: true });
+      }
+      window.__freeze = freeze;
+    </script>
+  </body>
+</html>

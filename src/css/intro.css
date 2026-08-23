@@ -373,29 +373,24 @@
     0 0 92px 26px rgba(255, 138, 72, 0.18);
 }
 
-/* Halo and breathing begin only once it has landed. */
+/* Breathing begins only once it has landed. */
 .is-arrived .intro__core {
   animation: intro-breathe 4200ms ease-in-out infinite;
 }
 
-.is-arrived .intro__core::after {
-  content: "";
-  position: absolute;
-  inset: -26px;
-  border-radius: 50%;
-  border: 1px solid rgba(255, 200, 150, 0.15);
-  animation: intro-halo 4200ms ease-out infinite;
-}
-
-/* A single ring pushed outward at the moment of arrival. */
-.is-arrived .intro__core::before {
-  content: "";
-  position: absolute;
-  inset: -8px;
-  border-radius: 50%;
-  border: 1px solid rgba(255, 214, 168, 0.65);
-  animation: intro-landing 1500ms cubic-bezier(0.16, 0.84, 0.3, 1) both;
-}
+/*
+ * No rings on the mark.
+ *
+ * There were two: a hairline halo pulsing outward forever, and a single ring
+ * pushed out on arrival -- both 1px borders on the core's pseudo-elements, and
+ * both reappearing during the wind-up and the collapse. A crisp circle at a
+ * fixed radius is a hoop drawn on the screen, and it read as chrome around a
+ * button rather than as anything the mark was doing. The same argument
+ * retired the shockwave rings in the burst, for the same reason.
+ *
+ * What is left is the box-shadow, which has no edge, and the shockwaves --
+ * which are not rings around the mark but waves crossing the whole frame.
+ */
 
 .intro__singularity.is-arrived:hover .intro__core {
   box-shadow:
@@ -410,20 +405,9 @@
   100% { transform: translateY(0); opacity: 1; }
 }
 
-@keyframes intro-landing {
-  from { transform: scale(0.4); opacity: 0.9; }
-  to   { transform: scale(7); opacity: 0; }
-}
-
 @keyframes intro-breathe {
   0%, 100% { transform: scale(1); }
   50%      { transform: scale(1.55); }
-}
-
-@keyframes intro-halo {
-  0%   { transform: scale(0.55); opacity: 0; }
-  32%  { opacity: 0.85; }
-  100% { transform: scale(2); opacity: 0; }
 }
 
 /*
@@ -516,11 +500,6 @@
     intro-kindle 3200ms ease-in both;
 }
 
-/* The halo tightens as the spin picks up. */
-.intro__singularity.is-winding .intro__core::after {
-  animation: intro-halo 1500ms ease-out infinite;
-}
-
 /*
  * Then it convulses.
  *
@@ -531,14 +510,6 @@
  */
 .intro__singularity.is-collapsing .intro__core {
   animation: intro-convulse 1400ms cubic-bezier(0.38, 0, 0.6, 1) both;
-}
-
-.intro__singularity.is-collapsing .intro__core::after {
-  animation: intro-halo 300ms ease-out infinite;
-}
-
-.intro__singularity.is-collapsing .intro__core::before {
-  animation: intro-halo 220ms ease-out infinite;
 }
 
 @keyframes intro-kindle {
@@ -625,11 +596,6 @@
   animation: intro-charge 900ms cubic-bezier(0.7, 0, 0.84, 0) both;
 }
 
-.intro__singularity.is-charging .intro__core::after,
-.intro__singularity.is-charging .intro__core::before {
-  animation: intro-charge-collapse 620ms cubic-bezier(0.7, 0, 0.84, 0) both;
-}
-
 /*
  * Continues from scale(0.3), not from scale(1).
  *
@@ -641,11 +607,6 @@
   0%   { transform: scale(0.3); }
   46%  { transform: scale(0.14); box-shadow: 0 0 30px 8px rgba(255, 248, 232, 1); }
   100% { transform: scale(70); box-shadow: 0 0 220px 120px rgba(255, 250, 240, 1); }
-}
-
-@keyframes intro-charge-collapse {
-  from { transform: scale(1); opacity: 0.8; }
-  to   { transform: scale(0.1); opacity: 0; }
 }
 
 /* Full-frame blowout at detonation, fading to transparent so the WebGL burst
@@ -732,8 +693,6 @@ body.is-cosmic-intro .body-connector {
   .intro__spiral,
   .intro__spark,
   .intro__core,
-  .intro__core::after,
-  .intro__core::before,
   .intro__singularity.is-winding .intro__core,
   .intro__singularity.is-collapsing .intro__core,
   .intro__lore-line,
@@ -923,4 +882,56 @@ body.is-cosmic-intro::-webkit-scrollbar { width: 0; height: 0; }
   16%  { background-color: rgba(255, 252, 246, 0.40); }
   44%  { background-color: rgba(248, 250, 255, 0.10); }
   100% { background-color: rgba(0, 1, 4, 0); }
+}
+
+/*
+ * The cover between the gate and the opening's first frame.
+ *
+ * A WebGL canvas is only presented when the main thread yields, so clearing it
+ * before a long synchronous build does not put black on screen -- the browser
+ * keeps showing the last frame it was given, which is the solar system. This
+ * is a DOM node, so it paints on the compositor's own schedule and holds
+ * whatever the main thread is doing.
+ *
+ * It sits under `.intro` (z-index 10) so the gate's blowout still plays over
+ * the top of it, and it opens at the blowout's own white rather than at black:
+ * cutting to black between the white peak and the white first frame of the
+ * burst is a hole punched in the middle of the flash. It falls away from that
+ * white over the first second instead, which is the same thing the expansion
+ * itself does.
+ */
+.cosmic-blackout {
+  position: fixed;
+  inset: 0;
+  z-index: 9;
+  pointer-events: none;
+  background: #000;
+  animation: cosmic-blackout-settle 1100ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+/*
+ * White first, and held there.
+ *
+ * The build is usually well under a second, and for that whole stretch the
+ * cover is what the viewer is looking at -- so it has to be the same white the
+ * blowout peaked at and the same white the burst opens on, or the cover itself
+ * becomes a visible event between two flashes. It only falls away toward the
+ * dark if the build runs long, in which case a held beat before the beginning
+ * is the right thing to see anyway.
+ */
+@keyframes cosmic-blackout-settle {
+  0% { background: #ffffff; }
+  40% { background: #ffffff; }
+  70% { background: #e8c9a0; }
+  100% { background: #08040a; }
+}
+
+/*
+ * Frozen where it stands, then dissolved. Resetting it to black first would
+ * put a cut in exactly the place the whole element exists to remove.
+ */
+.cosmic-blackout.is-lifting {
+  animation-play-state: paused;
+  opacity: 0;
+  transition: opacity 320ms linear;
 }

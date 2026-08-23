@@ -1092,6 +1092,35 @@ import { createCosmicIntro } from './scene/space/cosmicIntro.js';
   // solar system. Null except while it is playing; disposed immediately after,
   // so it costs nothing once the viewer has arrived.
   let cosmicIntro = null;
+  /*
+   * True from the click until the opening's first frame exists.
+   *
+   * The window is not instantaneous -- building the sequence is seconds of
+   * work -- and for the whole of it the destination is still what the canvas
+   * holds. Nothing may be drawn while this is up.
+   */
+  let cosmicIntroPending = false;
+  /*
+   * Diagnostic: start the opening partway in.
+   *
+   * ?introFrom=24 runs the sequence forward to twenty-four seconds before the
+   * first frame is drawn, one sixtieth at a time. Stepping rather than jumping
+   * matters: half the journey is accumulated per frame -- every drift, every
+   * bubble -- so a single large delta lands somewhere the sequence would never
+   * actually have been. Twelve hundred steps cost about a tenth of a second,
+   * which is a cheap way to look at the tenth act without watching the nine
+   * before it.
+   */
+  let introSeekSeconds = Number(
+    new URLSearchParams(location.search).get("introFrom") || 0,
+  );
+  /*
+   * ...and hold there. With ?introHold=1 every frame after the seek is
+   * advanced by zero, so the sequence sits on one state and can be looked at
+   * for as long as it takes. window.__intro.update(1/60) steps it on by hand.
+   */
+  const introHold = new URLSearchParams(location.search).get("introHold") === "1";
+  let cosmicIntroBlackout = null;
 
   // Diagnostic handle used to inspect and toggle scene layers from the console
   // while tuning. Safe to remove; nothing in the experience reads it.
@@ -5528,6 +5557,23 @@ import { createCosmicIntro } from './scene/space/cosmicIntro.js';
   let lastWarmAt = -Infinity;
   let lastWarmObjectCount = -1;
   let quietWarmPasses = 0;
+  let preArrivalWarmed = false;
+  /*
+   * Diagnostic: which scene reached the framebuffer, and when.
+   *
+   * ?renderTrace=1 records one entry per presented frame -- "system" for the
+   * solar system, "intro" for the opening -- plus the moments the hand-over
+   * markers fire. A single "system" entry between the click and the arrival is
+   * the flash of Earth, and it names the frame that drew it.
+   */
+  const renderTrace = new URLSearchParams(location.search).get("renderTrace") === "1"
+    ? (window.__renderTrace = [])
+    : null;
+  const trace = (what) => {
+    if (renderTrace && renderTrace.length < 20000) {
+      renderTrace.push(Math.round(performance.now()) + " " + what);
+    }
+  };
   const arrivalDebug = new URLSearchParams(location.search).get("arrivalDebug") === "1"
     ? (window.__arrival = { warms: [], frames: [], landed: false })
     : null;
@@ -5630,6 +5676,7 @@ import { createCosmicIntro } from './scene/space/cosmicIntro.js';
       camera.updateMatrixWorld();
       renderer.setRenderTarget(warmRenderTarget);
       renderer.render(scene, camera);
+      trace("warm(target)");
     } catch (error) {
       console.warn("[BeyondEarth] destination warm-up failed", error);
     } finally {
@@ -5653,6 +5700,20 @@ import { createCosmicIntro } from './scene/space/cosmicIntro.js';
     - Main render loop that updates the camera, rotates bodies, animates particles, and renders the scene.
   */
   function animate(frameTime = performance.now()) {
+    /*
+     * The gap between the click and the first frame of the opening.
+     *
+     * The sequence takes a couple of seconds to build, and until it exists
+     * this loop would otherwise fall straight through to the solar system and
+     * draw it -- behind a gate overlay that is in the middle of animating
+     * itself transparent. That is the flash of Earth: not a stale buffer, a
+     * live redraw of the destination during the hand-over. The frame is
+     * already blank; the correct thing to do with it is nothing at all.
+     */
+    if (!cosmicIntro && cosmicIntroPending) {
+      requestAnimationFrame(animate);
+      return;
+    }
     // While the opening burst plays it owns the frame entirely. The solar
     // system is already built and its satellites keep hydrating on their own
     // timers underneath, so nothing is lost by pausing scene updates here.
@@ -5682,14 +5743,47 @@ import { createCosmicIntro } from './scene/space/cosmicIntro.js';
        * covers it.
        */
       warmDestination(frameTime, { heavy: false });
+      // Diagnostic handle, and only when a diagnostic asked for one.
+      if (introHold) window.__intro = cosmicIntro;
 
       let progress = 1;
       try {
-        progress = cosmicIntro.update(introDelta);
+        if (introSeekSeconds > 0) {
+          const steps = Math.round(introSeekSeconds * 60);
+          introSeekSeconds = 0;
+          for (let i = 0; i < steps; i += 1) cosmicIntro.update(1 / 60);
+        }
+        progress = cosmicIntro.update(introHold ? 0 : introDelta);
         renderer.render(cosmicIntro.scene, cosmicIntro.camera);
+        trace("intro");
+        if (cosmicIntroBlackout) {
+          // The opening owns the frame now. Faded rather than cut, because the
+          // first frames of the burst are a white field and the cover is black.
+          const cover = cosmicIntroBlackout;
+          cosmicIntroBlackout = null;
+          cover.classList.add("is-lifting");
+          setTimeout(() => cover.remove(), 400);
+        }
       } catch (error) {
         console.error("[BeyondEarth] opening sequence failed, skipping to the system", error);
         progress = 1;
+      }
+
+      /*
+       * The heavy warm happens a beat *before* the join, not at it.
+       *
+       * Recompiling and redrawing the destination is twenty to forty
+       * milliseconds, and doing it in the same tick as the cut means the last
+       * frame of the flare is held on screen for all of it -- which is the
+       * arrival pause, and no amount of veil hides a still frame. Nine tenths
+       * of the way through, the shot is a single star growing in the middle of
+       * an otherwise empty frame and travelling fast; a couple of dropped
+       * frames there are invisible. By the time the cut arrives the forced
+       * pass below usually finds nothing changed and returns immediately.
+       */
+      if (!preArrivalWarmed && progress > 0.9) {
+        preArrivalWarmed = true;
+        warmDestination(frameTime, { force: true });
       }
 
       if (progress >= 1) {
@@ -6105,6 +6199,7 @@ import { createCosmicIntro } from './scene/space/cosmicIntro.js';
     updateSatelliteNameLabels();
     updateInspectionInterface();
     renderer.render(scene, camera);
+    trace("system");
     performanceHud.update(frameTime);
 
     // Loader visibility is tied to a frame that was actually submitted, not to
@@ -6288,7 +6383,7 @@ import { createCosmicIntro } from './scene/space/cosmicIntro.js';
       return;
     }
 
-    intro.ready().then(() => {
+    intro.ready().then(async () => {
       // Frame the destination before the burst, so the cut lands on the view
       // the viewer is meant to arrive at rather than easing into it afterwards.
       /*
@@ -6308,18 +6403,74 @@ import { createCosmicIntro } from './scene/space/cosmicIntro.js';
        * anything else. Nothing that follows can be seen.
        */
       document.body.classList.add("is-cosmic-intro");
+      cosmicIntroPending = true;
+      trace("CLICK/blank");
       try {
         renderer.setRenderTarget(null);
         renderer.clear();
       } catch (error) {
         console.warn("[BeyondEarth] could not blank the frame before the burst", error);
       }
+      /*
+       * A cover over the canvas until the opening has something to show.
+       *
+       * Clearing the framebuffer is not enough on its own, for a reason worth
+       * writing down: a WebGL canvas is not composited in the middle of a
+       * task. The clear above lands in the drawing buffer and stays there
+       * until this task yields -- and the very next thing this task used to do
+       * was spend two or three seconds building the sequence. So the browser
+       * went on presenting the last frame it *had* been given, which is the
+       * solar system, while the gate's blowout ran to its transparent end on
+       * the compositor and uncovered it.
+       *
+       * This element is a DOM node, so it paints on the next compositor frame
+       * regardless of what the main thread is doing, and it stays up until an
+       * opening frame has actually been drawn.
+       */
+      cosmicIntroBlackout = document.createElement("div");
+      cosmicIntroBlackout.className = "cosmic-blackout";
+      document.body.append(cosmicIntroBlackout);
       settleLandingView();
-      cosmicIntro = createCosmicIntro({ pixelRatio: cinematicPixelRatio });
+      /*
+       * Two frames of yield before the build.
+       *
+       * One is not enough: a rAF callback runs *before* the frame it belongs
+       * to is painted, so building inside the first one blocks the very paint
+       * that was being waited for. The second callback runs after the first
+       * frame has been presented, which is the guarantee wanted -- the cover
+       * is up and the blank is on screen before anything expensive starts.
+       */
+      await new Promise((resolve) => {
+        requestAnimationFrame(() => requestAnimationFrame(resolve));
+      });
+      /*
+       * And if the build throws, the viewer still arrives.
+       *
+       * The pending flag stops the loop drawing anything, so leaving it set
+       * after a failure is a black screen for the rest of the session -- a far
+       * worse outcome than the flash it was added to prevent. Cleared in
+       * `finally`, and a failed build hands straight over to the destination.
+       */
+      try {
+        cosmicIntro = createCosmicIntro({ pixelRatio: cinematicPixelRatio });
+      } catch (error) {
+        console.error("[BeyondEarth] opening sequence could not be built", error);
+        cosmicIntroBlackout?.remove();
+        cosmicIntroBlackout = null;
+        completeCosmicIntro();
+      } finally {
+        cosmicIntroPending = false;
+      }
       // `.loader` takes 700 ms to fade. Start the celestial entrance from the
       // end of that transition—not from the moment its class changes—otherwise
       // Earth, the Moon, and the belt are already moving rapidly when the user
       // sees the first clear frame.
+    }).catch((error) => {
+      console.error("[BeyondEarth] entering the opening failed", error);
+      cosmicIntroPending = false;
+      cosmicIntroBlackout?.remove();
+      cosmicIntroBlackout = null;
+      if (!cosmicIntro) completeCosmicIntro();
     });
   }
 

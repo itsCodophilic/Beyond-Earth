@@ -114,8 +114,8 @@ export function createIntroSequence({ root } = {}) {
    * without the vocabulary getting in the way.
    */
   const LORE_LINES = [
-    "13.8 billion years ago, everything — all matter, all space, all time — was a single point, hotter and denser than anything since.",
-    "Then it expanded. Not into space; space itself was what grew. That is the Big Bang.",
+    "13.8 billion years ago, everything — all matter, all energy, all of space and time — was one point. There was no outside to it.",
+    "Then it stretched. Not into anything: the stretching is what made the room. That is the Big Bang, and it has never stopped.",
   ];
   const loreLines = gate.querySelectorAll(".intro__lore-line");
   loreLines.forEach((line, index) => {
