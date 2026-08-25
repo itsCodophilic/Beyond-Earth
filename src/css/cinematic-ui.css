@@ -1407,7 +1407,8 @@ body:has(.satellite-atlas-directory.is-visible) .progress.distance-readout {
  * inside it and a satellite that keeps going round. The label is set as tracked
  * micro type against a hairline instead of in a bubble, and only on hover.
  */
-.earth-return-button {
+.earth-return-button,
+.system-return-button {
   width: 46px;
   height: 46px;
   border: 1px solid var(--cin-amber-soft);
@@ -1420,7 +1421,8 @@ body:has(.satellite-atlas-directory.is-visible) .progress.distance-readout {
 }
 
 /* The satellite: one dot on a ring, always going round. */
-.earth-return-button::before {
+.earth-return-button::before,
+.system-return-button::before {
   content: "";
   position: absolute;
   inset: -7px;
@@ -1441,7 +1443,8 @@ body:has(.satellite-atlas-directory.is-visible) .progress.distance-readout {
  * edge simply leaves the frame -- which is what the original did, and why it
  * was never legible there.
  */
-.earth-return-button::after {
+.earth-return-button::after,
+.system-return-button::after {
   left: auto;
   right: 60px;
   padding: 0.4rem 0.9rem 0.4rem 0;
@@ -1460,7 +1463,9 @@ body:has(.satellite-atlas-directory.is-visible) .progress.distance-readout {
 }
 
 .earth-return-button:hover,
-.earth-return-button:focus-visible {
+.system-return-button:hover,
+.earth-return-button:focus-visible,
+.system-return-button:focus-visible {
   border-color: var(--cin-amber);
   box-shadow: none;
   outline: none;
@@ -1468,7 +1473,9 @@ body:has(.satellite-atlas-directory.is-visible) .progress.distance-readout {
 }
 
 .earth-return-button:hover::after,
-.earth-return-button:focus-visible::after {
+.system-return-button:hover::after,
+.earth-return-button:focus-visible::after,
+.system-return-button:focus-visible::after {
   opacity: 1;
   transform: translateX(0);
 }
@@ -2123,4 +2130,157 @@ body:has(.satellite-atlas-directory.is-visible) .progress.distance-readout {
   .satellite-atlas-directory__close,
   .distance-unit-popover__close,
   .body-card__close { transition-duration: 0ms; transform: none; }
+}
+
+/*
+ * The second return.
+ *
+ * Every rule that shapes the Earth return now names this button too -- the
+ * ring, the orbiting satellite, the hover lift, the entrance, the label
+ * treatment. That is the point: it is the same control with a different
+ * destination, and a second bespoke style would have made it read as a
+ * different *kind* of thing.
+ *
+ * Only three things are its own: the glyph inside it, the label, and the
+ * position, which JavaScript measures off the Earth button's box so the two
+ * always sit together whichever stylesheet ends up placing that one.
+ */
+.system-return-button::after {
+  content: "Back to the whole system";
+}
+
+.system-return-button__orbit {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  opacity: 0.62;
+  transform-origin: 24px 24px;
+  transform: rotate(-16deg);
+}
+
+.system-return-button__orbit--inner { opacity: 0.44; }
+
+.system-return-button__sun {
+  fill: currentColor;
+  stroke: none;
+}
+
+/* One world out on the rim, still going round. */
+.system-return-button__world {
+  fill: currentColor;
+  stroke: none;
+  transform-origin: 24px 24px;
+  animation: system-return-world 13s linear infinite;
+}
+
+@keyframes system-return-world {
+  from { transform: rotate(-16deg) rotate(0deg); }
+  to { transform: rotate(-16deg) rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .system-return-button__world { animation: none; }
+}
+
+/* ------------------------------------- 6. the ring roster inside the dossier
+
+   Deliberately the same vocabulary as .saturn-ring-hover-card: amber mono
+   eyebrow, light large name, tabular range, faint motion line above a hairline
+   rule. The hover card and this list describe the same object, and a viewer who
+   clicks a ring after hovering it should feel they opened the card rather than
+   arrived somewhere new. */
+
+.planet-details__ring-roster {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  margin: 0.7rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.planet-details__ring-caption {
+  font-family: var(--cin-mono);
+  font-size: 0.5rem;
+  letter-spacing: 0.26em;
+  text-transform: uppercase;
+  color: var(--cin-amber);
+}
+
+.planet-details__ring {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  padding: 0.72rem 0.85rem 0.78rem;
+  border: 0;
+  border-left: 1px solid rgba(255, 255, 255, 0.12);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.012));
+  transition: border-color 240ms ease, background 240ms ease;
+}
+
+/* The ring the viewer actually clicked. Marked with the same amber the hover
+   card uses for its eyebrow, so the connection is unmistakable. */
+.planet-details__ring.is-selected {
+  border-left-color: var(--cin-amber);
+  background: linear-gradient(180deg, rgba(255, 190, 120, 0.09), rgba(255, 190, 120, 0.02));
+}
+
+.planet-details__ring-order {
+  font-family: var(--cin-mono);
+  font-size: 0.48rem;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--cin-ink-faint);
+}
+
+.planet-details__ring-name {
+  font-size: 1.05rem;
+  font-weight: 200;
+  letter-spacing: 0.02em;
+  color: var(--cin-ink);
+}
+
+.planet-details__ring-character {
+  font-family: var(--cin-mono);
+  font-size: 0.5rem;
+  letter-spacing: 0.22em;
+  color: var(--cin-amber);
+}
+
+.planet-details__ring-range {
+  font-family: var(--cin-mono);
+  font-size: 0.52rem;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.11em;
+  line-height: 1.6;
+  color: var(--cin-ink-faint);
+}
+
+.planet-details__ring-description {
+  margin: 0.12rem 0 0;
+  font-size: 0.76rem;
+  font-weight: 300;
+  line-height: 1.66;
+  color: var(--cin-ink-soft);
+}
+
+.planet-details__ring-motion {
+  margin-top: 0.3rem;
+  padding-top: 0.48rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+  font-family: var(--cin-mono);
+  font-size: 0.5rem;
+  letter-spacing: 0.12em;
+  line-height: 1.6;
+  color: var(--cin-ink-faint);
+}
+
+@media (max-width: 760px) {
+  .planet-details__ring {
+    padding: 0.62rem 0.7rem 0.68rem;
+  }
+
+  .planet-details__ring-name {
+    font-size: 0.95rem;
+  }
 }

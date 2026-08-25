@@ -6,12 +6,27 @@
  * offline fallbacks and are also easy places to experiment with visual styles.
  */
 import * as THREE from "three";
+import { hasDwarfWorldTexture, makeDwarfWorldTexture } from "./dwarfWorldTextures.js";
 
 /*
   makeNoiseTexture
   - Procedurally generates a planet-like canvas texture for bodies without external imagery.
 */
 export function makeNoiseTexture(kind, size = 1024) {
+  /*
+   * The worlds beyond Neptune get their own painter.
+   *
+   * None of them has ever been resolved into more than a few pixels, so there
+   * is no map to download and this generic three-colour fallback is all they
+   * would otherwise have -- which for seven bodies in a row would make them
+   * look like seven versions of the same thing. What is actually known about
+   * them is spectroscopic and quite specific: albedo, colour, which ices are
+   * on the surface. dwarfWorldTextures.js paints from those numbers.
+   */
+  if (hasDwarfWorldTexture(kind)) {
+    const painted = makeDwarfWorldTexture(kind, size);
+    if (painted) return painted;
+  }
   // Planet maps use a 2:1 rectangle because that ratio wraps naturally around a sphere.
   const textureCanvas = document.createElement("canvas");
   textureCanvas.width = size;

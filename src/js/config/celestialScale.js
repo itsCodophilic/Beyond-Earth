@@ -22,6 +22,13 @@ export const HELIOCENTRIC_ORBIT_AU = Object.freeze({
   Uranus: 19.1892,
   Neptune: 30.0699,
   Pluto: 39.482,
+  Orcus: 39.377,
+  Haumea: 43.060,
+  Quaoar: 43.156,
+  Makemake: 45.571,
+  Gonggong: 66.867,
+  Eris: 67.934,
+  Sedna: 506.44,
 });
 
 export const BODY_SIZE_DATA = Object.freeze({
@@ -35,6 +42,27 @@ export const BODY_SIZE_DATA = Object.freeze({
   Uranus: { diameterKm: 50_724, diameterEarths: 3.98, volumeEarths: 63.1 },
   Neptune: { diameterKm: 49_244, diameterEarths: 3.86, volumeEarths: 57.7 },
   Pluto: { diameterKm: 2_376.6, diameterEarths: 0.1863, volumeEarths: 0.00651 },
+
+  /*
+   * The dwarf planets, and the ones that are dwarf planets in all but the
+   * paperwork.
+   *
+   * Five bodies carry the IAU's `dwarf planet` label -- Ceres, Pluto, Eris,
+   * Haumea and Makemake -- and the boundary is administrative rather than
+   * physical: Orcus, Quaoar, Gonggong and Sedna are the same kind of object,
+   * some of them larger than ones that have the label, and are only waiting
+   * on a formal decision that nobody is in a hurry to make. They are all here
+   * because leaving them out would have meant a Solar System that stops at
+   * Pluto, and it does not.
+   */
+  Ceres: { diameterKm: 939.4, diameterEarths: 0.0736, volumeEarths: 0.000399 },
+  Orcus: { diameterKm: 958.4, diameterEarths: 0.0751, volumeEarths: 0.000424 },
+  Haumea: { diameterKm: 1_544.0, diameterEarths: 0.1210, volumeEarths: 0.001773 },
+  Quaoar: { diameterKm: 1_098.0, diameterEarths: 0.0861, volumeEarths: 0.000638 },
+  Makemake: { diameterKm: 1_430.0, diameterEarths: 0.1121, volumeEarths: 0.001409 },
+  Gonggong: { diameterKm: 1_230.0, diameterEarths: 0.0964, volumeEarths: 0.000897 },
+  Eris: { diameterKm: 2_326.0, diameterEarths: 0.1823, volumeEarths: 0.006063 },
+  Sedna: { diameterKm: 906.0, diameterEarths: 0.0710, volumeEarths: 0.000358 },
 });
 
 function compressedPlanetRadius(diameterEarths) {
@@ -101,6 +129,57 @@ export const PLANET_SCALE_PROFILES = Object.freeze({
     // Cinematically compressed Kuiper Belt placement, still beyond Neptune.
     orbitRadius: 191 * SOLAR_ORBIT_SCALE,
     focusDistance: 1.35,
+  },
+  /*
+   * Beyond Pluto the scale compression has to get much harder, and the reason
+   * is Sedna. Its semi-major axis is five hundred astronomical units -- nearly
+   * thirteen times Pluto's -- and drawn to the same rule as the planets it
+   * would put the entire rest of the Solar System inside a tenth of the frame.
+   * So the trans-Neptunian orbits are spread by hand: the real *ordering* is
+   * exact, the spacing is legible, and the gaps between them are honest about
+   * being cinematic. Every real number is still on the body's own card.
+   */
+  Orcus: {
+    ...BODY_SIZE_DATA.Orcus,
+    visualRadius: compressedPlanetRadius(BODY_SIZE_DATA.Orcus.diameterEarths),
+    orbitRadius: 189 * SOLAR_ORBIT_SCALE,
+    focusDistance: 1.3,
+  },
+  Haumea: {
+    ...BODY_SIZE_DATA.Haumea,
+    visualRadius: compressedPlanetRadius(BODY_SIZE_DATA.Haumea.diameterEarths),
+    orbitRadius: 203 * SOLAR_ORBIT_SCALE,
+    focusDistance: 1.55,
+  },
+  Quaoar: {
+    ...BODY_SIZE_DATA.Quaoar,
+    visualRadius: compressedPlanetRadius(BODY_SIZE_DATA.Quaoar.diameterEarths),
+    orbitRadius: 211 * SOLAR_ORBIT_SCALE,
+    focusDistance: 1.35,
+  },
+  Makemake: {
+    ...BODY_SIZE_DATA.Makemake,
+    visualRadius: compressedPlanetRadius(BODY_SIZE_DATA.Makemake.diameterEarths),
+    orbitRadius: 220 * SOLAR_ORBIT_SCALE,
+    focusDistance: 1.5,
+  },
+  Gonggong: {
+    ...BODY_SIZE_DATA.Gonggong,
+    visualRadius: compressedPlanetRadius(BODY_SIZE_DATA.Gonggong.diameterEarths),
+    orbitRadius: 233 * SOLAR_ORBIT_SCALE,
+    focusDistance: 1.4,
+  },
+  Eris: {
+    ...BODY_SIZE_DATA.Eris,
+    visualRadius: compressedPlanetRadius(BODY_SIZE_DATA.Eris.diameterEarths),
+    orbitRadius: 244 * SOLAR_ORBIT_SCALE,
+    focusDistance: 1.95,
+  },
+  Sedna: {
+    ...BODY_SIZE_DATA.Sedna,
+    visualRadius: compressedPlanetRadius(BODY_SIZE_DATA.Sedna.diameterEarths),
+    orbitRadius: 268 * SOLAR_ORBIT_SCALE,
+    focusDistance: 1.28,
   },
   Sun: {
     ...BODY_SIZE_DATA.Sun,

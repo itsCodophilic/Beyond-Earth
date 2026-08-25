@@ -56,8 +56,18 @@ const CAMERA_DISTANCE_STOPS = Object.freeze([
   { progress: 0.820, kilometres: ASTRONOMICAL_UNIT_KM * 50, region: "Kuiper frontier" },
   { progress: 0.900, kilometres: ASTRONOMICAL_UNIT_KM * 120, region: "Heliospheric frontier" },
   { progress: 0.955, kilometres: ASTRONOMICAL_UNIT_KM * 1_000, region: "Interstellar approach" },
-  { progress: 0.985, kilometres: LIGHT_YEAR_KM * 0.20, region: "Interstellar space" },
-  { progress: 1.000, kilometres: LIGHT_YEAR_KM * 6.0, region: "Local stellar neighbourhood" },
+  { progress: 0.985, kilometres: LIGHT_YEAR_KM * 0.60, region: "Interstellar space" },
+  /*
+   * Twenty light-years, not six.
+   *
+   * The far end of the scroll is where the whole Solar System has to fit in
+   * one frame, and the system got much bigger when the trans-Neptunian worlds
+   * were added -- Sedna's orbit alone is nearly half again the width of
+   * Pluto's. Six light-years was framed for a system that stopped at Pluto;
+   * ten is framed for one that does not, and still holds Proxima, Alpha
+   * Centauri, Barnard's Star and Sirius inside the same shot.
+   */
+  { progress: 1.000, kilometres: LIGHT_YEAR_KM * 10.0, region: "Local stellar neighbourhood" },
 ]);
 
 const wholeNumberFormatter = new Intl.NumberFormat("en-US", {

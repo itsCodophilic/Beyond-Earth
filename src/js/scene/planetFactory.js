@@ -9,6 +9,7 @@
 import * as THREE from "three";
 import { makeNoiseTexture } from "../graphics/proceduralTextures.js";
 import { createOrbitLine } from "./orbits.js";
+import { createIcyRingSystem, hasIcyRingSystem } from "../planets/icyRings.js";
 import { createSaturnSurfaceMaterial } from "../planets/saturn/saturn.js";
 import { createSaturnRingSystem, updateSaturnRingSystem } from "../planets/saturn/saturnRings.js";
 import { createUranusRingSystem, updateUranusRingSystem } from "../planets/uranus/uranusRings.js";
@@ -277,8 +278,60 @@ function createPlutoMaterial(texture) {
   });
 }
 
+/**
+ * Materials for the worlds beyond Neptune.
+ *
+ * Two things have to be got right that do not come up anywhere closer in.
+ *
+ * **Albedo is the most conspicuous fact about this set.** Eris reflects 96% of
+ * the light that reaches it and Quaoar reflects 12% -- an eightfold spread,
+ * far wider than anything among the planets -- and if they are all rendered
+ * with the same response that difference disappears, which throws away the
+ * single most distinguishing measurement anyone has of them.
+ *
+ * **And forty astronomical units is very dark.** Sunlight falls off with the
+ * square of distance, so at Eris the Sun delivers about a two-thousandth of
+ * what it delivers at Earth. Rendered literally, every one of these worlds is
+ * a barely-visible smudge -- which is true, and is why every real image of
+ * them is a long exposure. The small emissive term here is that exposure: it
+ * is scaled by each body's real albedo, so the *relative* brightness stays
+ * honest even though the absolute level does not.
+ */
+const DWARF_ALBEDO = {
+  Orcus: 0.23, Haumea: 0.66, Quaoar: 0.12, Makemake: 0.82,
+  Gonggong: 0.14, Eris: 0.96, Sedna: 0.41,
+};
+
+function createDwarfWorldMaterial(config, texture) {
+  const albedo = DWARF_ALBEDO[config.name] ?? 0.3;
+  return new THREE.MeshStandardMaterial({
+    map: texture,
+    color: 0xffffff,
+    // Fresh ice is smoother than old dusty regolith, and these vary a lot.
+    roughness: 0.99 - albedo * 0.14,
+    metalness: 0,
+    /*
+     * No displacement map at all, and only a whisper of bump.
+     *
+     * These bodies carry their relief in *geometry* -- see sculptDwarfGeometry,
+     * which moves real vertices for real craters. The surface map is now an
+     * unwrapped photograph, so every crater in it is already a crater in the
+     * mesh; pushing the mesh again by the same image double-counts all of it
+     * and turns the world into a golf ball. The small bump term is only there
+     * to catch grazing light on the fine cracks that are too small to sculpt.
+     */
+    bumpMap: texture,
+    bumpScale: 0.006,
+    emissive: 0xffffff,
+    emissiveMap: texture,
+    emissiveIntensity: 0.10 + albedo * 0.20,
+    envMapIntensity: 0.06,
+  });
+}
+
 function createRockyMaterial(config, textures) {
   const map = textures[config.texture] ?? makeNoiseTexture(config.texture);
+  if (DWARF_ALBEDO[config.name]) return createDwarfWorldMaterial(config, map);
   if (config.name === "Mercury") return createMercuryMaterial(map);
   if (config.name === "Mars") return createMarsMaterial(map);
   if (config.name === "Venus") return createVenusSurfaceMaterial(map);
@@ -423,7 +476,104 @@ function wrappedLongitudeDelta(a, b) {
  * impact basins; Mars receives subtler craters, Valles Marineris cuts, and a broad
  * shield volcano with a real summit caldera.
  */
+/*
+ * The worlds beyond Neptune, sculpted rather than merely painted.
+ *
+ * A painted sphere is a painted sphere from any angle: the silhouette gives it
+ * away instantly, and at these sizes the silhouette is most of what there is
+ * to look at. So each of these gets real geometry -- vertices moved, normals
+ * recomputed, terrain that occludes itself and casts its own shading.
+ *
+ * `relief` is how far from a smooth ellipsoid the body is, and it is not a
+ * style choice. Eris is a two-thousand-kilometre world that has been resurfaced
+ * by nitrogen frost and is very nearly a smooth ball; Sedna and Orcus are half
+ * that size, old, and lumpy. The ordering here is theirs.
+ *
+ * `shape` is the triaxial axis ratio, and for one body it is the whole point:
+ * Haumea is 2,122 x 1,688 x 1,036 km. A 3.9-hour rotation -- the fastest of
+ * any large body in the Solar System -- has pulled it into an ellipsoid twice
+ * as long as it is thick. Drawn as a sphere it would be a lie about the single
+ * most interesting fact about it.
+ */
+const DWARF_TERRAIN = {
+  Orcus: { relief: 0.020, craters: 74, seed: 90482, shape: null },
+  Haumea: { relief: 0.008, craters: 30, seed: 136108, shape: { x: 1.0, y: 0.488, z: 0.795 } },
+  Quaoar: { relief: 0.019, craters: 84, seed: 50000, shape: { x: 1.0, y: 0.874, z: 0.952 } },
+  Makemake: { relief: 0.013, craters: 44, seed: 136472, shape: { x: 1.0, y: 0.990, z: 1.0 } },
+  Gonggong: { relief: 0.016, craters: 70, seed: 225088, shape: null },
+  Eris: { relief: 0.006, craters: 22, seed: 136199, shape: null },
+  Sedna: { relief: 0.024, craters: 88, seed: 90377, shape: { x: 1.0, y: 0.92, z: 0.97 } },
+};
+
+const DWARF_CRATERS = Object.fromEntries(
+  Object.entries(DWARF_TERRAIN).map(([name, terrain]) => [
+    name,
+    /*
+     * Small and many, not few and huge. The first pass allowed craters up to
+     * eleven degrees across, and at that size the raised rim and the depressed
+     * floor read as concentric ripples rather than as impacts -- the body came
+     * out looking like a struck bell. Real crater populations are steeply
+     * weighted toward the small end, and drawn that way they read correctly.
+     */
+    seededCraterField(terrain.craters * 3, terrain.seed, 0.014, 0.085, 0.062),
+  ]),
+);
+
+function sculptDwarfGeometry(geometry, config) {
+  const terrain = DWARF_TERRAIN[config.name];
+  if (!terrain) return geometry;
+  const positions = geometry.attributes.position;
+  const direction = new THREE.Vector3();
+  const radius = config.radius;
+  const craters = DWARF_CRATERS[config.name];
+
+  for (let index = 0; index < positions.count; index += 1) {
+    direction.fromBufferAttribute(positions, index).normalize();
+    /*
+     * Two octaves at very different scales. The broad one gives the body its
+     * shape -- the gentle bulges and flats that make a small world look like
+     * it froze rather than like it was turned on a lathe -- and the fine one
+     * gives the surface something for the light to catch at close range.
+     */
+    const broad = terrainFbm(direction, 3.1, 5) - 0.5;
+    const fine = terrainFbm(direction, 13.5, 4) - 0.5;
+    let height = radius * (broad * terrain.relief + fine * terrain.relief * 0.34);
+
+    for (let i = 0; i < craters.length; i += 1) {
+      height += craterRelief(direction, craters[i], radius);
+    }
+
+    direction.multiplyScalar(radius + height);
+    positions.setXYZ(index, direction.x, direction.y, direction.z);
+  }
+
+  /*
+   * The triaxial squash goes on last, so the terrain is squashed with the body
+   * rather than applied to an already-flattened surface -- which would leave
+   * craters that are round on the long axis and oval on the short one.
+   */
+  if (terrain.shape) {
+    const shape = terrain.shape;
+    for (let index = 0; index < positions.count; index += 1) {
+      positions.setXYZ(
+        index,
+        positions.getX(index) * shape.x,
+        positions.getY(index) * shape.y,
+        positions.getZ(index) * shape.z,
+      );
+    }
+  }
+
+  positions.needsUpdate = true;
+  geometry.computeVertexNormals();
+  geometry.computeBoundingSphere();
+  geometry.computeBoundingBox();
+  geometry.userData.terrainKind = config.name;
+  return geometry;
+}
+
 function sculptRockyGeometry(geometry, config) {
+  if (DWARF_TERRAIN[config.name]) return sculptDwarfGeometry(geometry, config);
   if (!["Mercury", "Mars"].includes(config.name)) return geometry;
   const positions = geometry.attributes.position;
   const direction = new THREE.Vector3();
@@ -1265,7 +1415,11 @@ export function createPlanet({
             ? [192, 160]
             : config.name === "Pluto"
               ? [196, 164]
-              : [144, 112];
+              // The trans-Neptunian worlds are sculpted, and sculpted geometry
+              // is only as good as the vertices it has to move.
+              : DWARF_TERRAIN[config.name]
+                ? [176, 144]
+                : [144, 112];
   const segments = [
     getSegmentCount(baseSegments[0], segmentScale, 80),
     getSegmentCount(baseSegments[1], segmentScale, 64),
@@ -1345,6 +1499,25 @@ export function createPlanet({
       Neptune: 2.72,
     }[config.name];
     mesh.userData.focusVisualRadius = config.radius * ringBoundsMultiplier;
+  } else if (hasIcyRingSystem(config.name)) {
+    /*
+     * Built the same way Saturn's and Uranus's are: independent particles on
+     * their own orbits, with an invisible annulus per ring for the pointer to
+     * hit and a ringData payload so the ring hover card names the fragment.
+     * The first attempt drew each one as a flat translucent annulus and it
+     * read exactly like what it was -- a decal over the picture, with hard
+     * edges no real ring has.
+     */
+    const icyRings = createIcyRingSystem({
+      planet: mesh,
+      config,
+      radius: config.radius,
+      hoverTargets,
+      pixelRatio: Math.min(typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1, 2),
+    });
+    mesh.userData.visualLayers.ringSystem = icyRings;
+    mesh.userData.icyRingSystem = icyRings;
+    mesh.userData.focusVisualRadius = (icyRings?.outerRadius ?? config.radius) * 1.35;
   } else {
     mesh.userData.focusVisualRadius = config.radius;
   }
@@ -1358,7 +1531,14 @@ export function createPlanet({
       orbitRoot,
       config.orbitRadius,
       config.orbitColor,
-      config.orbitOpacity ?? 0.18,
+      /*
+       * The inner planets have no orbitOpacity of their own and fell back to
+       * 0.18, which was chosen when these were one-hardware-pixel lines that
+       * needed all the alpha they could get to register at all. A ribbon with
+       * feathered edges reads at well under half that, so the default is set
+       * for the new geometry rather than inherited from the old.
+       */
+      config.orbitOpacity ?? 0.34,
       config.orbitInclination ?? config.tilt ?? 0,
       config.orbitEccentricity ?? 0,
       config.orbitRotation ?? 0,
@@ -1401,6 +1581,9 @@ export function updatePlanetVisuals(planet, time, motionScale = 1, camera = null
       updateUranusRingSystem(layers.ringSystem, time, camera);
     } else if (planet.name === "Neptune") {
       updateNeptuneRingSystem(layers.ringSystem, time, camera, motionScale);
+    } else if (typeof layers.ringSystem.update === "function") {
+      // Haumea and Quaoar: differential rotation, inner ring fastest.
+      layers.ringSystem.update(0.016 * motionScale);
     } else {
       layers.ringSystem.rotation.y += 0.000012 * motionScale;
     }

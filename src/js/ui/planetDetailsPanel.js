@@ -181,6 +181,55 @@ function cleanValue(value) {
   return text;
 }
 
+/**
+ * Reads the named rings straight off the body that is being inspected.
+ *
+ * Until now every ring in the project described itself only to the hover card,
+ * which meant the information existed for exactly as long as the pointer sat
+ * still on a band a few pixels wide -- and out at Haumea and Quaoar those bands
+ * are both thin and moving. The same `ringData` payload the hover card reads is
+ * collected here instead, so the dossier can hold the whole system at once and
+ * the viewer can actually read it.
+ *
+ * Nothing about the ring builders changes: they already attach `ringData` to an
+ * interaction mesh inside the planet, so walking the body finds every ring of
+ * every world that has any, in one place, with no per-planet registry to keep
+ * in step.
+ */
+function collectRingRoster(body) {
+  if (!body || typeof body.traverse !== "function") return [];
+  const rings = [];
+  const seen = new Set();
+  const visit = (root) => {
+    if (!root || typeof root.traverse !== "function") return;
+    root.traverse((object) => {
+      const data = object.userData;
+      const ring = data?.ringData;
+      if (!data?.isPlanetRing || !ring) return;
+      const name = data.name ?? object.name ?? "Ring";
+      if (seen.has(name)) return;
+      seen.add(name);
+      rings.push({
+        name,
+        order: ring.order ?? null,
+        character: ring.character ?? null,
+        radialRange: ring.radialRange ?? null,
+        description: ring.description ?? null,
+        motion: ring.motion ?? null,
+        systemName: ring.systemName ?? null,
+        index: Number.isFinite(data.ringIndex) ? data.ringIndex : rings.length,
+      });
+    });
+  };
+  visit(body);
+  // Some ring systems hang off the visual-layer record rather than under the
+  // mesh itself; check there too rather than assuming one parenting scheme.
+  visit(body.userData?.visualLayers?.ringSystem?.group);
+  visit(body.userData?.visualLayers?.ringSystem);
+  rings.sort((a, b) => a.index - b.index);
+  return rings;
+}
+
 function resolveDetails(bodyOrName, context = {}) {
   const name = getBodyName(bodyOrName);
   const body = typeof bodyOrName === "string" ? null : bodyOrName;
@@ -230,6 +279,8 @@ function resolveDetails(bodyOrName, context = {}) {
       ? `${info.surfaceEvidence}${info.roughness ? ` · model roughness ${info.roughness}` : ""}`
       : null,
     rings: planet?.rings ?? info.rings,
+    ringRoster: collectRingRoster(body),
+    ringSystemName: null,
     lore: planet?.lore
       ?? override.lore
       ?? info.description
@@ -342,6 +393,7 @@ export function createCelestialDetailsPanel() {
             <div class="planet-details__advanced-item planet-details__advanced-item--rings" data-planet-field="rings">
               <span data-cosmic-text>Ring system</span>
               <p id="planet-details-rings" data-cosmic-text></p>
+              <ol class="planet-details__ring-roster" id="planet-details-ring-roster" hidden></ol>
             </div>
             <div class="planet-details__advanced-item planet-details__advanced-item--lore" data-planet-field="lore">
               <span data-cosmic-text>Celestial story</span>
@@ -379,6 +431,7 @@ export function createCelestialDetailsPanel() {
     orbital: layer.querySelector("#planet-details-orbital"),
     relation: layer.querySelector("#planet-details-relation"),
   });
+  const ringRoster = layer.querySelector("#planet-details-ring-roster");
   const advancedFields = Object.freeze({
     atmosphere: layer.querySelector("#planet-details-atmosphere"),
     temperature: layer.querySelector("#planet-details-temperature"),
@@ -412,8 +465,62 @@ export function createCelestialDetailsPanel() {
     const row = layer.querySelector(`[data-core-field="${key}"]`);
     if (!output || !row) return;
     const available = Boolean(value);
-    row.hidden = !available;
+    // The rings row earns its place if *either* the prose or the roster has
+    // something to say. Haumea and Quaoar carry no catalogue paragraph, only
+    // real named rings, and hiding the row on the paragraph alone threw them
+    // both away.
+    const keepForRoster = key === "rings" && Boolean(ringRoster) && !ringRoster.hidden;
+    row.hidden = !available && !keepForRoster;
+    output.hidden = !available;
     output.textContent = available ? value : "";
+  }
+
+  /**
+   * Draws one entry per named ring, in the same visual language as the hover
+   * card the viewer just came from, so the two read as one idea rather than as
+   * two unrelated descriptions of the same object.
+   */
+  function writeRingRoster(rings, activeRingName, bodyName) {
+    if (!ringRoster) return;
+    ringRoster.textContent = "";
+    const available = Array.isArray(rings) && rings.length > 0;
+    ringRoster.hidden = !available;
+    if (!available) return;
+
+    // Saturn's and Uranus's ring payloads predate the systemName field, so fall
+    // back to naming the system after the body rather than dropping the header.
+    const systemName = rings.find((ring) => ring.systemName)?.systemName
+      ?? (bodyName ? `${bodyName} ring system` : null);
+    if (systemName) {
+      const caption = document.createElement("li");
+      caption.className = "planet-details__ring-caption";
+      caption.setAttribute("data-cosmic-text", "");
+      caption.textContent = `${systemName} · ${rings.length} named ${rings.length === 1 ? "ring" : "rings"}`;
+      ringRoster.append(caption);
+    }
+
+    rings.forEach((ring) => {
+      const entry = document.createElement("li");
+      entry.className = "planet-details__ring";
+      if (activeRingName && ring.name === activeRingName) entry.classList.add("is-selected");
+
+      const append = (className, text, tag = "span") => {
+        if (!text) return;
+        const node = document.createElement(tag);
+        node.className = className;
+        node.setAttribute("data-cosmic-text", "");
+        node.textContent = text;
+        entry.append(node);
+      };
+
+      append("planet-details__ring-order", ring.order);
+      append("planet-details__ring-name", ring.name, "strong");
+      append("planet-details__ring-character", ring.character);
+      append("planet-details__ring-range", ring.radialRange);
+      append("planet-details__ring-description", ring.description, "p");
+      append("planet-details__ring-motion", ring.motion);
+      ringRoster.append(entry);
+    });
   }
 
   function writeAdvancedField(key, value) {
@@ -421,7 +528,13 @@ export function createCelestialDetailsPanel() {
     const row = layer.querySelector(`[data-planet-field="${key}"]`);
     if (!output || !row) return;
     const available = Boolean(value);
-    row.hidden = !available;
+    // The rings row earns its place if *either* the prose or the roster has
+    // something to say. Haumea and Quaoar carry no catalogue paragraph, only
+    // real named rings, and hiding the row on the paragraph alone threw them
+    // both away.
+    const keepForRoster = key === "rings" && Boolean(ringRoster) && !ringRoster.hidden;
+    row.hidden = !available && !keepForRoster;
+    output.hidden = !available;
     output.textContent = available ? value : "";
   }
 
@@ -593,6 +706,9 @@ export function createCelestialDetailsPanel() {
     writeCoreField("distance", details.distance);
     writeCoreField("orbital", details.orbital);
     writeCoreField("relation", details.relationValue);
+    // The roster is written first so the rings row knows whether it has content
+    // even when the body carries no descriptive paragraph.
+    writeRingRoster(details.ringRoster, details.highlightRingName, details.name);
     Object.keys(advancedFields).forEach((key) => writeAdvancedField(key, details[key]));
 
     sources.hidden = !details.scienceUrl;
@@ -617,6 +733,7 @@ export function createCelestialDetailsPanel() {
     revealFrame = null;
     previouslyFocused = document.activeElement;
     activeBodyName = details.name;
+    details.highlightRingName = context.highlightRingName ?? null;
     clearContextHighlight();
 
     // Unhide the non-interactive layer before preparing glyph spans. The

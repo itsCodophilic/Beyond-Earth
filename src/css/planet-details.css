@@ -19,6 +19,32 @@
   pointer-events: auto;
 }
 
+/*
+ * Closed is closed, and `pointer-events: none` on the container is not enough
+ * to make it so.
+ *
+ * The dossier is a full-viewport fixed layer that is hidden by opacity rather
+ * than by display, so when it is shut it is still there, still the size of the
+ * screen, still on top of the canvas. The container turns pointer events off
+ * -- but any descendant that turns them back on for its own sake defeats that
+ * completely, and this panel has one: `[data-cosmic-text]` sets
+ * `pointer-events: auto` so the per-character hover effect can work.
+ *
+ * The result was an invisible sheet across the middle of the viewport that
+ * silently swallowed clicks. Clicking "empty space" to travel to another
+ * region did nothing at all, so whatever body was selected stayed selected --
+ * which is exactly how it was reported: "we still show the planet".
+ *
+ * `visibility: hidden` is the fix rather than another `pointer-events` rule,
+ * because visibility is inherited and a descendant cannot re-enable hit
+ * testing without explicitly setting `visibility: visible`. It also correctly
+ * takes the whole subtree out of the accessibility tree and out of the tab
+ * order, which the opacity-only version never did.
+ */
+.planet-details:not(.is-open):not(.is-closing) {
+  visibility: hidden;
+}
+
 .planet-details__backdrop {
   position: absolute;
   inset: 0;

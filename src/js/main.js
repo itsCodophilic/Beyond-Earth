@@ -55,6 +55,7 @@ import {
   interpolateCameraDistanceFromEarth,
 } from './scene/distanceFromEarth.js';
 import { createPlanet, updatePlanetVisuals } from './scene/planetFactory.js';
+import { setOrbitSolarGlare, setOrbitViewport } from './scene/orbits.js';
 import { setOrbitPosition, solveOrbitEccentricAnomaly } from './scene/orbits.js';
 import { SpaceEnvironment } from './scene/space/spaceEnvironment.js';
 import { JOURNEY_MAP } from './scene/space/spaceEnvironmentConfig.js';
@@ -1015,6 +1016,67 @@ import { createCosmicIntro } from './scene/space/cosmicIntro.js';
   earthReturnButton.classList.add("is-awaiting-entrance");
   earthReturnButton.disabled = true;
 
+  /*
+   * The second return: back to the whole system.
+   *
+   * There was one way home and it went to Earth, which is the right default
+   * and the wrong only option -- the journey now runs out to Sedna and back,
+   * and from the Kuiper frontier "take me to Earth" is a very long way past
+   * where you actually wanted to stop. This one pulls all the way out instead,
+   * to the frame where every orbit fits at once.
+   *
+   * It is deliberately the same mark in a different colour rather than a new
+   * kind of control: the pair reads as two ends of one axis.
+   */
+  let systemReturnButton = document.querySelector("#system-return-button");
+  if (!systemReturnButton) {
+    systemReturnButton = document.createElement("button");
+    systemReturnButton.id = "system-return-button";
+    systemReturnButton.className = "system-return-button";
+    systemReturnButton.type = "button";
+    systemReturnButton.setAttribute("aria-label", "Pull back to the whole Solar System");
+    systemReturnButton.title = "Pull back to the whole Solar System";
+    systemReturnButton.innerHTML = `
+      <svg viewBox="0 0 48 48" aria-hidden="true">
+        <ellipse class="system-return-button__orbit" cx="24" cy="24" rx="19" ry="7.4"/>
+        <ellipse class="system-return-button__orbit system-return-button__orbit--inner" cx="24" cy="24" rx="10.5" ry="4.1"/>
+        <circle class="system-return-button__sun" cx="24" cy="24" r="3.4"/>
+        <circle class="system-return-button__world" cx="43" cy="24" r="1.9"/>
+      </svg>
+      <span>The whole system</span>
+    `;
+    document.body.append(systemReturnButton);
+  }
+  systemReturnButton.classList.add("is-awaiting-entrance");
+  systemReturnButton.disabled = true;
+
+  /*
+   * Positioned from the Earth button's own box rather than from its own CSS.
+   *
+   * The return button is placed by two different stylesheets depending on
+   * which rule wins, so hard-coding a second set of offsets would put this one
+   * in the wrong corner the moment that changes. Measuring the anchor and
+   * sitting directly above it cannot come apart.
+   */
+  function placeSystemReturnButton() {
+    /*
+     * Measured while the anchor is at rest, which is not the same as measured
+     * when it is asked for. The Earth button enters with a transform, and a
+     * rect read during that animation is the rect of a button that is halfway
+     * off the bottom of the screen -- which put this one a couple of hundred
+     * pixels too high. The caller re-runs this once the entrance has settled.
+     */
+    const anchor = earthReturnButton.getBoundingClientRect();
+    if (anchor.width <= 0) return;
+    // 22px, not 12: both marks carry a satellite ring inset 7px outside their
+    // own edge, so a tighter gap has the two rings overlapping.
+    systemReturnButton.style.left = `${Math.round(anchor.left)}px`;
+    systemReturnButton.style.right = "auto";
+    systemReturnButton.style.bottom = `${Math.round(innerHeight - anchor.top + 22)}px`;
+    systemReturnButton.style.width = `${Math.round(anchor.width)}px`;
+    systemReturnButton.style.height = `${Math.round(anchor.height)}px`;
+  }
+
   // Scene is the root container of the 3D scene graph. Anything not attached to
   // the scene (directly or through a Group) cannot be rendered.
   const scene = new THREE.Scene();
@@ -1025,7 +1087,18 @@ import { createCosmicIntro } from './scene/space/cosmicIntro.js';
 
   // PerspectiveCamera arguments: vertical FOV, aspect ratio, near plane, far plane.
   // Objects outside near/far are clipped and never sent through the full pipeline.
-  const camera = new THREE.PerspectiveCamera(56, innerWidth / innerHeight, 0.1, 7500);
+  /*
+   * The far plane has to clear the whole scene from the furthest the camera
+   * can get, and the scene got much larger: Sedna's orbit alone is 2,814 units
+   * across, and the camera now pulls back to 5,200. Fifteen thousand covers
+   * both with room to spare.
+   *
+   * The cost is depth precision -- the near/far ratio goes from 75,000:1 to
+   * 200,000:1, about two and a half times coarser. That is affordable here
+   * because everything that needs precision is inspected from close range,
+   * where a perspective depth buffer has almost all of its resolution.
+   */
+  const camera = new THREE.PerspectiveCamera(56, innerWidth / innerHeight, 0.1, 15000);
   // Keep normal scene layer 0 and also allow the isolated close-inspection
   // layers to participate. Without the Jovian layer the detailed moon geometry
   // existed, but its dedicated sculpting lights never reached the camera.
@@ -1034,12 +1107,99 @@ import { createCosmicIntro } from './scene/space/cosmicIntro.js';
   // The renderer owns the WebGL context and draws into the existing HTML canvas.
   // Rendering now stays on one deterministic cinematic profile: High geometry,
   // High environment detail, and a stable high-resolution drawing buffer.
-  const renderer = new THREE.WebGLRenderer({
-    canvas,
-    antialias: true,
-    alpha: false,
-    powerPreference: "high-performance",
-  });
+  /*
+   * Ask for the good context, then settle for a working one.
+   *
+   * `new THREE.WebGLRenderer` throws if the browser refuses a context, and it
+   * refuses for reasons that have nothing to do with this page: the GPU process
+   * has crashed or been sandboxed off, hardware acceleration is disabled, a
+   * laptop is on switchable graphics and will not hand out a discrete context,
+   * or -- the common one during development -- too many live contexts already
+   * exist because the page has been reloaded a few dozen times and Chrome caps
+   * how many it will keep alive at once.
+   *
+   * Several of those refuse only the *demanding* request. Dropping
+   * `powerPreference` lets a switchable-graphics machine answer with its
+   * integrated GPU, and dropping antialias lowers the memory the context needs.
+   * So the request is made three times, weakest last, and only a failure of all
+   * three is a real failure.
+   */
+  function createRenderer() {
+    const attempts = [
+      { antialias: true, alpha: false, powerPreference: "high-performance" },
+      { antialias: true, alpha: false },
+      { antialias: false, alpha: false, powerPreference: "low-power" },
+    ];
+    const failures = [];
+    for (let index = 0; index < attempts.length; index += 1) {
+      try {
+        const created = new THREE.WebGLRenderer({ canvas, ...attempts[index] });
+        if (index > 0) {
+          console.warn(
+            `[BeyondEarth] WebGL context created on fallback attempt ${index + 1}`,
+            attempts[index],
+          );
+        }
+        return created;
+      } catch (error) {
+        failures.push(error?.message ?? String(error));
+      }
+    }
+    reportGraphicsFailure(failures);
+    return null;
+  }
+
+  /**
+   * Says what happened, in the page, in words.
+   *
+   * Without this the failure is an unhandled promise rejection and a black
+   * rectangle: nothing on screen, nothing to act on, and no reason to think the
+   * problem is the browser rather than the site.
+   */
+  function reportGraphicsFailure(failures = []) {
+    console.error("[BeyondEarth] no WebGL context could be created", failures);
+    const notice = document.createElement("div");
+    notice.className = "graphics-failure";
+    notice.setAttribute("role", "alert");
+    notice.innerHTML = `
+      <h1>This experience needs WebGL</h1>
+      <p>
+        Your browser would not give the page a 3D graphics context, so the
+        universe cannot be drawn. The scene itself is fine — this is the browser
+        refusing to hand out a GPU.
+      </p>
+      <p class="graphics-failure__fixes">
+        Most often this is hardware acceleration being switched off, or too many
+        3D pages open at once. Restarting the browser clears it. In Chrome you
+        can confirm at <code>chrome://gpu</code>, and re-enable acceleration
+        under Settings → System.
+      </p>
+    `;
+    document.body.append(notice);
+    loader?.classList.add("is-hidden");
+    canvas?.setAttribute("hidden", "hidden");
+  }
+
+  const renderer = createRenderer();
+  if (!renderer) return;
+
+  /*
+   * A context can also be taken away *after* it was granted -- the GPU process
+   * restarting underneath a running page does exactly that, and the page then
+   * renders its last frame forever with no error anywhere. Calling
+   * preventDefault is what tells the browser this page wants the context back;
+   * without it, no restore event is ever delivered.
+   */
+  canvas?.addEventListener("webglcontextlost", (event) => {
+    event.preventDefault();
+    console.warn("[BeyondEarth] WebGL context lost — waiting for the browser to restore it");
+    document.body.classList.add("is-graphics-context-lost");
+  }, false);
+
+  canvas?.addEventListener("webglcontextrestored", () => {
+    console.warn("[BeyondEarth] WebGL context restored");
+    document.body.classList.remove("is-graphics-context-lost");
+  }, false);
   const creationQuality = "high";
 
   // Asteroid belt population density, kept separate from creationQuality so the
@@ -1146,6 +1306,8 @@ import { createCosmicIntro } from './scene/space/cosmicIntro.js';
   const planets = [];
   const hoverTargets = [];
   const orbitTargets = [];
+  const orbitPickProjection = new THREE.Vector3();
+  const sunScreenProjection = new THREE.Vector3();
   scene.add(world, orbitRoot);
 
   function createAsteroidLocatorTexture() {
@@ -1477,6 +1639,66 @@ import { createCosmicIntro } from './scene/space/cosmicIntro.js';
       quality: creationQuality,
     });
   });
+
+  /*
+   * Diagnostic: the body list, by name.
+   *
+   * ?bodyDebug=1 exposes every constructed world so that a build can be
+   * checked without hunting for a two-pixel dot on screen -- which is how the
+   * trans-Neptunian bodies have to be verified, because at the distances they
+   * are placed at that is exactly what they are. Absent the parameter this
+   * costs one string comparison at startup.
+   */
+  if (new URLSearchParams(location.search).get("bodyDebug") === "1") {
+    window.__bodies = planets;
+    window.__orbits = orbitTargets;
+    window.__camera = camera;
+    window.__orbitProbe = () => ({
+      hasLeftOpeningEarthView,
+      focusedBody: focusedBody?.name ?? null,
+      isDragging,
+      lastPointerType,
+      pointer: [pointer.x, pointer.y],
+      hovered: hoveredPlanetOrbit?.name ?? null,
+      hit: findPlanetOrbitAtPointer()?.orbit?.userData?.planetName ?? null,
+      threshold: raycaster.params.Line.threshold,
+    });
+    window.__scene = world;
+    /*
+     * The Sun's apparent size is the one number that explains what it looks
+     * like from any given distance, and it is the product of three things --
+     * the model scale, the camera range and the field of view. Reporting the
+     * projected radius in pixels directly means never having to work it out by
+     * hand again.
+     */
+    window.__sunProbe = () => {
+      const position = sun.system.getWorldPosition(new THREE.Vector3());
+      const range = camera.position.distanceTo(position);
+      const worldPerPixel = 2 * range * Math.tan(THREE.MathUtils.degToRad(camera.fov * 0.5))
+        / Math.max(1, innerHeight);
+      const worldRadius = SUN_BASE_VISUAL_RADIUS * sun.system.scale.x;
+      return {
+        modelScale: sun.system.scale.x,
+        worldRadius,
+        rangeToSun: range,
+        worldPerPixel,
+        projectedPixelRadius: worldRadius / worldPerPixel,
+      };
+    };
+    window.__focusBody = (name) => {
+      const target = planets.find((planet) => planet.name === name);
+      if (target) focusBody(target);
+      return Boolean(target);
+    };
+  }
+
+  /*
+   * The orbit guides are screen-space ribbons, so they need to know how big
+   * the viewport is to convert their pixel width into clip space. In CSS
+   * pixels rather than device pixels, so a guide is the same apparent
+   * thickness on a Retina display as anywhere else.
+   */
+  setOrbitViewport(orbitRoot, innerWidth, innerHeight);
 
   const earth = planets.find((planet) => planet.name === "Earth");
   const earthRadius = earth.userData.visualRadius ?? 1.25;
@@ -1885,15 +2107,29 @@ import { createCosmicIntro } from './scene/space/cosmicIntro.js';
     // smoothstep-like easing: slow at both ends, faster through the middle.
     const eased = progress * progress * (3 - 2 * progress);
     // lerp(a, b, t) returns a at t=0, b at t=1, and blends between them.
-    return THREE.MathUtils.lerp(4.8, 2550, eased);
+    /*
+     * Out to 7,200 rather than 2,550.
+     *
+     * The old ceiling was set when the system stopped at Pluto, whose orbit is
+     * 2,006 units across -- so the whole thing fitted the frame with a little
+     * room. It does not any more. Sedna's orbit is 2,814 units across and at
+     * the old maximum distance the camera was *inside* it, which is why the
+     * outer system became unreadable the moment the trans-Neptunian bodies
+     * were added. Sedna's orbit alone is 2,814 units across.
+     *
+     * 5,200 rather than the 7,200 first tried: that framed the system inside
+     * a fifth of the height and the bodies stopped being findable, which is
+     * the opposite problem to the one being solved.
+     */
+    return THREE.MathUtils.lerp(4.8, 5200, eased);
   }
 
   /** Converts the current yaw/pitch into the camera offset used by the journey. */
-  function setSphericalCameraOffset(target, distance) {
+  function setSphericalCameraOffset(target, distance, atYaw = yaw, atPitch = pitch) {
     target.set(
-      Math.cos(pitch) * Math.sin(yaw) * distance,
-      Math.sin(pitch) * distance * 0.64,
-      Math.cos(pitch) * Math.cos(yaw) * distance,
+      Math.cos(atPitch) * Math.sin(atYaw) * distance,
+      Math.sin(atPitch) * distance * 0.64,
+      Math.cos(atPitch) * Math.cos(atYaw) * distance,
     );
     return target;
   }
@@ -1980,7 +2216,13 @@ import { createCosmicIntro } from './scene/space/cosmicIntro.js';
 
   const SUN_RADIUS_KM = PLANET_SCALE_PROFILES.Sun.diameterKm * 0.5;
   const SUN_BASE_VISUAL_RADIUS = PLANET_SCALE_PROFILES.Sun.visualRadius;
-  const MAX_CINEMATIC_CAMERA_DISTANCE = 2550;
+  /*
+   * The smallest the Sun's opaque photosphere is ever allowed to be on screen.
+   * Small enough to still read as a distant star at ten light-years, large
+   * enough that an orbit guide cannot be seen through the middle of it.
+   */
+  const SUN_MINIMUM_PIXEL_RADIUS = 4.5;
+  const MAX_CINEMATIC_CAMERA_DISTANCE = 5200;
   let currentSunAngularRadius = 0;
   let currentSunProjectedRadiusPixels = Infinity;
   let snapSunApparentScaleOnNextFrame = true;
@@ -2134,6 +2376,10 @@ import { createCosmicIntro } from './scene/space/cosmicIntro.js';
     sun.system.getWorldPosition(solarWorldPosition);
     const cameraToSun = Math.max(1, camera.position.distanceTo(solarWorldPosition));
     const halfFov = THREE.MathUtils.degToRad(camera.fov * 0.5);
+    // How much world one screen pixel covers at the Sun's distance. Needed
+    // before the scale is chosen, so the minimum disk can be stated in pixels.
+    const worldUnitsPerPixelAtSun = 2 * cameraToSun * Math.tan(halfFov)
+      / Math.max(1, innerHeight);
 
     let targetScale = isActiveSunInspection
       ? THREE.MathUtils.lerp(1, 0.18, sunFocusPullbackBlend)
@@ -2143,11 +2389,29 @@ import { createCosmicIntro } from './scene/space/cosmicIntro.js';
       const angularRadius = Math.atan(SUN_RADIUS_KM / realDistanceKm);
       // Resize the world-space model so its projected disk keeps the real solar
       // angle from the selected planet. This also remains valid when the viewer
-      // pulls far back while keeping that planet selected; the Sun never falls
-      // back into an invisible sub-pixel point at the wide-focus boundary.
+      // pulls far back while keeping that planet selected.
       const apparentRadius = Math.tan(angularRadius) * cameraToSun;
+      /*
+       * Keep a solid disk on screen, always.
+       *
+       * The floor used to be a flat 0.0011 of the model, which was written when
+       * the camera stopped at 2,550 units and was a couple of pixels there. At
+       * ten light-years it is a tenth of a world unit -- about a hundredth of a
+       * pixel. The photosphere disappears completely and the only thing left
+       * where the Sun should be is the glow sprite, which is additive and has
+       * nothing solid inside it. Orbit guides passing behind then show straight
+       * through the middle of the star, which reads exactly like a transparent
+       * Sun because that is what it is.
+       *
+       * A floor expressed in *pixels* instead of in model fractions holds an
+       * opaque core of a fixed apparent size however far back the camera goes,
+       * so there is always something for the guides to be hidden behind. Above
+       * that distance the real angular size takes over again and the floor
+       * never engages.
+       */
+      const pixelFloorRadius = SUN_MINIMUM_PIXEL_RADIUS * worldUnitsPerPixelAtSun;
       targetScale = THREE.MathUtils.clamp(
-        apparentRadius / SUN_BASE_VISUAL_RADIUS,
+        Math.max(apparentRadius, pixelFloorRadius) / SUN_BASE_VISUAL_RADIUS,
         0.0011,
         1,
       );
@@ -2229,6 +2493,10 @@ import { createCosmicIntro } from './scene/space/cosmicIntro.js';
       Math.max(steadyGlowPixels, 172),
       maximumZoomBlend,
     );
+    // The widest the Sun's radiance reaches on screen this frame, in pixels.
+    // The glow sprite sets the floor; the diffraction sparkle usually exceeds
+    // it and is tracked below.
+    let solarGlarePixels = maximumGlowPixels * 0.5;
     const targetGlowWorldSize = Math.max(
       apparentWorldRadius * 2.56,
       maximumGlowPixels * worldUnitsPerPixel,
@@ -2308,6 +2576,9 @@ import { createCosmicIntro } from './scene/space/cosmicIntro.js';
         * outerBoundaryBoost
         * starPulse;
 
+      if (sparkleVisibility > 0.01) {
+        solarGlarePixels = Math.max(solarGlarePixels, starPixelSize * 0.5 * sparkleVisibility);
+      }
       const starWorldSize = starPixelSize * worldUnitsPerPixel;
       const localStarSize = starWorldSize / Math.max(nextScale, 0.0001);
       const opacityPulse = primaryTwinkle * 0.34 + fineTwinkle * 0.22;
@@ -2331,6 +2602,28 @@ import { createCosmicIntro } from './scene/space/cosmicIntro.js';
       sun.distantStar.material.depthTest = true;
       sun.distantStar.renderOrder = 8;
     }
+
+    /*
+     * Hand the Sun's glare to the orbit guides.
+     *
+     * The photosphere is opaque and occludes them correctly, but from the outer
+     * system it is a few pixels across inside a flare two hundred wide. Flare
+     * and guide are both transparent, so neither hides the other and a ribbon
+     * drawn across the brightest thing in the scene reads as a see-through Sun.
+     * The guides fade out inside the glare instead, which is what a star
+     * actually does to anything faint near it.
+     */
+    sunScreenProjection.copy(solarWorldPosition).project(camera);
+    const sunIsOnScreen = sunScreenProjection.z > -1 && sunScreenProjection.z < 1;
+    setOrbitSolarGlare(
+      orbitRoot,
+      sunScreenProjection.x,
+      sunScreenProjection.y,
+      // Normalised device coordinates measure 2 across the viewport height.
+      Math.max(0.002, solarGlarePixels * 1.24 / Math.max(1, innerHeight)),
+      sunIsOnScreen ? 1 : 0,
+      Math.max(0.0001, innerWidth / Math.max(1, innerHeight)),
+    );
 
     setSunPerformanceProfile(sun, "high", {
       projectedRadiusPixels,
@@ -2903,20 +3196,64 @@ import { createCosmicIntro } from './scene/space/cosmicIntro.js';
     const worldUnitsPerPixel = 2 * cameraDistanceFromSystem
       * Math.tan(THREE.MathUtils.degToRad(camera.fov * 0.5))
       / Math.max(1, innerHeight);
+    /*
+     * The grab radius is specified in pixels and converted to world units, so
+     * it stays the same size on screen at any zoom -- which is the whole point
+     * of computing `worldUnitsPerPixel` first. The ceiling then has to be
+     * large enough not to defeat that.
+     *
+     * It was 4.9 world units, which was generous when the camera stopped at
+     * 2,550 and meaningless once it pulled back to 5,200: at that distance a
+     * pixel is nearly seven world units, so the clamp was holding the grab
+     * radius at *two thirds of a pixel* and no orbit could be hovered at all
+     * in the one view where the orbits are the entire picture.
+     *
+     * During a close inspection it shrinks again, because there the guides are
+     * not what the viewer is reaching for -- the body and its moons are, and a
+     * wide grab lets the parent planet's own ribbon steal the pointer off them.
+     */
+    const selectedPlanet = getSelectedSystemPlanet();
+    const grabPixels = (innerWidth <= 760 ? 11 : 7) * (focusedBody ? 0.42 : 1);
     raycaster.params.Line.threshold = THREE.MathUtils.clamp(
-      worldUnitsPerPixel * (innerWidth <= 760 ? 16 : 12),
+      worldUnitsPerPixel * grabPixels,
       0.10,
-      4.9,
+      160,
     );
     raycaster.setFromCamera(pointer, camera);
 
-    const hit = raycaster.intersectObjects(orbitTargets, false).find(({ object }) => (
-      object.visible
-      && object.userData?.isPlanetOrbit
-      && object.userData?.planet
-    ));
-    if (!hit) return null;
-    return { orbit: hit.object, point: hit.point };
+    /*
+     * Choose by distance to the cursor, not distance to the camera.
+     *
+     * three.js returns line intersections sorted along the ray, and `.find()`
+     * took the first one -- so whichever guide happened to be *nearest the
+     * camera* within the grab radius won, even if the cursor was sitting on a
+     * different one. Reaching for Sedna's orbit at the wide view therefore kept
+     * selecting an inner planet whose path crossed the same part of the screen
+     * from much closer in. The hit point is already the closest point on the
+     * ribbon to the ray, so projecting it and measuring in pixels answers the
+     * question the viewer is actually asking: which line is under my cursor.
+     */
+    const hits = raycaster.intersectObjects(orbitTargets, false);
+    let bestHit = null;
+    let bestPixels = Infinity;
+    for (let index = 0; index < hits.length; index += 1) {
+      const hit = hits[index];
+      const object = hit.object;
+      if (!object.visible || !object.userData?.isPlanetOrbit || !object.userData?.planet) continue;
+      // The guide belonging to the body already being inspected is never a
+      // target. Its name is on screen; offering it steals hover from the moons.
+      if (selectedPlanet && object.userData.planet === selectedPlanet) continue;
+      orbitPickProjection.copy(hit.point).project(camera);
+      const offsetX = (orbitPickProjection.x - pointer.x) * 0.5 * innerWidth;
+      const offsetY = (orbitPickProjection.y - pointer.y) * 0.5 * innerHeight;
+      const pixels = Math.hypot(offsetX, offsetY);
+      if (pixels < bestPixels) {
+        bestPixels = pixels;
+        bestHit = hit;
+      }
+    }
+    if (!bestHit || bestPixels > grabPixels + 1.5) return null;
+    return { orbit: bestHit.object, point: bestHit.point };
   }
 
   function isPointerStillOnHoveredPlanetOrbit() {
@@ -3085,25 +3422,59 @@ import { createCosmicIntro } from './scene/space/cosmicIntro.js';
 
   function getSelectedSystemPlanet() {
     if (!focusedBody || focusedUiSuppressedByWideView) return null;
-    const type = getInteractiveType(focusedBody);
-    if (type === "planet" || type === "dwarf planet") return focusedBody;
+    /*
+     * Anything that owns a heliocentric guide is its own selection.
+     *
+     * This used to compare the body's catalogue *type* against "planet" and
+     * "dwarf planet", which silently excluded Orcus, Quaoar, Gonggong and
+     * Sedna -- all four are catalogued as "Dwarf planet candidate". Selecting
+     * any of them therefore dimmed every guide in the system and highlighted
+     * none, which is precisely the case where the guide matters most, because
+     * out there the orbit is the only thing showing you where you are. Asking
+     * the orbit registry instead cannot drift out of step with the catalogue.
+     */
+    if (orbitTargets.some((orbit) => orbit.userData?.planet === focusedBody)) return focusedBody;
     const parentName = focusedBody.userData?.parentPlanet;
     return parentName ? planets.find((planet) => planet.name === parentName) ?? null : null;
   }
 
   function updatePlanetOrbitVisuals(deltaTime) {
+    /*
+     * Orbit guides get *brighter* as the journey pulls out, not flatter.
+     *
+     * This used to saturate at 0.22 by the time the camera had left Earth
+     * orbit and stay there for the rest of the journey, which is exactly
+     * backwards. Close in, a guide crossing the frame is clutter -- there is a
+     * planet to look at. Pulled all the way out, the guides *are* the picture:
+     * they are the only thing that shows the shape of the system, and the
+     * bodies themselves are a few pixels each. So the ramp runs the other way
+     * and keeps going all the way to the end of the scroll.
+     */
     const baseJourneyOpacity = THREE.MathUtils.clamp(
-      (smoothProgress - 0.035) / 0.18,
-      0.04,
-      0.22,
+      0.10 + smoothProgress * 0.44,
+      0.10,
+      0.54,
     );
+    /*
+     * ...and they get out of the way entirely during a close inspection. At
+     * the far end of the system a single guide sweeps right across the frame,
+     * so a body being examined would otherwise be crossed by half a dozen
+     * bright ribbons belonging to worlds that are nowhere near it.
+     */
+    const inspectionFade = focusedBody ? 0.22 : 1;
     const selectedPlanet = getSelectedSystemPlanet();
     const ease = frameAdjustedEase(hoveredPlanetOrbit ? 0.52 : 0.18, deltaTime);
 
     orbitTargets.forEach((orbit) => {
-      const baseOpacity = Number(orbit.userData?.baseOpacity ?? 0.18);
-      const relativeOpacity = baseOpacity / 0.18;
-      const normalOpacity = THREE.MathUtils.clamp(baseJourneyOpacity * relativeOpacity, 0.025, 0.28);
+      const baseOpacity = Number(orbit.userData?.baseOpacity ?? 0.34);
+      // Relative to the current default, so a guide that asked for a dimmer or
+      // brighter path than usual keeps that relationship.
+      const relativeOpacity = baseOpacity / 0.34;
+      const normalOpacity = THREE.MathUtils.clamp(
+        baseJourneyOpacity * relativeOpacity * inspectionFade,
+        0.02,
+        0.62,
+      );
       const isHovered = orbit === hoveredPlanetOrbit;
       const isSelected = orbit.userData?.planet === selectedPlanet;
       let targetOpacity = normalOpacity;
@@ -3111,10 +3482,27 @@ import { createCosmicIntro } from './scene/space/cosmicIntro.js';
       if (hoveredPlanetOrbit) {
         targetOpacity = isHovered ? 0.92 : Math.max(0.012, normalOpacity * 0.16);
       } else if (selectedPlanet) {
-        targetOpacity = isSelected ? 0.68 : Math.max(0.016, normalOpacity * 0.23);
+        /*
+         * The focused body's own path is not merely "still legible" -- it is
+         * the one piece of context an inspection cannot supply for itself.
+         * Close in on Sedna you can see Sedna and nothing else; the guide is
+         * what tells you the shape and tilt of where you are standing. So it
+         * is held near full strength while everything else drops away.
+         */
+        targetOpacity = isSelected ? 0.80 : Math.max(0.010, normalOpacity * 0.23);
       }
 
       orbit.material.opacity = THREE.MathUtils.lerp(orbit.material.opacity, targetOpacity, ease);
+      /*
+       * Width follows the same easing as the brightness. A hovered guide goes
+       * from one and a half pixels to four, which on a hairline is a far
+       * stronger signal than any amount of extra alpha could be.
+       */
+      const glowTarget = isHovered ? 1 : isSelected ? 0.55 : 0;
+      const glowCurrent = orbit.userData.hoverGlow ?? 0;
+      const glowNext = THREE.MathUtils.lerp(glowCurrent, glowTarget, ease);
+      orbit.userData.hoverGlow = glowNext;
+      orbit.userData.setHoverGlow?.(glowNext);
       orbitBaseColourScratch.setHex(orbit.userData?.baseColor ?? orbit.material.color.getHex());
       orbitTargetColourScratch.copy(orbitBaseColourScratch);
       if (isHovered) orbitTargetColourScratch.lerp(orbitHoverColour, 0.78);
@@ -4289,6 +4677,16 @@ import { createCosmicIntro } from './scene/space/cosmicIntro.js';
     const scrollbarWidth = Math.max(0, window.innerWidth - document.documentElement.clientWidth);
     journeyScrollSnapshot = {
       scrollY: window.scrollY,
+      /*
+       * The journey's real length, measured now.
+       *
+       * Two lines below this the document becomes `position: fixed`, which
+       * takes the body out of flow and collapses `scrollHeight` to roughly one
+       * viewport. Anything that asks "how long is the journey?" while a body is
+       * being inspected gets an answer close to zero -- which is the end of the
+       * journey nearest the Sun, not the far end.
+       */
+      maximumScroll: Math.max(0, document.documentElement.scrollHeight - innerHeight),
       scrollProgress,
       smoothProgress,
       yaw,
@@ -5137,6 +5535,91 @@ import { createCosmicIntro } from './scene/space/cosmicIntro.js';
 
   earthReturnButton.addEventListener("click", travelBackToEarth);
 
+  /**
+   * Pulls all the way out to the establishing frame.
+   *
+   * Deliberately does *not* set `smoothProgress`. The journey eases toward
+   * whatever `scrollProgress` says, so leaving the smoothed value alone makes
+   * the camera fly out over a couple of seconds instead of cutting -- which is
+   * the difference between arriving somewhere and being teleported.
+   */
+  const wholeSystemFocus = new THREE.Vector3();
+  const wholeSystemCamera = new THREE.Vector3();
+  const wholeSystemOrientation = new THREE.Matrix4();
+
+  /**
+   * Aims a focus-exit that is already running at the establishing frame.
+   *
+   * The exit does not recompute the journey camera each frame. It lerps towards
+   * a pose it *captured* the moment inspection began, and it re-pins
+   * `scrollProgress` to that same captured value on every frame until it
+   * finishes. Redirecting only `targetScrollY` therefore bought nothing: the
+   * camera still flew home to the distance the viewer had been standing at, and
+   * the pull-out to the end of the journey ran afterwards as a separate move.
+   * That is the stop at six light-years before the ten.
+   *
+   * Overwriting the snapshot makes the wide view the exit's own destination, so
+   * there is one flight from the body straight out to the whole system.
+   */
+  function aimFocusExitAtWholeSystem(transition, maximumScroll) {
+    const { snapshot } = transition;
+    const outerDistance = getCameraDistance(1);
+    /*
+     * Ask the Sun directly rather than going through getFocusPoint.
+     *
+     * `focusedBody` is not cleared until the exit's camera phase finishes, and
+     * while it is set getFocusPoint answers with the *body's* position -- so
+     * building the establishing frame around it would frame the dwarf planet
+     * from ten light-years away instead of framing the system.
+     */
+    hasLeftOpeningEarthView = true;
+    sun.system.getWorldPosition(wholeSystemFocus);
+    // The orientation the journey had before inspection, not the one the
+    // inspection camera is holding at this instant.
+    setSphericalCameraOffset(sphericalCameraOffset, outerDistance, snapshot.yaw, snapshot.pitch);
+    wholeSystemCamera.copy(wholeSystemFocus).add(sphericalCameraOffset);
+    wholeSystemOrientation.lookAt(wholeSystemCamera, wholeSystemFocus, camera.up);
+
+    transition.targetScrollY = maximumScroll;
+    snapshot.scrollY = maximumScroll;
+    snapshot.scrollProgress = 1;
+    snapshot.smoothProgress = 1;
+    snapshot.cameraPosition.copy(wholeSystemCamera);
+    snapshot.cameraFocusPoint.copy(wholeSystemFocus);
+    snapshot.cameraQuaternion.setFromRotationMatrix(wholeSystemOrientation);
+    snapshot.hasCameraFocusPoint = true;
+    // The journey's own field of view at the far end of the scroll. Taken from
+    // the same expression the animation loop uses so the arrival matches a
+    // scrolled-out view exactly rather than approximately.
+    snapshot.cameraFov = THREE.MathUtils.clamp(THREE.MathUtils.lerp(42, 72, 1), 16, 94);
+    // The establishing frame is the canonical pose, not an offset from it.
+    snapshot.freeExploreCameraOffsetTarget.set(0, 0, 0);
+    snapshot.freeExploreCameraOffsetCurrent.set(0, 0, 0);
+    snapshot.freeExploreFocusOffsetTarget.set(0, 0, 0);
+    snapshot.freeExploreFocusOffsetCurrent.set(0, 0, 0);
+  }
+
+  function travelToWholeSystem() {
+    // While a body is focused the document is fixed and its scrollHeight has
+    // collapsed, so the live measurement is meaningless. The length captured
+    // when the scroll was locked is the real one.
+    const lockedLength = journeyScrollSnapshot?.maximumScroll;
+    const maximumScroll = focusedBody && Number.isFinite(lockedLength)
+      ? lockedLength
+      : Math.max(0, document.documentElement.scrollHeight - innerHeight);
+
+    if (focusedBody) {
+      focusBody(null);
+      if (focusExitTransition) aimFocusExitAtWholeSystem(focusExitTransition, maximumScroll);
+    }
+    resetFreeExploration();
+    forceJourneyScrollPosition(maximumScroll);
+    scrollProgress = 1;
+  }
+
+  systemReturnButton.addEventListener("click", travelToWholeSystem);
+  addEventListener("resize", placeSystemReturnButton);
+
   /** Plays one precise HUD confirmation at the raycast-approved space point. */
   function showSpaceDivePulse() {
     if (!spaceDivePulse) return;
@@ -5367,6 +5850,9 @@ import { createCosmicIntro } from './scene/space/cosmicIntro.js';
       queueCelestialDetailsContext(ringSelection.userData.parentPlanetObject.userData?.name ?? ringSelection.userData.parentPlanetObject.name, {
         highlightSection: "rings",
         openAdvanced: true,
+        // Which band was actually clicked, so the dossier can mark it in the
+        // roster instead of presenting a list the viewer has to search.
+        highlightRingName: ringSelection.userData?.name ?? null,
       });
     }
     const orbit = body
@@ -5460,6 +5946,7 @@ import { createCosmicIntro } from './scene/space/cosmicIntro.js';
   });
 
   addEventListener("resize", () => {
+    setOrbitViewport(orbitRoot, innerWidth, innerHeight);
     // Both the camera projection and drawing buffer must match the new viewport.
     camera.aspect = innerWidth / innerHeight;
     camera.updateProjectionMatrix();
@@ -6191,6 +6678,33 @@ import { createCosmicIntro } from './scene/space/cosmicIntro.js';
 
     // ----- Sync HTML, draw the frame, then schedule the next frame -----
     // Matrix updates make the latest camera transform available to 3D→2D projection.
+    /*
+     * The near plane follows the camera, and it has to.
+     *
+     * A perspective depth buffer spends almost all of its resolution near the
+     * lens: the separation it can resolve at distance z goes as z squared over
+     * `near`. With near pinned at 0.1 and the camera pulled back to five
+     * thousand units, the Sun's ninety-unit radius stopped being resolvable
+     * from the orbit guides passing behind it -- so the far half of every
+     * orbit won the depth test and the Sun rendered as though it were
+     * transparent, with orbital paths showing straight through the disc.
+     *
+     * Scaling `near` with the distance to whatever the camera is actually
+     * looking at fixes it at both ends. Pulled out, near rises to a couple of
+     * units and precision at the system's scale improves by more than an order
+     * of magnitude. Inspecting a moon a fraction of a unit across, the focus
+     * point is right in front of the lens and near drops back to its floor, so
+     * nothing is ever clipped.
+     */
+    const focusRange = camera.position.distanceTo(cameraFocusPoint);
+    const desiredNear = THREE.MathUtils.clamp(focusRange / 3600, 0.02, 2.4);
+    // Only rewrite the projection when it has actually moved: this runs every
+    // frame and updateProjectionMatrix is not free.
+    if (Math.abs(desiredNear - camera.near) > camera.near * 0.06) {
+      camera.near = desiredNear;
+      camera.updateProjectionMatrix();
+    }
+
     camera.updateMatrixWorld();
     updatePlanetOrbitHoverVisual();
     updateCelestialSelectionCard();
@@ -6280,7 +6794,7 @@ import { createCosmicIntro } from './scene/space/cosmicIntro.js';
     const ARRIVAL_LINES = [
       "One star, eight planets — and at least five dwarf planets, with more found every few years.",
       "All of it condensed out of one collapsing cloud of gas and dust, 4.6 billion years ago.",
-      "You are six light-years out, looking back in.",
+      "You are ten light-years out, looking back in.",
     ];
     const ARRIVAL_LINE_MS = 5200;
     const ARRIVAL_FADE_MS = 440;
@@ -6352,6 +6866,14 @@ import { createCosmicIntro } from './scene/space/cosmicIntro.js';
       earthReturnButton.classList.remove("is-awaiting-entrance");
       earthReturnButton.classList.add("is-entering");
       setTimeout(() => earthReturnButton.classList.remove("is-entering"), 1500);
+      systemReturnButton.disabled = false;
+      systemReturnButton.classList.remove("is-awaiting-entrance");
+      systemReturnButton.classList.add("is-entering");
+      setTimeout(() => systemReturnButton.classList.remove("is-entering"), 1500);
+      // Once, immediately, so it is roughly right; then again after both
+      // entrances have settled, when the anchor's rect is finally the truth.
+      placeSystemReturnButton();
+      setTimeout(placeSystemReturnButton, 1700);
     }, 700);
   }
 

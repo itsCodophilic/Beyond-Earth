@@ -5681,12 +5681,14 @@ export function createCosmicIntro({ pixelRatio } = {}) {
        *
        * What replaces it is a Hermite in *log* space whose starting slope is
        * the rate the pan before it was closing at -- about 0.17 e-folds a
-       * second -- building to roughly half an e-fold by the end. So the dive
-       * begins at exactly the speed the shot was already travelling and
-       * accelerates into it, which is what a dive is; the old one stopped and
-       * then bolted.
+       * second -- peaking near half an e-fold through the middle and easing
+       * back to 0.28 by the last frame, which is the rate the act after it
+       * picks the star up at. So the dive begins at exactly the speed the shot
+       * was already travelling, accelerates into it -- which is what a dive is
+       * -- and hands its speed on rather than dropping it. The old one stopped
+       * and then bolted.
        */
-      const eased = hermite01(clamp01(local), 0.46, 1.35);
+      const eased = hermite01(clamp01(local), 0.46, 0.75);
       galaxySprites.forEach((sprite) => { applyFade(sprite, 0); });
       setDeepStarLevel(0);
       setNebulaLevel(0, seconds);
@@ -5744,13 +5746,19 @@ export function createCosmicIntro({ pixelRatio } = {}) {
        * Picks up the dive's exit rate and eases off it.
        *
        * In log space, so the number that has to match across the seam is the
-       * *relative* growth rate: the dive leaves at about half an e-fold a
-       * second and this act would run at 0.38 flat, which is a step down at
-       * the join. Taking the incoming rate as the start slope removes it, and
-       * settling to 0.85 of average by the end is the one deceleration in the
-       * sequence that is earned -- the shot is arriving.
+       * *relative* growth rate. The dive is set to ease down to 0.28 e-folds a
+       * second by its last frame and this act starts the star growing at
+       * exactly that, building slightly into the flare. Rate across the join:
+       * 0.28 either side.
+       *
+       * The dive's peak is unchanged -- it still runs at 0.44 through its
+       * middle, which is what makes it a dive. All that moved is where it
+       * spends that: it used to be still accelerating when the act ended and
+       * then handed over to a star growing five times slower than the object
+       * that had been filling the frame a frame earlier. That is the fraction
+       * of a pause; it was never a dropped frame.
        */
-      const eased = hermite01(clamp01(local), 1.3, 0.85);
+      const eased = hermite01(clamp01(local), 0.72, 1.1);
 
       /*
        * The last leg: one star, growing.
@@ -5770,7 +5778,17 @@ export function createCosmicIntro({ pixelRatio } = {}) {
         90,
         1,
       );
-      const settle = clamp01((local - 0.05) / 0.35);
+      /*
+       * No dead zone at the front of this.
+       *
+       * The star used to start fading in a twentieth of the way into the act
+       * -- four hundred milliseconds during which the only thing on screen
+       * still changing was a galaxy whose framing had just stopped. Four
+       * hundred milliseconds is exactly the size of the pause that was
+       * reported. It comes up from the first frame now, so the object that
+       * carries the act's speed is present from the instant the act owns it.
+       */
+      const settle = clamp01(local / 0.3);
       sunMarkMaterial.opacity = 0.9 * (1 - settle);
       // The band of the galaxy dims behind it as the star takes the frame.
       mwMaterial.opacity = lerp(1, 0.42, eased);

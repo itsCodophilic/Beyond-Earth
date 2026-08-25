@@ -19,6 +19,37 @@ import { saturn } from "./saturn/saturn.js";
 import { uranus } from "./uranus/uranus.js";
 import { neptune } from "./neptune/neptune.js";
 import { pluto } from "./pluto/pluto.js";
+import { orcus } from "./orcus/orcus.js";
+import { haumea } from "./haumea/haumea.js";
+import { quaoar } from "./quaoar/quaoar.js";
+import { makemake } from "./makemake/makemake.js";
+import { gonggong } from "./gonggong/gonggong.js";
+import { eris } from "./eris/eris.js";
+import { sedna } from "./sedna/sedna.js";
 
-// Export one canonical order for rendering, navigation, and future storytelling.
-export const PLANET_CONFIGS = [mercury, venus, earth, mars, jupiter, saturn, uranus, neptune, pluto];
+/*
+ * The Solar System does not stop at Pluto, and for a long time this list did.
+ *
+ * Everything after Pluto here is a trans-Neptunian world. Three of them --
+ * Eris, Haumea and Makemake -- carry the IAU's dwarf planet label alongside
+ * Pluto and Ceres; the other four do not, and the difference is administrative
+ * rather than physical. Orcus and Quaoar and Gonggong are the same kind of
+ * object, some of them larger than bodies that have the label, waiting on a
+ * formal decision nobody is in a hurry to make. Sedna is stranger still: its
+ * closest approach to the Sun is more than twice Neptune's distance, so it has
+ * never been inside the planets' gravitational reach at all.
+ *
+ * Ceres is deliberately not in this list. It is a dwarf planet, but it is also
+ * the largest object in the asteroid belt and it is already built there, with
+ * its real orbit and its real shape -- see asteroidBelt.js. Adding a second
+ * copy here would put two Ceres in the same Solar System.
+ */
+export const PLANET_CONFIGS = [
+  mercury, venus, earth, mars, jupiter, saturn, uranus, neptune,
+  pluto, orcus, haumea, quaoar, makemake, gonggong, eris, sedna,
+];
+
+/** The worlds beyond Neptune, for anything that wants to treat them as a set. */
+export const TRANS_NEPTUNIAN_NAMES = Object.freeze([
+  "Pluto", "Orcus", "Haumea", "Quaoar", "Makemake", "Gonggong", "Eris", "Sedna",
+]);

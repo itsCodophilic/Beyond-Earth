@@ -5,6 +5,7 @@ import {
   SPACE_ENVIRONMENT_CONFIG,
 } from "./spaceEnvironmentConfig.js";
 import { createZodiacalLight } from "./zodiacalLight.js";
+import { createDeepSky } from "./deepSky.js";
 
 /**
  * Public facade for every non-planetary space layer.
@@ -61,7 +62,24 @@ export class SpaceEnvironment {
       ? createZodiacalLight({ radius: radii.zodiacalLightShell })
       : null;
 
-    this.layers.push(...[this.zodiacalLight].filter(Boolean));
+    /*
+     * Built first so it is added first: the sky has to be the earliest thing
+     * in the draw order or a depth-testless layer on top of it would be
+     * composited underneath. Its own renderOrder does the real work, but
+     * keeping the graph in the same order costs nothing and removes a way for
+     * this to go wrong later.
+     */
+    this.deepSky = this.quality.deepSkyEnabled
+      ? createDeepSky({
+        radius: radii.deepSkyShell,
+        moteSpan: radii.deepSkyMoteSpan,
+        fieldCount: this.quality.deepSkyStars,
+        moteCount: this.quality.deepSkyMotes,
+        pixelRatio: this.pixelRatio,
+      })
+      : null;
+
+    this.layers.push(...[this.deepSky, this.zodiacalLight].filter(Boolean));
     if (this.layers.length) {
       this.root.add(...this.layers.map((layer) => layer.object));
     }
@@ -122,6 +140,11 @@ export class SpaceEnvironment {
     context.contrast = state.backgroundContrast;
     context.journeyProgress = state.journeyProgress;
     context.visibility = state.zodiacalGlow;
+    // The sky rides with the lens, so it needs the camera and nothing else
+    // does. Passed on the shared context rather than stored on the layer, so
+    // there is exactly one place a stale camera reference could come from.
+    context.camera = this.camera;
+    this.deepSky?.update(context);
     this.zodiacalLight?.update(context);
     return state;
   }
@@ -146,6 +169,7 @@ export class SpaceEnvironment {
     this.quality = preset;
 
     if (this.zodiacalLight) this.zodiacalLight.object.visible = preset.zodiacalLightEnabled;
+    if (this.deepSky) this.deepSky.object.visible = preset.deepSkyEnabled;
   }
 
   dispose() {

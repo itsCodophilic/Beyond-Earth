@@ -22,7 +22,7 @@ export const pluto = {
   orbitSegments: 1440,
   bump: 0.030,
   orbitColor: 0xa9a0b8,
-  orbitOpacity: 0.14,
+  orbitOpacity: 0.34,
   detail: "Dwarf planet · Kuiper Belt world",
   focusScale: 2.6,
   // Wider framing for the expanded five-moon portrait. The outer Hydra orbit

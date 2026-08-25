@@ -6,6 +6,7 @@
  * (for example `earth`) is the stable name used everywhere else in the app.
  */
 const LOCAL_TEXTURE_ROOT = `${import.meta.env.BASE_URL}textures`;
+const DWARF_TEXTURE_ROOT = `${import.meta.env.BASE_URL}assets/textures/dwarf`;
 
 export const TEXTURE_URLS = {
   sun: "https://threejs.org/examples/textures/lava/cloud.png",
@@ -31,6 +32,25 @@ export const TEXTURE_URLS = {
   // the supplied real-image reference so the dwarf planet reads consistently
   // from every camera angle without relying on the procedural fallback.
   pluto: `${import.meta.env.BASE_URL}assets/textures/pluto/pluto-equirectangular.png`,
+
+  /*
+   * The seven worlds beyond Neptune.
+   *
+   * None of them has ever been resolved into more than a handful of pixels by
+   * any telescope, so there is no survey map to download -- every image of them
+   * in existence is one disc, lit from one side, seen from one angle. These
+   * maps were built by unwrapping exactly that: the reference photograph is
+   * projected back off the sphere it was taken of, the illumination baked into
+   * it is divided out, and the half that was facing away is grown from the half
+   * that was not. See tools/dwarf-textures/README.md for the method.
+   */
+  orcus: `${DWARF_TEXTURE_ROOT}/orcus-equirectangular.jpg`,
+  haumea: `${DWARF_TEXTURE_ROOT}/haumea-equirectangular.jpg`,
+  quaoar: `${DWARF_TEXTURE_ROOT}/quaoar-equirectangular.jpg`,
+  makemake: `${DWARF_TEXTURE_ROOT}/makemake-equirectangular.jpg`,
+  gonggong: `${DWARF_TEXTURE_ROOT}/gonggong-equirectangular.jpg`,
+  eris: `${DWARF_TEXTURE_ROOT}/eris-equirectangular.jpg`,
+  sedna: `${DWARF_TEXTURE_ROOT}/sedna-equirectangular.jpg`,
   // Neptune is drawn by a seamless 3D atmosphere shader in neptuneSurface.js.
   // Avoiding a flat image prevents polar pinching and longitude seams.
 };
