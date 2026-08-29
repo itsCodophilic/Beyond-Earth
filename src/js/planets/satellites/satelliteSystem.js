@@ -32,6 +32,11 @@ import { URANUS_MOON_COUNT, URANUS_MOON_PROFILES } from "../uranus/satellites/ur
 import { createUranianMoonSurface } from "../uranus/satellites/uranianMoonFactory.js";
 import { PLUTO_MOON_COUNT, PLUTO_MOON_PROFILES } from "../pluto/satellites/plutonianMoonCatalog.js";
 import { createPlutonianMoonSurface } from "../pluto/satellites/plutonianMoonFactory.js";
+import { createTransNeptunianMoonSurface } from "./transNeptunianMoonFactory.js";
+import {
+  TRANS_NEPTUNIAN_MOON_PARENTS,
+  TRANS_NEPTUNIAN_MOON_SYSTEMS,
+} from "./transNeptunianMoonCatalog.js";
 
 const MOON_SYSTEMS = Object.freeze({
   Mars: [
@@ -43,6 +48,9 @@ const MOON_SYSTEMS = Object.freeze({
   Uranus: URANUS_MOON_PROFILES,
   Neptune: NEPTUNE_MOON_PROFILES,
   Pluto: PLUTO_MOON_PROFILES,
+  // Eris, Haumea, Orcus, Quaoar, Makemake and Gonggong. Sedna is absent
+  // because it genuinely has no moon, not because one has been left out.
+  ...TRANS_NEPTUNIAN_MOON_SYSTEMS,
 });
 
 const PARENT_ORBITAL_SCALE = Object.freeze({
@@ -52,6 +60,12 @@ const PARENT_ORBITAL_SCALE = Object.freeze({
   Uranus: { heliocentricAU: 19.1892, eccentricity: 0.0473 },
   Neptune: { heliocentricAU: 30.0699, eccentricity: 0.0086 },
   Pluto: { heliocentricAU: 39.482, eccentricity: 0.2488 },
+  Orcus: { heliocentricAU: 39.377, eccentricity: 0.2201 },
+  Haumea: { heliocentricAU: 43.060, eccentricity: 0.1915 },
+  Quaoar: { heliocentricAU: 43.156, eccentricity: 0.0350 },
+  Makemake: { heliocentricAU: 45.571, eccentricity: 0.1612 },
+  Gonggong: { heliocentricAU: 66.867, eccentricity: 0.4999 },
+  Eris: { heliocentricAU: 67.934, eccentricity: 0.4360 },
 });
 
 const orbitPoint = new THREE.Vector3();
@@ -292,6 +306,8 @@ function createSatelliteMesh(
     moon = createUranianMoonSurface(profile, quality);
   } else if (parentName === "Pluto") {
     moon = createPlutonianMoonSurface(profile, quality);
+  } else if (TRANS_NEPTUNIAN_MOON_PARENTS.includes(parentName)) {
+    moon = createTransNeptunianMoonSurface(profile, quality);
   } else {
     moon = new THREE.Mesh(sharedGeometry, createMoonMaterial(profile, sharedTexture));
   }

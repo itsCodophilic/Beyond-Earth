@@ -266,10 +266,31 @@
 
 .intro__singularity.is-arrived { cursor: pointer; }
 
+/*
+ * Focus is shown as light, not as a hoop.
+ *
+ * The mark is focused programmatically the instant it finishes descending, so
+ * that Enter and Space work without anyone having to hunt for it with Tab. The
+ * side effect was that Chrome decided this counted as keyboard focus and drew
+ * the focus ring -- a crisp 1px amber circle at a fixed radius, on every load,
+ * for every visitor. That is the same hoop the halo and the arrival ring were
+ * deliberately removed for: a circle at a fixed radius reads as chrome around a
+ * button rather than as anything the singularity is doing.
+ *
+ * Removing an outline without replacing it would be worse than the hoop, so
+ * focus now brightens the core well past its hover state. It is unmistakably a
+ * state change, it is visible to anyone navigating by keyboard, and it is made
+ * of the same light everything else here is made of.
+ */
 .intro__singularity:focus-visible {
-  outline: 1px solid rgba(255, 214, 160, 0.55);
-  outline-offset: 14px;
-  border-radius: 50%;
+  outline: none;
+}
+
+.intro__singularity:focus-visible .intro__core {
+  box-shadow:
+    0 0 20px 5px rgba(255, 244, 224, 1),
+    0 0 64px 18px rgba(255, 206, 148, 0.8),
+    0 0 156px 48px rgba(255, 154, 88, 0.38);
 }
 
 /*
