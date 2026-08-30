@@ -1646,6 +1646,249 @@ export function createCosmicIntro({ pixelRatio } = {}) {
   const captionBody = caption.querySelector(".cosmic-caption__body");
   document.body.append(caption);
 
+  /* -------------------------------------------- the distance still to run */
+
+  /*
+   * How far there is left to go, in units a person can hold.
+   *
+   * The opening covers about forty-six billion light-years in ninety-seven
+   * seconds, and without a number on it that is just a sequence of pretty
+   * shots -- there is no sense of *closing*, because every act looks like
+   * moving through space at roughly the same apparent speed. The readout is
+   * what turns it into an approach.
+   *
+   * The anchors below are the real scales each act is crossing: the comoving
+   * radius of the observable universe, then the cosmic web, then the Local
+   * Group at Andromeda's distance, the galaxy's own width, the Orion Arm, and
+   * finally the Sun's neighbourhood. Interpolating the *logarithm* between
+   * them is what keeps it readable -- linear interpolation across ten orders of
+   * magnitude would sit at forty-six billion for a minute and then drop through
+   * everything else in the last two seconds.
+   */
+  /*
+   * The readout does not start at the start.
+   *
+   * The first four acts are before our universe: the Big Bang, the condensing,
+   * the multiverse, the approach to one bubble in it. There is no honest
+   * distance to quote in any of them -- "how far to the Solar System" from
+   * outside the universe that contains it is not a number, and putting 46.5
+   * billion light-years on screen while the shot is still showing the
+   * inflating foam claims a measurement nobody could make.
+   *
+   * So it begins exactly where it becomes meaningful: at `cosmicWeb`, the
+   * moment the journey arrives inside our own universe, standing at the edge
+   * of the observable part of it. That figure -- 46.5 billion light-years,
+   * the comoving radius, in every direction from Earth -- is the real one for
+   * that instant. Before it there is nothing on screen at all.
+   */
+  const READOUT_FIRST_PHASE = "approach";
+  const READOUT_START_MS = PHASE_ORDER
+    .slice(0, PHASE_ORDER.indexOf(READOUT_FIRST_PHASE))
+    .reduce((sum, key) => sum + (INTRO_TIMING[key] || 0), 0);
+
+  /**
+   * How long the reading sits at the edge before it starts to fall: the whole
+   * of the act it appears in.
+   *
+   * The readout begins at `approach`, the act titled "Our Universe" -- the
+   * moment the journey stops looking at the multiverse and arrives at the one
+   * bubble that contains everything else in this experience. That is where a
+   * distance to the Solar System first means anything, so that is where the
+   * number appears.
+   *
+   * And for the length of that act it does not move, because nothing about the
+   * shot is closing yet: it is establishing where we now are. The figure it
+   * holds is the honest one for that position -- 46.5 billion light-years, the
+   * comoving radius of the observable universe, which is the same measurement
+   * the caption states from the other side as "93 billion light-years across".
+   *
+   * The hold also solves a smaller problem it was originally written for: the
+   * readout fades up over 1.2 seconds, and a count that starts on the same
+   * frame has already fallen through several billion light-years before the
+   * number is legible -- so the first figure anyone could read was not the
+   * edge at all.
+   *
+   * Because the hold is exactly one act long, the countdown still begins at
+   * the Cosmic Web and every later act lands on the same real landmark it did
+   * before: 447 million light-years at the end of the web, 4.29 million at the
+   * galaxies, 41,200 inside the Milky Way, 396 in the Orion Arm, 10.0 on
+   * arrival.
+   */
+  const READOUT_HOLD_MS = INTRO_TIMING.approach;
+  const READOUT_SPAN_MS = PHASE_ORDER
+    .slice(PHASE_ORDER.indexOf(READOUT_FIRST_PHASE))
+    .reduce((sum, key) => sum + (INTRO_TIMING[key] || 0), 0) - READOUT_HOLD_MS;
+
+  /**
+   * The comoving radius of the observable universe: 46.5 billion light-years.
+   *
+   * Not 13.8. The light from the cosmic microwave background has been in
+   * transit for 13.8 billion years, but space expanded while it travelled, so
+   * the matter that emitted it is now about three and a third times further
+   * away than that.
+   */
+  const START_LIGHT_YEARS = 4.65e10;
+
+  /**
+   * Where the count stops, and it does not stop at zero.
+   *
+   * Zero would be wrong in a way that shows: the intro does not land *on* the
+   * Solar System, it hands over to the establishing frame that holds the whole
+   * system in shot, and that frame is ten light-years out -- the same ten the
+   * "Back to Solar System" control returns to. A readout running to zero would
+   * claim the camera is standing on the Sun while the viewer is plainly
+   * looking at the entire system from outside it.
+   *
+   * Ten light-years is also a real place to be standing. It puts Sirius
+   * (8.6 ly) and Epsilon Eridani (10.5 ly) either side of you.
+   */
+  const TERMINAL_LIGHT_YEARS = 10;
+
+  /*
+   * One constant rate across the whole readout, and the acts land on real
+   * landmarks anyway.
+   *
+   * The rate is fixed by the two endpoints and the time between them:
+   * log10(4.65e10 / 10) over 57.5 seconds is 0.168 decades per second, every
+   * second. That was the whole point of the change -- a number that crawls,
+   * lurches, then crawls again is unreadable as progress -- but it would be a
+   * poor trade if it put nonsense on screen during each act. It does not.
+   * Running that rate from the edge of the observable universe, the value at
+   * each act boundary comes out as:
+   *
+   *   end of cosmicWeb    447 million ly   supercluster and filament scale
+   *   end of galaxies     4.3 million ly   the Local Group, just past Andromeda
+   *   end of milkyWay      41,100 ly       inside our own galaxy's disc
+   *   end of orionArm         396 ly       the local arm, around the Pleiades
+   *   end of sunApproach     17.9 ly       the Sun's immediate neighbourhood
+   *   end of arrive          10.0 ly       the establishing frame
+   *
+   * Every one of those is the right order of magnitude for what the shot is
+   * showing and the caption is saying. The constant rate and the honest
+   * landmarks turn out not to be in conflict -- which is what you would hope,
+   * since the acts were timed by how much there is to say about each scale,
+   * and there is roughly the same amount to say about each decade.
+   */
+  /*
+   * The gauge, as the viewer drew it: <--- value --->
+   *
+   * The two arms are the distance still to run, and they shrink as it closes.
+   * That does something a number alone cannot -- a number counting down
+   * through ten orders of magnitude is impressive and unreadable as *progress*,
+   * because 46.5 billion and 2.5 million look equally enormous. Two lines
+   * drawing in toward the middle are read pre-attentively, before the digits
+   * are parsed at all.
+   *
+   * The reading sits in a slot held open by an invisible copy of the longest
+   * string it can ever show, with the live text positioned over it. The slot's
+   * width never changes, so the arms' inner ends never move -- without that,
+   * every time the text got shorter the flex row re-centred and both arms
+   * jumped sideways, on top of the shrink they were already doing.
+   */
+  const distanceReadout = document.createElement("div");
+  distanceReadout.className = "cosmic-distance";
+  distanceReadout.innerHTML = `
+    <span class="cosmic-distance__label"></span>
+    <span class="cosmic-distance__gauge">
+      <span class="cosmic-distance__arm cosmic-distance__arm--left" aria-hidden="true"></span>
+      <span class="cosmic-distance__value">
+        <span class="cosmic-distance__sizer" aria-hidden="true">46.5 billion light-years</span>
+        <span class="cosmic-distance__text"></span>
+      </span>
+      <span class="cosmic-distance__arm cosmic-distance__arm--right" aria-hidden="true"></span>
+    </span>
+  `;
+  const distanceLabel = distanceReadout.querySelector(".cosmic-distance__label");
+  const distanceValue = distanceReadout.querySelector(".cosmic-distance__text");
+  const distanceGauge = distanceReadout.querySelector(".cosmic-distance__gauge");
+  document.body.append(distanceReadout);
+  let lastDistanceText = "";
+
+  /** Light-years to something a reader can picture, with the unit switching. */
+  function formatDistance(lightYears) {
+    if (lightYears >= 1e9) return `${(lightYears / 1e9).toFixed(1)} billion light-years`;
+    if (lightYears >= 1e6) return `${(lightYears / 1e6).toFixed(2)} million light-years`;
+    // Rounded to the nearest hundred, because at this range the last two
+    // digits change every frame and a number that flickers cannot be read.
+    if (lightYears >= 1e4) {
+      const rounded = Math.round(lightYears / 100) * 100;
+      return `${rounded.toLocaleString("en-US")} light-years`;
+    }
+    if (lightYears >= 100) return `${Math.round(lightYears).toLocaleString("en-US")} light-years`;
+    return `${lightYears.toFixed(1)} light-years`;
+  }
+
+  function updateDistanceReadout(elapsedMs) {
+    /*
+     * Nothing at all until the journey is inside our universe. Hidden by
+     * removing `is-live`, which is the same fade the readout already uses, so
+     * it arrives rather than appearing.
+     */
+    if (elapsedMs < READOUT_START_MS) {
+      distanceReadout.classList.remove("is-live", "is-closing");
+      return;
+    }
+
+    const through = clamp01(
+      (elapsedMs - READOUT_START_MS - READOUT_HOLD_MS) / READOUT_SPAN_MS,
+    );
+    const remaining = START_LIGHT_YEARS * Math.pow(
+      TERMINAL_LIGHT_YEARS / START_LIGHT_YEARS,
+      through,
+    );
+
+    const text = formatDistance(Math.max(TERMINAL_LIGHT_YEARS, remaining));
+    if (text !== lastDistanceText) {
+      distanceValue.textContent = text;
+      lastDistanceText = text;
+    }
+
+    /*
+     * The arms are the same quantity, and they are written every frame.
+     *
+     * They used to be quantised to a hundred steps to avoid touching a custom
+     * property sixty times a second. With the rate uneven that was invisible;
+     * with the rate constant it is not -- a hundred steps over a minute is one
+     * step per second, and a line that jumps once a second beside a number
+     * that changes continuously reads as ticking. Writing one custom property
+     * per frame costs a few microseconds, and it is the difference between a
+     * line that slides and a line that stutters.
+     */
+    distanceGauge.style.setProperty("--reach", (1 - through).toFixed(4));
+
+    /*
+     * The label says what the number *is*, and that changes once.
+     *
+     * While it holds at the edge it is not a distance still to travel, it is a
+     * statement of where the journey has arrived: the boundary of the part of
+     * the universe anything can be seen from. Once it starts falling it
+     * becomes a countdown, and says so.
+     */
+    const nextLabel = through <= 0
+      ? "The edge of the observable universe"
+      : "Distance to the Solar System";
+    if (distanceLabel.textContent !== nextLabel) distanceLabel.textContent = nextLabel;
+
+    distanceReadout.classList.add("is-live");
+    // The last stretch gets a brighter treatment: this is the arrival.
+    distanceReadout.classList.toggle("is-closing", through > 0.88);
+  }
+
+  /**
+   * Settles the gauge on the establishing frame and fades it out.
+   *
+   * Ten light-years is not a rounding of zero -- it is where the camera now
+   * is, and it is the same ten light-years "Back to Solar System" returns to.
+   */
+  function retireDistanceReadout() {
+    distanceValue.textContent = formatDistance(TERMINAL_LIGHT_YEARS);
+    distanceGauge.style.setProperty("--reach", "0");
+    distanceReadout.classList.add("is-closing");
+    // Dropping is-live is what starts the 1,200 ms opacity transition.
+    distanceReadout.classList.remove("is-live");
+    setTimeout(() => distanceReadout.remove(), 1400);
+  }
+
   let captionKey = null;
   /*
    * The body line is faded by hand, not by CSS.
@@ -5008,6 +5251,7 @@ export function createCosmicIntro({ pixelRatio } = {}) {
     }
 
     elapsed += deltaSeconds * 1000;
+    updateDistanceReadout(elapsed);
     dustMaterial.uniforms.uTime.value += deltaSeconds;
     const seconds = elapsed / 1000;
     const total = phaseTotal();
@@ -5911,6 +6155,19 @@ export function createCosmicIntro({ pixelRatio } = {}) {
    */
   function dispose() {
     caption.remove();
+    /*
+     * The readout is retired, not deleted.
+     *
+     * Pulling it out of the DOM on the frame the opening ends means the last
+     * number anyone sees is whatever the count happened to be on that frame --
+     * which was measured at 823 light-years, nowhere near the ten the viewer
+     * is now looking at. So it is pinned to the value that is actually true of
+     * the shot being handed over to, and then allowed to fade on the CSS
+     * transition it already has. The node outlives this call by a second and a
+     * bit, which costs nothing: it is inert, it is out of the layout's way,
+     * and it removes itself.
+     */
+    retireDistanceReadout();
     // Collect first, then detach. Removing objects during traverse() corrupts
     // the children array mid-walk and throws -- which, because this runs inside
     // the render loop, previously killed the loop and left a black screen.

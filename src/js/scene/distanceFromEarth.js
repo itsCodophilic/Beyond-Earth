@@ -315,16 +315,86 @@ export function formatEarthDistanceRange(range) {
  * Planet values follow the angular positions visible in the current scene while
  * using JPL semi-major axes for the physical scale.
  */
-export function createEarthDistanceTracker({ earth }) {
+export function createEarthDistanceTracker({ earth, resolvePlanetByName = null }) {
   const earthWorldDirection = new THREE.Vector3();
   const bodyWorldDirection = new THREE.Vector3();
   const earthHeliocentricPosition = new THREE.Vector3();
   const bodyHeliocentricPosition = new THREE.Vector3();
+  const parentWorldPosition = new THREE.Vector3();
+  const satelliteOffset = new THREE.Vector3();
 
   function heliocentricPosition(body, orbitalRadiusAU, target) {
     body.getWorldPosition(target);
     if (target.lengthSq() < 1e-10 || orbitalRadiusAU <= 0) return target.set(0, 0, 0);
     return target.normalize().multiplyScalar(orbitalRadiusAU);
+  }
+
+  /**
+   * Finds the planet a moon belongs to.
+   *
+   * The first attempt walked up the scene graph, on the assumption that a moon
+   * sits inside its planet. It does not: a satellite system is a *sibling* of
+   * the planet's mesh, both hanging off an unnamed orbital pivot, so the walk
+   * found nothing and every moon fell silently back to the old behaviour --
+   * which looked like the fix had not worked, when what had actually happened
+   * is that it never ran.
+   *
+   * So the planet is looked up by name from the list the application already
+   * keeps. The graph walk is retained underneath as a fallback, because it
+   * costs nothing and would cover a body built outside that list.
+   */
+  function findParentPlanet(body) {
+    const parentName = String(body?.userData?.parentPlanet ?? "");
+    if (!parentName) return null;
+    const resolved = resolvePlanetByName?.(parentName);
+    if (resolved) return resolved;
+    let node = body.parent;
+    while (node) {
+      if (node.userData?.name === parentName && node.userData?.visualRadius) return node;
+      node = node.parent;
+    }
+    return null;
+  }
+
+  /**
+   * Where a moon actually is, in heliocentric AU.
+   *
+   * Every moon used to be given its planet's orbital elements verbatim and
+   * then projected onto that planet's semi-major axis -- so all ninety-five
+   * Jovian moons returned Jupiter's distance from Earth, identical to the
+   * kilometre. That is what made the readout look hardcoded: it was not
+   * hardcoded, it was the same computation performed on the same numbers
+   * ninety-five times.
+   *
+   * The fix is to put the moon where it is: its planet's position, plus its
+   * own offset from that planet. The *direction* of the offset is read live
+   * from the scene, so it swings round as the moon orbits, but the *length*
+   * comes from the catalogue in real kilometres -- because the scene
+   * deliberately compresses satellite orbits and its distances are not to
+   * scale.
+   *
+   * The differences are small next to interplanetary distances and they are
+   * real: Io and Callisto are about 1.5 million kilometres apart, which is a
+   * visible difference in a readout quoted in kilometres, and the value now
+   * changes as a moon rounds its orbit toward Earth and away again.
+   */
+  function satelliteHeliocentricPosition(body, parentAU, target) {
+    const axisKm = Number(body?.userData?.satelliteSemiMajorAxisKm);
+    const parent = findParentPlanet(body);
+    if (!parent || !Number.isFinite(axisKm) || axisKm <= 0) return null;
+
+    heliocentricPosition(parent, parentAU, target);
+    if (target.lengthSq() < 1e-10) return null;
+
+    parent.getWorldPosition(parentWorldPosition);
+    body.getWorldPosition(satelliteOffset);
+    satelliteOffset.sub(parentWorldPosition);
+    if (satelliteOffset.lengthSq() < 1e-12) return target;
+
+    return target.addScaledVector(
+      satelliteOffset.normalize(),
+      axisKm / ASTRONOMICAL_UNIT_KM,
+    );
   }
 
   function getBodyDistanceFromEarth(body) {
@@ -364,7 +434,17 @@ export function createEarthDistanceTracker({ earth }) {
       const bodyAU = orbitalElements.semiMajorAxisAU;
       heliocentricPosition(earth, earthAU, earthWorldDirection);
       earthHeliocentricPosition.copy(earthWorldDirection);
-      heliocentricPosition(body, bodyAU, bodyWorldDirection);
+
+      /*
+       * A moon is placed relative to its planet; everything else is placed on
+       * its own orbit. Falling back to the planet's own position when the moon
+       * has no catalogued axis is deliberate -- it is the old behaviour, and
+       * for a moon whose real orbit is unknown it is the honest answer.
+       */
+      const satellitePosition = orbitalElements.source === "satellite-parent-orbit"
+        ? satelliteHeliocentricPosition(body, bodyAU, bodyWorldDirection)
+        : null;
+      if (!satellitePosition) heliocentricPosition(body, bodyAU, bodyWorldDirection);
       bodyHeliocentricPosition.copy(bodyWorldDirection);
 
       return {
@@ -375,7 +455,9 @@ export function createEarthDistanceTracker({ earth }) {
             ? "Current simulated separation · verified small-body orbit"
             : "Current simulated separation · generated asteroid orbit"
           : orbitalElements.source === "satellite-parent-orbit"
-            ? `Current simulated separation · ${body.userData.parentPlanet} moon system`
+            ? (Number.isFinite(Number(body?.userData?.satelliteSemiMajorAxisKm))
+              ? `Current simulated separation · ${body.userData.parentPlanet} plus this moon's own orbit`
+              : `Current simulated separation · ${body.userData.parentPlanet} moon system`)
             : "Current simulated Earth separation · planetary orbit",
         bodyName: name,
         basis: orbitalElements.source,

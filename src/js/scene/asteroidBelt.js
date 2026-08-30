@@ -1085,6 +1085,14 @@ export function findNearestAsteroidInstanceAtPointer({
   extraHitPixels = 2.5,
   radiusMultiplier = 1.35,
   visibleRadiusPreference = 0.12,
+  /**
+   * Ignore instances further from the lens than this.
+   *
+   * Used when a body is focused and the pointer is over its disk: rocks behind
+   * it are genuinely hidden and must not be acquired through it, while rocks in
+   * front of it are in plain sight and must be.
+   */
+  maximumCameraDistance = Infinity,
 }) {
   if (!Array.isArray(meshes) || !camera || !pointer) return null;
 
@@ -1119,6 +1127,7 @@ export function findNearestAsteroidInstanceAtPointer({
         || projected.y < -1.08 || projected.y > 1.08) continue;
 
       const cameraDistance = Math.max(0.0001, cameraPosition.distanceTo(_position));
+      if (cameraDistance > maximumCameraDistance) continue;
       const visibilityScale = Number(mesh.userData.visualScaleFactor ?? 1);
       const projectedRadiusPixels = Number(record.visualRadius ?? 0)
         * visibilityScale / cameraDistance * focalPixels;

@@ -956,3 +956,173 @@ body.is-cosmic-intro::-webkit-scrollbar { width: 0; height: 0; }
   opacity: 0;
   transition: opacity 320ms linear;
 }
+
+/* ------------------------------------------- the distance still to travel
+
+   Bottom centre, opposite the captions at the top, so the two never fight for
+   the same part of the frame. Deliberately quiet: the number is the point, and
+   it is doing something no caption can -- falling, continuously, for ninety-
+   seven seconds, which is what makes the opening read as an approach rather
+   than as a sequence of nice shots. */
+
+.cosmic-distance {
+  position: fixed;
+  bottom: 9vh;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 12;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 1200ms ease;
+}
+
+.cosmic-distance.is-live { opacity: 1; }
+
+.cosmic-distance__label {
+  font-family: var(--cin-mono, ui-monospace, monospace);
+  font-size: 0.5rem;
+  font-weight: 400;
+  letter-spacing: 0.34em;
+  text-transform: uppercase;
+  color: rgba(255, 214, 160, 0.72);
+}
+
+/* Tabular figures: without them every digit change nudges the whole line
+   sideways, and a number that jitters as it counts is unreadable. */
+/* A slot of constant width, holding a reading of varying width.
+
+   The sizer is an invisible copy of the longest string the readout can show,
+   so the slot is as wide as the worst case and never changes. The live text is
+   absolutely positioned over it and centred. That is what keeps the arms
+   smooth: their inner ends are pinned to a box that does not move, so the only
+   thing changing is the width the --reach variable is driving. */
+.cosmic-distance__value {
+  position: relative;
+  flex: 0 0 auto;
+  display: inline-block;
+  white-space: nowrap;
+  font-size: clamp(0.95rem, 2.1vw, 1.5rem);
+  font-weight: 200;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+  color: rgba(255, 246, 232, 0.94);
+  text-shadow: 0 0 26px rgba(255, 198, 132, 0.22);
+}
+
+.cosmic-distance__sizer {
+  visibility: hidden;
+}
+
+.cosmic-distance__text {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ------------------------------------------------ the closing-distance gauge
+
+   <--- 46.5 billion light-years --->
+
+   The arms are the distance still to run. They are driven by a single custom
+   property, --reach, which the intro sets from the logarithm of what is left:
+   1 at the start, 0 on arrival. Everything else here is arithmetic on that.
+
+   Why a custom property and a width rather than a transform: the arms sit in a
+   flex row either side of the number, so shrinking them has to actually move
+   the layout inward -- the two lines and the value close up together, which is
+   the whole gesture. A transform would scale the lines while leaving holes
+   where they used to be.
+*/
+.cosmic-distance__gauge {
+  --reach: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(0.5rem, 1.6vw, 1.1rem);
+  max-width: 100vw;
+  padding: 0 12px;
+}
+
+.cosmic-distance__arm {
+  position: relative;
+  display: block;
+  height: 1px;
+  /* Floors at 20px so the arrowhead always has a shaft to sit on. */
+  width: calc(20px + var(--reach) * (min(26vw, 230px) - 20px));
+  /* On a narrow viewport the arms give way before the number does. Without
+     this the row overflows and the reading wraps to two lines, which puts the
+     arrowheads level with the gap between them instead of level with the
+     value they are pointing at. */
+  flex: 0 1 auto;
+  min-width: 20px;
+  /* No transition: the intro updates --reach a hundred times over ninety-seven
+     seconds and a transition would always be chasing the last value. The
+     quantisation is what makes it smooth, not an easing curve. */
+  background: linear-gradient(
+    to var(--arm-out, left),
+    rgba(255, 214, 160, 0.70),
+    rgba(255, 214, 160, 0.10)
+  );
+}
+
+/* The head: two borders on a rotated square, which stays a crisp chevron at
+   any zoom in a way a triangle built from border tricks does not. */
+.cosmic-distance__arm::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  width: 6px;
+  height: 6px;
+  border-style: solid;
+  border-color: rgba(255, 214, 160, 0.78);
+  border-width: 1px 0 0 1px;
+}
+
+.cosmic-distance__arm--left { --arm-out: left; }
+.cosmic-distance__arm--left::after {
+  left: 0;
+  transform: translate(0, -50%) rotate(-45deg);
+}
+
+.cosmic-distance__arm--right { --arm-out: right; }
+.cosmic-distance__arm--right::after {
+  right: 0;
+  transform: translate(0, -50%) rotate(135deg);
+}
+
+/* The last stretch. Nothing moves -- the arms are already nearly shut -- it
+   just warms up, so arrival reads as arrival. */
+.cosmic-distance.is-closing .cosmic-distance__arm {
+  background: linear-gradient(
+    to var(--arm-out, left),
+    rgba(255, 236, 205, 0.92),
+    rgba(255, 236, 205, 0.22)
+  );
+}
+
+.cosmic-distance.is-closing .cosmic-distance__arm::after {
+  border-color: rgba(255, 240, 214, 0.95);
+}
+
+.cosmic-distance.is-closing .cosmic-distance__value {
+  color: rgba(255, 252, 246, 1);
+  text-shadow: 0 0 34px rgba(255, 206, 148, 0.42);
+}
+
+@media (max-width: 760px) {
+  .cosmic-distance { bottom: 6vh; }
+  .cosmic-distance__value { font-size: 1rem; }
+  .cosmic-distance__arm {
+    width: calc(14px + var(--reach) * (22vw - 14px));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cosmic-distance { transition: none; }
+}

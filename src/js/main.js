@@ -56,6 +56,7 @@ import {
 } from './scene/distanceFromEarth.js';
 import { createPlanet, updatePlanetVisuals } from './scene/planetFactory.js';
 import { setOrbitSolarGlare, setOrbitViewport } from './scene/orbits.js';
+import { createSolarSystemEvents, EVENT_ARRIVAL_DELAY_SECONDS } from './scene/events/solarSystemEvents.js';
 import { setOrbitPosition, solveOrbitEccentricAnomaly } from './scene/orbits.js';
 import { SpaceEnvironment } from './scene/space/spaceEnvironment.js';
 import { JOURNEY_MAP } from './scene/space/spaceEnvironmentConfig.js';
@@ -63,6 +64,37 @@ import { createSun, setSunPerformanceProfile, updateSun } from './stars/sun/sun.
 import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
 import { createCelestialDetailsPanel } from './ui/planetDetailsPanel.js';
 import { createPerformanceHud } from './ui/performanceHud.js';
+import { createSpaceEventsDashboard } from './ui/spaceEventsDashboard.js';
+
+/**
+ * Every surface that owns its own scrolling, and must never have a wheel or a
+ * touch drag taken off it by the journey.
+ *
+ * This existed already, and three of the handlers that needed it did not use
+ * it -- they each carried their own copy of the list, written before this
+ * constant did, and those copies were never updated. The events dashboard is
+ * a tall scrolling panel, so the omission was immediately visible: a wheel
+ * over the open dashboard was cancelled by `preventFocusedJourneyScroll` and
+ * fed to the focused-body zoom instead, and the panel could not be scrolled at
+ * all while a body was focused.
+ *
+ * Declared at module scope so there is exactly one list and every handler
+ * reads it, whatever order they are defined in.
+ */
+const JOURNEY_UI_SELECTOR = [
+  ".about-experience",
+  ".events-dashboard",
+  ".planet-details",
+  ".celestial-selection-card",
+  ".satellite-system-overview",
+  ".satellite-atlas-directory",
+  ".satellite-name-label",
+  ".body-card",
+  ".body-card-restore",
+  ".progress",
+  ".distance-cinematic-layer",
+  ".system-return-button",
+].join(", ");
 import { createIntroSequence } from './ui/introSequence.js';
 import { createCosmicIntro } from './scene/space/cosmicIntro.js';
 
@@ -447,9 +479,9 @@ import { createCosmicIntro } from './scene/space/cosmicIntro.js';
   // card/connector exit, so the triggering gesture is never discarded.
   function dismissDistanceInfoForJourneyIntent(event) {
     if (!activeDistanceInfo || !distanceCinematicPanel?.isOpen()) return;
-    if (event.target.closest?.(".progress, .distance-cinematic-layer")) return;
+    if (event.target.closest?.(".progress, .distance-cinematic-layer, .events-dashboard")) return;
     // These two controls run their own coordinated exit sequence.
-    if (event.target.closest?.("#earth-return-button, #space-exit-control")) return;
+    if (event.target.closest?.("#system-return-button, #space-exit-control")) return;
 
     // A wheel event that starts against a position-fixed page may be discarded
     // even if the lock is removed during capture. Prevent that ambiguous native
@@ -992,29 +1024,303 @@ import { createCosmicIntro } from './scene/space/cosmicIntro.js';
 
   // A persistent rocket button resets focus, regional exploration, camera angle,
   // page distance and scroll position, then returns to the opening Earth view.
-  let earthReturnButton = document.querySelector("#earth-return-button");
-  if (!earthReturnButton) {
-    earthReturnButton = document.createElement("button");
-    earthReturnButton.id = "earth-return-button";
-    earthReturnButton.className = "earth-return-button";
-    earthReturnButton.type = "button";
-    earthReturnButton.setAttribute("aria-label", "Travel back to Earth");
-    earthReturnButton.title = "Travel back to Earth";
-    earthReturnButton.innerHTML = `
-      <svg viewBox="0 0 48 48" aria-hidden="true">
-        <path class="earth-return-button__body" d="M29.8 7.2c5.1 1.2 9.8 5.9 11 11-2.1 7.7-7.1 14.3-14.8 19.1l-7.6-7.6C23.2 22 29.8 17 37.5 14.9"/>
-        <path class="earth-return-button__window" d="M31.8 15.8a4.6 4.6 0 1 1-6.5 6.5 4.6 4.6 0 0 1 6.5-6.5Z"/>
-        <path class="earth-return-button__fin" d="m19.2 27.6-7.7 1.2-4.3 4.3 9.1 1.1m4.1-13.8 1.2-7.7 4.3-4.3 1.1 9.1"/>
-        <path class="earth-return-button__flame" d="M14.5 34.1c-4.2 1.1-6.5 3.4-7.4 7.3 3.9-.8 6.2-3.1 7.4-7.3Z"/>
-      </svg>
-      <span>Travel back to Earth</span>
+  /*
+   * The announcement for a staged event.
+   *
+   * Without it the events are wasted: something flashes on a planet the viewer
+   * may not be looking at, and even if they are, an impact flash with no label
+   * is just a sparkle. The card says what happened, on which world, and -- the
+   * part that makes it worth reading -- how often it really happens, which is
+   * the fact that makes the Solar System feel busy rather than decorative.
+   *
+   * When the body is off screen it says so, because then the card is an
+   * invitation to go and look rather than a caption for something on screen.
+   */
+  let solarEventNotice = document.querySelector("#solar-event-notice");
+  if (!solarEventNotice) {
+    solarEventNotice = document.createElement("aside");
+    solarEventNotice.id = "solar-event-notice";
+    solarEventNotice.className = "solar-event-notice";
+    solarEventNotice.setAttribute("aria-live", "polite");
+    solarEventNotice.innerHTML = `
+      <span class="solar-event-notice__eyebrow" id="solar-event-eyebrow">Happening now</span>
+      <strong class="solar-event-notice__title" id="solar-event-title"></strong>
+      <span class="solar-event-notice__detail" id="solar-event-detail"></span>
+      <span class="solar-event-notice__note" id="solar-event-note"></span>
     `;
-    document.body.append(earthReturnButton);
+    document.body.append(solarEventNotice);
   }
-  // The rocket remains outside the frame while the loader is visible. It is
-  // enabled only after its single overshoot-and-settle entrance has started.
-  earthReturnButton.classList.add("is-awaiting-entrance");
-  earthReturnButton.disabled = true;
+  const solarEventEyebrow = solarEventNotice.querySelector("#solar-event-eyebrow");
+  const solarEventTitle = solarEventNotice.querySelector("#solar-event-title");
+  const solarEventDetail = solarEventNotice.querySelector("#solar-event-detail");
+  const solarEventNote = solarEventNotice.querySelector("#solar-event-note");
+  let solarEventNoticeTimer = null;
+  let solarEventCountdownTimer = null;
+  let solarEventStartTimer = null;
+  /** Which event the card is about, for the announcement and for diagnostics. */
+  let solarEventCurrentId = null;
+
+  /**
+   * Where the presentation is up to.
+   *
+   *   idle     nothing staged
+   *   waiting  travelled, counting down, not started yet
+   *   running  the event is playing
+   *   done     it finished and the card is still up saying so
+   *
+   * The distinction between the first three and `done` is the whole of the
+   * dismissal rule. While an event is waiting or running it is immune to
+   * everything the viewer does -- see below. Once it is done, the card is just
+   * a caption for something that has finished, and the next thing the viewer
+   * does clears it.
+   */
+  let solarEventPhase = "idle";
+
+  function clearSolarEventTimers() {
+    if (solarEventNoticeTimer) clearTimeout(solarEventNoticeTimer);
+    if (solarEventCountdownTimer) clearInterval(solarEventCountdownTimer);
+    if (solarEventStartTimer) clearTimeout(solarEventStartTimer);
+    solarEventNoticeTimer = null;
+    solarEventCountdownTimer = null;
+    solarEventStartTimer = null;
+  }
+
+  /**
+   * Clears the deck for an event, and puts it back afterwards.
+   *
+   * A planet's own interface -- the dossier, the "reveal all moons" control,
+   * the ring-system roster, the satellite directory -- occupies the same
+   * region of the screen as the event card, and the orbit guides draw straight
+   * across the body the event is happening on. Running an event with all of
+   * that up means two things fighting for the same pixels, which is exactly
+   * what was reported.
+   *
+   * So an event takes the screen for its duration. The `is-space-event`
+   * class on <body> hides the DOM surfaces (see cinematic-ui.css), and the
+   * orbit guides are switched off in the scene, which is the only part that
+   * cannot be done in CSS.
+   */
+  const solarEventHiddenGuides = [];
+  /*
+   * The guide lines that are hidden along with the panels.
+   *
+   * `orbitRoot` covers the planetary orbits. The satellite guides are built
+   * per system and live inside their parent, so they are found by name rather
+   * than held in a list -- and the names are the ones the factories give them,
+   * which is why they read as prose. Matching on "orbit" and "guide" together
+   * is deliberately narrow: it must not catch the bodies themselves.
+   */
+  const SOLAR_EVENT_GUIDE_NAMES = /orbit (guide|guides)|satellite atlas orbit/i;
+
+  function setSolarEventStagingUI(active) {
+    document.body.classList.toggle("is-space-event", active);
+    if (orbitRoot) orbitRoot.visible = !active;
+
+    if (active) {
+      /*
+       * Collected once here, enforced every frame in the animation loop.
+       *
+       * Setting `visible = false` a single time does not work on these, and it
+       * took a measurement to see why: the satellite systems rewrite the
+       * visibility of their own guides every frame, from whether their parent
+       * is focused and what is hovered. A one-off assignment is silently
+       * undone on the very next frame -- the guides stayed on screen for the
+       * whole of an event while the code that hid them reported success.
+       *
+       * So the list is gathered here and re-applied in the loop. Every
+       * matching object is recorded, not only the ones currently visible, with
+       * the state it was in: a system that decides to show a guide *during* an
+       * event must be overruled too, and whatever it wanted is what gets
+       * restored at the end.
+       */
+      solarEventHiddenGuides.length = 0;
+      world.traverse((object) => {
+        if (!SOLAR_EVENT_GUIDE_NAMES.test(object.name || "")) return;
+        solarEventHiddenGuides.push({ object, wasVisible: object.visible });
+      });
+      enforceSolarEventGuideHiding();
+      return;
+    }
+
+    solarEventHiddenGuides.forEach(({ object, wasVisible }) => {
+      object.visible = wasVisible;
+    });
+    solarEventHiddenGuides.length = 0;
+  }
+
+  /** Re-applies the hiding. Called once per frame while an event is staged. */
+  function enforceSolarEventGuideHiding() {
+    for (let index = 0; index < solarEventHiddenGuides.length; index += 1) {
+      solarEventHiddenGuides[index].object.visible = false;
+    }
+  }
+
+  function showSolarEventNotice(event) {
+    if (!event) return;
+    solarEventCurrentId = event.id ?? solarEventCurrentId;
+    solarEventPhase = "running";
+    solarEventEyebrow.textContent = event.visible
+      ? `${event.body} · happening now`
+      : `${event.body} · happening now, off screen`;
+    solarEventTitle.textContent = event.title;
+    solarEventDetail.textContent = event.detail;
+    solarEventNote.textContent = event.note;
+    solarEventNotice.classList.add("is-visible");
+    solarEventNotice.classList.remove("is-waiting");
+    setSolarEventStagingUI(true);
+  }
+
+  /**
+   * Takes the viewer to an event, then shows it to them.
+   *
+   * Four beats, and the third one is the one that matters:
+   *
+   *   1  focus the body the event happens on, so the camera flies there
+   *   2  put the card up in its waiting state, naming what is about to happen
+   *   3  count down five seconds, out loud
+   *   4  stage the event once
+   *
+   * The wait is not padding. Focusing a body starts a camera transition, and
+   * an event that begins during it happens to a viewer who is still moving --
+   * on a planet that is still growing in the frame. Five seconds is enough for
+   * the flight to settle and for the card to be read, which means the viewer
+   * knows what they are about to see before they see it. Announcing the count
+   * is what turns the pause from dead air into anticipation.
+   */
+  function presentSolarEvent(id) {
+    const definition = solarSystemEvents.list().find((event) => event.id === id);
+    if (!definition) return false;
+    /*
+     * A supernova has no world to travel to, so the journey for one is the
+     * opposite move: if a body is focused, back out of it, because the whole
+     * point is to be looking at the sky rather than at a planet filling the
+     * frame. If nothing is focused there is nothing to do -- the sky is
+     * already what is on screen.
+     */
+    const target = definition.isSky ? null : solarSystemEventBodies(definition.body);
+    if (!definition.isSky && !target) return false;
+
+    dismissSolarEventNotice();
+    solarSystemEvents.stop();
+    solarEventCurrentId = id;
+    solarEventPhase = "waiting";
+
+    /*
+     * Travel, but only if travelling is needed.
+     *
+     * `focusBody` is not idempotent, and it is not meant to be: called on the
+     * body that is *already* focused it is the gesture for opening that body's
+     * dossier, which is correct behaviour for a click on a planet and entirely
+     * wrong here. Watching Jupiter's impact swarm, then asking for it again
+     * from the dashboard, therefore opened Jupiter's information panel instead
+     * of staging anything -- which is what was reported, and which happened for
+     * every event whose body the viewer was already sitting on.
+     *
+     * The camera is already where it needs to be in that case, so the correct
+     * move is to do nothing at all.
+     */
+    if (definition.isSky) {
+      if (focusedBody) focusBody(null);
+    } else if (focusedBody !== target) {
+      focusBody(target);
+    }
+
+    solarEventTitle.textContent = definition.title;
+    solarEventDetail.textContent = definition.detail;
+    solarEventNote.textContent = definition.note;
+    solarEventNotice.classList.add("is-visible", "is-waiting");
+    setSolarEventStagingUI(true);
+
+    let remaining = EVENT_ARRIVAL_DELAY_SECONDS;
+    const tick = () => {
+      solarEventEyebrow.textContent = remaining > 0
+        ? `${definition.body} · beginning in ${remaining}s`
+        : `${definition.body} · beginning now`;
+    };
+    tick();
+    solarEventCountdownTimer = setInterval(() => {
+      remaining -= 1;
+      tick();
+      if (remaining <= 0) {
+        clearInterval(solarEventCountdownTimer);
+        solarEventCountdownTimer = null;
+      }
+    }, 1000);
+
+    solarEventStartTimer = setTimeout(() => {
+      solarEventStartTimer = null;
+      solarSystemEvents.play(id);
+    }, EVENT_ARRIVAL_DELAY_SECONDS * 1000);
+    return true;
+  }
+
+  /** Puts the card away and gives the planet's own interface back. */
+  function dismissSolarEventNotice() {
+    clearSolarEventTimers();
+    solarEventNotice.classList.remove("is-visible", "is-waiting");
+    solarEventCurrentId = null;
+    solarEventPhase = "idle";
+    setSolarEventStagingUI(false);
+  }
+
+  /**
+   * True while an event is counting down or playing.
+   *
+   * Nothing the viewer does may interrupt either. The point of travelling to a
+   * body and waiting five seconds is that the viewer then *watches* something,
+   * and they will naturally drag to turn the planet toward the light while it
+   * happens -- which, under the previous rule, cancelled the countdown before
+   * it finished and took the card away mid-event. Turning the planet is
+   * exactly what someone should be doing during a volcanic plume; it is the
+   * behaviour the feature is for, not an instruction to abandon it.
+   */
+  function isSolarEventStaging() {
+    return solarEventPhase === "waiting" || solarEventPhase === "running";
+  }
+
+  /*
+   * Dismissal, and only after the event is over.
+   *
+   * `done` is the only phase these apply in. While something is waiting or
+   * running, every one of them declines -- so dragging, scrolling, pressing
+   * keys and clicking around are all free, and the event plays to its end
+   * regardless. When it has finished the card is a caption for something in
+   * the past, and the next thing the viewer does clears it.
+   *
+   * Capture phase, so they run before the handlers that act on the same
+   * gesture and regardless of whether any of those stop propagation.
+   */
+  const dismissFinishedEventCard = (event) => {
+    if (isSolarEventStaging()) return;
+    if (event?.target?.closest?.("#solar-event-notice")) return;
+    if (solarEventPhase !== "done") return;
+    dismissSolarEventNotice();
+  };
+
+  addEventListener("pointerdown", dismissFinishedEventCard, { capture: true });
+  addEventListener("wheel", dismissFinishedEventCard, { capture: true, passive: true });
+  addEventListener("keydown", dismissFinishedEventCard, { capture: true });
+
+  addEventListener("beyond-earth:events-dashboard-state", (event) => {
+    // Opening the catalogue is the one action that clears the card even
+    // mid-event: the viewer is explicitly going to choose something else, and
+    // `presentSolarEvent` will stop whatever is running anyway.
+    if (event.detail?.open) dismissSolarEventNotice();
+  });
+
+  /*
+   * There used to be two ways home, and the other one went to Earth.
+   *
+   * It made sense when the journey ended at Pluto. Once the scroll ran out to
+   * Sedna and back, "take me to Earth" was almost never what anyone wanted from
+   * the Kuiper frontier -- it is a very long way past where you meant to stop,
+   * and it lands you focused on a body rather than looking at the system. The
+   * one control below replaces it.
+   *
+   * Its shared CSS selectors are left paired with `.earth-return-button`
+   * throughout: every rule that shapes this mark was written for both, and the
+   * half that no longer matches anything costs nothing.
+   */
 
   /*
    * The second return: back to the whole system.
@@ -1034,8 +1340,8 @@ import { createCosmicIntro } from './scene/space/cosmicIntro.js';
     systemReturnButton.id = "system-return-button";
     systemReturnButton.className = "system-return-button";
     systemReturnButton.type = "button";
-    systemReturnButton.setAttribute("aria-label", "Pull back to the whole Solar System");
-    systemReturnButton.title = "Pull back to the whole Solar System";
+    systemReturnButton.setAttribute("aria-label", "Back to the Solar System");
+    systemReturnButton.title = "Back to the Solar System";
     systemReturnButton.innerHTML = `
       <svg viewBox="0 0 48 48" aria-hidden="true">
         <ellipse class="system-return-button__orbit" cx="24" cy="24" rx="19" ry="7.4"/>
@@ -1043,7 +1349,7 @@ import { createCosmicIntro } from './scene/space/cosmicIntro.js';
         <circle class="system-return-button__sun" cx="24" cy="24" r="3.4"/>
         <circle class="system-return-button__world" cx="43" cy="24" r="1.9"/>
       </svg>
-      <span>The whole system</span>
+      <span>Solar System</span>
     `;
     document.body.append(systemReturnButton);
   }
@@ -1051,30 +1357,19 @@ import { createCosmicIntro } from './scene/space/cosmicIntro.js';
   systemReturnButton.disabled = true;
 
   /*
-   * Positioned from the Earth button's own box rather than from its own CSS.
+   * Placed by the stylesheet, not by measurement.
    *
-   * The return button is placed by two different stylesheets depending on
-   * which rule wins, so hard-coding a second set of offsets would put this one
-   * in the wrong corner the moment that changes. Measuring the anchor and
-   * sitting directly above it cannot come apart.
+   * This used to read the Earth button's box and sit above it, because two
+   * marks in one corner had to agree about where that corner was. With one
+   * mark left there is nothing to agree with, and the shared rule in
+   * experience.css already puts it where the pair used to start.
    */
   function placeSystemReturnButton() {
-    /*
-     * Measured while the anchor is at rest, which is not the same as measured
-     * when it is asked for. The Earth button enters with a transform, and a
-     * rect read during that animation is the rect of a button that is halfway
-     * off the bottom of the screen -- which put this one a couple of hundred
-     * pixels too high. The caller re-runs this once the entrance has settled.
-     */
-    const anchor = earthReturnButton.getBoundingClientRect();
-    if (anchor.width <= 0) return;
-    // 22px, not 12: both marks carry a satellite ring inset 7px outside their
-    // own edge, so a tighter gap has the two rings overlapping.
-    systemReturnButton.style.left = `${Math.round(anchor.left)}px`;
-    systemReturnButton.style.right = "auto";
-    systemReturnButton.style.bottom = `${Math.round(innerHeight - anchor.top + 22)}px`;
-    systemReturnButton.style.width = `${Math.round(anchor.width)}px`;
-    systemReturnButton.style.height = `${Math.round(anchor.height)}px`;
+    systemReturnButton.style.left = "";
+    systemReturnButton.style.right = "";
+    systemReturnButton.style.bottom = "";
+    systemReturnButton.style.width = "";
+    systemReturnButton.style.height = "";
   }
 
   // Scene is the root container of the 3D scene graph. Anything not attached to
@@ -1517,6 +1812,7 @@ import { createCosmicIntro } from './scene/space/cosmicIntro.js';
   let elapsedTime = 0;
   let isPageVisible = !document.hidden;
   let isAboutExperienceOpen = false;
+  let isEventsDashboardOpen = false;
   let isPlanetDetailsOpen = false;
   const cameraFocusPoint = new THREE.Vector3();
   const targetFocusPoint = new THREE.Vector3();
@@ -1685,10 +1981,114 @@ import { createCosmicIntro } from './scene/space/cosmicIntro.js';
         projectedPixelRadius: worldRadius / worldPerPixel,
       };
     };
+    /*
+     * Distance readout for any named body, without having to click it.
+     *
+     * Added while chasing a report that every moon of a planet showed that
+     * planet's distance: comparing two moons by eye means two clicks and two
+     * card reads, and comparing ninety-five is not possible at all. This
+     * returns the same number the card would show.
+     */
+    window.__distanceTo = (name) => {
+      let found = null;
+      world.traverse((candidate) => {
+        if (found) return;
+        if (candidate.userData?.name === name && candidate.userData?.visualRadius) {
+          found = candidate;
+        }
+      });
+      if (!found) return null;
+      const measured = earthDistanceTracker.getBodyDistanceFromEarth(found);
+      return {
+        name,
+        kilometres: Math.round(measured.kilometres),
+        region: measured.region,
+        basis: measured.basis,
+        axisKm: found.userData?.satelliteSemiMajorAxisKm ?? null,
+      };
+    };
+
+    /*
+     * Runs the asteroid picker at a screen position, with exactly the
+     * parameters the hover path uses.
+     *
+     * Added while chasing a report that only some rocks in a belt region can be
+     * hovered. Driving synthetic pointer events proved nothing -- the failure
+     * could have been anywhere between the event and the picker -- so this
+     * calls the picker itself and reports what it saw.
+     */
+    /*
+     * Runs the whole hover scan at a screen position, synchronously.
+     *
+     * Driving it with real pointer events could not be trusted: the belt moves,
+     * so a position measured and then hovered a second later is a position
+     * where the rock no longer is. This sets the pointer and runs the scan in
+     * the same instant, which is the only way to ask "would this rock be
+     * acquired" and get an answer about that rock.
+     */
+    window.__hoverAt = (clientX, clientY) => {
+      pointer.x = (clientX / innerWidth) * 2 - 1;
+      pointer.y = -(clientY / innerHeight) * 2 + 1;
+      clearCelestialHover();
+      findCelestialForHover();
+      return {
+        body: hoveredCelestialBody?.userData?.name
+          ?? hoveredCelestialBody?.name
+          ?? null,
+        isAsteroid: Boolean(hoveredCelestialBody && isAsteroidBody(hoveredCelestialBody)),
+        orbit: Boolean(hoveredPlanetOrbit),
+        // The gates, so a null result can be explained rather than guessed at.
+        isDragging,
+        lastPointerType,
+        focused: focusedBody?.userData?.name ?? null,
+        focusedUiSuppressedByWideView,
+      };
+    };
+
+    window.__pickAsteroidAt = (clientX, clientY) => {
+      pointer.x = (clientX / innerWidth) * 2 - 1;
+      pointer.y = -(clientY / innerHeight) * 2 + 1;
+      const encounterIntensity = getAsteroidEncounterIntensity();
+      const hit = findNearestAsteroidInstanceAtPointer({
+        meshes: asteroidBelt?.instancedBoulders ?? [],
+        pointer,
+        camera,
+        viewportWidth: innerWidth,
+        viewportHeight: innerHeight,
+        minimumVisibleRadiusPixels: THREE.MathUtils.lerp(0.20, 0.08, encounterIntensity),
+        maximumPixelRadius: THREE.MathUtils.lerp(
+          innerWidth <= 760 ? 15 : 11,
+          innerWidth <= 760 ? 28 : 23,
+          encounterIntensity,
+        ),
+        extraHitPixels: THREE.MathUtils.lerp(
+          innerWidth <= 760 ? 5.5 : 4.0,
+          innerWidth <= 760 ? 12.0 : 9.0,
+          encounterIntensity,
+        ),
+        radiusMultiplier: THREE.MathUtils.lerp(1.42, 1.78, encounterIntensity),
+        visibleRadiusPreference: THREE.MathUtils.lerp(0.10, 0.18, encounterIntensity),
+      });
+      return {
+        hit: Boolean(hit),
+        name: hit?.userData?.name ?? null,
+        encounterIntensity: +encounterIntensity.toFixed(3),
+      };
+    };
+
     window.__focusBody = (name) => {
       const target = planets.find((planet) => planet.name === name);
-      if (target) focusBody(target);
-      return Boolean(target);
+      if (target) { focusBody(target); return true; }
+      // Anything else in the scene that is a body: moons, asteroids, dwarfs.
+      let found = null;
+      world.traverse((candidate) => {
+        if (found) return;
+        if (candidate.userData?.name === name && candidate.userData?.visualRadius) {
+          found = candidate;
+        }
+      });
+      if (found) focusBody(found);
+      return Boolean(found);
     };
   }
 
@@ -1767,6 +2167,167 @@ import { createCosmicIntro } from './scene/space/cosmicIntro.js';
     quality: creationQuality,
     deferDirectBodies: true,
   });
+  /*
+   * Things that actually happen, staged on a timer.
+   *
+   * The Solar System reads as furniture in most renderings -- the planets go
+   * round and nothing ever *occurs* -- and that is not a fair picture of the
+   * place. Every event in the roster is one that really recurs: Jupiter is hit
+   * hard enough to be seen from Earth a couple of times a year, Io is erupting
+   * somewhere at every moment, Enceladus has been venting its ocean for as long
+   * as anyone has looked, Earth crosses the same debris trails on the same
+   * dates annually, and the Sun sheds a billion tonnes of itself several times
+   * a day.
+   */
+  /**
+   * Finds the body an event happens on, by name.
+   *
+   * A named function rather than an inline callback because two things need
+   * it: the event system, to build and attach an event, and `presentSolarEvent`
+   * above, to decide whether it can fly there at all. A function declaration so
+   * the ordering of the two does not matter.
+   */
+  function solarSystemEventBodies(name) {
+      const planet = planets.find((candidate) => candidate.name === name);
+      if (planet) return planet;
+      if (name === "Sun") return sun.surface ?? sun.system;
+      // Moons live inside their parent's satellite system rather than in the
+      // planet list, so Io and Enceladus have to be looked up there.
+      for (let index = 0; index < majorSatelliteSystems.length; index += 1) {
+        const found = majorSatelliteSystems[index].moons
+          ?.find((entry) => entry.moon?.userData?.name === name);
+        if (found?.moon) return found.moon;
+      }
+      /*
+       * The Moon is not in any of those.
+       *
+       * Earth's satellite is built by its own path rather than through the
+       * shared satellite system, so it is in neither the planet list nor
+       * `majorSatelliteSystems` -- and the lunar impact-flash event silently
+       * failed to stage because of it, while the other thirteen worked. Rather
+       * than special-casing one name, this asks the scene: any mesh that
+       * carries the name and knows its own visual radius is a body an event
+       * can be attached to, which is exactly the contract the builders need.
+       */
+      let matched = null;
+      world.traverse((candidate) => {
+        if (matched) return;
+        if (candidate.isMesh
+          && candidate.userData?.name === name
+          && candidate.userData?.visualRadius) {
+          matched = candidate;
+        }
+      });
+      return matched;
+  }
+
+  /*
+   * Where an event with no world happens.
+   *
+   * A supernova is not on anything. It needs a parent that rides with the
+   * camera the way the star field does, so the explosion sits out on the sky
+   * at a fixed apparent position however the shot moves. Its position is
+   * synchronised to the camera each frame in the animation loop.
+   */
+  const skyEventAnchor = new THREE.Group();
+  skyEventAnchor.name = "Deep-sky event anchor";
+  skyEventAnchor.frustumCulled = false;
+  world.add(skyEventAnchor);
+
+  const solarSystemEvents = createSolarSystemEvents({
+    camera,
+    findBody: solarSystemEventBodies,
+    announce: (event) => showSolarEventNotice(event),
+    skyAnchor: skyEventAnchor,
+    /*
+     * Both of these are deferred, and they have to be.
+     *
+     * `spaceEnvironment` is built about a hundred and thirty lines below this
+     * call, so reading it here throws a ReferenceError -- `const` is not
+     * hoisted, and that error silently kills every line after it. This file
+     * has now been bitten by exactly that four times, so both are functions,
+     * called at the moment they are needed rather than read at the moment they
+     * are handed over. A getter would not have been enough: destructuring the
+     * options object in the callee invokes the getter during the call, which
+     * is the same instant and the same crash.
+     */
+    getSkyRadius: () => spaceEnvironment.skyShellRadius,
+    setSkyHighlight: (value) => spaceEnvironment?.setSkyHighlight(value),
+  });
+
+  /*
+   * The card's tail end.
+   *
+   * Subscribed rather than timed, because the durations differ per event and
+   * duplicating them here would be a second source of truth that could drift.
+   *
+   * There used to be a "watch it again" button here. It is gone, and the
+   * reason is that it was a second, worse way to do something the catalogue
+   * already does properly: the dashboard knows every event, says what each one
+   * is, and takes the viewer to it. A replay control on the card duplicated
+   * only the last one, and it was the source of two separate bugs of its own.
+   * One route in, and it is the good one.
+   *
+   * When the event ends the card says so, gives the planet's interface back,
+   * and then clears itself after a few seconds -- or sooner, the moment the
+   * viewer does anything at all.
+   */
+  solarSystemEvents.subscribe((state) => {
+    if (state.activeId) {
+      solarEventNotice.classList.remove("is-waiting");
+      return;
+    }
+    if (solarEventPhase !== "running") return;
+    if (!solarEventCurrentId || !solarEventNotice.classList.contains("is-visible")) return;
+    solarEventPhase = "done";
+    solarEventEyebrow.textContent = `${
+      solarSystemEvents.list().find((event) => event.id === solarEventCurrentId)?.body ?? ""
+    } · that was it`;
+    // The planet is the viewer's again the instant the event stops, rather
+    // than when they get round to dismissing the caption.
+    setSolarEventStagingUI(false);
+    clearSolarEventTimers();
+    solarEventNoticeTimer = setTimeout(() => {
+      solarEventNoticeTimer = null;
+      dismissSolarEventNotice();
+    }, 9000);
+  });
+
+  /*
+   * The catalogue, and the way in to it.
+   *
+   * Placed here, after `solarSystemEvents`, and that ordering is load-bearing:
+   * it renders itself from `list()` and drives `play()`, and `const` is not
+   * hoisted. An earlier draft of this put
+   * it up with the other UI construction, where `solarSystemEvents` is in its
+   * temporal dead zone -- which throws a ReferenceError and silently kills
+   * every line after it. That has already happened once in this file.
+   *
+   * There is no fallback if the trigger is missing from the markup: the
+   * dashboard is simply not wired and the events go on rotating exactly as
+   * they did before, which is the correct degradation for a discovery
+   * affordance.
+   */
+  const spaceEventsDashboard = createSpaceEventsDashboard({
+    events: solarSystemEvents,
+    trigger: document.querySelector("#space-events-trigger"),
+    onView: presentSolarEvent,
+  });
+
+  if (new URLSearchParams(location.search).get("bodyDebug") === "1") {
+    /*
+     * Events fire every few minutes by design, which is right for a viewer and
+     * useless for checking one. This stages any of them on demand:
+     *   __events.list()            what is in the roster
+     *   __events.trigger("io-eruption")
+     *
+     * Attached here rather than in the diagnostics block above, because that
+     * block runs before this object exists and `const` is not hoisted.
+     */
+    window.__events = solarSystemEvents;
+    window.__eventsPanel = spaceEventsDashboard;
+  }
+
   let majorSatelliteHydrationStarted = false;
   let majorSatelliteHydrationCursor = 0;
 
@@ -1847,6 +2408,21 @@ import { createCosmicIntro } from './scene/space/cosmicIntro.js';
   await spaceEnvironment.init();
   performance.mark("BE:spaceEnv-end");
 
+  if (new URLSearchParams(location.search).get("bodyDebug") === "1") {
+    /*
+     * The deep-sky layers, for inspection:
+     *   __space.listTransients()          what is burning right now
+     *   __space.triggerTransient("ia")    ignite one on demand
+     *
+     * Attached here rather than in the debug block further down, for the same
+     * reason the events object is attached below the one above it: `const` is
+     * not hoisted, and reaching for `spaceEnvironment` before this line throws
+     * a ReferenceError that silently kills everything after it. That has now
+     * happened twice in this file, which is why both sites say so.
+     */
+    window.__space = spaceEnvironment;
+  }
+
 
   function isInformationOverlayOpen() {
     return isAboutExperienceOpen || isPlanetDetailsOpen;
@@ -1871,6 +2447,25 @@ import { createCosmicIntro } from './scene/space/cosmicIntro.js';
     if (!isInformationOverlayOpen()) {
       // Ignore time spent reading so orbital bodies cannot jump on resume.
       timer.reset();
+    }
+  });
+
+  /*
+   * The events dashboard is deliberately NOT part of isInformationOverlayOpen.
+   *
+   * That predicate freezes the universe, and freezing it here would be
+   * exactly backwards: this panel exists to choose which piece of a running
+   * scene to watch, and a viewer who presses "view this space event" while
+   * the simulation is stopped would get a still frame. So it suppresses
+   * pointer picking -- a click on the sheet must not also select the planet
+   * behind it -- and nothing else.
+   */
+  addEventListener("beyond-earth:events-dashboard-state", (event) => {
+    isEventsDashboardOpen = Boolean(event.detail?.open);
+    if (isEventsDashboardOpen) {
+      isDragging = false;
+      clearCelestialHover();
+      clearPlanetOrbitHover();
     }
   });
 
@@ -1926,7 +2521,12 @@ import { createCosmicIntro } from './scene/space/cosmicIntro.js';
     performance.mark("BE:belt-end");
     setAsteroidBeltQuality(asteroidBelt, asteroidBeltDensity, cinematicPixelRatio);
   }
-  const earthDistanceTracker = createEarthDistanceTracker({ earth });
+  const earthDistanceTracker = createEarthDistanceTracker({
+    earth,
+    // Moons need their planet's position to be placed correctly, and the
+    // planet is not one of their ancestors -- see findParentPlanet.
+    resolvePlanetByName: (name) => planets.find((planet) => planet.name === name) ?? null,
+  });
   let previousDistanceProgress = smoothProgress;
 
   function createFocusedMeasurementInfo(focusedDistance, formatted, rangeText) {
@@ -4046,7 +4646,7 @@ import { createCosmicIntro } from './scene/space/cosmicIntro.js';
     ".progress",
     ".distance-readout",
     ".distance-cinematic-layer",
-    ".earth-return-button",
+    ".system-return-button",
     ".planet-system-banner",
     ".celestial-selection-card",
     ".satellite-system-overview",
@@ -4362,25 +4962,61 @@ import { createCosmicIntro } from './scene/space/cosmicIntro.js';
       return;
     }
 
-    // While inspecting a body, its own visible surface should not reveal a
-    // target hidden behind it. Nearby visible bodies can still be discovered
-    // and selected without closing focus first.
-    if (focusedBody && !focusedUiSuppressedByWideView
-      && isPointerInsideVisibleBodyDisk(focusedBody, 1.5)) {
-      clearCelestialHover();
-      clearPlanetOrbitHover();
-      return;
+    /*
+     * While inspecting a body, its own surface must not reveal a target hidden
+     * behind it -- but everything in front of it is in plain sight.
+     *
+     * This used to clear the hover outright whenever the pointer was inside
+     * one and a half times the focused body's disk, and inside a belt region
+     * that is most of the screen: focus a rock and every asteroid near it
+     * stopped responding, which is exactly the "not all of them are
+     * selectable" that was reported. Measured with the picker called directly,
+     * it returned a rock at every one of eighty sampled positions; through the
+     * hover path it returned none at all.
+     *
+     * So the suppression is now a *depth* test rather than a screen-space one.
+     * The general raycast and the body searches still stop, because those are
+     * the paths that could acquire something occluded. The asteroid search
+     * continues, limited to instances nearer to the lens than the focused
+     * body's near surface -- which is the rule the old comment always claimed.
+     */
+    const focusedDiskActive = Boolean(focusedBody && !focusedUiSuppressedByWideView);
+    /*
+     * Two radii, doing two different jobs.
+     *
+     * The 1.5x margin is what suppresses the searches that could acquire
+     * something occluded -- it is generous on purpose, because a body's
+     * silhouette is not a perfect circle and the margin covers the ragged
+     * edge.
+     *
+     * The depth limit for asteroids uses the *true* disk instead. Outside the
+     * real silhouette nothing is behind anything: a rock beside the focused
+     * body is in clear view however far away it is, and cutting those by
+     * distance was the first attempt at this fix and hid almost the entire
+     * belt, because most of it is further out than the rock being inspected.
+     */
+    const overFocusedDisk = Boolean(
+      focusedDiskActive && isPointerInsideVisibleBodyDisk(focusedBody, 1.5),
+    );
+    let asteroidDepthLimit = Infinity;
+    if (focusedDiskActive && isPointerInsideVisibleBodyDisk(focusedBody, 1.0)) {
+      focusedBody.getWorldPosition(radiusWorldPosition);
+      const focusedRadius = Number(focusedBody.userData?.visualRadius ?? 0);
+      asteroidDepthLimit = Math.max(
+        0,
+        camera.position.distanceTo(radiusWorldPosition) - focusedRadius,
+      );
     }
 
     raycaster.setFromCamera(pointer, camera);
-    const hits = raycaster.intersectObjects(hoverTargets, true);
+    const hits = overFocusedDisk ? [] : raycaster.intersectObjects(hoverTargets, true);
     const hitBodies = hits
       .map((hit) => findInteractiveObject(hit))
       .filter((body) => Boolean(
         body && (body !== focusedBody || focusedUiSuppressedByWideView)
       ));
 
-    const nearbyMajor = findNearestMajorBodyAtPointer({
+    const nearbyMajor = overFocusedDisk ? null : findNearestMajorBodyAtPointer({
       minimumVisibleRadiusPixels: 0.14,
       extraHitPixels: innerWidth <= 760 ? 12 : 7,
       maximumHitRadiusPixels: innerWidth <= 760 ? 30 : 23,
@@ -4394,7 +5030,7 @@ import { createCosmicIntro } from './scene/space/cosmicIntro.js';
     // Jupiter's full 115-moon system uses a dedicated visibility-aware search.
     // Run it after the major-body silhouette test so a small satellite crossing
     // Jupiter's disk cannot steal the visibly larger planet's interaction.
-    const nearbyJovianSatellite = findNearestJovianSatelliteAtPointer({
+    const nearbyJovianSatellite = overFocusedDisk ? null : findNearestJovianSatelliteAtPointer({
       systems: majorSatelliteSystems,
       pointer,
       camera,
@@ -4407,7 +5043,7 @@ import { createCosmicIntro } from './scene/space/cosmicIntro.js';
       return;
     }
 
-    const nearbyDenseSatellite = findNearestDenseSatelliteAtPointer({
+    const nearbyDenseSatellite = overFocusedDisk ? null : findNearestDenseSatelliteAtPointer({
       systems: majorSatelliteSystems,
       pointer,
       camera,
@@ -4468,13 +5104,16 @@ import { createCosmicIntro } from './scene/space/cosmicIntro.js';
       ),
       radiusMultiplier: THREE.MathUtils.lerp(1.42, 1.78, encounterIntensity),
       visibleRadiusPreference: THREE.MathUtils.lerp(0.10, 0.18, encounterIntensity),
+      // Rocks behind the body being inspected stay hidden; rocks in front of
+      // it are on screen and must stay pickable.
+      maximumCameraDistance: asteroidDepthLimit,
     });
     if (nearbyInstance) {
       setCelestialHover(nearbyInstance);
       return;
     }
 
-    const orbitCandidate = findPlanetOrbitAtPointer();
+    const orbitCandidate = overFocusedDisk ? null : findPlanetOrbitAtPointer();
     if (orbitCandidate) {
       setPlanetOrbitHover(orbitCandidate.orbit, orbitCandidate.point);
       return;
@@ -5324,8 +5963,6 @@ import { createCosmicIntro } from './scene/space/cosmicIntro.js';
     - Wires scroll, pointer, drag, and keyboard events to the camera control state.
     - Keeps the scene interactive while preserving pointer selection and drag motion.
   */
-  const JOURNEY_UI_SELECTOR = ".about-experience, .planet-details, .celestial-selection-card, .satellite-system-overview, .satellite-atlas-directory, .satellite-name-label, .body-card, .body-card-restore, .progress, .distance-cinematic-layer, .earth-return-button";
-
   /**
    * A hover may slow orbital motion for inspection, but it must never capture a
    * deliberate journey gesture. Releasing it during the wheel's capture phase
@@ -5440,101 +6077,6 @@ import { createCosmicIntro } from './scene/space/cosmicIntro.js';
     }
   }
 
-  let isEarthReturnQueued = false;
-
-  /** Performs the camera reset only after any open distance shot has ended. */
-  function completeTravelBackToEarth() {
-    cancelPlanetDetailsReveal();
-    celestialDetailsPanel?.hide({ restoreFocus: false });
-    clearCelestialHover();
-    clearPlanetOrbitHover();
-    pointerDownPlanetOrbit = null;
-    if (celestialHoverTimer) {
-      clearTimeout(celestialHoverTimer);
-      celestialHoverTimer = null;
-    }
-
-    if (focusedBody) {
-      setAsteroidFocusAppearance(focusedBody, false);
-      setAsteroidInspectionDetail(focusedBody, false);
-    }
-    focusedBody = null;
-    focusedUiSuppressedByWideView = false;
-    focusNavigationHistory.length = 0;
-    focusExitTransition = null;
-    document.documentElement.classList.remove("is-focus-exit-restoring");
-    focusedBodyLocator.visible = false;
-    focusedBodyLocator.material.opacity = 0;
-    displayedBody = null;
-    setBodyCardCollapsed(false);
-    focusZoomTarget = 1;
-    focusZoomCurrent = 1;
-    focusPinchDistance = null;
-
-    if (isJourneyScrollLocked) unlockJourneyScroll();
-    resetFreeExploration({ immediate: true });
-
-    scrollProgress = 0;
-    smoothProgress = 0;
-    hasLeftOpeningEarthView = false;
-    previousDistanceProgress = 0;
-    targetYaw = -0.55;
-    targetPitch = 0.22;
-    yaw = targetYaw;
-    pitch = targetPitch;
-    camera.fov = earth.userData?.focusFov ?? 34;
-    camera.updateProjectionMatrix();
-    earth.getWorldPosition(cameraFocusPoint);
-    targetFocusPoint.copy(cameraFocusPoint);
-    hasCameraFocusPoint = true;
-
-    // Put the document at the real journey origin before focus locks scrolling.
-    // The camera itself provides the cinematic transition, while the stored
-    // focus snapshot now correctly restores to the top of the experience.
-    document.documentElement.style.scrollBehavior = "auto";
-    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
-    document.documentElement.style.scrollBehavior = "";
-
-    // “Travel back to Earth” now lands in the exact same inspection state as
-    // clicking Earth: identical target, framing distance, FOV, readout, and
-    // apparent solar angle. This prevents the unfocused full-size Sun from
-    // appearing unnaturally close beside Earth during the return.
-    focusBody(earth);
-    updateBodyCard(earth);
-    snapSunApparentScaleOnNextFrame = true;
-
-    earthReturnButton.classList.remove("is-returning");
-    void earthReturnButton.offsetWidth;
-    earthReturnButton.classList.add("is-returning");
-    setTimeout(() => earthReturnButton.classList.remove("is-returning"), 850);
-  }
-
-  function travelBackToEarth() {
-    if (isEarthReturnQueued) return;
-
-    // Keep the current camera perfectly still while the explanation card
-    // shrinks away and its luminous route retracts. Starting the Earth reset
-    // only after that sequence completes prevents the line from visibly
-    // lingering over an already-arrived Earth scene.
-    if (distanceCinematicPanel?.isOpen()) {
-      isEarthReturnQueued = true;
-      earthReturnButton.disabled = true;
-      closeDistanceInfoPopover({
-        releaseJourneyLock: false,
-        onComplete: () => {
-          isEarthReturnQueued = false;
-          earthReturnButton.disabled = false;
-          completeTravelBackToEarth();
-        },
-      });
-      return;
-    }
-
-    completeTravelBackToEarth();
-  }
-
-  earthReturnButton.addEventListener("click", travelBackToEarth);
-
   /**
    * Pulls all the way out to the establishing frame.
    *
@@ -5609,6 +6151,22 @@ import { createCosmicIntro } from './scene/space/cosmicIntro.js';
       : Math.max(0, document.documentElement.scrollHeight - innerHeight);
 
     if (focusedBody) {
+      /*
+       * The trail has to be thrown away before leaving, not after.
+       *
+       * `focusBody(null)` routes through `navigateBackFromFocusedBody`, and
+       * that function's first act is to check the navigation history: if there
+       * is anything on it, it restores the *previous* body instead of exiting.
+       * That is right for a back gesture and wrong for this one. Hopping Earth
+       * to Mars to Europa and then asking to go back to the Solar System
+       * therefore walked the chain in reverse, one body per press, and never
+       * reached the system at all -- and because the exit transition was never
+       * begun, the aiming below had nothing to aim.
+       *
+       * This control means "all the way out", so the trail is cleared first
+       * and the exit path is the only one left.
+       */
+      focusNavigationHistory.length = 0;
       focusBody(null);
       if (focusExitTransition) aimFocusExitAtWholeSystem(focusExitTransition, maximumScroll);
     }
@@ -5716,7 +6274,7 @@ import { createCosmicIntro } from './scene/space/cosmicIntro.js';
 
   const preventFocusedJourneyScroll = (event) => {
     // Cards and the distance explanation retain their own internal scrolling.
-    if (event.target.closest?.(".planet-details, .celestial-selection-card, .satellite-system-overview, .satellite-atlas-directory, .satellite-name-label, .body-card, .body-card-restore, .progress, .distance-cinematic-layer")) return;
+    if (event.target.closest?.(JOURNEY_UI_SELECTOR)) return;
     if (!isJourneyScrollLocked) return;
 
     event.preventDefault();
@@ -5725,7 +6283,7 @@ import { createCosmicIntro } from './scene/space/cosmicIntro.js';
   addEventListener("wheel", preventFocusedJourneyScroll, { passive: false });
 
   addEventListener("touchstart", (event) => {
-    if (event.target.closest?.(".planet-details, .celestial-selection-card, .satellite-system-overview, .satellite-atlas-directory, .satellite-name-label, .body-card, .body-card-restore, .progress, .distance-cinematic-layer")) return;
+    if (event.target.closest?.(JOURNEY_UI_SELECTOR)) return;
     if (!focusedBody || event.touches.length !== 2) return;
     focusPinchDistance = Math.hypot(
       event.touches[0].clientX - event.touches[1].clientX,
@@ -5734,7 +6292,7 @@ import { createCosmicIntro } from './scene/space/cosmicIntro.js';
   }, { passive: true });
 
   addEventListener("touchmove", (event) => {
-    if (event.target.closest?.(".planet-details, .celestial-selection-card, .satellite-system-overview, .satellite-atlas-directory, .satellite-name-label, .body-card, .body-card-restore, .progress, .distance-cinematic-layer")) return;
+    if (event.target.closest?.(JOURNEY_UI_SELECTOR)) return;
     if (!focusedBody || event.touches.length !== 2 || focusPinchDistance == null) return;
     event.preventDefault();
 
@@ -5765,7 +6323,7 @@ import { createCosmicIntro } from './scene/space/cosmicIntro.js';
     if (hoveredPlanetOrbit && !isPointerStillOnHoveredPlanetOrbit()) {
       clearPlanetOrbitHover();
     }
-    if (event.target.closest?.(".about-experience, .planet-details, .celestial-selection-card, .satellite-system-overview, .satellite-atlas-directory, .satellite-name-label, .hud, .body-card, .body-card-restore, .progress, .distance-cinematic-layer, .earth-return-button")) {
+    if (event.target.closest?.(".about-experience, .events-dashboard, .planet-details, .celestial-selection-card, .satellite-system-overview, .satellite-atlas-directory, .satellite-name-label, .hud, .body-card, .body-card-restore, .progress, .distance-cinematic-layer, .system-return-button")) {
       clearCelestialHover();
       clearPlanetOrbitHover();
       lastPointer = { x: event.clientX, y: event.clientY };
@@ -5810,7 +6368,7 @@ import { createCosmicIntro } from './scene/space/cosmicIntro.js';
   });
 
   addEventListener("pointerdown", (event) => {
-    if (event.target.closest?.(".about-experience, .planet-details, .celestial-selection-card, .satellite-system-overview, .satellite-atlas-directory, .satellite-name-label, .body-card-restore, .progress, .distance-cinematic-layer, .earth-return-button")) return;
+    if (event.target.closest?.(".about-experience, .events-dashboard, .planet-details, .celestial-selection-card, .satellite-system-overview, .satellite-atlas-directory, .satellite-name-label, .body-card-restore, .progress, .distance-cinematic-layer, .system-return-button")) return;
     updatePointerFromEvent(event);
     const pressedOrbitCandidate = hoveredPlanetOrbit && isPointerStillOnHoveredPlanetOrbit()
       ? hoveredPlanetOrbit
@@ -5830,7 +6388,7 @@ import { createCosmicIntro } from './scene/space/cosmicIntro.js';
     updatePointerFromEvent(event);
     isDragging = false;
     // HUD clicks belong to HTML controls and must not select objects behind them.
-    if (event.target.closest?.(".about-experience, .planet-details, .celestial-selection-card, .satellite-system-overview, .satellite-atlas-directory, .satellite-name-label, .hud, .body-card, .body-card-restore, .progress, .distance-cinematic-layer, .earth-return-button")) {
+    if (event.target.closest?.(".about-experience, .events-dashboard, .planet-details, .celestial-selection-card, .satellite-system-overview, .satellite-atlas-directory, .satellite-name-label, .hud, .body-card, .body-card-restore, .progress, .distance-cinematic-layer, .system-return-button")) {
       pointerDownCelestialBody = null;
       pointerDownPlanetOrbit = null;
       return;
@@ -6669,6 +7227,14 @@ import { createCosmicIntro } from './scene/space/cosmicIntro.js';
     );
     // One journey value coordinates renderer exposure and the zodiacal glow
     // for scroll, reverse travel, and body focus alike.
+    // Events run on real seconds, not on the journey's motion scale: "every
+    // three or four minutes" has to mean minutes the viewer can feel.
+    // The sky anchor rides with the lens, so anything staged on it stays put
+    // on the sky rather than sliding past as the camera moves.
+    skyEventAnchor.position.copy(camera.position);
+    solarSystemEvents.setPaused(!isPageVisible || Boolean(cosmicIntro) || cosmicIntroPending);
+    solarSystemEvents.update(deltaTime);
+
     spaceEnvironment.setJourneyProgress(getEnvironmentJourneyProgress());
     spaceEnvironment.setPaused(!isPageVisible || isInformationOverlayOpen());
     spaceEnvironment.update(deltaTime * motionScale, simulationTime);
@@ -6712,6 +7278,17 @@ import { createCosmicIntro } from './scene/space/cosmicIntro.js';
     updateSatelliteAtlasDirectory();
     updateSatelliteNameLabels();
     updateInspectionInterface();
+    /*
+     * The last word on guide visibility, immediately before the draw.
+     *
+     * The satellite systems set their own guides' visibility from focus and
+     * hover state every frame, and several of the calls just above are what do
+     * it. Asserting the event's hiding earlier in the loop therefore got
+     * overwritten before anything was drawn -- measured as three of four
+     * guides hidden and the fourth stubbornly on screen for the whole event.
+     * Putting it here means nothing runs after it except the render.
+     */
+    if (solarEventHiddenGuides.length) enforceSolarEventGuideHiding();
     renderer.render(scene, camera);
     trace("system");
     performanceHud.update(frameTime);
@@ -6862,18 +7439,11 @@ import { createCosmicIntro } from './scene/space/cosmicIntro.js';
     announceArrival();
     openingMotionStartedAt = performance.now() + 500;
     setTimeout(() => {
-      earthReturnButton.disabled = false;
-      earthReturnButton.classList.remove("is-awaiting-entrance");
-      earthReturnButton.classList.add("is-entering");
-      setTimeout(() => earthReturnButton.classList.remove("is-entering"), 1500);
       systemReturnButton.disabled = false;
       systemReturnButton.classList.remove("is-awaiting-entrance");
       systemReturnButton.classList.add("is-entering");
       setTimeout(() => systemReturnButton.classList.remove("is-entering"), 1500);
-      // Once, immediately, so it is roughly right; then again after both
-      // entrances have settled, when the anchor's rect is finally the truth.
       placeSystemReturnButton();
-      setTimeout(placeSystemReturnButton, 1700);
     }, 700);
   }
 

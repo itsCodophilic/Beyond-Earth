@@ -52,9 +52,51 @@ export const QUALITY_PRESETS = Object.freeze({
    * have to be that many, because the Milky Way is an unresolved star field
    * and the only way to draw one honestly is with a great many small stars.
    */
-  high: { zodiacalLightEnabled: true, deepSkyEnabled: true, deepSkyStars: 90000, deepSkyMotes: 2800 },
-  medium: { zodiacalLightEnabled: true, deepSkyEnabled: true, deepSkyStars: 60000, deepSkyMotes: 2000 },
-  low: { zodiacalLightEnabled: false, deepSkyEnabled: true, deepSkyStars: 24000, deepSkyMotes: 800 },
+  /*
+   * deepSkyClouds and deepSkyTransientSlots are cheap in a way the star counts
+   * are not, and cheap in the opposite direction. The clouds are big
+   * transparent quads -- negligible vertex work, real fill cost, so they scale
+   * down on low. The transient slots are a single Points draw of at most a
+   * couple of dozen vertices whose only per-frame work is rewriting six floats
+   * each, which costs nothing anywhere; they stay generous even on low because
+   * they are the layer that makes the sky look alive.
+   *
+   * The cloud counts went up by roughly a factor of three when the dust was
+   * rebuilt as continuous filaments rather than scattered blobs. That is not
+   * three times the material -- the clouds are laid in overlapping chains now,
+   * so most of the extra ones are filling the gaps between the old ones rather
+   * than adding new structure. Continuity is the whole point: what was
+   * reported was that the dust looked scattered, and the only way a field of
+   * discrete sprites stops looking scattered is if there are enough of them,
+   * close enough together, to merge.
+   */
+  high: {
+    zodiacalLightEnabled: true,
+    deepSkyEnabled: true,
+    deepSkyStars: 90000,
+    deepSkyMotes: 2800,
+    deepSkyTransientsEnabled: true,
+    deepSkyClouds: 90,
+    deepSkyTransientSlots: 16,
+  },
+  medium: {
+    zodiacalLightEnabled: true,
+    deepSkyEnabled: true,
+    deepSkyStars: 60000,
+    deepSkyMotes: 2000,
+    deepSkyTransientsEnabled: true,
+    deepSkyClouds: 64,
+    deepSkyTransientSlots: 14,
+  },
+  low: {
+    zodiacalLightEnabled: false,
+    deepSkyEnabled: true,
+    deepSkyStars: 24000,
+    deepSkyMotes: 800,
+    deepSkyTransientsEnabled: true,
+    deepSkyClouds: 30,
+    deepSkyTransientSlots: 10,
+  },
 });
 
 export const SPACE_ENVIRONMENT_CONFIG = Object.freeze({

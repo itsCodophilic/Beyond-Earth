@@ -6,6 +6,7 @@ import {
 } from "./spaceEnvironmentConfig.js";
 import { createZodiacalLight } from "./zodiacalLight.js";
 import { createDeepSky } from "./deepSky.js";
+import { createDeepSkyTransients } from "./deepSkyTransients.js";
 
 /**
  * Public facade for every non-planetary space layer.
@@ -79,7 +80,22 @@ export class SpaceEnvironment {
       })
       : null;
 
-    this.layers.push(...[this.deepSky, this.zodiacalLight].filter(Boolean));
+    /*
+     * The transient layer is built after the sky and added after it, for the
+     * same draw-order reason: its dust sits *behind* every star in deepSky.js
+     * (renderOrder -59 against the field's -56), so the stars read as being in
+     * front of the nebulosity rather than the nebulosity washing over them.
+     */
+    this.deepSkyTransients = this.quality.deepSkyTransientsEnabled
+      ? createDeepSkyTransients({
+        radius: radii.deepSkyShell,
+        cloudCount: this.quality.deepSkyClouds,
+        slots: this.quality.deepSkyTransientSlots,
+        pixelRatio: this.pixelRatio,
+      })
+      : null;
+
+    this.layers.push(...[this.deepSky, this.deepSkyTransients, this.zodiacalLight].filter(Boolean));
     if (this.layers.length) {
       this.root.add(...this.layers.map((layer) => layer.object));
     }
@@ -144,7 +160,9 @@ export class SpaceEnvironment {
     // does. Passed on the shared context rather than stored on the layer, so
     // there is exactly one place a stale camera reference could come from.
     context.camera = this.camera;
+    context.deltaTime = deltaTime;
     this.deepSky?.update(context);
+    this.deepSkyTransients?.update(context);
     this.zodiacalLight?.update(context);
     return state;
   }
@@ -170,6 +188,36 @@ export class SpaceEnvironment {
 
     if (this.zodiacalLight) this.zodiacalLight.object.visible = preset.zodiacalLightEnabled;
     if (this.deepSky) this.deepSky.object.visible = preset.deepSkyEnabled;
+    if (this.deepSkyTransients) {
+      this.deepSkyTransients.object.visible = preset.deepSkyTransientsEnabled;
+    }
+  }
+
+  /** Ignites a deep-sky transient now. Returns null when the layer is off. */
+  triggerTransient(familyId = null) {
+    return this.deepSkyTransients?.trigger(familyId) ?? null;
+  }
+
+  /**
+   * Brightens the interstellar dust, 0 to 1.
+   *
+   * The supernova events drive this while they burn. A star exploding inside a
+   * nebula lights the nebula; without this the explosion would be a bright dot
+   * pasted over an unchanged background, which is the one thing every real
+   * photograph of one is not.
+   */
+  setSkyHighlight(value) {
+    this.deepSkyTransients?.setHighlight(value);
+  }
+
+  /** The radius of the sky shell, for staging something against it. */
+  get skyShellRadius() {
+    return this.deepSkyTransients?.shellRadius ?? 3000;
+  }
+
+  /** What is currently burning out there, for diagnostics. */
+  listTransients() {
+    return this.deepSkyTransients?.list() ?? [];
   }
 
   dispose() {

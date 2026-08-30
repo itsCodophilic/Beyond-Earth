@@ -174,8 +174,13 @@ export const SKY_GALAXIES = Object.freeze([
   { name: "Small Magellanic Cloud", catalog: "NGC 292", ra: 0.8792, dec: -72.8283, sizeMajor: 5.333, sizeMinor: 3.083, angle: 45, colour: "#fff0e0", core: 0.45 },
   { name: "Centaurus A", catalog: "NGC 5128", ra: 13.4247, dec: -43.0161, sizeMajor: 0.428, sizeMinor: 0.333, angle: 35, colour: "#ffe3c0", core: 0.6 },
   { name: "Bode's Galaxy", catalog: "M81", ra: 9.9260, dec: 69.0672, sizeMajor: 0.415, sizeMinor: 0.192, angle: 157, colour: "#ffeacf", core: 0.5 },
-  { name: "Cigar Galaxy", catalog: "M82", ra: 9.9317, dec: 69.6831, sizeMajor: 0.187, sizeMinor: 0.072, angle: 65, colour: "#ffd9b8", core: 0.5 },
-  { name: "Sculptor Galaxy", catalog: "NGC 253", ra: 0.7925, dec: -25.2875, sizeMajor: 0.483, sizeMinor: 0.113, angle: 52, colour: "#ffe6c2", core: 0.45 },
+  // M82 is a starburst: tidally shaken by M81, forming stars ten times faster
+  // than the whole Milky Way, and venting a superwind of ionised hydrogen
+  // thousands of light-years out of both faces of the disc. Those red filaments
+  // are the object -- drawn without them it is just another edge-on smudge.
+  { name: "Cigar Galaxy", catalog: "M82", ra: 9.9317, dec: 69.6831, sizeMajor: 0.187, sizeMinor: 0.072, angle: 65, colour: "#ffd9b8", core: 0.62, starburst: 1.0 },
+  // Also a starburst, and the nearest one after M82 -- weaker wind, more dust.
+  { name: "Sculptor Galaxy", catalog: "NGC 253", ra: 0.7925, dec: -25.2875, sizeMajor: 0.483, sizeMinor: 0.113, angle: 52, colour: "#ffe6c2", core: 0.45, starburst: 0.55 },
   { name: "Whirlpool Galaxy", catalog: "M51", ra: 13.4979, dec: 47.1956, sizeMajor: 0.187, sizeMinor: 0.115, angle: 7, colour: "#dbe7ff", core: 0.45 },
   { name: "Sombrero Galaxy", catalog: "M104", ra: 12.6665, dec: -11.6225, sizeMajor: 0.143, sizeMinor: 0.070, angle: 89, colour: "#ffe8cc", core: 0.5 },
 ]);

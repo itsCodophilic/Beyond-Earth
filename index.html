@@ -51,6 +51,26 @@
         <div class="ship-controls" aria-label="Celestial inspection guidance">
           <span>Click, Scroll and dive into the Universe</span>
         </div>
+
+        <!--
+          The way in to the space-events catalogue.
+
+          It has to be a permanent control rather than something that appears
+          when an event fires, because the whole problem it solves is that the
+          events are invisible until one happens: a viewer needs to be able to
+          find out what exists *before* seeing any of it.
+        -->
+        <button
+          class="events-trigger"
+          id="space-events-trigger"
+          type="button"
+          aria-haspopup="dialog"
+          aria-expanded="false"
+          aria-controls="space-events-dashboard"
+        >
+          <span class="events-trigger__pip" aria-hidden="true"></span>
+          Space events
+        </button>
       </header>
 
       <!-- First content stage introduces the Earth-scale starting point. -->

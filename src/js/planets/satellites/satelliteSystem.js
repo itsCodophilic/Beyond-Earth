@@ -394,6 +394,19 @@ function createSatelliteMesh(
     heliocentricAU: orbitalScale.heliocentricAU,
     orbitalEccentricity: orbitalScale.eccentricity,
     satelliteOrbitalEccentricity: profile.eccentricity ?? 0,
+    /*
+     * The moon's real distance from its own planet, in kilometres.
+     *
+     * Carried through because the scene compresses satellite orbits hard for
+     * readability -- Callisto is drawn nowhere near four and a half times
+     * further out than Io -- so nothing in the scene graph can be measured to
+     * recover it. Without this every moon of a planet reported that planet's
+     * distance from Earth, identical to the last digit, which reads as a
+     * hardcoded number because it effectively was one.
+     */
+    satelliteSemiMajorAxisKm: Number.isFinite(profile.semiMajorAxisKm)
+      ? profile.semiMajorAxisKm
+      : null,
     distanceBasis: "satellite-parent-orbit",
     tidallyLocked: Boolean(profile.tidallyLocked),
     surfaceModel: parentName === "Mars"
@@ -528,6 +541,9 @@ function createDenseSatelliteInteractionTarget(profile, parentName) {
     parentPlanet: parentName,
     isSatellite: true,
     isDenseSatellite: true,
+    satelliteSemiMajorAxisKm: Number.isFinite(profile.semiMajorAxisKm)
+      ? profile.semiMajorAxisKm
+      : null,
     satelliteFamily: profile.family ?? null,
     interactionTier: "background",
     surfaceEvidence: profile.surfaceEvidence

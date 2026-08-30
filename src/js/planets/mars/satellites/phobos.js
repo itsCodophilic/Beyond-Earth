@@ -10,6 +10,8 @@ export const PHOBOS_PROFILE = Object.freeze({
   diameterKm: 22.2,
   dimensions: "27 × 22 × 18 km",
   orbitScale: 1.75,
+  // Phobos orbits 9,376 km from Mars's centre -- closer to its planet than any other moon in the Solar System, and inside the synchronous radius, so it rises in the west.
+  semiMajorAxisKm: 9_376,
   speed: 0.024,
   inclination: 0.02,
   shape: [1.23, 1.0, 0.82],

@@ -5,9 +5,13 @@
   right: 0;
   z-index: 5;
   display: grid;
-  grid-template-columns: minmax(150px, 1fr) auto;
+  /* Three columns since the space-events control joined: brand on the left,
+     then the guidance line and the events button pushed right together. The
+     middle track is the flexible one, so the two right-hand controls keep
+     their intrinsic widths and the brand never squeezes them. */
+  grid-template-columns: minmax(150px, auto) 1fr auto;
   align-items: center;
-  gap: 16px;
+  gap: 12px;
   padding: 18px clamp(16px, 4vw, 44px);
   pointer-events: none;
 }
@@ -15,6 +19,11 @@
 .hud > * {
   pointer-events: auto;
 }
+
+/* Pushed to the right-hand end of its flexible track, so the guidance line
+   and the events button stay together as a pair rather than the guidance
+   drifting into the middle of the header. */
+.ship-controls { justify-self: end; }
 
 .brand,
 .ship-controls {
@@ -203,9 +212,29 @@
 }
 
 @media (max-width: 860px) {
+  /*
+   * Two rows, not three columns.
+   *
+   * Adding the space-events control to a header that was already tight broke
+   * the guidance strip on narrow viewports: measured at 579 px the strip had
+   * 354 px of space for 414 px of content, so the last item was clipped
+   * mid-word. Shrinking the button would not have recovered enough of it.
+   *
+   * So below this width the header wraps: the brand and the events control
+   * share the top row, and the guidance strip gets the whole of the second to
+   * itself -- which is more room than it had before the button existed.
+   */
   .hud {
-    grid-template-columns: 1fr auto;
-    gap: 10px;
+    grid-template-columns: auto 1fr;
+    grid-template-rows: auto auto;
+    gap: 8px;
+  }
+
+  .brand { grid-area: 1 / 1; }
+
+  .events-trigger {
+    grid-area: 1 / 2;
+    justify-self: end;
   }
 
   .brand {
@@ -223,8 +252,9 @@
   }
 
   .ship-controls {
-    grid-column: 2;
-    max-width: calc(100vw - 88px);
+    grid-area: 2 / 1 / 2 / 3;
+    justify-self: end;
+    max-width: calc(100vw - 32px);
     min-height: 46px;
     padding: 4px;
   }

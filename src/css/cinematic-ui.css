@@ -2141,12 +2141,12 @@ body:has(.satellite-atlas-directory.is-visible) .progress.distance-readout {
  * destination, and a second bespoke style would have made it read as a
  * different *kind* of thing.
  *
- * Only three things are its own: the glyph inside it, the label, and the
- * position, which JavaScript measures off the Earth button's box so the two
- * always sit together whichever stylesheet ends up placing that one.
+ * The Earth return it was paired with has since been removed, and these
+ * selectors are deliberately left naming both: every rule here was written for
+ * the pair, and the half that no longer matches anything costs nothing.
  */
 .system-return-button::after {
-  content: "Back to the whole system";
+  content: "Back to Solar System";
 }
 
 .system-return-button__orbit {
@@ -2283,4 +2283,572 @@ body:has(.satellite-atlas-directory.is-visible) .progress.distance-readout {
   .planet-details__ring-name {
     font-size: 0.95rem;
   }
+}
+
+/* --------------------------------------- 7. the staged-event announcement
+
+   Same vocabulary as the ring roster and the hover cards: amber mono eyebrow,
+   light title, quiet body copy, a hairline rule above the closing fact. It sits
+   opposite the distance readout so the two never collide, and it is inert to
+   the pointer -- it is a caption, not a control, and it must never intercept a
+   click meant for the sky behind it. */
+
+.solar-event-notice {
+  position: fixed;
+  right: clamp(16px, 2.4vw, 34px);
+  bottom: clamp(96px, 11vh, 150px);
+  z-index: 12;
+  display: flex;
+  flex-direction: column;
+  gap: 0.34rem;
+  width: min(310px, calc(100vw - 32px));
+  padding: 0.85rem 1rem 0.9rem;
+  border: 0;
+  border-top: 1px solid var(--cin-amber);
+  background: linear-gradient(180deg, rgba(3, 5, 11, 0.95), rgba(3, 5, 11, 0.86));
+  box-shadow: 0 20px 52px rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(11px);
+  -webkit-backdrop-filter: blur(11px);
+  color: var(--cin-ink);
+  opacity: 0;
+  transform: translateY(10px);
+  pointer-events: none;
+  transition: opacity 520ms ease, transform 520ms cubic-bezier(0.16, 0.84, 0.3, 1);
+}
+
+.solar-event-notice.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.solar-event-notice__eyebrow {
+  font-family: var(--cin-mono);
+  font-size: 0.5rem;
+  letter-spacing: 0.26em;
+  text-transform: uppercase;
+  color: var(--cin-amber);
+}
+
+.solar-event-notice__title {
+  font-size: 1.12rem;
+  font-weight: 200;
+  letter-spacing: 0.02em;
+  color: var(--cin-ink);
+}
+
+.solar-event-notice__detail {
+  font-size: 0.78rem;
+  font-weight: 300;
+  line-height: 1.62;
+  color: var(--cin-ink-soft);
+}
+
+.solar-event-notice__note {
+  margin-top: 0.3rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+  font-family: var(--cin-mono);
+  font-size: 0.53rem;
+  letter-spacing: 0.11em;
+  line-height: 1.6;
+  color: var(--cin-ink-faint);
+}
+
+/* The card is a caption and inert to the pointer -- except for this, which is
+   the one thing in it that is a control. Re-enabling pointer events on the
+   button alone keeps a click on the card's text falling through to the scene
+   the way it always has. */
+/* Waiting for the countdown to run out. The eyebrow is doing the talking, so
+   the only change is a slow pulse on the rule above the card -- enough to say
+   "something is coming" without competing with the number that says when. */
+.solar-event-notice.is-waiting {
+  border-top-color: rgba(255, 196, 130, 0.55);
+  animation: solar-event-waiting 1600ms ease-in-out infinite;
+}
+
+@keyframes solar-event-waiting {
+  0%, 100% { border-top-color: rgba(255, 196, 130, 0.34); }
+  50% { border-top-color: rgba(255, 214, 160, 1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .solar-event-notice.is-waiting { animation: none; }
+}
+
+@media (max-width: 760px) {
+  .solar-event-notice {
+    right: 12px;
+    left: 12px;
+    bottom: clamp(84px, 14vh, 132px);
+    width: auto;
+  }
+}
+
+/* ============================================================ space events
+
+   The dashboard. Same vocabulary as every other surface here -- amber mono
+   eyebrows, hairline rules, near-black glass -- laid out as a right-hand sheet
+   rather than a centred card, because it is a *list* of thirteen things and a
+   centred modal would either be too tall for the viewport or too narrow to
+   read.
+
+   It deliberately does not black out the scene. The about panel does, because
+   it is asking for the viewer's whole attention; this one is a control surface
+   for something happening behind it, and dimming that thing to nothing while
+   choosing which part of it to watch would be self-defeating.
+*/
+
+.events-dashboard {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.events-dashboard[hidden] { display: none; }
+
+.events-dashboard__backdrop {
+  position: absolute;
+  inset: 0;
+  /* Barely there: enough to catch clicks and to push the sheet forward, not
+     enough to hide the event the sheet is talking about. */
+  background: rgba(2, 4, 9, 0.30);
+  opacity: 0;
+  transition: opacity 380ms ease;
+}
+
+.events-dashboard.is-open .events-dashboard__backdrop { opacity: 1; }
+
+.events-dashboard__sheet {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  width: min(430px, 100vw);
+  height: 100%;
+  padding: clamp(1.1rem, 2.4vw, 1.7rem);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border-left: 1px solid rgba(255, 255, 255, 0.08);
+  background: linear-gradient(180deg, rgba(3, 5, 11, 0.97), rgba(3, 5, 11, 0.93));
+  box-shadow: -30px 0 80px rgba(0, 0, 0, 0.62);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  color: var(--cin-ink);
+  transform: translateX(24px);
+  opacity: 0;
+  transition: transform 420ms cubic-bezier(0.16, 0.84, 0.3, 1), opacity 320ms ease;
+}
+
+.events-dashboard.is-open .events-dashboard__sheet {
+  transform: translateX(0);
+  opacity: 1;
+}
+
+.events-dashboard__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.events-dashboard__eyebrow {
+  display: block;
+  margin-bottom: 0.3rem;
+  font-family: var(--cin-mono);
+  font-size: 0.5rem;
+  letter-spacing: 0.26em;
+  text-transform: uppercase;
+  color: var(--cin-amber);
+}
+
+.events-dashboard__header h2 {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 200;
+  letter-spacing: 0.02em;
+}
+
+.events-dashboard__close {
+  flex: 0 0 auto;
+  width: 30px;
+  height: 30px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--cin-ink-soft);
+  font-size: 1.05rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: color 220ms ease, border-color 220ms ease;
+}
+
+.events-dashboard__close:hover,
+.events-dashboard__close:focus-visible {
+  color: var(--cin-ink);
+  border-color: var(--cin-amber-soft);
+  outline: none;
+}
+
+.events-dashboard__intro {
+  margin: 0;
+  font-size: 0.78rem;
+  font-weight: 300;
+  line-height: 1.66;
+  color: var(--cin-ink-soft);
+}
+
+/* --------------------------------------------------------------- the search */
+
+.events-dashboard__search {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding: 0.85rem 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.events-dashboard__search-label {
+  font-family: var(--cin-mono);
+  font-size: 0.48rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--cin-ink-faint);
+}
+
+.events-dashboard__search-input {
+  width: 100%;
+  padding: 0.5rem 0.1rem;
+  border: 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.14);
+  background: transparent;
+  color: var(--cin-ink);
+  font-family: inherit;
+  font-size: 0.86rem;
+  font-weight: 300;
+  transition: border-color 240ms ease;
+}
+
+.events-dashboard__search-input::placeholder {
+  color: rgba(206, 216, 234, 0.34);
+}
+
+.events-dashboard__search-input:focus {
+  outline: none;
+  border-bottom-color: var(--cin-amber);
+}
+
+/* The native clear button is the wrong colour on a dark ground and there is no
+   way to restyle it, so it is removed and Escape / select-all does the job. */
+.events-dashboard__search-input::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.events-dashboard__tally {
+  font-family: var(--cin-mono);
+  font-size: 0.53rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--cin-amber);
+  font-variant-numeric: tabular-nums;
+}
+
+.events-dashboard__empty {
+  margin: 1.4rem 0;
+  font-size: 0.8rem;
+  font-weight: 300;
+  line-height: 1.7;
+  color: var(--cin-ink-soft);
+}
+
+.events-dashboard__empty em {
+  font-style: normal;
+  color: var(--cin-amber);
+}
+
+/* ----------------------------------------------------------------- the list */
+
+.events-dashboard__list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.events-dashboard__event {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.95rem 0.2rem 1.05rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  transition: border-color 300ms ease;
+}
+
+.events-dashboard__event.is-running {
+  border-left: 1px solid var(--cin-amber);
+  padding-left: 0.75rem;
+}
+
+.events-dashboard__event-head {
+  display: flex;
+  flex-direction: column;
+  gap: 0.16rem;
+}
+
+.events-dashboard__event-body {
+  font-family: var(--cin-mono);
+  font-size: 0.5rem;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--cin-amber);
+}
+
+.events-dashboard__event-title {
+  margin: 0;
+  font-size: 1.02rem;
+  font-weight: 200;
+  letter-spacing: 0.02em;
+  color: var(--cin-ink);
+}
+
+/* Past, present and future in one chip: not seen yet, happening now, or seen
+   this many times before. */
+.events-dashboard__count {
+  margin-top: 0.2rem;
+  font-family: var(--cin-mono);
+  font-size: 0.48rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  font-variant-numeric: tabular-nums;
+  color: var(--cin-ink-faint);
+}
+
+.events-dashboard__count[data-state="seen"] { color: rgba(226, 216, 204, 0.58); }
+
+.events-dashboard__count[data-state="live"] {
+  color: var(--cin-amber);
+}
+
+.events-dashboard__event[hidden] { display: none; }
+
+.events-dashboard__event-detail {
+  margin: 0;
+  font-size: 0.78rem;
+  font-weight: 300;
+  line-height: 1.62;
+  color: var(--cin-ink-soft);
+}
+
+.events-dashboard__facts {
+  display: flex;
+  flex-direction: column;
+  gap: 0.42rem;
+  margin: 0.1rem 0 0;
+}
+
+.events-dashboard__facts div {
+  display: flex;
+  flex-direction: column;
+  gap: 0.14rem;
+}
+
+.events-dashboard__facts dt {
+  font-family: var(--cin-mono);
+  font-size: 0.48rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--cin-ink-faint);
+}
+
+.events-dashboard__facts dd {
+  margin: 0;
+  font-size: 0.73rem;
+  font-weight: 300;
+  line-height: 1.6;
+  color: rgba(226, 216, 204, 0.78);
+}
+
+.events-dashboard__event-note {
+  margin: 0.1rem 0 0;
+  padding-top: 0.5rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  font-family: var(--cin-mono);
+  font-size: 0.55rem;
+  letter-spacing: 0.06em;
+  line-height: 1.72;
+  color: var(--cin-ink-faint);
+}
+
+.events-dashboard__play {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.3rem;
+  padding: 0.44rem 0.9rem 0.44rem 0.72rem;
+  border: 1px solid rgba(255, 196, 130, 0.28);
+  background: rgba(255, 196, 130, 0.06);
+  color: var(--cin-ink);
+  font-family: var(--cin-mono);
+  font-size: 0.55rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background 240ms ease, border-color 240ms ease, transform 240ms ease;
+}
+
+.events-dashboard__play:hover,
+.events-dashboard__play:focus-visible {
+  background: rgba(255, 196, 130, 0.14);
+  border-color: var(--cin-amber);
+  outline: none;
+  transform: translateX(2px);
+}
+
+/* A triangle from a rotated square, for the same reason the distance gauge's
+   arrowhead is: it stays crisp where border-triangles go soft. */
+.events-dashboard__play-icon {
+  width: 0;
+  height: 0;
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+  border-left: 6px solid var(--cin-amber);
+}
+
+/* Not disabled, and not hidden. The event is real and worth reading about;
+   what the row cannot do right now is stage it, so the button says where to
+   go instead of greying out and explaining nothing. */
+.events-dashboard__event.is-unavailable .events-dashboard__play {
+  border-color: rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--cin-ink-soft);
+  cursor: default;
+  transform: none;
+}
+
+.events-dashboard__event.is-unavailable .events-dashboard__play:hover {
+  background: rgba(255, 255, 255, 0.03);
+  border-color: rgba(255, 255, 255, 0.14);
+  transform: none;
+}
+
+.events-dashboard__event.is-unavailable .events-dashboard__play-icon {
+  display: none;
+}
+
+.events-dashboard__footnote {
+  margin: 0.4rem 0 0.6rem;
+  font-family: var(--cin-mono);
+  font-size: 0.53rem;
+  letter-spacing: 0.08em;
+  line-height: 1.72;
+  color: var(--cin-ink-faint);
+}
+
+/* The HUD trigger. Sits with the brand and the guidance line, in the same
+   register as both. */
+.events-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.42rem 0.85rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(3, 5, 11, 0.42);
+  color: var(--cin-ink-soft);
+  font-family: var(--cin-mono);
+  font-size: 0.53rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  cursor: pointer;
+  backdrop-filter: blur(9px);
+  -webkit-backdrop-filter: blur(9px);
+  transition: color 240ms ease, border-color 240ms ease, background 240ms ease;
+}
+
+.events-trigger:hover,
+.events-trigger:focus-visible,
+.events-trigger[aria-expanded="true"] {
+  color: var(--cin-ink);
+  border-color: var(--cin-amber-soft);
+  background: rgba(255, 196, 130, 0.08);
+  outline: none;
+}
+
+/* A slow pulse, so the control advertises that there is something behind it.
+   It is the only animated affordance in the HUD, which is what makes it work;
+   two of these would read as noise. */
+.events-trigger__pip {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--cin-amber);
+  animation: events-trigger-pulse 2600ms ease-in-out infinite;
+}
+
+@keyframes events-trigger-pulse {
+  0%, 100% { opacity: 0.35; transform: scale(0.8); }
+  50% { opacity: 1; transform: scale(1); }
+}
+
+@media (max-width: 760px) {
+  .events-dashboard__sheet {
+    width: 100vw;
+    border-left: 0;
+  }
+
+  .events-trigger {
+    padding: 0.36rem 0.6rem;
+    letter-spacing: 0.14em;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .events-dashboard__sheet,
+  .events-dashboard__backdrop { transition: none; }
+  .events-trigger__pip { animation: none; opacity: 0.9; }
+}
+
+
+/* ================================================ the screen during an event
+
+   An event takes the screen for its duration.
+
+   A planet's own interface -- its dossier, the "reveal all moons" control, the
+   ring-system roster, the satellite directory, the selection card -- occupies
+   the same corner as the event card, and all of it is about the body rather
+   than about what is happening to it. Running an event with that up put two
+   unrelated things in the same pixels, each drawn over the other depending on
+   stacking order, which is what was reported.
+
+   So they are hidden for the duration and given straight back when it ends.
+   Not `display: none` -- these surfaces animate in and out, and cutting them
+   would make the handover a snap rather than a fade -- but opacity plus
+   pointer-events, so they are gone visually and unclickable, and every bit of
+   their internal state survives untouched.
+
+   The orbit guides are handled in main.js instead: they are geometry in the
+   scene, not DOM, and CSS cannot reach them.
+*/
+body.is-space-event .planet-details,
+body.is-space-event .celestial-selection-card,
+body.is-space-event .satellite-system-overview,
+body.is-space-event .satellite-atlas-directory,
+body.is-space-event .satellite-name-label,
+body.is-space-event .body-card,
+body.is-space-event .body-card-restore,
+body.is-space-event .body-connector {
+  opacity: 0 !important;
+  pointer-events: none !important;
+  transition: opacity 420ms ease;
+}
+
+/* The return control stays. It is the way out of a focused body, and taking it
+   away for twenty seconds would strand a viewer who changed their mind. */
+body.is-space-event .system-return-button {
+  opacity: 1;
 }

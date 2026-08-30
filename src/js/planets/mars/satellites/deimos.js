@@ -10,6 +10,8 @@ export const DEIMOS_PROFILE = Object.freeze({
   diameterKm: 12.4,
   dimensions: "15 × 12 × 11 km",
   orbitScale: 2.75,
+  // Deimos orbits 23,463 km out, just outside the synchronous radius, so it drifts slowly westward across the Martian sky over more than two days.
+  semiMajorAxisKm: 23_463,
   speed: 0.008,
   inclination: 0.04,
   shape: [1.22, 0.98, 0.89],

@@ -352,6 +352,74 @@ function makeGalaxyTexture(entry, random) {
     context.lineWidth = 7 + random() * 8;
     context.lineCap = "round";
     context.stroke();
+
+    /*
+     * Star-forming knots along the arm.
+     *
+     * A spiral arm is not a smooth ribbon of light -- it is a queue of HII
+     * regions, and in every photograph of a face-on galaxy the arms are visibly
+     * beaded rather than drawn. A few brighter dots per arm is the whole
+     * difference between a painted spiral and one that looks photographed.
+     */
+    for (let knot = 0; knot < 5; knot += 1) {
+      const t = 0.25 + random() * 0.7;
+      const angle = phase + t * 4.2;
+      const r = 16 + t * 104;
+      const x = Math.cos(angle) * r;
+      const y = Math.sin(angle) * r;
+      const glow = context.createRadialGradient(x, y, 0, x, y, 5 + random() * 7);
+      glow.addColorStop(0, rgb(0.30, 1.25));
+      glow.addColorStop(1, rgb(0));
+      context.fillStyle = glow;
+      context.beginPath();
+      context.arc(x, y, 12, 0, Math.PI * 2);
+      context.fill();
+    }
+  }
+
+  /*
+   * The superwind, for the galaxies that have one.
+   *
+   * A starburst forms stars so fast that the supernovae overlap: the shocks
+   * merge into one hot outflow that punches straight out of both faces of the
+   * disc and drags ionised hydrogen with it for thousands of light-years. It
+   * glows in H-alpha, which is why every photograph of M82 shows the same
+   * thing -- a pale edge-on disc with red filaments streaming perpendicular to
+   * it. Perpendicular is the point: the wind escapes the short way out, so it
+   * runs across the disc rather than along it.
+   */
+  const starburst = entry.starburst ?? 0;
+  if (starburst > 0) {
+    // Undo the disc flattening so the wind is measured in real proportions,
+    // then draw along y, which is across the disc.
+    context.restore();
+    context.save();
+    context.translate(128, 128);
+    for (let side = -1; side <= 1; side += 2) {
+      for (let filament = 0; filament < 9; filament += 1) {
+        const spread = (random() - 0.5) * 62;
+        const reach = (72 + random() * 52) * starburst;
+        context.beginPath();
+        context.moveTo(spread * 0.28, side * 10);
+        // Filaments splay as they climb: the wind is a cone, not a column.
+        context.quadraticCurveTo(
+          spread * 0.7, side * reach * 0.55,
+          spread, side * reach,
+        );
+        const wind = context.createLinearGradient(0, side * 10, 0, side * reach);
+        wind.addColorStop(0.00, "rgba(255,120,96,0.30)");
+        wind.addColorStop(0.35, "rgba(238,74,66,0.20)");
+        wind.addColorStop(1.00, "rgba(180,40,50,0)");
+        context.strokeStyle = wind;
+        context.lineWidth = 3 + random() * 6;
+        context.lineCap = "round";
+        context.stroke();
+      }
+    }
+    context.restore();
+    context.save();
+    context.translate(128, 128);
+    context.scale(1, flatten);
   }
 
   // The dust lane, which is what makes an inclined disc read as inclined.
@@ -749,7 +817,16 @@ export function createDeepSky({
    * brightness it actually has, which is: faint. These are objects that need a
    * dark sky and twenty minutes of dark adaptation.
    */
-  const surfaceLevel = (size, base) => base / (1 + Math.pow(Math.max(0.1, size), 1.35) * 0.9);
+  /*
+   * Lifted by a fifth over the first pass. The surface-brightness falloff is
+   * the right *shape* -- it is what stopped every nebula reading as an
+   * identical orange blob -- but tuned purely for honesty it left the sky
+   * emptier than the reference the viewer had in mind. This is one multiplier
+   * on the whole set, so the relationship between objects is untouched.
+   */
+  const SKY_RICHNESS = 1.22;
+  const surfaceLevel = (size, base) => (base * SKY_RICHNESS)
+    / (1 + Math.pow(Math.max(0.1, size), 1.35) * 0.9);
 
   const NEBULA_BASE = {
     emission: 0.95,
@@ -784,7 +861,7 @@ export function createDeepSky({
      * another faint smudge -- which is also how every photograph of it looks,
      * because a photograph integrates and an eye does not.
      */
-    const emphasis = entry.catalog === "M31" ? 2.4 : 1;
+    const emphasis = entry.catalog === "M31" ? 2.4 : (1 + (entry.starburst ?? 0) * 0.55);
     addSprite(
       entry,
       track(makeGalaxyTexture(entry, random)),
