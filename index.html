@@ -13,8 +13,8 @@
     <!-- <link rel="preconnect" href="https://unpkg.com" />
     <link rel="preconnect" href="https://threejs.org" /> -->
     <!-- Main stylesheet for page layout, HUD, and effects. -->
-    <script type="module" crossorigin src="/Beyond-Earth/assets/index-BJBEnzkw.js"></script>
-    <link rel="stylesheet" crossorigin href="/Beyond-Earth/assets/index-BVcf--tP.css">
+    <script type="module" crossorigin src="/Beyond-Earth/assets/index-BmnWO51g.js"></script>
+    <link rel="stylesheet" crossorigin href="/Beyond-Earth/assets/index-C_p64yh9.css">
   </head>
   <body>
     <!-- Loader overlay displayed while Three.js assets and textures initialize. -->
@@ -48,9 +48,100 @@
           </span>
         </button>
 
-        <!-- Primary invitation into the focused slow-motion inspection experience. -->
-        <div class="ship-controls" aria-label="Celestial inspection guidance">
-          <span>Click, Scroll and dive into the Universe</span>
+        <!--
+          The guidance strip that used to sit here is gone.
+
+          It explained three controls and then stayed on screen for the rest of
+          the session next to the thing it was describing, crowding the
+          space-events control badly enough to force a two-row header on narrow
+          viewports. The same three things are now said once, in sequence, by
+          the guided tour in src/js/ui/guidedTour.js -- which can be skipped,
+          and never runs twice.
+        -->
+
+        <!--
+          The three controls, as one row.
+
+          They were three separate objects with three different silhouettes,
+          which is a lot of visual noise for a corner: a two-line pill, a
+          bordered slab, and a floating keycap parked over the scene on the
+          other side of the screen. They do comparable things -- open the
+          catalogue, change how the scene is presented, leave whatever you are
+          in -- so they now share one shape and sit together, in the order you
+          reach for them.
+        -->
+        <div class="hud-controls">
+          <!--
+            The way in to the space-events catalogue.
+
+            A permanent control rather than something that appears when an
+            event fires, because the whole problem it solves is that the events
+            are invisible until one happens: a viewer needs to be able to find
+            out what exists *before* seeing any of it.
+
+            The "17 real events" line it used to carry is gone. A number that
+            never changes is not news after the first read, and it forced a
+            two-line control that nothing else in the row could match. The
+            count is still there -- inside the panel, next to the search field,
+            where it is telling you how much you are filtering rather than
+            advertising.
+          -->
+          <button
+            class="hud-control events-trigger"
+            id="space-events-trigger"
+            type="button"
+            aria-haspopup="dialog"
+            aria-expanded="false"
+            aria-controls="space-events-dashboard"
+          >
+            <span class="hud-control__glyph events-trigger__pip" aria-hidden="true"></span>
+            <span class="hud-control__label">Space events</span>
+          </button>
+
+          <!--
+            Info mode and space mode, as a switch rather than a button.
+
+            Two named states with a visible position between them: the label
+            says which one you are about to move to, and the track shows which
+            one you are in. A single button reading "Space mode" could not say
+            whether it described the current state or the destination, which is
+            the ambiguity every unlabelled toggle has.
+          -->
+          <button
+            class="hud-control mode-switch"
+            id="space-mode-toggle"
+            type="button"
+            role="switch"
+            aria-checked="false"
+            title="Hide every overlay and keep only the worlds"
+          >
+            <span class="mode-switch__track" aria-hidden="true">
+              <span class="mode-switch__knob"></span>
+            </span>
+            <span class="hud-control__label mode-switch__label">Switch to Space Mode</span>
+          </button>
+
+          <!--
+            The way out of whatever you are inspecting.
+
+            It used to float over the scene at the top left, on the opposite
+            side of the screen from everything else it belongs with. In the row
+            it is where a viewer already is. It stays in place when there is
+            nothing to exit, disabled rather than removed, so the row never
+            changes width under the pointer.
+          -->
+          <button
+            class="hud-control space-exit-control"
+            id="space-exit-control"
+            type="button"
+            aria-label="Exit the current space view"
+            aria-keyshortcuts="Escape"
+            title="Exit the current view (Escape)"
+            disabled
+          >
+            <kbd class="hud-control__key">Esc</kbd>
+            <span class="hud-control__label">Exit view</span>
+          </button>
         </div>
       </header>
 
@@ -123,6 +214,40 @@
           window.cancelAnimationFrame = (handle) => pending.delete(handle);
           Object.defineProperty(document, "hidden", { get: () => false });
           Object.defineProperty(document, "visibilityState", { get: () => "visible" });
+
+          /*
+           * Timers as well, and for a reason that cost an afternoon to find.
+           *
+           * Clamping background timers to a second is survivable. Freezing
+           * them is not, and Chrome does freeze them outright once a page has
+           * been hidden for a few minutes -- so the gate, whose whole
+           * click-to-detonation chain is nested setTimeouts, simply never
+           * reaches resolve(). Under automation that reads as "the click does
+           * nothing", which is a very convincing and entirely false bug.
+           *
+           * Driven off the same frame clock, every timer fires on schedule
+           * however long the tab has been out of sight. Diagnostic only: this
+           * is inside the ?raf=poll branch.
+           */
+          const timers = new Map();
+          let nextTimer = 1;
+          window.setTimeout = (callback, delay) => {
+            if (typeof callback !== "function") return 0;
+            const handle = nextTimer++;
+            timers.set(handle, { due: performance.now() + Math.max(0, delay || 0), callback });
+            return handle;
+          };
+          window.clearTimeout = (handle) => timers.delete(handle);
+          const pump = () => {
+            const now = performance.now();
+            timers.forEach((timer, handle) => {
+              if (timer.due > now) return;
+              timers.delete(handle);
+              try { timer.callback(); } catch (error) { console.error(error); }
+            });
+            window.requestAnimationFrame(pump);
+          };
+          window.requestAnimationFrame(pump);
         }());
       }
     </script>
