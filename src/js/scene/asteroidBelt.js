@@ -978,9 +978,25 @@ function attachAsteroidMetadata(object, {
     name,
     detail: `${compositionData.label} | ${family}`,
     focusScale: 7.5,
-    // Small asteroids need a much tighter camera than planets. This explicit
-    // distance is consumed by main.js and is independent of orbital distance.
-    focusDistance: Math.max(0.24, visualRadius * 4.35),
+    /*
+     * Small asteroids need a much tighter camera than planets. This explicit
+     * distance is consumed by main.js and is independent of orbital distance.
+     *
+     * Pulled back from 4.35 radii to 6.4, and the reason is reachability
+     * rather than composition. At 4.35 radii, with a 30-degree field, a rock's
+     * silhouette covers about 87% of the frame's half-height -- measured on
+     * Vesta as a 363-pixel disc on an 835-pixel viewport, with only *four* of
+     * the 164 belt instances on screen falling outside it. Every other rock was
+     * behind the one being inspected, correctly unpickable, and the belt became
+     * impossible to move around in: the reported symptom was focusing one
+     * asteroid and finding no other would take a hover.
+     *
+     * At 6.4 radii the rock still dominates the frame -- it is what the viewer
+     * asked to look at -- but there is a real margin of sky around it, and the
+     * neighbours in that margin are visible and selectable. `minFocusDistance`
+     * keeps the old close approach available by zooming in.
+     */
+    focusDistance: Math.max(0.24, visualRadius * 6.4),
     minFocusDistance: Math.max(0.20, visualRadius * 3.4),
     focusEase: 0.14,
     isAsteroid: true,
@@ -2601,6 +2617,43 @@ export function updateJupiterTrojanFrame(asteroidBelt, jupiter = null) {
 const ASTEROID_LOD = {
   hideBelowPixels: 1.05,
   showAbovePixels: 1.45,
+
+  /*
+   * The same two thresholds while the viewer is inside the belt.
+   *
+   * The cull floor above was written for the wide solar-system shot, where the
+   * belt is a thin ellipse and a sub-pixel rock is genuinely not worth a draw
+   * call. Inside the belt it was the reason "not all nearby asteroids are
+   * selectable": focused on Vesta, the *entire* remaining population projects
+   * between 0.8 and 1.6 pixels -- so the 1.05/1.45 dead band swallowed it.
+   * Measured at that moment: 9 of 323 belt bodies visible, and the nine were
+   * not the nine nearest. Neighbours at 58, 60 and 67 units were culled while
+   * one at 100 was drawn, because which side of the dead band a rock is left on
+   * is a matter of the history of its own hysteresis, not of distance. An
+   * invisible object is skipped by the raycaster, so every one of those was
+   * unhoverable, and the sky around the focused rock was simply empty.
+   *
+   * In an encounter almost nothing is culled: if it lands on screen it can be
+   * pointed at.
+   */
+  encounterHideBelowPixels: 0.14,
+  encounterShowAbovePixels: 0.22,
+
+  /*
+   * ...and a floor on how small a neighbour may be *drawn* while inspecting.
+   *
+   * Visible is not the same as findable. A rock rendered 1.2 pixels across is
+   * a dark speck against a starfield -- selectable in principle, invisible in
+   * practice. During an encounter anything under this size is drawn at this
+   * size, which is the same bargain `ASTEROID_ENCOUNTER.maximumVisualScale`
+   * already strikes for the instanced boulders, expressed in screen space so
+   * that it does the same job at every distance. The boost is capped, faded in
+   * with the encounter, and self-cancelling: as the camera closes on a rock its
+   * true size passes the floor and the scale returns to 1 before arrival.
+   */
+  encounterMinimumPixels: 3.4,
+  encounterMaximumBoost: 6,
+
   standInBelowPixels: 4.5,
   fullSculptAbovePixels: 6.5,
   // Uploading a geometry the GPU has not seen before stalls the frame. Spread
@@ -2611,32 +2664,87 @@ const ASTEROID_LOD = {
 const _lodWorldPosition = new THREE.Vector3();
 
 /**
+ * Applies the encounter presence boost to one rock.
+ *
+ * `visualRadius` moves with the scale because it is what the screen-space
+ * asteroid picker measures a hit against, and what main.js uses for the
+ * focused body's occlusion depth -- a rock drawn larger has to be pickable
+ * larger, or the boost would make it look reachable without making it so.
+ * `baseVisualRadius` keeps the honest figure for the focus distance.
+ */
+function applyAsteroidPresenceScale(rock, presence) {
+  const current = Number(rock.userData.presenceScale ?? 1);
+  if (Math.abs(current - presence) < 0.002) return;
+  rock.userData.presenceScale = presence;
+
+  const base = rock.userData.basePresenceScale
+    ?? (rock.userData.basePresenceScale = rock.scale.clone());
+  rock.scale.copy(base).multiplyScalar(presence);
+
+  const baseRadius = Number(rock.userData.baseVisualRadius ?? 0);
+  if (baseRadius > 0) rock.userData.visualRadius = baseRadius * presence;
+}
+
+/**
  * Chooses a detail level for one resolved rock from its projected size.
  * Returns true when the body should be drawn at all.
  */
-function applyAsteroidLevelOfDetail(rock, camera, focalPixels, budget) {
+function applyAsteroidLevelOfDetail(rock, camera, focalPixels, budget, encounter = 0) {
   const core = rock.userData.core;
   if (!core || !core.userData.lodLow) return true;
 
   _lodWorldPosition.setFromMatrixPosition(rock.matrixWorld);
   const distance = camera.position.distanceTo(_lodWorldPosition);
-  const radius = Number(rock.userData.visualRadius ?? 0.1);
+  // The rock's *own* size, never the boosted one: measuring the boosted radius
+  // would feed the boost back into itself and the scale would run away.
+  const radius = Number(rock.userData.baseVisualRadius
+    ?? (rock.userData.baseVisualRadius = Number(rock.userData.visualRadius ?? 0.1)));
   const pixels = (radius / Math.max(distance, 1e-4)) * focalPixels;
+
+  const strength = THREE.MathUtils.clamp(Number(encounter) || 0, 0, 1);
+  const hideBelow = THREE.MathUtils.lerp(
+    ASTEROID_LOD.hideBelowPixels,
+    ASTEROID_LOD.encounterHideBelowPixels,
+    strength,
+  );
+  const showAbove = THREE.MathUtils.lerp(
+    ASTEROID_LOD.showAbovePixels,
+    ASTEROID_LOD.encounterShowAbovePixels,
+    strength,
+  );
 
   // Visibility, with a dead band between the two thresholds.
   if (rock.visible) {
-    if (pixels < ASTEROID_LOD.hideBelowPixels) { rock.visible = false; return false; }
-  } else if (pixels > ASTEROID_LOD.showAbovePixels) {
+    if (pixels < hideBelow) {
+      rock.visible = false;
+      applyAsteroidPresenceScale(rock, 1);
+      return false;
+    }
+  } else if (pixels > showAbove) {
     rock.visible = true;
   } else {
+    applyAsteroidPresenceScale(rock, 1);
     return false;
   }
 
+  let presence = 1;
+  if (strength > 0 && pixels > 0 && pixels < ASTEROID_LOD.encounterMinimumPixels) {
+    const wantedScale = Math.min(
+      ASTEROID_LOD.encounterMaximumBoost,
+      ASTEROID_LOD.encounterMinimumPixels / pixels,
+    );
+    presence = THREE.MathUtils.lerp(1, wantedScale, strength);
+  }
+  applyAsteroidPresenceScale(rock, presence);
+
+  // Geometry is chosen from what is actually drawn, so a boosted speck does not
+  // ask for a sculpt it does not need.
+  const drawnPixels = pixels * presence;
   const usingStandIn = core.geometry === core.userData.lodLow;
   let wanted = core.geometry;
-  if (usingStandIn && pixels > ASTEROID_LOD.fullSculptAbovePixels) {
+  if (usingStandIn && drawnPixels > ASTEROID_LOD.fullSculptAbovePixels) {
     wanted = core.userData.lodHigh;
-  } else if (!usingStandIn && pixels < ASTEROID_LOD.standInBelowPixels) {
+  } else if (!usingStandIn && drawnPixels < ASTEROID_LOD.standInBelowPixels) {
     wanted = core.userData.lodLow;
   }
 
@@ -2742,7 +2850,15 @@ export function updateAsteroidBelt(
 
     // Detail selection runs for every rock including Trojans, which return
     // early below because their motion is driven from updateJupiterTrojanFrame.
-    if (camera) applyAsteroidLevelOfDetail(rock, camera, focalPixels, lodBudget);
+    if (camera) {
+      applyAsteroidLevelOfDetail(
+        rock,
+        camera,
+        focalPixels,
+        lodBudget,
+        asteroidBelt.encounterIntensity,
+      );
+    }
 
     // Trojan positions and spin are synchronized every rendered frame by
     // updateJupiterTrojanFrame(), avoiding 20-30 Hz stepping near Jupiter.

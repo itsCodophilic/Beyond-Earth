@@ -59,6 +59,13 @@ export function createAboutExperiencePanel({ trigger }) {
           Drift out past Mars into the debris of a planet that never formed. Watch Saturn's rings resolve from a band of light into a hundred thousand kilometres of ice. Fall beyond Neptune into the dark, where the Sun is only the brightest star. Stay as long as you like — nothing out here is in a hurry.
         </p>
 
+        <div class="about-experience__replay">
+          <button class="about-experience__replay-button" id="replay-tour" type="button">
+            Replay the guided tour
+          </button>
+          <span>Thirteen steps, about a minute. Skippable at any point.</span>
+        </div>
+
         <footer class="about-experience__author">
           <span>Created with curiosity by <strong>Harsh Pandya</strong></span>
           <span aria-hidden="true">·</span>

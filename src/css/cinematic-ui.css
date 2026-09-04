@@ -227,14 +227,48 @@
 
 .progress::before { display: none; }
 
+/*
+   The readout is now on a slab, like the controls in the header.
+
+   It was type laid straight onto the frame with a soft gradient behind it, and
+   that works over the empty dark of the outer system and fails over everything
+   else: cross a bright arm of the nebula, or the lit limb of a planet, and the
+   figure you are travelling by is the thing you can no longer read. A gradient
+   cannot solve it, because the problem is not one direction of falloff -- it is
+   that the background varies underneath the whole panel and keeps changing.
+
+   So the same treatment the header controls get: a real ground, a blur behind
+   it, and the amber hairline along the top that the rest of the interface is
+   held by. Restrained enough to stay a caption rather than becoming a card,
+   dark enough that the numbers hold at any brightness.
+*/
 .progress.distance-readout::after {
   content: "";
   position: absolute;
-  inset: -22px -26px -20px -24px;
+  inset: -14px -22px -14px -20px;
   z-index: -1;
-  background: linear-gradient(20deg, rgba(2, 4, 9, 0.9), rgba(2, 4, 9, 0.42) 62%, transparent);
-  -webkit-mask-image: linear-gradient(0deg, #000 60%, transparent);
-  mask-image: linear-gradient(0deg, #000 60%, transparent);
+  border-radius: 3px;
+  background:
+    linear-gradient(180deg, rgba(9, 14, 26, 0.72), rgba(3, 5, 11, 0.66));
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.42);
+  backdrop-filter: blur(13px) saturate(1.12);
+  -webkit-backdrop-filter: blur(13px) saturate(1.12);
+  pointer-events: none;
+}
+
+/* The hairline sits on the slab rather than on the text, so it spans the whole
+   panel the way the one over the header row does. */
+.progress.distance-readout::before {
+  content: "";
+  display: block;
+  position: absolute;
+  top: -14px;
+  right: -22px;
+  left: -20px;
+  z-index: -1;
+  height: 1px;
+  background: var(--cin-amber);
+  opacity: 0.72;
   pointer-events: none;
 }
 
@@ -250,32 +284,67 @@
   flex-wrap: nowrap;
   gap: 0.75rem;
   align-items: baseline;
-  margin: 0 0 0.75rem;
-  padding: 0.85rem 0 0;
+  margin: 0 0 0.6rem;
+  /* The rule that used to sit here has moved onto the slab above, where it can
+     span the whole panel instead of only the text. */
+  padding: 0;
   border: 0;
-  border-top: 1px solid var(--cin-amber-soft);
   background: none;
+}
+
+/*
+   "You are at" is the title of the reading and was the faintest thing in the
+   panel -- 0.72 alpha of a dim blue-grey, under a large figure it is supposed
+   to be introducing. It now carries the amber the rest of the interface uses
+   for labels, at full strength, with a glow of its own so it survives a bright
+   background as well as a dark one.
+*/
+.distance-readout__header > span:first-child {
+  color: var(--cin-amber);
+  font-family: var(--cin-mono);
+  font-size: 0.58rem;
+  font-weight: 400;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  text-shadow:
+    0 0 14px rgba(255, 196, 130, 0.55),
+    0 1px 3px rgba(0, 0, 0, 0.9);
 }
 
 .distance-readout__header em {
   flex: 0 0 auto;
   width: auto;
   font-style: normal;
-  color: var(--cin-ink-faint);
+  color: rgba(226, 216, 204, 0.72);
   letter-spacing: 0.22em;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
 }
 
+/*
+   The figure itself.
+
+   Kept large and thin -- it is the one piece of display type in the interface
+   and it should stay that way -- but at 200 weight over a moving background,
+   thin strokes are exactly what disappears first. 300 and a tabular figure set
+   keep it from swimming as the digits change, and the shadow is layered rather
+   than single: a tight dark one to hold the strokes' edges at any brightness,
+   and a wide soft one to separate the whole line from what is behind it.
+*/
 .distance-readout__value {
   display: block;
   margin: 0;
   font-size: clamp(1.5rem, 2.1vw, 2.05rem);
-  font-weight: 200;
-  letter-spacing: 0.004em;
+  font-weight: 300;
+  letter-spacing: 0.006em;
   line-height: 1.1;
-  color: var(--cin-ink);
+  color: #ffffff;
+  font-variant-numeric: tabular-nums;
   background: none;
   -webkit-text-fill-color: currentColor;
-  text-shadow: 0 0 30px rgba(0, 0, 0, 0.85);
+  text-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.95),
+    0 0 14px rgba(0, 0, 0, 0.85),
+    0 0 36px rgba(0, 0, 0, 0.7);
 }
 
 .distance-readout__footer {
@@ -284,6 +353,7 @@
   gap: 0.85rem;
   align-items: baseline;
   justify-content: flex-start;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
   margin: 0.7rem 0 0;
   padding: 0;
   border: 0;
@@ -298,7 +368,7 @@
 /* The region label came through in the old cyan; everything in this layer
    reads on the same warm scale so nothing jumps out of the palette. */
 .distance-readout__footer > span:first-child {
-  color: var(--cin-ink-faint);
+  color: rgba(226, 216, 204, 0.8);
   background: none;
   -webkit-text-fill-color: currentColor;
 }
@@ -807,115 +877,18 @@ body:has(.satellite-atlas-directory.is-visible) .progress.distance-readout {
 
 /* ---- the instruction row */
 
-.ship-controls {
-  /*
-   * The pulsing glow is a keyframe animation, and an animated value beats a
-   * plain declaration however late it is in the cascade -- setting box-shadow
-   * to none here did nothing until the animation itself was called off. It has
-   * to go regardless: a border that breathes cyan and rose on a loop is the
-   * single least filmic thing on the screen.
-   */
-  animation: none;
-  /* The old pill clipped its own last item; without a box there is nothing to
-     clip against, so the row is simply as wide as the three instructions. */
-  max-width: none;
-  overflow: visible;
-  gap: 0;
-  padding: 0.75rem 0 0;
-  border: 0;
-  border-top: 1px solid var(--cin-amber-soft);
-  border-radius: 0;
-  background: none;
-  box-shadow: none;
-  backdrop-filter: none;
-}
 
-.ship-controls::before,
-.ship-controls::after { display: none; }
 
-.ship-controls__step,
-.ship-controls__escape {
-  gap: 0.55rem;
-  padding: 0.1rem 1.15rem;
-  border: 0;
-  border-radius: 0;
-  background: none;
-  box-shadow: none;
-}
 
-.ship-controls__step + .ship-controls__step,
-.ship-controls__escape {
-  border-left: 1px solid rgba(255, 255, 255, 0.09);
-}
 
-.ship-controls__escape:last-child { padding-right: 0; }
 
-.ship-controls__index {
-  width: auto;
-  height: auto;
-  padding: 0;
-  border: 0;
-  border-radius: 0;
-  background: none;
-  box-shadow: none;
-  font-family: var(--cin-mono);
-  font-size: 0.54rem;
-  font-variant-numeric: tabular-nums;
-  letter-spacing: 0.2em;
-  color: rgba(255, 196, 130, 0.55);
-}
 
-.ship-controls__copy { gap: 0.14rem; }
 
-.ship-controls__copy strong {
-  font-size: 0.78rem;
-  font-weight: 300;
-  letter-spacing: 0.035em;
-  text-transform: none;
-  color: var(--cin-ink);
-  background: none;
-  -webkit-text-fill-color: currentColor;
-}
 
-.ship-controls__copy small {
-  font-family: var(--cin-mono);
-  font-size: 0.5rem;
-  font-weight: 400;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  color: var(--cin-ink-faint);
-  text-shadow: none;
-}
 
-.ship-controls__copy strong { text-shadow: none; }
 
-.ship-controls__escape kbd {
-  padding: 0.16rem 0.42rem;
-  border: 1px solid var(--cin-amber-soft);
-  border-radius: 0;
-  background: none;
-  box-shadow: none;
-  font-family: var(--cin-mono);
-  font-size: 0.5rem;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: var(--cin-amber);
-}
 
-.ship-controls__escape:hover,
-.ship-controls__escape:focus-visible {
-  border-color: rgba(255, 255, 255, 0.09);
-  background: none;
-  box-shadow: none;
-}
 
-.ship-controls__escape:hover kbd,
-.ship-controls__escape:focus-visible kbd {
-  border-color: var(--cin-amber);
-  background: none;
-  box-shadow: none;
-  color: var(--cin-ink);
-}
 
 /* ================================================================== *
  *  Second pass: the surfaces that only appear on hover, click or open
@@ -2851,4 +2824,837 @@ body.is-space-event .body-connector {
    away for twenty seconds would strand a viewer who changed their mind. */
 body.is-space-event .system-return-button {
   opacity: 1;
+}
+
+
+/* ============================================== the header control row
+
+   One shape, three controls.
+
+   They were three different objects: a two-line pill for the events
+   catalogue, a bordered slab for the mode toggle, and a keycap floating over
+   the scene at the opposite corner for the exit. Nothing tied them together
+   and they did comparable things, so they are now one instrument -- a single
+   slab divided by hairlines, in the order a viewer reaches for them: what is
+   out there, how it is presented, and the way back.
+
+   The shared piece is `.hud-control`. Everything specific to one of the three
+   is added on top of it and never re-states the geometry, so the row cannot
+   drift out of alignment the next time one of them changes.
+*/
+.hud-control {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.62rem 0.95rem;
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  /* Hairlines between, not gaps: the row is one object. */
+  border-right-width: 0;
+  background: linear-gradient(180deg, rgba(9, 14, 26, 0.62), rgba(3, 5, 11, 0.56));
+  color: var(--cin-ink-soft);
+  font: inherit;
+  cursor: pointer;
+  backdrop-filter: blur(11px) saturate(1.15);
+  -webkit-backdrop-filter: blur(11px) saturate(1.15);
+  transition:
+    color 240ms ease,
+    border-color 240ms ease,
+    background 240ms ease,
+    opacity 420ms ease;
+}
+
+.hud-control:first-child { border-radius: 3px 0 0 3px; }
+
+.hud-control:last-child {
+  border-right-width: 1px;
+  border-radius: 0 3px 3px 0;
+}
+
+/* A single hairline of light along the top of the whole row, which is the
+   motif the rest of the interface is held by. */
+.hud-control::before {
+  position: absolute;
+  top: -1px;
+  right: 0;
+  left: 0;
+  height: 1px;
+  content: "";
+  background: var(--cin-amber-soft);
+  opacity: 0.55;
+  transition: opacity 240ms ease;
+  pointer-events: none;
+}
+
+.hud-control:hover,
+.hud-control:focus-visible,
+.hud-control[aria-expanded="true"] {
+  color: var(--cin-ink);
+  border-color: var(--cin-amber-soft);
+  background: linear-gradient(180deg, rgba(255, 196, 130, 0.11), rgba(255, 196, 130, 0.05));
+  outline: none;
+}
+
+.hud-control:hover::before,
+.hud-control:focus-visible::before { opacity: 1; }
+
+.hud-control__label {
+  font-family: var(--cin-mono);
+  font-size: 0.54rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.hud-control__key {
+  padding: 0.12rem 0.34rem;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 2px;
+  font-family: var(--cin-mono);
+  font-size: 0.46rem;
+  letter-spacing: 0.1em;
+  color: var(--cin-ink);
+}
+
+/* ------------------------------------------------------------ space events */
+
+/* A slow pulse, so the control advertises that there is something behind it.
+   It is the only animated affordance in the row, which is what makes it work;
+   three of these would read as noise. */
+.events-trigger__pip {
+  width: 5px;
+  height: 5px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: var(--cin-amber);
+  animation: events-trigger-pulse 2600ms ease-in-out infinite;
+}
+
+@keyframes events-trigger-pulse {
+  0%, 100% { opacity: 0.35; transform: scale(0.8); }
+  50% { opacity: 1; transform: scale(1); }
+}
+
+/* ----------------------------------------------------- the info/space switch
+
+   A real switch, because there are two named states and a button cannot say
+   which of them it is describing. The track shows where you are; the label
+   says where the press will take you. Both halves are always at full contrast,
+   in space mode included -- a control that fades out in one of its two states
+   is hardest to find exactly when it is the only one left on screen.
+*/
+.mode-switch__track {
+  position: relative;
+  width: 30px;
+  height: 14px;
+  flex: 0 0 auto;
+  border: 1px solid rgba(255, 196, 130, 0.4);
+  border-radius: 999px;
+  background: rgba(255, 196, 130, 0.1);
+  transition: background 320ms ease, border-color 320ms ease;
+}
+
+.mode-switch__knob {
+  position: absolute;
+  top: 50%;
+  left: 2px;
+  width: 8px;
+  height: 8px;
+  margin-top: -4px;
+  border-radius: 50%;
+  background: var(--cin-amber);
+  box-shadow: 0 0 8px rgba(255, 196, 130, 0.7);
+  transition: transform 360ms cubic-bezier(0.16, 1, 0.3, 1), background 320ms ease,
+    box-shadow 320ms ease;
+}
+
+/* In space mode the knob crosses to the far side and cools from the amber the
+   interface is drawn in to the white the stars are. */
+.mode-switch[aria-checked="true"] .mode-switch__track {
+  border-color: rgba(196, 220, 255, 0.5);
+  background: rgba(150, 190, 255, 0.14);
+}
+
+.mode-switch[aria-checked="true"] .mode-switch__knob {
+  transform: translateX(14px);
+  background: #eaf2ff;
+  box-shadow: 0 0 10px rgba(190, 220, 255, 0.85);
+}
+
+/* -------------------------------------------------------- the exit control */
+
+/*
+   It stays in the row when there is nothing to exit.
+
+   Removing it would change the row's width under the pointer, which is worse
+   than a control that is visibly unavailable for a moment. Disabled is also
+   the truth: Escape does nothing here either.
+*/
+.space-exit-control:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.space-exit-control:disabled:hover,
+.space-exit-control:disabled:focus-visible {
+  color: var(--cin-ink-soft);
+  border-color: rgba(255, 255, 255, 0.11);
+  background: linear-gradient(180deg, rgba(9, 14, 26, 0.62), rgba(3, 5, 11, 0.56));
+}
+
+body.is-space-event .space-exit-control { opacity: 0.3; pointer-events: none; }
+
+/* ==================================================== space mode
+
+   The frame with nothing in it but the worlds.
+
+   Everything this interface draws over the scene is there because the scene
+   alone does not say what you are looking at: which ellipse belongs to which
+   planet, what that speck is, how far away it is. All of it is also, at some
+   point, in the way -- and the moment it is in the way is usually the moment
+   the view is worth looking at.
+
+   So it comes off in one press. Not `display: none`, for the same reason the
+   event staging avoids it: these surfaces animate, and cutting them would make
+   entering space mode a snap instead of a fade. Opacity plus pointer-events
+   means they leave quietly and every bit of their state survives, so leaving
+   space mode restores exactly the screen you had.
+
+   The orbit lines are geometry rather than DOM and are switched off in
+   main.js, which is also where the two independent reasons for hiding them --
+   an event, and this -- are reconciled.
+*/
+body.is-space-mode .planet-details,
+body.is-space-mode .celestial-selection-card,
+body.is-space-mode .satellite-system-overview,
+body.is-space-mode .satellite-atlas-directory,
+body.is-space-mode .satellite-name-label,
+body.is-space-mode .satellite-name-layer,
+body.is-space-mode .planet-orbit-hover-tooltip,
+body.is-space-mode .planet-system-banner,
+body.is-space-mode .space-explore-hint,
+body.is-space-mode .space-dive-pulse,
+body.is-space-mode .solar-event-notice,
+body.is-space-mode .events-dashboard,
+body.is-space-mode .body-card,
+body.is-space-mode .body-card-restore,
+body.is-space-mode .body-connector,
+body.is-space-mode .saturn-ring-hover-card,
+body.is-space-mode .asteroid-hover-tooltip,
+body.is-space-mode .progress,
+body.is-space-mode .distance-cinematic-layer,
+body.is-space-mode .system-return-button,
+body.is-space-mode .brand {
+  opacity: 0 !important;
+  pointer-events: none !important;
+  transition: opacity 520ms ease;
+}
+
+/*
+   The catalogue control goes; the other two survive at full strength.
+
+   Space events was left in the row at first, on the reasoning that the row
+   should be identical in both states. But the panel it opens is one of the
+   surfaces space mode exists to hide, so the control was an invitation to a
+   click that could only be refused -- and a button that looks live and does
+   nothing visible is worse than a button that is not there.
+
+   The switch and the exit stay, and an earlier version faded the switch to a
+   quarter opacity here, which is exactly backwards: in space mode it is the
+   only way back, and dimming it made the mode feel like something that had
+   happened to the viewer rather than something they chose.
+*/
+body.is-space-mode .events-trigger { display: none; }
+
+/* With the first control gone the second inherits the row's left-hand cap. */
+body.is-space-mode .mode-switch { border-radius: 3px 0 0 3px; }
+
+/*
+   The control row survives, at full strength.
+
+   An earlier version faded the toggle to a quarter opacity in space mode, on
+   the reasoning that it should not compete with the view. That is exactly
+   backwards: in space mode it is the only control left on screen, so it is the
+   only thing a viewer can use to get back, and hiding it makes the mode feel
+   like something that happened *to* them. The row keeps its contrast in both
+   states -- it is three small words in a corner, and it is the way out.
+*/
+
+/*
+   Said once, on the way in.
+
+   Space mode removes the controls that would otherwise explain themselves, so
+   the one thing a viewer needs -- that it is reversible, and how -- has to be
+   said at the moment it becomes true. It fades on its own; it is not a panel.
+*/
+.space-mode-hint {
+  position: fixed;
+  left: 50%;
+  bottom: clamp(48px, 9vh, 92px);
+  z-index: 12;
+  padding: 0.55rem 1rem;
+  transform: translateX(-50%);
+  border-top: 1px solid var(--cin-amber-soft);
+  background: rgba(3, 5, 11, 0.72);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  color: var(--cin-ink-soft);
+  font-family: var(--cin-mono);
+  font-size: var(--cin-micro);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  text-align: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 520ms ease;
+}
+
+.space-mode-hint.is-visible { opacity: 1; }
+
+/* Narrow viewports drop the words and keep the marks: a pulsing pip, a switch
+   in one of two positions, and a keycap are each still readable alone. */
+@media (max-width: 760px) {
+  .hud-control__label { display: none; }
+  .hud-control { padding: 0.6rem 0.66rem; }
+}
+
+/* ------------------------------------------------- the tour's target marker
+
+   A ring around the world a step is talking about.
+
+   "There is Earth" is only useful if the viewer can find Earth, and at nine
+   pixels of radius among a field of stars that is a real ask -- the step was
+   pointing at something the person reading it could not pick out. The marker
+   names the world and follows it, and it is a *ring* rather than a dot for the
+   obvious reason: it has to leave the thing it is pointing at visible.
+
+   It also gets out of the way. The ring stands off the disc and grows with it,
+   and past about 46 pixels of radius the marker is dropped altogether -- a
+   reticle over something unmistakable is just one more object on screen.
+
+   It never takes pointer events, because the step it belongs to ends with a
+   click on exactly the thing underneath it.
+*/
+/*
+   The leader line.
+
+   The ring alone was still being missed -- it is a thin circle in a frame full
+   of thin circles, and somebody reading the card in one corner has no reason to
+   look at the middle of the screen. This carries the eye from the sentence to
+   the planet. It stops short of the ring rather than touching it, because a
+   line that runs into the marker reads as an object and a line that stops
+   reads as a gesture.
+*/
+.tour-leader {
+  position: fixed;
+  inset: 0;
+  z-index: 11;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 420ms ease;
+  overflow: visible;
+}
+
+.tour-leader.is-visible { opacity: 1; }
+
+.tour-leader__line {
+  stroke: var(--cin-amber);
+  stroke-width: 1;
+  stroke-dasharray: 5 5;
+  opacity: 0.62;
+  animation: tourLeaderTravel 1400ms linear infinite;
+}
+
+.tour-leader__anchor {
+  fill: var(--cin-amber);
+  opacity: 0.85;
+}
+
+/* The dashes run toward the world, which says which end is the subject. */
+@keyframes tourLeaderTravel {
+  to { stroke-dashoffset: -20; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tour-leader__line { animation: none; }
+}
+
+.tour-target {
+  --tour-target-size: 56px;
+  position: fixed;
+  z-index: 12;
+  display: grid;
+  place-items: center;
+  width: var(--tour-target-size);
+  height: var(--tour-target-size);
+  transform: translate(-50%, -50%);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 420ms ease;
+}
+
+.tour-target.is-visible { opacity: 1; }
+
+.tour-target__ring,
+.tour-target__pulse {
+  position: absolute;
+  inset: 0;
+  border: 1px solid var(--cin-amber);
+  border-radius: 50%;
+}
+
+.tour-target__ring {
+  box-shadow:
+    inset 0 0 12px rgba(255, 196, 130, 0.16),
+    0 0 18px rgba(255, 196, 130, 0.28);
+}
+
+/* One slow expanding echo. Two would read as an alarm rather than a pointer. */
+.tour-target__pulse {
+  border-color: rgba(255, 196, 130, 0.55);
+  animation: tourTargetPulse 2400ms cubic-bezier(0.16, 0.84, 0.3, 1) infinite;
+}
+
+@keyframes tourTargetPulse {
+  0% { transform: scale(1); opacity: 0.7; }
+  70%, 100% { transform: scale(1.9); opacity: 0; }
+}
+
+.tour-target__label {
+  position: absolute;
+  top: calc(100% + 9px);
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 0.2rem 0.5rem;
+  background: rgba(3, 5, 11, 0.72);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  color: var(--cin-amber);
+  font-family: var(--cin-mono);
+  font-size: 0.5rem;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tour-target__pulse { animation: none; opacity: 0.35; }
+}
+
+/* ================================================================== the tour
+
+   A first-run walkthrough, and now a modal one.
+
+   The first version deliberately had no backdrop, on the reasoning that a card
+   which dims the Solar System in order to explain the Solar System teaches
+   nothing. That is true of the steps that only *tell* you something, and quite
+   wrong for the ones that ask you to do something. "Scroll", "drag up and
+   down", "click a dark patch" are instructions, and against a live scene full
+   of moving planets there is nothing telling the eye which of the two things
+   on screen it is meant to attend to.
+
+   So the scene is dimmed and blurred, but not covered: the blur sits on the
+   canvas itself rather than under a sheet of colour, which keeps the Solar
+   System *recognisable* back there. The result reads as "attend here for a
+   moment", not as "the experience has stopped".
+
+   And the veil lifts the instant the gesture is performed -- see
+   `is-tour-satisfied`. The scene snapping back into focus is the acknowledgement
+   the step was written for.
+*/
+body.is-tour-open #universe {
+  transition: filter 520ms cubic-bezier(0.16, 0.84, 0.3, 1);
+}
+
+/*
+   Three levels, one per kind of step.
+
+   `full` is for the steps that are instructions about the controls: there is
+   nothing on screen worth attending to except the card, so the scene steps
+   back. `soft` points at something that is already up -- the dossier panel,
+   the events control -- and only needs the rest to recede. `clear` is for the
+   steps where the scene *is* the exercise: "there is Earth, go to it" cannot
+   be asked through a dark wash, and the first version of this asked a viewer
+   to find a small blue disc in a frame that had been deliberately dimmed.
+*/
+body[data-tour-veil="full"] #universe {
+  filter: blur(6px) saturate(0.68) brightness(0.6);
+}
+
+body[data-tour-veil="soft"] #universe {
+  filter: blur(2.4px) saturate(0.9) brightness(0.82);
+}
+
+body[data-tour-veil="clear"] #universe {
+  filter: none;
+}
+
+/* Practising the gesture clears the frame. The scene is never fully restored
+   while a `full` step is up -- the card still has to be the sharpest thing on
+   screen -- but the difference is unmistakable. */
+body.is-tour-open.is-tour-satisfied[data-tour-veil="full"] #universe {
+  filter: blur(1.5px) saturate(0.92) brightness(0.84);
+}
+
+/*
+   Everything the tour is not talking about steps back with the scene, so the
+   card is not competing with several panels at once for attention.
+
+   The header is *not* in this list, and that is on purpose: the last step
+   points at the events control, which lives inside it, and opacity on a parent
+   cannot be undone by a child. Dimming the header would have dimmed the one
+   thing the step exists to show.
+*/
+/*
+   Scoped to the `full` steps only.
+
+   It applied to every step at first, and that put it in direct conflict with
+   the step whose whole subject is one of these surfaces: "read about the world
+   you are at" was measured pointing at a dossier panel this rule had faded to
+   0.3 -- and then failing to point at it at all, because the tour will not
+   anchor to something it cannot see. A step that has dropped the veil has
+   nothing to gain from dimming the interface either.
+*/
+/*
+   Dimming only what is actually shown.
+   
+   These surfaces are hidden by having opacity 0 of their own, so a rule that
+   sets 0.3 on all of them does not dim a hidden card -- it *reveals* one at 30
+   per cent. Reported on the replay: the walkthrough restarted over a ghost of
+   the Earth selection card, still legible, from the run before. Each selector
+   now carries the application's own signal that the surface is up.
+*/
+body[data-tour-veil="full"] .progress,
+body[data-tour-veil="full"] .body-card:not([aria-hidden="true"]),
+body[data-tour-veil="full"] .celestial-selection-card.is-visible,
+body[data-tour-veil="full"] .body-connector:not([aria-hidden="true"]),
+body[data-tour-veil="full"] .asteroid-hover-tooltip.is-visible {
+  opacity: 0.3;
+  transition: opacity 460ms ease;
+}
+
+/*
+   The thing a step is pointing at is lifted clear of the veil instead.
+
+   Note what this does *not* set: `position`. An earlier version added
+   `position: relative` to make the z-index take effect, which is correct for a
+   static element and destroys a fixed one -- and two of the three surfaces
+   this can land on (the dossier panel, the selection card) are fixed. The
+   header controls are already relatively positioned and grid items take a
+   z-index regardless, so there is nothing to add.
+*/
+body.is-tour-open .is-tour-subject {
+  z-index: 61;
+  opacity: 1;
+}
+
+.tour {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 400ms ease;
+}
+
+.tour.is-open { opacity: 1; }
+
+/*
+   The veil.
+
+   A flat wash rather than a cut-out mask, and it never takes pointer events --
+   set explicitly in the script, because a step that says "click a dark patch"
+   has to be obeyable through it. Its own blur is small; the heavy blur is on
+   the canvas, where it can soften the scene without also softening the card
+   sitting on top of this element.
+*/
+.tour__veil {
+  position: fixed;
+  inset: 0;
+  background:
+    radial-gradient(circle at 50% 46%, rgba(3, 5, 11, 0.26), rgba(2, 3, 8, 0.74) 80%);
+  opacity: 0;
+  transition: opacity 520ms ease;
+}
+
+.tour.is-open .tour__veil { opacity: 1; }
+.tour.is-open[data-veil="soft"] .tour__veil { opacity: 0.5; }
+.tour.is-open[data-veil="clear"] .tour__veil { opacity: 0; }
+.tour.is-satisfied[data-veil="full"] .tour__veil { opacity: 0.35; }
+
+/* A ring around the control being described, positioned from its real
+   measured rectangle. */
+.tour__spotlight {
+  position: fixed;
+  border: 1px solid var(--cin-amber);
+  box-shadow:
+    0 0 0 3px rgba(255, 196, 130, 0.12),
+    0 0 34px rgba(255, 196, 130, 0.28),
+    0 0 0 100vmax rgba(2, 3, 8, 0.34);
+  opacity: 0;
+  transition: opacity 320ms ease, left 380ms cubic-bezier(0.16, 0.84, 0.3, 1),
+    top 380ms cubic-bezier(0.16, 0.84, 0.3, 1), width 380ms ease, height 380ms ease;
+}
+
+/*
+   Larger, because eight steps of real explanation is not a tooltip.
+
+   At 348px the body copy ran to five and six lines of small type, which is the
+   shape of something you skip. The extra width buys back line length and lets
+   the type sit at a size meant to be read once, properly, rather than skimmed.
+*/
+.tour__card {
+  position: fixed;
+  width: min(460px, calc(100vw - 24px));
+  padding: 1.35rem 1.55rem 1.25rem;
+  border: 0;
+  border-top: 1px solid var(--cin-amber);
+  background: linear-gradient(180deg, rgba(3, 5, 11, 0.97), rgba(3, 5, 11, 0.93));
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.72);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  color: var(--cin-ink);
+  pointer-events: auto;
+  transition: left 380ms cubic-bezier(0.16, 0.84, 0.3, 1),
+    top 380ms cubic-bezier(0.16, 0.84, 0.3, 1),
+    border-color 300ms ease;
+}
+
+.tour.is-satisfied .tour__card { border-top-color: rgba(150, 230, 190, 0.85); }
+
+/*
+   The rail.
+
+   Seven steps is enough that "Step 4 of 7" alone leaves you doing arithmetic
+   about how much is left. The pips answer it at a glance, and they sit above
+   the counter rather than replacing it, because the counter is what a screen
+   reader gets.
+*/
+.tour__rail {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 0.85rem;
+}
+
+.tour__pip {
+  height: 2px;
+  flex: 1 1 0;
+  background: rgba(226, 216, 204, 0.14);
+  transition: background 320ms ease, transform 320ms ease;
+}
+
+.tour__pip.is-done { background: var(--cin-amber-soft); }
+
+.tour__pip.is-current {
+  background: var(--cin-amber);
+  transform: scaleY(2);
+}
+
+.tour__progress {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-family: var(--cin-mono);
+  font-size: 0.48rem;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--cin-amber);
+  font-variant-numeric: tabular-nums;
+}
+
+.tour__title {
+  margin: 0 0 0.6rem;
+  font-size: 1.34rem;
+  font-weight: 200;
+  letter-spacing: 0.01em;
+}
+
+.tour__body {
+  margin: 0 0 1rem;
+  font-size: 0.92rem;
+  font-weight: 300;
+  line-height: 1.72;
+  color: var(--cin-ink-soft);
+}
+
+/*
+   The hint carries two different sentences at two different moments: the
+   instruction to try the gesture, and the confirmation once it has been
+   performed. Same element, so the second replaces the first in place instead
+   of the card growing a line and everything below it jumping.
+*/
+.tour__hint {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0 0 0.9rem;
+  min-height: 1.2rem;
+  font-size: 0.84rem;
+  font-weight: 400;
+  line-height: 1.5;
+  color: rgba(255, 214, 164, 0.92);
+}
+
+.tour__hint::before {
+  flex: 0 0 auto;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--cin-amber);
+  content: "";
+  animation: tourHintPulse 1.9s ease-in-out infinite;
+}
+
+.tour.is-satisfied .tour__hint { color: rgba(168, 235, 200, 0.94); }
+
+.tour.is-satisfied .tour__hint::before {
+  background: rgba(150, 230, 190, 0.95);
+  animation: none;
+}
+
+@keyframes tourHintPulse {
+  0%, 100% { opacity: 0.35; transform: scale(0.8); }
+  50% { opacity: 1; transform: scale(1.25); }
+}
+
+.tour__actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+}
+
+/* Skip is always present and never hidden behind a menu. A tour you cannot
+   leave on the first card is not an explanation, it is an obstacle. */
+.tour__skip {
+  padding: 0.36rem 0;
+  border: 0;
+  background: transparent;
+  color: var(--cin-ink-faint);
+  font-family: var(--cin-mono);
+  font-size: 0.5rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: color 220ms ease;
+}
+
+.tour__skip:hover,
+.tour__skip:focus-visible { color: var(--cin-ink-soft); outline: none; }
+
+.tour__next {
+  padding: 0.46rem 1rem;
+  border: 1px solid rgba(255, 196, 130, 0.32);
+  background: rgba(255, 196, 130, 0.08);
+  color: var(--cin-ink);
+  font-family: var(--cin-mono);
+  font-size: 0.52rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background 220ms ease, border-color 220ms ease;
+}
+
+.tour__next:hover,
+.tour__next:focus-visible {
+  background: rgba(255, 196, 130, 0.16);
+  border-color: var(--cin-amber);
+  outline: none;
+}
+
+.tour.is-satisfied .tour__next {
+  border-color: rgba(150, 230, 190, 0.5);
+  background: rgba(150, 230, 190, 0.12);
+}
+
+
+
+
+
+@media (prefers-reduced-motion: reduce) {
+  .tour, .tour__card, .tour__spotlight, .tour__veil, .tour__pip { transition: none; }
+  .tour__hint::before { animation: none; }
+  body.is-tour-open #universe { transition: none; }
+}
+
+/*
+ * A control the tour has not handed over yet.
+ *
+ * Dimmed and inert, but still in place: a control that vanishes and reappears
+ * is a different interface each time and the viewer never learns where
+ * anything lives. They can see all five the whole way through, and each one
+ * lights up as the step that explains it arrives -- so the interface assembles
+ * itself in the order it was taught.
+ */
+.is-tour-locked {
+  opacity: 0.26 !important;
+  pointer-events: none !important;
+  filter: saturate(0.4);
+  transition: opacity 520ms ease, filter 520ms ease;
+}
+
+/* The readout keeps reading while it is locked -- the approach step depends on
+   the number being live. Only its controls stop answering. */
+.progress.distance-readout.is-tour-locked {
+  opacity: 1 !important;
+  filter: none;
+}
+
+.progress.distance-readout.is-tour-locked .distance-readout__method,
+.progress.distance-readout.is-tour-locked [data-distance-unit] {
+  opacity: 0.34;
+  pointer-events: none;
+  transition: opacity 520ms ease;
+}
+
+/*
+ * Watching an event waits until the tour is over.
+ *
+ * The catalogue step is about the catalogue: what is out there, how often it
+ * happens, why. Pressing "view this space event" flies the viewer to another
+ * world and stages a twenty-second sequence, which is a different experience
+ * arriving in the middle of this one. The rows stay readable and the button
+ * says so; it comes back the moment the tour ends.
+ */
+body.is-tour-open .events-dashboard__play {
+  opacity: 0.32;
+  pointer-events: none;
+}
+
+/*
+ * The measurement popover sits above the tour.
+ *
+ * It is the thing one step exists to open, so it cannot open underneath the
+ * card that asked for it. The card is placed to the side on that step as well
+ * -- both were needed, because moving only one of them still left the two
+ * overlapping at narrow widths.
+ */
+body.is-tour-open .distance-cinematic-layer,
+body.is-tour-open .distance-cinematic-panel {
+  z-index: 62;
+}
+
+/* The replay control on the closing step. Quiet, next to Skip, so the primary
+   action is still to go and look at the thing. */
+.tour__replay {
+  margin-right: auto;
+  padding: 0.46rem 0.9rem;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: transparent;
+  color: var(--cin-ink-soft);
+  font-family: var(--cin-mono);
+  font-size: 0.5rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: color 220ms ease, border-color 220ms ease;
+}
+
+.tour__replay:hover,
+.tour__replay:focus-visible {
+  color: var(--cin-ink);
+  border-color: var(--cin-amber-soft);
+  outline: none;
 }

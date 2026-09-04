@@ -260,6 +260,15 @@ function buildProfiles(parentName, records) {
       color: record.colour,
       diameterEstimated: true,
       orbitScale: displayOrbitScale(parentName, index, records.length),
+      /*
+       * The real orbital radius, carried through so the distance readout can
+       * place the moon relative to its parent rather than on top of it.
+       *
+       * `orbitScale` above is a *display* number -- these systems are
+       * compressed hard so a moon stays visible beside its world -- so nothing
+       * measured from the scene can recover this.
+       */
+      semiMajorAxisKm: record.semiMajorAxisKm,
       inclination: THREE.MathUtils.degToRad(record.inclinationDeg),
       node: THREE.MathUtils.degToRad(record.nodeDeg),
       meanAnomaly: THREE.MathUtils.degToRad(record.meanAnomalyDeg),

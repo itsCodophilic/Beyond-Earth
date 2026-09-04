@@ -5,11 +5,10 @@
   right: 0;
   z-index: 5;
   display: grid;
-  /* Three columns since the space-events control joined: brand on the left,
-     then the guidance line and the events button pushed right together. The
-     middle track is the flexible one, so the two right-hand controls keep
-     their intrinsic widths and the brand never squeezes them. */
-  grid-template-columns: minmax(150px, auto) 1fr auto;
+  /* The brand, then the control row pushed to the right as one object. The
+     guidance strip that used to occupy the middle track is gone -- the tour
+     explains those controls once instead of describing them permanently. */
+  grid-template-columns: 1fr auto;
   align-items: center;
   gap: 12px;
   padding: 18px clamp(16px, 4vw, 44px);
@@ -20,171 +19,22 @@
   pointer-events: auto;
 }
 
-/* Pushed to the right-hand end of its flexible track, so the guidance line
-   and the events button stay together as a pair rather than the guidance
-   drifting into the middle of the header. */
-.ship-controls { justify-self: end; }
-
-.brand,
-.ship-controls {
-  width: fit-content;
-  min-height: 44px;
-  border: 1px solid var(--line);
-  background: var(--panel);
-  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.24);
-  backdrop-filter: blur(18px);
-}
-
-
-
-.ship-controls {
-  position: relative;
-  isolation: isolate;
-  justify-self: end;
-  display: grid;
-  grid-template-columns: auto auto auto;
-  align-items: center;
-  gap: 0;
-  min-height: 58px;
-  max-width: min(820px, calc(100vw - 300px));
-  padding: 6px;
-  overflow: hidden;
-  border-color: rgba(125, 231, 255, 0.5);
-  border-radius: 14px;
-  color: #fff;
-  font-size: 0.72rem;
-  letter-spacing: 0.02em;
-  text-shadow:
-    0 0 8px rgba(255, 255, 255, 0.72),
-    0 0 18px rgba(125, 231, 255, 0.78);
-  box-shadow:
-    inset 0 0 18px rgba(125, 231, 255, 0.08),
-    0 0 16px rgba(125, 231, 255, 0.34),
-    0 0 38px rgba(157, 140, 255, 0.22);
-  animation: guidanceGlow 3.2s ease-in-out infinite;
-}
-
-.ship-controls::before {
-  position: absolute;
-  inset: -2px;
-  z-index: -1;
-  content: "";
-  border-radius: inherit;
-  background: linear-gradient(110deg, rgba(125, 231, 255, 0.34), rgba(157, 140, 255, 0.2), rgba(255, 125, 168, 0.28));
-  filter: blur(12px);
-  opacity: 0.72;
-}
-
-.ship-controls::after {
-  position: absolute;
-  top: -35%;
-  bottom: -35%;
-  left: -90px;
-  z-index: -1;
-  width: 62px;
-  content: "";
-  pointer-events: none;
-  background: linear-gradient(90deg, transparent, rgba(180, 245, 255, 0.18), transparent);
-  transform: skewX(-17deg);
-  animation: guidanceScan 5.4s ease-in-out infinite;
-}
-
-.ship-controls__step,
-.ship-controls__escape {
-  position: relative;
-  min-width: 0;
-  min-height: 46px;
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  align-items: center;
-  gap: 8px;
-  padding: 5px 13px;
-}
-
-.ship-controls__step + .ship-controls__step,
-.ship-controls__escape {
-  border-left: 1px solid rgba(125, 231, 255, 0.18);
-}
-
-.ship-controls__index {
-  display: grid;
-  place-items: center;
-  width: 24px;
-  height: 24px;
-  border: 1px solid rgba(125, 231, 255, 0.32);
-  border-radius: 50%;
-  color: #82eaff;
-  font-family: "Space Mono", monospace;
-  font-size: 0.55rem;
-  box-shadow: inset 0 0 9px rgba(125, 231, 255, 0.12);
-}
-
-.ship-controls__copy {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  text-align: left;
-}
-
-.ship-controls__copy strong {
-  color: #f8fcff;
-  font-size: 0.68rem;
-  font-weight: 850;
-  line-height: 1.15;
-  white-space: nowrap;
-}
-
-.ship-controls__copy small {
-  color: rgba(178, 211, 229, 0.72);
-  font-size: 0.55rem;
-  font-weight: 650;
-  line-height: 1.15;
-  white-space: nowrap;
-}
-
-.ship-controls__escape {
-  appearance: none;
-  border-top: 0;
-  border-right: 0;
-  border-bottom: 0;
-  background: linear-gradient(120deg, rgba(157, 140, 255, 0.10), rgba(125, 231, 255, 0.06));
-  color: inherit;
-  font: inherit;
-  cursor: pointer;
-  text-shadow: inherit;
-  transition: background 180ms ease, box-shadow 180ms ease;
-}
-
-.ship-controls__escape kbd {
-  min-width: 38px;
-  padding: 6px 7px;
-  border: 1px solid rgba(255, 154, 202, 0.62);
-  border-radius: 8px;
-  background: rgba(14, 8, 28, 0.82);
-  color: #fff2fa;
-  font-family: "Space Mono", monospace;
-  font-size: 0.66rem;
-  font-weight: 850;
-  text-align: center;
-  box-shadow:
-    inset 0 -2px 0 rgba(255, 125, 168, 0.22),
-    0 0 14px rgba(255, 125, 168, 0.24);
-}
-
-.ship-controls__escape:hover,
-.ship-controls__escape:focus-visible {
-  outline: none;
-  background: linear-gradient(120deg, rgba(157, 140, 255, 0.20), rgba(125, 231, 255, 0.13));
-  box-shadow: inset 0 0 18px rgba(125, 231, 255, 0.08);
-}
-
-.ship-controls__escape:hover kbd,
-.ship-controls__escape:focus-visible kbd {
-  border-color: rgba(125, 231, 255, 0.78);
-  box-shadow:
-    inset 0 -2px 0 rgba(125, 231, 255, 0.26),
-    0 0 20px rgba(125, 231, 255, 0.42);
+/*
+ * The brand shrinks to its own content.
+ *
+ * Its cinematic style is a single hairline along its top edge -- the same rule
+ * that underlines the rest of the interface. That worked while a third column
+ * (the "Click Empty Space | Click a Celestial Body" strip) sat between the
+ * brand and the events control, because the brand's flexible track was then
+ * only as wide as the words in it. With that strip gone the track is the whole
+ * free width of the header, the brand stretched to fill it, and its hairline
+ * became a rule running from the wordmark across to the events button --
+ * reported as "a line getting started from Interstellar experience to space
+ * event". Pinning the brand to the start of its track ends the line where the
+ * words end.
+ */
+.brand {
+  justify-self: start;
 }
 
 @keyframes guidanceGlow {
@@ -213,28 +63,17 @@
 
 @media (max-width: 860px) {
   /*
-   * Two rows, not three columns.
+   * One row is enough again.
    *
-   * Adding the space-events control to a header that was already tight broke
-   * the guidance strip on narrow viewports: measured at 579 px the strip had
-   * 354 px of space for 414 px of content, so the last item was clipped
-   * mid-word. Shrinking the button would not have recovered enough of it.
-   *
-   * So below this width the header wraps: the brand and the events control
-   * share the top row, and the guidance strip gets the whole of the second to
-   * itself -- which is more room than it had before the button existed.
+   * The two-row header existed because the guidance strip and the events
+   * control could not both fit -- measured at 579 px the strip had 354 px of
+   * space for 414 px of content and was clipped mid-word. With the strip gone
+   * there is only the brand and one button, which fit side by side at any
+   * width worth supporting.
    */
   .hud {
-    grid-template-columns: auto 1fr;
-    grid-template-rows: auto auto;
+    grid-template-columns: 1fr auto;
     gap: 8px;
-  }
-
-  .brand { grid-area: 1 / 1; }
-
-  .events-trigger {
-    grid-area: 1 / 2;
-    justify-self: end;
   }
 
   .brand {
@@ -251,40 +90,21 @@
     clip: rect(0 0 0 0);
   }
 
-  .ship-controls {
-    grid-area: 2 / 1 / 2 / 3;
-    justify-self: end;
-    max-width: calc(100vw - 32px);
-    min-height: 46px;
-    padding: 4px;
-  }
 
-  .ship-controls__step,
-  .ship-controls__escape {
-    min-height: 38px;
-    gap: 5px;
-    padding: 3px 8px;
-  }
 
-  .ship-controls__index,
-  .ship-controls__copy small {
-    display: none;
-  }
 
-  .ship-controls__copy strong {
-    font-size: 0.57rem;
-  }
 
-  .ship-controls__escape kbd {
-    min-width: 34px;
-    padding: 5px;
-    font-size: 0.58rem;
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .ship-controls,
-  .ship-controls::after {
-    animation: none;
-  }
+}
+
+
+/* The three controls travel together and are separated by hairlines rather
+   than by gaps, so they read as one instrument instead of three buttons that
+   happen to be adjacent. */
+.hud-controls {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
 }

@@ -35,6 +35,36 @@ const PLANET_ORBITAL_ELEMENTS = Object.freeze({
 });
 
 
+/**
+ * The dwarf planets, which had no orbital elements at all.
+ *
+ * This was the cause of a reported gap that looked impossible: Eris reading
+ * 8.71 AU from Earth while its moon Dysnomia, sitting visibly beside it, read
+ * 68.4 AU. Neither number was random. Dysnomia's was *correct* -- it fell
+ * through to the `heliocentricAU` its satellite system carries, which is Eris's
+ * real semi-major axis. Eris itself matched nothing in any table, so it fell
+ * all the way to the scene-scaled fallback, which measures in scene units and
+ * divides by Earth's orbit radius. Nothing in the trans-Neptunian region is
+ * drawn at true scale, so that estimate was wrong by a factor of eight.
+ *
+ * With both in the same table, the pair is computed from the same basis and
+ * the moon gains its own offset on top -- which is the whole point of the
+ * satellite branch below.
+ *
+ * Elements from the JPL Small-Body Database, and consistent with the figures
+ * the project already carries in `PARENT_ORBITAL_SCALE`.
+ */
+const DWARF_PLANET_ELEMENTS = Object.freeze({
+  orcus: { semiMajorAxisAU: 39.377, eccentricity: 0.2201 },
+  haumea: { semiMajorAxisAU: 43.060, eccentricity: 0.1915 },
+  quaoar: { semiMajorAxisAU: 43.156, eccentricity: 0.0350 },
+  makemake: { semiMajorAxisAU: 45.571, eccentricity: 0.1612 },
+  gonggong: { semiMajorAxisAU: 66.867, eccentricity: 0.4999 },
+  eris: { semiMajorAxisAU: 67.934, eccentricity: 0.4360 },
+  // Aphelion 937 AU, perihelion 76.19 AU: the most eccentric orbit here by far.
+  sedna: { semiMajorAxisAU: 506.8, eccentricity: 0.8496 },
+});
+
 const NAMED_SMALL_BODY_ELEMENTS = Object.freeze({
   ceres: { semiMajorAxisAU: 2.7675, eccentricity: 0.0758, source: "jpl-small-body" },
   vesta: { semiMajorAxisAU: 2.3613, eccentricity: 0.0887, source: "jpl-small-body" },
@@ -97,8 +127,26 @@ function resolveOrbitalElements(body) {
   const normalizedName = normalizedBodyName(body);
   const parentPlanet = String(body?.userData?.parentPlanet ?? "").toLowerCase();
 
-  if (parentPlanet && PLANET_ORBITAL_ELEMENTS[parentPlanet]) {
-    return { ...PLANET_ORBITAL_ELEMENTS[parentPlanet], source: "satellite-parent-orbit" };
+  const parentElements = PLANET_ORBITAL_ELEMENTS[parentPlanet]
+    ?? DWARF_PLANET_ELEMENTS[parentPlanet];
+  if (parentPlanet && parentElements) {
+    return { ...parentElements, source: "satellite-parent-orbit" };
+  }
+
+  /*
+   * Exact match before substring match, and the dwarfs are exact-only.
+   *
+   * The loop below matches a body if its name *contains* a planet name, which
+   * is what lets "Jupiter interaction target" resolve to Jupiter. Adding the
+   * dwarfs to that loop would be a trap: "ceres" contains "eris", so Ceres --
+   * a main-belt object 2.77 AU out -- would silently resolve as Eris at 67.9
+   * AU. Exact names first, and the dwarfs never enter the substring pass.
+   */
+  if (DWARF_PLANET_ELEMENTS[normalizedName]) {
+    return { ...DWARF_PLANET_ELEMENTS[normalizedName], source: "jpl-elements" };
+  }
+  if (PLANET_ORBITAL_ELEMENTS[normalizedName]) {
+    return { ...PLANET_ORBITAL_ELEMENTS[normalizedName], source: "jpl-elements" };
   }
 
   for (const [planetName, elements] of Object.entries(PLANET_ORBITAL_ELEMENTS)) {

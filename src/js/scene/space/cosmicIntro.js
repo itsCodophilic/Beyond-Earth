@@ -1687,88 +1687,129 @@ export function createCosmicIntro({ pixelRatio } = {}) {
     .reduce((sum, key) => sum + (INTRO_TIMING[key] || 0), 0);
 
   /**
-   * How long the reading sits at the edge before it starts to fall: the whole
-   * of the act it appears in.
+   * How long the reading sits still before it starts to fall.
    *
-   * The readout begins at `approach`, the act titled "Our Universe" -- the
-   * moment the journey stops looking at the multiverse and arrives at the one
-   * bubble that contains everything else in this experience. That is where a
-   * distance to the Solar System first means anything, so that is where the
-   * number appears.
-   *
-   * And for the length of that act it does not move, because nothing about the
-   * shot is closing yet: it is establishing where we now are. The figure it
-   * holds is the honest one for that position -- 46.5 billion light-years, the
-   * comoving radius of the observable universe, which is the same measurement
-   * the caption states from the other side as "93 billion light-years across".
-   *
-   * The hold also solves a smaller problem it was originally written for: the
-   * readout fades up over 1.2 seconds, and a count that starts on the same
-   * frame has already fallen through several billion light-years before the
-   * number is legible -- so the first figure anyone could read was not the
-   * edge at all.
-   *
-   * Because the hold is exactly one act long, the countdown still begins at
-   * the Cosmic Web and every later act lands on the same real landmark it did
-   * before: 447 million light-years at the end of the web, 4.29 million at the
-   * galaxies, 41,200 inside the Milky Way, 396 in the Orion Arm, 10.0 on
-   * arrival.
+   * Just long enough to cover the fade-in, and no longer. It was one whole act
+   * -- twelve seconds -- and that was reported exactly as it looked: the number
+   * appears, then stays put until the Cosmic Web. A count that is frozen is not
+   * a count. A second and a bit is invisible against a sixty-nine second
+   * descent, and it is still enough that the first legible figure is the edge
+   * rather than something already several billion light-years inside it.
    */
-  const READOUT_HOLD_MS = INTRO_TIMING.approach;
-  const READOUT_SPAN_MS = PHASE_ORDER
-    .slice(PHASE_ORDER.indexOf(READOUT_FIRST_PHASE))
-    .reduce((sum, key) => sum + (INTRO_TIMING[key] || 0), 0) - READOUT_HOLD_MS;
+  const READOUT_HOLD_MS = 1200;
 
   /**
-   * The comoving radius of the observable universe: 46.5 billion light-years.
+   * Where the readout is at each moment, in light-years.
    *
-   * Not 13.8. The light from the cosmic microwave background has been in
-   * transit for 13.8 billion years, but space expanded while it travelled, so
-   * the matter that emitted it is now about three and a third times further
-   * away than that.
+   * ## Why this is a curve and not one formula
+   *
+   * Two things were asked of this number and they pull against each other. It
+   * has to fall *evenly* -- a value that freezes and then bolts is unreadable
+   * as progress, which is what a constant-rate-per-act version did. And it has
+   * to be *right*: at the moment the narration says "the Milky Way", the figure
+   * on screen should be a distance that means something about the Milky Way.
+   *
+   * A single exponential from the edge of the universe to ten light-years is
+   * perfectly even and lands the intermediate acts on distances that have
+   * nothing to do with what they are describing. Anchoring every act to its own
+   * real scale is perfectly accurate and produces wild swings in rate, because
+   * the acts are timed by how much narration they carry: the cosmic web act
+   * spans 1.37 to 0.52 billion light-years -- a third of a decade in twelve
+   * seconds -- while the act after it crosses two and a half decades in the
+   * same twelve.
+   *
+   * ## The resolution
+   *
+   * Anchor only where the narration names something with a real distance, and
+   * let the curve run smoothly between. Four anchors do that work:
+   *
+   *   64 s  2.537e6  Andromeda -- the caption turns to the Milky Way
+   *   76 s  1.057e5  the galaxy's own disc -- the caption is the Orion Arm
+   *   88 s  4.44e2   the Pleiades -- the local neighbourhood
+   *   96 s  2.505e1  Vega -- the Sun's immediate surroundings
+   *
+   * and the long opening stretch from the edge of the observable universe is
+   * left unanchored, sweeping smoothly down through the cosmic web and
+   * Laniakea rather than being pinned to either. Their sizes are of the same
+   * order as each other, so pinning both is what created the near-stationary
+   * act in the first place.
+   *
+   * The result runs at between 0.115 and 0.2 decades per second for almost all
+   * of its length -- within a factor of two, where the old version varied by
+   * more than five.
    */
-  const START_LIGHT_YEARS = 4.65e10;
+  const READOUT_ANCHORS = [
+    [28.0, 4.65e10],  // the comoving radius of the observable universe
+    [64.0, 2.537e6],  // Andromeda: the far side of the Local Group
+    [76.0, 1.057e5],  // the Milky Way's disc, end to end
+    [88.0, 4.44e2],   // the Pleiades, inside the Orion Arm
+    [96.0, 2.505e1],  // Vega
+    [97.5, 1.0e1],    // the establishing frame the opening hands over to
+  ];
 
   /**
-   * Where the count stops, and it does not stop at zero.
+   * Monotone cubic interpolation of the anchors, in log space.
    *
-   * Zero would be wrong in a way that shows: the intro does not land *on* the
-   * Solar System, it hands over to the establishing frame that holds the whole
-   * system in shot, and that frame is ten light-years out -- the same ten the
-   * "Back to Solar System" control returns to. A readout running to zero would
-   * claim the camera is standing on the Sun while the viewer is plainly
-   * looking at the entire system from outside it.
+   * Fritsch-Carlson: an ordinary cubic spline through these points would
+   * overshoot between them and briefly send the distance *upward*, which is
+   * the one thing a countdown must never do. Limiting the tangents guarantees
+   * the result is monotone while keeping the first derivative continuous --
+   * so the rate changes gradually and there is no kink at an act boundary.
    *
-   * Ten light-years is also a real place to be standing. It puts Sirius
-   * (8.6 ly) and Epsilon Eridani (10.5 ly) either side of you.
+   * Built once. It is six points.
    */
-  const TERMINAL_LIGHT_YEARS = 10;
+  const READOUT_CURVE = (() => {
+    const xs = READOUT_ANCHORS.map(([time]) => time);
+    const ys = READOUT_ANCHORS.map(([, distance]) => Math.log10(distance));
+    const n = xs.length;
+    const slopes = [];
+    for (let i = 0; i < n - 1; i += 1) {
+      slopes.push((ys[i + 1] - ys[i]) / (xs[i + 1] - xs[i]));
+    }
+    const tangents = new Array(n);
+    tangents[0] = slopes[0];
+    tangents[n - 1] = slopes[n - 2];
+    for (let i = 1; i < n - 1; i += 1) {
+      tangents[i] = slopes[i - 1] * slopes[i] <= 0
+        ? 0
+        : (slopes[i - 1] + slopes[i]) / 2;
+    }
+    // Fritsch-Carlson limiter: keeps every segment monotone.
+    for (let i = 0; i < n - 1; i += 1) {
+      if (slopes[i] === 0) { tangents[i] = 0; tangents[i + 1] = 0; continue; }
+      const a = tangents[i] / slopes[i];
+      const b = tangents[i + 1] / slopes[i];
+      const magnitude = Math.hypot(a, b);
+      if (magnitude > 3) {
+        tangents[i] = (3 / magnitude) * a * slopes[i];
+        tangents[i + 1] = (3 / magnitude) * b * slopes[i];
+      }
+    }
+    return (seconds) => {
+      if (seconds <= xs[0]) return Math.pow(10, ys[0]);
+      if (seconds >= xs[n - 1]) return Math.pow(10, ys[n - 1]);
+      let i = 0;
+      while (i < n - 2 && seconds > xs[i + 1]) i += 1;
+      const h = xs[i + 1] - xs[i];
+      const t = (seconds - xs[i]) / h;
+      const t2 = t * t;
+      const t3 = t2 * t;
+      const h00 = 2 * t3 - 3 * t2 + 1;
+      const h10 = t3 - 2 * t2 + t;
+      const h01 = -2 * t3 + 3 * t2;
+      const h11 = t3 - t2;
+      return Math.pow(
+        10,
+        h00 * ys[i] + h10 * h * tangents[i] + h01 * ys[i + 1] + h11 * h * tangents[i + 1],
+      );
+    };
+  })();
 
-  /*
-   * One constant rate across the whole readout, and the acts land on real
-   * landmarks anyway.
-   *
-   * The rate is fixed by the two endpoints and the time between them:
-   * log10(4.65e10 / 10) over 57.5 seconds is 0.168 decades per second, every
-   * second. That was the whole point of the change -- a number that crawls,
-   * lurches, then crawls again is unreadable as progress -- but it would be a
-   * poor trade if it put nonsense on screen during each act. It does not.
-   * Running that rate from the edge of the observable universe, the value at
-   * each act boundary comes out as:
-   *
-   *   end of cosmicWeb    447 million ly   supercluster and filament scale
-   *   end of galaxies     4.3 million ly   the Local Group, just past Andromeda
-   *   end of milkyWay      41,100 ly       inside our own galaxy's disc
-   *   end of orionArm         396 ly       the local arm, around the Pleiades
-   *   end of sunApproach     17.9 ly       the Sun's immediate neighbourhood
-   *   end of arrive          10.0 ly       the establishing frame
-   *
-   * Every one of those is the right order of magnitude for what the shot is
-   * showing and the caption is saying. The constant rate and the honest
-   * landmarks turn out not to be in conflict -- which is what you would hope,
-   * since the acts were timed by how much there is to say about each scale,
-   * and there is roughly the same amount to say about each decade.
-   */
+  const READOUT_START_SECONDS = READOUT_ANCHORS[0][0];
+  const READOUT_END_SECONDS = READOUT_ANCHORS[READOUT_ANCHORS.length - 1][0];
+  const TERMINAL_LIGHT_YEARS = READOUT_ANCHORS[READOUT_ANCHORS.length - 1][1];
+  const START_LIGHT_YEARS = READOUT_ANCHORS[0][1];
+
   /*
    * The gauge, as the viewer drew it: <--- value --->
    *
@@ -1829,31 +1870,35 @@ export function createCosmicIntro({ pixelRatio } = {}) {
       return;
     }
 
-    const through = clamp01(
-      (elapsedMs - READOUT_START_MS - READOUT_HOLD_MS) / READOUT_SPAN_MS,
+    // The hold subtracts from the clock rather than freezing it, so the curve
+    // below is only ever asked about times it has anchors for.
+    const seconds = Math.max(
+      READOUT_START_SECONDS,
+      (elapsedMs - READOUT_HOLD_MS) / 1000,
     );
-    const remaining = START_LIGHT_YEARS * Math.pow(
-      TERMINAL_LIGHT_YEARS / START_LIGHT_YEARS,
-      through,
-    );
+    const remaining = Math.max(TERMINAL_LIGHT_YEARS, READOUT_CURVE(seconds));
 
-    const text = formatDistance(Math.max(TERMINAL_LIGHT_YEARS, remaining));
+    const text = formatDistance(remaining);
     if (text !== lastDistanceText) {
       distanceValue.textContent = text;
       lastDistanceText = text;
     }
 
     /*
-     * The arms are the same quantity, and they are written every frame.
+     * The arms track how far in we are on the same logarithmic measure as the
+     * number, and are written every frame.
      *
      * They used to be quantised to a hundred steps to avoid touching a custom
      * property sixty times a second. With the rate uneven that was invisible;
-     * with the rate constant it is not -- a hundred steps over a minute is one
-     * step per second, and a line that jumps once a second beside a number
-     * that changes continuously reads as ticking. Writing one custom property
-     * per frame costs a few microseconds, and it is the difference between a
-     * line that slides and a line that stutters.
+     * with it even it is not -- a hundred steps over a minute is one step per
+     * second, and a line that jumps once a second beside a number that changes
+     * continuously reads as ticking. One custom property per frame costs a few
+     * microseconds, and it is the difference between sliding and stuttering.
      */
+    const through = clamp01(
+      Math.log10(START_LIGHT_YEARS / remaining)
+      / Math.log10(START_LIGHT_YEARS / TERMINAL_LIGHT_YEARS),
+    );
     distanceGauge.style.setProperty("--reach", (1 - through).toFixed(4));
 
     /*
@@ -1871,7 +1916,7 @@ export function createCosmicIntro({ pixelRatio } = {}) {
 
     distanceReadout.classList.add("is-live");
     // The last stretch gets a brighter treatment: this is the arrival.
-    distanceReadout.classList.toggle("is-closing", through > 0.88);
+    distanceReadout.classList.toggle("is-closing", seconds > READOUT_END_SECONDS - 6);
   }
 
   /**

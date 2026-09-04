@@ -29,12 +29,6 @@ body.is-about-experience-open .brand {
   pointer-events: none;
 }
 
-body.is-about-experience-open .ship-controls {
-  opacity: 0;
-  pointer-events: none;
-  transform: translateY(-8px) scale(0.97);
-  transition: opacity 260ms ease, transform 360ms ease;
-}
 
 .about-experience__backdrop {
   position: absolute;
@@ -510,4 +504,44 @@ body.is-about-experience-open .ship-controls {
     transition-duration: 0.01ms !important;
     transition-delay: 0ms !important;
   }
+}
+
+/*
+ * The way back into the guided tour.
+ *
+ * The tour records that it has run so it never ambushes a returning viewer,
+ * which is right -- and leaves no route back for someone who skipped it, or
+ * who cleared it by accident. This is that route, in the one panel that is
+ * about the experience rather than about a world.
+ */
+.about-experience__replay {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 22px;
+  color: rgba(175, 199, 219, 0.56);
+  font-size: 0.66rem;
+  letter-spacing: 0.045em;
+}
+
+.about-experience__replay-button {
+  padding: 0.44rem 0.9rem;
+  border: 1px solid rgba(133, 202, 230, 0.28);
+  border-radius: 999px;
+  background: rgba(125, 231, 255, 0.06);
+  color: #d8ecf7;
+  font: inherit;
+  font-size: 0.68rem;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  transition: background 240ms ease, border-color 240ms ease, color 240ms ease;
+}
+
+.about-experience__replay-button:hover,
+.about-experience__replay-button:focus-visible {
+  background: rgba(125, 231, 255, 0.14);
+  border-color: rgba(141, 234, 255, 0.6);
+  color: #f4fbff;
+  outline: none;
 }

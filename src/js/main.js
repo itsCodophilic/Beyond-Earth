@@ -65,6 +65,7 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
 import { createCelestialDetailsPanel } from './ui/planetDetailsPanel.js';
 import { createPerformanceHud } from './ui/performanceHud.js';
 import { createSpaceEventsDashboard } from './ui/spaceEventsDashboard.js';
+import { createGuidedTour, replayGuidedTour } from './ui/guidedTour.js';
 
 /**
  * Every surface that owns its own scrolling, and must never have a wheel or a
@@ -83,6 +84,10 @@ import { createSpaceEventsDashboard } from './ui/spaceEventsDashboard.js';
  */
 const JOURNEY_UI_SELECTOR = [
   ".about-experience",
+  ".tour__card",
+  ".space-exit-control",
+  ".space-mode-toggle",
+  ".space-mode-hint",
   ".events-dashboard",
   ".planet-details",
   ".celestial-selection-card",
@@ -160,6 +165,17 @@ import { createCosmicIntro } from './scene/space/cosmicIntro.js';
     progressShell.classList.add("distance-readout");
     progressShell.setAttribute("role", "region");
     progressShell.setAttribute("aria-label", "Distance from Earth");
+    /*
+     * The container is marked `aria-hidden` in the markup, from when it was a
+     * decorative progress bar. It is now a labelled region containing real
+     * buttons -- the unit badges and the measurement control -- and
+     * `aria-hidden` over focusable elements hides them from assistive
+     * technology while leaving them in the tab order, which is the one
+     * combination the specification calls out as invalid. Found because the
+     * tour would not anchor a step to it: the anchor resolver skips
+     * `aria-hidden` subtrees for exactly the same reason.
+     */
+    progressShell.removeAttribute("aria-hidden");
     progressShell.innerHTML = `
       <div class="distance-readout__header">
         <span>You are at</span>
@@ -445,6 +461,10 @@ import { createCosmicIntro } from './scene/space/cosmicIntro.js';
   }
 
   function activateDistanceReadoutControl(event) {
+    // The readout keeps *reading* while it is locked -- the tour's approach
+    // step depends on it -- but its unit badges and measurement control do not
+    // open until the step that explains what they are.
+    if (isTourControlLocked("distance")) return false;
     const unitButton = event.target.closest?.("[data-distance-unit]");
     const measurementButton = event.target.closest?.("#distance-measurement-info");
     const closeButton = event.target.closest?.(".distance-unit-popover__close");
@@ -616,57 +636,64 @@ import { createCosmicIntro } from './scene/space/cosmicIntro.js';
     cardFacts.append(scaleRow);
   }
 
-  // Replace the original generic sentence with three explicit actions. The Esc
-  // key is a real button as well as a keyboard shortcut, so either interaction
-  // runs the same exit logic.
-  let spaceExploreHint = document.querySelector(".ship-controls");
-  const spaceGuidanceMarkup = `
-    <span class="ship-controls__step ship-controls__step--space">
-      <span class="ship-controls__index" aria-hidden="true">01</span>
-      <span class="ship-controls__copy">
-        <strong>Click empty space</strong>
-        <small>Travel into that region</small>
-      </span>
-    </span>
-    <span class="ship-controls__step ship-controls__step--body">
-      <span class="ship-controls__index" aria-hidden="true">02</span>
-      <span class="ship-controls__copy">
-        <strong>Click a celestial body</strong>
-        <small>Inspect its information</small>
-      </span>
-    </span>
-    <button
-      class="ship-controls__escape"
-      id="space-exit-control"
-      type="button"
-      aria-label="Exit the current space view"
-      aria-keyshortcuts="Escape"
-      title="Exit the current view (Escape)"
-    >
-      <kbd>Esc</kbd>
-      <span class="ship-controls__copy">
-        <strong>Exit current view</strong>
-        <small>Click here or press the key</small>
-      </span>
-    </button>
-  `;
-  if (spaceExploreHint) {
-    spaceExploreHint.innerHTML = spaceGuidanceMarkup;
-    spaceExploreHint.setAttribute("aria-label", "Universe navigation instructions");
-  } else {
-    spaceExploreHint = document.createElement("div");
-    spaceExploreHint.className = "ship-controls";
-    spaceExploreHint.setAttribute("aria-label", "Universe navigation instructions");
-    spaceExploreHint.innerHTML = spaceGuidanceMarkup;
-    document.querySelector(".hud")?.append(spaceExploreHint);
+  /*
+   * The exit control now lives in the header row, in index.html.
+   *
+   * It used to be built here and appended to <body>, floating over the scene
+   * at the top left -- the opposite corner from every other control it belongs
+   * with. This still tolerates its absence, because several handlers name it
+   * and a missing element would take them down with it.
+   */
+  let spaceExitControl = document.querySelector("#space-exit-control");
+  if (!spaceExitControl) {
+    spaceExitControl = document.createElement("button");
+    spaceExitControl.id = "space-exit-control";
+    spaceExitControl.className = "hud-control space-exit-control";
+    spaceExitControl.type = "button";
+    spaceExitControl.setAttribute("aria-label", "Exit the current space view");
+    spaceExitControl.setAttribute("aria-keyshortcuts", "Escape");
+    spaceExitControl.title = "Exit the current view (Escape)";
+    spaceExitControl.innerHTML = `
+      <kbd class="hud-control__key">Esc</kbd>
+      <span class="hud-control__label">Exit view</span>
+    `;
+    spaceExitControl.disabled = true;
+    (document.querySelector(".hud-controls") ?? document.body).append(spaceExitControl);
   }
-  const spaceExitControl = spaceExploreHint?.querySelector("#space-exit-control");
-  spaceExitControl?.addEventListener("click", (event) => {
+  spaceExitControl.addEventListener("click", (event) => {
     event.preventDefault();
     event.stopPropagation();
     exitCurrentView();
     spaceExitControl.blur();
   });
+
+  /*
+   * Availability, not visibility.
+   *
+   * The rule itself is unchanged and was worth getting right: binding this to
+   * the free-space *diving* call sites was the first attempt, and it left the
+   * control hidden while a body was focused -- the one moment there is
+   * something to exit was the one moment the button was gone. It is driven
+   * from the actual state instead, once per frame in the loop.
+   *
+   * What changed is what the rule does. In the header row, removing the button
+   * would resize the row under the pointer every time a viewer entered or left
+   * a body. It is disabled in place instead, which is also simply true: with
+   * nothing to exit, Escape does nothing either.
+   */
+  let spaceExitControlVisible = false;
+  let spaceExitControlLocked = null;
+  function updateSpaceExitControl() {
+    const shouldShow = Boolean(focusedBody || hasExploredFreeSpace);
+    const locked = isTourControlLocked("exit");
+    if (shouldShow === spaceExitControlVisible && locked === spaceExitControlLocked) return;
+    spaceExitControlVisible = shouldShow;
+    spaceExitControlLocked = locked;
+    // Two independent reasons to be unavailable, and the control is available
+    // only when neither holds.
+    spaceExitControl.disabled = !shouldShow || locked;
+    spaceExitControl.classList.toggle("is-hidden", false);
+  }
 
   // Empty-space travel receives its own cinematic confirmation. The element is
   // reused for every click so repeated dives never leave abandoned DOM nodes.
@@ -1112,11 +1139,27 @@ import { createCosmicIntro } from './scene/space/cosmicIntro.js';
    */
   const SOLAR_EVENT_GUIDE_NAMES = /orbit (guide|guides)|satellite atlas orbit/i;
 
-  function setSolarEventStagingUI(active) {
-    document.body.classList.toggle("is-space-event", active);
-    if (orbitRoot) orbitRoot.visible = !active;
+  /*
+   * Two things now want the guides gone, and they do not coordinate.
+   *
+   * An event takes the screen for its duration; space mode takes it until the
+   * viewer gives it back. Either can begin and end while the other is on, so
+   * the guides are hidden while *any* reason holds and restored only when the
+   * last one lets go. Written as a flag instead, an event ending inside space
+   * mode would have put every orbit line back.
+   */
+  const guideSuppressionReasons = new Set();
 
-    if (active) {
+  function setGuideSuppression(reason, active) {
+    const suppressedBefore = guideSuppressionReasons.size > 0;
+    if (active) guideSuppressionReasons.add(reason);
+    else guideSuppressionReasons.delete(reason);
+    const suppressedNow = guideSuppressionReasons.size > 0;
+    if (suppressedNow === suppressedBefore) return;
+
+    if (orbitRoot) orbitRoot.visible = !suppressedNow;
+
+    if (suppressedNow) {
       /*
        * Collected once here, enforced every frame in the animation loop.
        *
@@ -1148,12 +1191,96 @@ import { createCosmicIntro } from './scene/space/cosmicIntro.js';
     solarEventHiddenGuides.length = 0;
   }
 
-  /** Re-applies the hiding. Called once per frame while an event is staged. */
+  function setSolarEventStagingUI(active) {
+    document.body.classList.toggle("is-space-event", active);
+    setGuideSuppression("space-event", active);
+  }
+
+  /** Re-applies the hiding. Called once per frame while anything suppresses. */
   function enforceSolarEventGuideHiding() {
     for (let index = 0; index < solarEventHiddenGuides.length; index += 1) {
       solarEventHiddenGuides[index].object.visible = false;
     }
   }
+
+  /*
+   * Space mode.
+   *
+   * The DOM half is one class and a stylesheet; the half that cannot be done
+   * in CSS is the orbit geometry, which goes through the same suppression the
+   * events use. Hover scanning deliberately keeps running underneath: the
+   * worlds are still there to be clicked and travelled to, they simply stop
+   * announcing themselves, and a mode that also made the scene inert would be
+   * a screenshot rather than a view.
+   */
+  let spaceModeActive = false;
+  const spaceModeToggle = document.querySelector("#space-mode-toggle");
+  let spaceModeHint = document.querySelector(".space-mode-hint");
+  if (!spaceModeHint) {
+    spaceModeHint = document.createElement("div");
+    spaceModeHint.className = "space-mode-hint";
+    spaceModeHint.setAttribute("aria-live", "polite");
+    document.body.append(spaceModeHint);
+  }
+  let spaceModeHintTimer = null;
+
+  function setSpaceMode(active) {
+    const next = Boolean(active);
+    if (next === spaceModeActive) return;
+    spaceModeActive = next;
+    document.body.classList.toggle("is-space-mode", next);
+    setGuideSuppression("space-mode", next);
+    if (spaceModeToggle) {
+      /*
+       * The label names the destination, not the state.
+       *
+       * A switch shows where you are -- the knob is on one side or the other.
+       * What a switch cannot show is what the other side *is*, and "Space
+       * mode" as a caption could equally have meant "you are in space mode" or
+       * "press for space mode". Naming the move settles it, and the track
+       * carries the state underneath.
+       */
+      spaceModeToggle.setAttribute("aria-checked", next ? "true" : "false");
+      const label = spaceModeToggle.querySelector(".mode-switch__label");
+      if (label) label.textContent = next ? "Switch to Info Mode" : "Switch to Space Mode";
+      spaceModeToggle.title = next
+        ? "Bring the orbits, cards and readouts back (Escape)"
+        : "Hide every overlay and keep only the worlds";
+    }
+
+    // Anything already on screen is told to go. The panels are faded by CSS,
+    // but a live hover would otherwise be waiting to reappear the moment the
+    // mode ends over a body the pointer has since left.
+    if (next) {
+      clearCelestialHover();
+      clearPlanetOrbitHover();
+      /*
+       * The dashboard is a panel rather than a hover, so fading it would leave
+       * it open-but-invisible and still open when the mode ends. It is closed
+       * outright. (Read at click time, long after the dashboard is built --
+       * this handler is defined above it.)
+       */
+      spaceEventsDashboard?.close();
+    }
+
+    if (spaceModeHintTimer) clearTimeout(spaceModeHintTimer);
+    if (next) {
+      spaceModeHint.textContent = "Space mode · Esc or the control to bring everything back";
+      spaceModeHint.classList.add("is-visible");
+      spaceModeHintTimer = setTimeout(() => {
+        spaceModeHint.classList.remove("is-visible");
+      }, 4200);
+    } else {
+      spaceModeHint.classList.remove("is-visible");
+    }
+  }
+
+  spaceModeToggle?.addEventListener("click", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setSpaceMode(!spaceModeActive);
+    spaceModeToggle.blur();
+  });
 
   function showSolarEventNotice(event) {
     if (!event) return;
@@ -1813,6 +1940,148 @@ import { createCosmicIntro } from './scene/space/cosmicIntro.js';
   let isPageVisible = !document.hidden;
   let isAboutExperienceOpen = false;
   let isEventsDashboardOpen = false;
+  let isGuidedTourOpen = false;
+
+  /*
+   * While the "click empty space" step is up, only empty space answers.
+   *
+   * The step teaches one gesture, and the frame is full of things that answer a
+   * click differently -- a planet, a moon, an orbit line. Clicking one of those
+   * is not a mistake a viewer can see they have made: they clicked, something
+   * happened, it was not what the card described. Worse, it was measured
+   * putting them *inside a focused body* at the moment step 5 began, which is
+   * where the whole Gonggong problem started.
+   *
+   * So for the length of that one step the other targets stop responding, and
+   * the hover scan stops offering them, which is the part that matters -- a
+   * control that cannot be used should not look like it can.
+   */
+  /*
+   * The arrival caption owns the screen while it runs.
+   *
+   * The opening ends on three lines of title card over the Solar System -- what
+   * is here, where it came from, where you are standing -- and the walkthrough
+   * used to open on top of them on a 1.4 second timer. Two things then compete
+   * for the same middle of the frame, and the viewer sees neither the system
+   * they have just travelled to nor the card explaining how to move through it.
+   *
+   * So the caption plays out first, in a read mode: the scene is fully visible,
+   * nothing is scrolling, nothing answers a click, and there is nothing to do
+   * except look at it. The tour begins when the last line has gone.
+   */
+  let isArrivalCaptionPlaying = false;
+
+  /*
+   * The interface arrives locked, and the tour hands it over one control at a
+   * time.
+   *
+   * Everything in the frame is reachable from the first second, and on a first
+   * visit that is five controls a viewer has no way to tell apart -- so they
+   * press one, something large happens, and the walkthrough is now explaining a
+   * screen they are no longer looking at. Each control is therefore inert until
+   * the step that explains it, and live from that moment on. The order the tour
+   * runs in is the order the interface assembles itself in.
+   *
+   * Locked means *disabled*, not hidden: a control that vanishes and reappears
+   * is a different interface each time, and the viewer never learns where
+   * anything lives. They can see all five the whole way through.
+   */
+  const TOUR_CONTROL_LOCKS = Object.freeze({
+    events: "#space-events-trigger",
+    spacemode: "#space-mode-toggle",
+    systemreturn: "#system-return-button",
+    exit: "#space-exit-control",
+    // Not a single button: the readout's unit badges and its measurement
+    // control are several elements sharing one activation path, so this one is
+    // enforced there rather than by a `disabled` attribute.
+    distance: ".progress.distance-readout",
+  });
+
+  let tourControlsLocked = false;
+  const tourUnlockedControls = new Set();
+
+  function isTourControlLocked(key) {
+    return tourControlsLocked && !tourUnlockedControls.has(key);
+  }
+
+  function applyTourControlLocks() {
+    Object.entries(TOUR_CONTROL_LOCKS).forEach(([key, selector]) => {
+      const element = document.querySelector(selector);
+      if (!element) return;
+      const locked = isTourControlLocked(key);
+      element.classList.toggle("is-tour-locked", locked);
+      /*
+       * Two of these are owned by other rules and must not have `disabled`
+       * written here, or the two writers fight once per frame: the exit control
+       * is disabled by whether there is anything to exit, and the return button
+       * by its own entrance animation. Both consult the lock themselves.
+       */
+      if (key === "exit" || key === "distance") return;
+      if (key === "systemreturn") {
+        element.disabled = locked || !systemReturnButtonReleased;
+        return;
+      }
+      element.disabled = locked;
+    });
+  }
+
+  function setTourControlsLocked(locked) {
+    tourControlsLocked = Boolean(locked);
+    if (!tourControlsLocked) tourUnlockedControls.clear();
+    applyTourControlLocks();
+  }
+
+  function unlockTourControl(key) {
+    if (!key) return;
+    tourUnlockedControls.add(key);
+    applyTourControlLocks();
+  }
+
+  // The return button has its own delayed entrance after the opening; this
+  // records whether that has happened so the lock and the entrance can both
+  // have an opinion without overwriting each other.
+  let systemReturnButtonReleased = false;
+
+
+  let tourEmptySpaceOnly = false;
+
+  /*
+   * What answers a click during a tour step: "all", "space", or "none".
+   *
+   * `space` was the first of these -- the step that teaches the empty-space
+   * gesture cannot have a planet quietly intercepting it. `none` came from the
+   * same observation applied to the three steps before it: they are about
+   * moving the camera, the viewer has a live scene in front of them, and a
+   * stray click during "drag to look around" flies them into a body and
+   * abandons the lesson. Nothing they can do in those steps should take them
+   * anywhere they did not ask to go.
+   */
+  let tourClickMode = "all";
+
+  /*
+   * When the mode is "only", the names that still answer.
+   *
+   * "Go to Earth and click on it" was resolving to whatever happened to be
+   * under the pointer -- a belt rock, an orbit line, a neighbouring world --
+   * and the viewer had no way to tell that they had followed the instruction
+   * and been given something else. The named world is the only thing the scene
+   * will hand back for the length of that step.
+   */
+  let tourClickOnly = null;
+
+  /*
+   * Hover is suppressed by the tour, but not for the whole of it.
+   *
+   * The original rule switched discovery off for the entire walkthrough, which
+   * was right when every step was explanatory. Two steps now ask the viewer to
+   * *find and click* a world -- Earth at nine pixels, then its moon -- and
+   * hover is precisely the feedback that tells them they are on it before they
+   * commit. So it is suppressed only while the card is the subject, and
+   * restored for the steps that have dropped the veil because the scene is the
+   * exercise.
+   */
+  let tourSuppressesHover = false;
+
   let isPlanetDetailsOpen = false;
   const cameraFocusPoint = new THREE.Vector3();
   const targetFocusPoint = new THREE.Vector3();
@@ -2026,6 +2295,83 @@ import { createCosmicIntro } from './scene/space/cosmicIntro.js';
      * the same instant, which is the only way to ask "would this rock be
      * acquired" and get an answer about that rock.
      */
+    /**
+     * Re-runs the hover scan's decision chain and reports where it stopped.
+     *
+     * Guessing at this has cost several rounds. Every branch is re-evaluated
+     * here in the same order the real scan uses, so the answer is a *reason*
+     * rather than a null.
+     */
+    window.__hoverTrace = (clientX, clientY) => {
+      pointer.x = (clientX / innerWidth) * 2 - 1;
+      pointer.y = -(clientY / innerHeight) * 2 + 1;
+      const steps = [];
+      if (isDragging) steps.push("blocked: isDragging");
+      if (lastPointerType === "touch") steps.push("blocked: touch pointer");
+      if (isGuidedTourOpen) steps.push("blocked: tour open");
+
+      const focusedActive = Boolean(focusedBody && !focusedUiSuppressedByWideView);
+      const overDisk = Boolean(focusedActive && isPointerInsideVisibleBodyDisk(focusedBody, 1.5));
+      steps.push(`focused=${focusedBody?.userData?.name ?? "none"} overDisk=${overDisk}`);
+
+      raycaster.setFromCamera(pointer, camera);
+      const rayHits = overDisk ? [] : raycaster.intersectObjects(hoverTargets, true);
+      steps.push(`raycastHits=${rayHits.length}`);
+
+      const major = overDisk ? null : findNearestMajorBodyAtPointer({
+        minimumVisibleRadiusPixels: 0.14,
+        extraHitPixels: innerWidth <= 760 ? 12 : 7,
+        maximumHitRadiusPixels: innerWidth <= 760 ? 30 : 23,
+        excludedBody: focusedBody,
+      });
+      if (major) steps.push(`WON by majorBody: ${major.userData?.name}`);
+
+      const encounter = Math.max(
+        getAsteroidEncounterIntensity(),
+        (focusedBody && (isAsteroidBody(focusedBody)
+          || focusedBody.userData?.name === "Mars"
+          || focusedBody.userData?.name === "Jupiter")) ? 1 : 0,
+      );
+      steps.push(`encounterIntensity=${encounter.toFixed(2)}`);
+
+      let depthLimit = Infinity;
+      if (focusedActive && isPointerInsideVisibleBodyDisk(focusedBody, 1.0)) {
+        focusedBody.getWorldPosition(radiusWorldPosition);
+        depthLimit = Math.max(0, camera.position.distanceTo(radiusWorldPosition)
+          - Number(focusedBody.userData?.visualRadius ?? 0));
+      }
+      steps.push(`asteroidDepthLimit=${depthLimit === Infinity ? "none" : depthLimit.toFixed(2)}`);
+
+      const unlimited = findNearestAsteroidInstanceAtPointer({
+        meshes: asteroidBelt?.instancedBoulders ?? [],
+        pointer, camera,
+        viewportWidth: innerWidth, viewportHeight: innerHeight,
+        minimumVisibleRadiusPixels: THREE.MathUtils.lerp(0.20, 0.08, encounter),
+        maximumPixelRadius: THREE.MathUtils.lerp(innerWidth <= 760 ? 15 : 11, innerWidth <= 760 ? 28 : 23, encounter),
+        extraHitPixels: THREE.MathUtils.lerp(innerWidth <= 760 ? 5.5 : 4.0, innerWidth <= 760 ? 12.0 : 9.0, encounter),
+        radiusMultiplier: THREE.MathUtils.lerp(1.42, 1.78, encounter),
+        visibleRadiusPreference: THREE.MathUtils.lerp(0.10, 0.18, encounter),
+      });
+      const limited = findNearestAsteroidInstanceAtPointer({
+        meshes: asteroidBelt?.instancedBoulders ?? [],
+        pointer, camera,
+        viewportWidth: innerWidth, viewportHeight: innerHeight,
+        minimumVisibleRadiusPixels: THREE.MathUtils.lerp(0.20, 0.08, encounter),
+        maximumPixelRadius: THREE.MathUtils.lerp(innerWidth <= 760 ? 15 : 11, innerWidth <= 760 ? 28 : 23, encounter),
+        extraHitPixels: THREE.MathUtils.lerp(innerWidth <= 760 ? 5.5 : 4.0, innerWidth <= 760 ? 12.0 : 9.0, encounter),
+        radiusMultiplier: THREE.MathUtils.lerp(1.42, 1.78, encounter),
+        visibleRadiusPreference: THREE.MathUtils.lerp(0.10, 0.18, encounter),
+        maximumCameraDistance: depthLimit,
+      });
+      steps.push(`asteroidPicker unlimited=${Boolean(unlimited)} withDepthLimit=${Boolean(limited)}`);
+
+      // And what the real scan actually decided.
+      clearCelestialHover();
+      findCelestialForHover();
+      steps.push(`RESULT=${hoveredCelestialBody?.userData?.name ?? hoveredCelestialBody?.name ?? "none"}`);
+      return steps;
+    };
+
     window.__hoverAt = (clientX, clientY) => {
       pointer.x = (clientX / innerWidth) * 2 - 1;
       pointer.y = -(clientY / innerHeight) * 2 + 1;
@@ -2308,6 +2654,36 @@ import { createCosmicIntro } from './scene/space/cosmicIntro.js';
    * they did before, which is the correct degradation for a discovery
    * affordance.
    */
+  /*
+   * The walkthrough, started once the controls it points at exist.
+   *
+   * Deliberately after the dashboard: two of its steps measure the position of
+   * real buttons, and a step that cannot find its anchor falls back to a
+   * centred card -- correct, but a worse explanation than the one it was meant
+   * to give.
+   */
+  /*
+   * ?tour=1 runs the walkthrough whatever the stored answer says.
+   *
+   * Worth having for its own sake, and it exists because of a real accident:
+   * the completion flag is written to `localStorage`, and a session spent
+   * testing the tour in the viewer's own browser wrote it there. The tour then
+   * silently never appeared again, with nothing on screen to say why. A forced
+   * route and the replay control in the About panel both mean that state can
+   * always be undone from outside.
+   */
+  const forceTour = new URLSearchParams(location.search).get("tour") === "1";
+  const guidedTour = createGuidedTour({ force: forceTour });
+
+  document.querySelector("#replay-tour")?.addEventListener("click", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    // Close the panel first: two of the tour's steps measure real buttons, and
+    // the About overlay is covering them.
+    document.querySelector(".about-experience__close")?.click();
+    setTimeout(() => replayGuidedTour(), 700);
+  });
+
   const spaceEventsDashboard = createSpaceEventsDashboard({
     events: solarSystemEvents,
     trigger: document.querySelector("#space-events-trigger"),
@@ -2326,6 +2702,8 @@ import { createCosmicIntro } from './scene/space/cosmicIntro.js';
      */
     window.__events = solarSystemEvents;
     window.__eventsPanel = spaceEventsDashboard;
+    window.__tour = guidedTour;
+    window.__replayTour = replayGuidedTour;
   }
 
   let majorSatelliteHydrationStarted = false;
@@ -2460,6 +2838,43 @@ import { createCosmicIntro } from './scene/space/cosmicIntro.js';
    * pointer picking -- a click on the sheet must not also select the planet
    * behind it -- and nothing else.
    */
+  addEventListener("beyond-earth:tour-state", (event) => {
+    isGuidedTourOpen = Boolean(event.detail?.open);
+    if (isGuidedTourOpen) {
+      /*
+       * A replay re-locks the interface.
+       *
+       * The first run locks at the arrival caption, before the tour opens, and
+       * this covers the other way in. Consistency is the argument: the ladder
+       * *is* the tour -- watching the interface assemble itself as each control
+       * is explained -- and a replay is a request to see that again. Skip
+       * hands the whole of it straight back for anyone who only wanted one
+       * particular step.
+       */
+      setTourControlsLocked(true);
+      /*
+       * A tour opens on a clean scene.
+       *
+       * Reported on the replay: the walkthrough restarted with the Earth and
+       * Moon selection cards still sitting behind it, because a replay begins
+       * from wherever the previous run ended -- at a focused world, with its
+       * panels up. Backing all the way out first is the same move finishing
+       * makes, and it means step one always describes the frame it is actually
+       * over.
+       *
+       * Guarded, so the first run is untouched: nothing is focused and nothing
+       * has been explored at the arrival, and re-forcing the journey pose there
+       * would fight the landing that has just been staged.
+       */
+      if (focusedBody || hasExploredFreeSpace) travelToWholeSystem();
+      // Opens suppressed; the first step's own action event settles which of
+      // the two states this actually is a moment later.
+      tourSuppressesHover = true;
+      clearCelestialHover();
+      clearPlanetOrbitHover();
+    }
+  });
+
   addEventListener("beyond-earth:events-dashboard-state", (event) => {
     isEventsDashboardOpen = Boolean(event.detail?.open);
     if (isEventsDashboardOpen) {
@@ -4642,7 +5057,8 @@ import { createCosmicIntro } from './scene/space/cosmicIntro.js';
   // cinematic panels are created after the initial document has loaded.
   const satelliteLabelUiOcclusionSelector = [
     ".hud",
-    ".ship-controls",
+    ".space-exit-control",
+    ".tour__card",
     ".progress",
     ".distance-readout",
     ".distance-cinematic-layer",
@@ -4893,6 +5309,20 @@ import { createCosmicIntro } from './scene/space/cosmicIntro.js';
   }
 
   function setCelestialHover(body) {
+    /*
+     * The same restriction the click has, applied to the cue.
+     *
+     * A green target over a rock the viewer cannot select would be worse than
+     * no cue at all -- it would be the interface offering something and then
+     * refusing it.
+     */
+    if (tourClickMode === "only") {
+      const name = body?.userData?.name ?? body?.name ?? null;
+      if (!name || !tourClickOnly?.includes(name)) {
+        clearCelestialHover();
+        return;
+      }
+    }
     if (body) clearPlanetOrbitHover();
     if (!body || (body === focusedBody && !focusedUiSuppressedByWideView)) {
       clearCelestialHover();
@@ -4956,7 +5386,11 @@ import { createCosmicIntro } from './scene/space/cosmicIntro.js';
     // Reading a distance explanation no longer disables discovery in the 3D
     // scene. Moving outside the card can still reveal the green target and its
     // hover label, preparing the exact body the user may click next.
-    if (isDragging || lastPointerType === "touch") {
+    if (isDragging
+      || lastPointerType === "touch"
+      || isArrivalCaptionPlaying
+      || tourSuppressesHover
+      || (tourClickMode !== "all" && tourClickMode !== "only")) {
       clearCelestialHover();
       clearPlanetOrbitHover();
       return;
@@ -4982,24 +5416,16 @@ import { createCosmicIntro } from './scene/space/cosmicIntro.js';
      */
     const focusedDiskActive = Boolean(focusedBody && !focusedUiSuppressedByWideView);
     /*
-     * Two radii, doing two different jobs.
-     *
-     * The 1.5x margin is what suppresses the searches that could acquire
-     * something occluded -- it is generous on purpose, because a body's
-     * silhouette is not a perfect circle and the margin covers the ragged
-     * edge.
-     *
-     * The depth limit for asteroids uses the *true* disk instead. Outside the
-     * real silhouette nothing is behind anything: a rock beside the focused
-     * body is in clear view however far away it is, and cutting those by
-     * distance was the first attempt at this fix and hid almost the entire
-     * belt, because most of it is further out than the rock being inspected.
+     * The second argument is *extra pixels*, not a multiplier -- so both of
+     * these are the body's true silhouette give or take a pixel and a half.
+     * Worth stating, because reading it as a 1.5x radius is an easy mistake
+     * and it changes what this code appears to do by a lot.
      */
     const overFocusedDisk = Boolean(
       focusedDiskActive && isPointerInsideVisibleBodyDisk(focusedBody, 1.5),
     );
     let asteroidDepthLimit = Infinity;
-    if (focusedDiskActive && isPointerInsideVisibleBodyDisk(focusedBody, 1.0)) {
+    if (overFocusedDisk) {
       focusedBody.getWorldPosition(radiusWorldPosition);
       const focusedRadius = Number(focusedBody.userData?.visualRadius ?? 0);
       asteroidDepthLimit = Math.max(
@@ -5007,6 +5433,35 @@ import { createCosmicIntro } from './scene/space/cosmicIntro.js';
         camera.position.distanceTo(radiusWorldPosition) - focusedRadius,
       );
     }
+
+    /*
+     * Asteroid-hopping: inspecting one rock should make its neighbours easy to
+     * reach, not hard.
+     *
+     * The belt's picking assistance is normally tied to `encounterIntensity`,
+     * which measures how far the camera is from the belt *volume*. That is the
+     * right measure while travelling, and the wrong one while inspecting: the
+     * reported failure was going to Mars, or Jupiter, or a C- or M-class rock,
+     * and finding no other asteroid would take a hover. Focusing something in
+     * or near the belt is a clear statement of what the viewer is looking at,
+     * so the assistance is turned fully on for it regardless of where the
+     * camera technically sits.
+     *
+     * This only widens the grab radius and lowers the visible-size floor. It
+     * cannot acquire a rock that is not drawn, and it cannot reach through the
+     * body being inspected -- the depth limit above still applies inside that
+     * body's silhouette.
+     */
+    const inspectingSmallBody = Boolean(
+      focusedBody
+      && (isAsteroidBody(focusedBody)
+        || focusedBody.userData?.name === "Mars"
+        || focusedBody.userData?.name === "Jupiter"),
+    );
+    const encounterIntensity = Math.max(
+      getAsteroidEncounterIntensity(),
+      inspectingSmallBody ? 1 : 0,
+    );
 
     raycaster.setFromCamera(pointer, camera);
     const hits = overFocusedDisk ? [] : raycaster.intersectObjects(hoverTargets, true);
@@ -5084,7 +5539,6 @@ import { createCosmicIntro } from './scene/space/cosmicIntro.js';
       return;
     }
 
-    const encounterIntensity = getAsteroidEncounterIntensity();
     const nearbyInstance = findNearestAsteroidInstanceAtPointer({
       meshes: asteroidBelt?.instancedBoulders ?? [],
       pointer,
@@ -5694,7 +6148,6 @@ import { createCosmicIntro } from './scene/space/cosmicIntro.js';
     camera.updateMatrixWorld(true);
     hasCameraFocusPoint = true;
     hasExploredFreeSpace = true;
-    spaceExploreHint?.classList.add("is-hidden");
 
     requestAnimationFrame(() => {
       forceJourneyScrollPosition(maximumScroll);
@@ -6046,6 +6499,9 @@ import { createCosmicIntro } from './scene/space/cosmicIntro.js';
   }
 
   function resetFreeExploration({ immediate = false } = {}) {
+    // Otherwise the tour's approach would re-apply on the very next frame and
+    // Escape would appear to do nothing.
+    tourApproach = null;
     freeExploreCameraOffsetTarget.set(0, 0, 0);
     freeExploreFocusOffsetTarget.set(0, 0, 0);
     hasExploredFreeSpace = false;
@@ -6055,7 +6511,6 @@ import { createCosmicIntro } from './scene/space/cosmicIntro.js';
       clearTimeout(spaceDivePulseTimer);
       spaceDivePulseTimer = null;
     }
-    spaceExploreHint?.classList.remove("is-hidden");
 
     if (immediate) {
       freeExploreCameraOffsetCurrent.set(0, 0, 0);
@@ -6269,12 +6724,478 @@ import { createCosmicIntro } from './scene/space/cosmicIntro.js';
 
     spaceDiveModeUntil = elapsedTime + 1.5;
     hasExploredFreeSpace = true;
-    spaceExploreHint?.classList.add("is-hidden");
   }
+
+  const tourApproachTarget = new THREE.Vector3();
+
+  /*
+   * The tour's approach to a world: close, but not arrived.
+   *
+   * The "go to a world" step used to point at the sky and hope. From the
+   * arrival distance Earth is a fraction of a pixel, so the step was asking a
+   * viewer to click something they could not see -- through a veil, which made
+   * it worse. Focusing Earth outright is the wrong fix, because that is the
+   * very gesture the step exists to teach.
+   *
+   * So the camera is brought to a stated gap short of it and aimed at it. Two
+   * things about that turned out to matter, and neither was obvious:
+   *
+   *   Earth moves. A one-shot target was measured drifting off the side of the
+   *   frame within seconds while the camera flew to where the planet had been.
+   *   The aim is therefore recomputed every frame, so the world stays centred
+   *   however long the viewer takes.
+   *
+   *   The gap belongs to the viewer. It scales with the scroll journey, which
+   *   makes the wheel do the last part of the travel literally: scrolling in
+   *   closes the distance to Earth rather than to the Sun, and the step's
+   *   instruction -- "scroll in, then click it" -- is true rather than
+   *   approximately true. Without this the rig held station and scrolling
+   *   moved the whole frame instead of closing on anything.
+   */
+  let tourApproach = null;
+
+  /*
+   * A marker over the world the tour is talking about.
+   *
+   * "There is Earth" is only useful if the viewer can find Earth, and at nine
+   * pixels among a field of stars that is a real ask. The marker names it and
+   * tracks it, and then gets out of the way: once the disc is big enough to be
+   * unmistakable it fades, because a reticle over something obvious is just
+   * something else on the screen.
+   */
+  let tourTargetMarker = document.querySelector(".tour-target");
+  if (!tourTargetMarker) {
+    tourTargetMarker = document.createElement("div");
+    tourTargetMarker.className = "tour-target";
+    tourTargetMarker.setAttribute("aria-hidden", "true");
+    tourTargetMarker.innerHTML = `
+      <span class="tour-target__ring"></span>
+      <span class="tour-target__pulse"></span>
+      <span class="tour-target__label"></span>
+    `;
+    document.body.append(tourTargetMarker);
+  }
+  const tourTargetLabel = tourTargetMarker.querySelector(".tour-target__label");
+
+  /*
+   * A line from the card to the world it is talking about.
+   *
+   * The ring alone was still being missed: it is a thin circle in a frame full
+   * of thin circles, and a viewer reading the card in one corner has no reason
+   * to look at the middle of the screen. The line answers "which one" by
+   * pointing, which is the whole of what was being asked for -- it starts at
+   * the edge of the card being read and ends just short of the ring, so the eye
+   * is carried from the sentence to the planet.
+   *
+   * Drawn in its own SVG over the viewport rather than inside the marker,
+   * because it spans the distance between two things that both move.
+   */
+  let tourLeader = document.querySelector(".tour-leader");
+  if (!tourLeader) {
+    tourLeader = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    tourLeader.setAttribute("class", "tour-leader");
+    tourLeader.setAttribute("aria-hidden", "true");
+    tourLeader.innerHTML = `
+      <line class="tour-leader__line" x1="0" y1="0" x2="0" y2="0"></line>
+      <circle class="tour-leader__anchor" cx="0" cy="0" r="2.5"></circle>
+    `;
+    document.body.append(tourLeader);
+  }
+  const tourLeaderLine = tourLeader.querySelector(".tour-leader__line");
+  const tourLeaderAnchor = tourLeader.querySelector(".tour-leader__anchor");
+
+  function updateTourLeader(targetX, targetY, ringRadius) {
+    const card = document.querySelector(".tour__card");
+    const rect = card?.getBoundingClientRect();
+    if (!rect || rect.width < 1) {
+      tourLeader.classList.remove("is-visible");
+      return;
+    }
+
+    // From whichever edge of the card faces the world, so the line never has to
+    // cross the card it is starting from.
+    const cardCentreX = rect.left + rect.width / 2;
+    const fromX = targetX < cardCentreX ? rect.left - 6 : rect.right + 6;
+    const fromY = THREE.MathUtils.clamp(
+      rect.top + rect.height / 2,
+      rect.top + 16,
+      rect.bottom - 16,
+    );
+
+    const dx = targetX - fromX;
+    const dy = targetY - fromY;
+    const length = Math.hypot(dx, dy);
+    // Too close to be worth drawing: the card is already beside the world.
+    if (length < ringRadius + 40) {
+      tourLeader.classList.remove("is-visible");
+      return;
+    }
+
+    // Stop short of the ring so the line points at it rather than into it.
+    const stop = (length - ringRadius - 7) / length;
+    tourLeaderLine.setAttribute("x1", `${fromX}`);
+    tourLeaderLine.setAttribute("y1", `${fromY}`);
+    tourLeaderLine.setAttribute("x2", `${fromX + dx * stop}`);
+    tourLeaderLine.setAttribute("y2", `${fromY + dy * stop}`);
+    tourLeaderAnchor.setAttribute("cx", `${fromX}`);
+    tourLeaderAnchor.setAttribute("cy", `${fromY}`);
+    tourLeader.classList.add("is-visible");
+  }
+  const tourMarkerProjection = new THREE.Vector3();
+  let tourTargetMarkerShown = false;
+
+  function updateTourTargetMarker() {
+    const body = tourApproach?.engaged && !focusedBody ? tourApproach.body : null;
+    if (!body) {
+      if (tourTargetMarkerShown) {
+        tourTargetMarker.classList.remove("is-visible");
+        tourTargetMarkerShown = false;
+      }
+      tourLeader.classList.remove("is-visible");
+      return;
+    }
+
+    body.getWorldPosition(tourMarkerProjection);
+    const distance = camera.position.distanceTo(tourMarkerProjection);
+    tourMarkerProjection.project(camera);
+
+    const focalPixels = (window.innerHeight * 0.5)
+      / Math.tan(THREE.MathUtils.degToRad(camera.fov * 0.5));
+    const radiusPixels = (Number(body.userData?.visualRadius ?? 0.2) / Math.max(distance, 1e-4))
+      * focalPixels;
+
+    const onScreen = tourMarkerProjection.z < 1
+      && Math.abs(tourMarkerProjection.x) <= 1
+      && Math.abs(tourMarkerProjection.y) <= 1;
+    /*
+     * Past this size the world is announcing itself and the marker is clutter.
+     *
+     * Two thresholds rather than one, for the same reason the asteroid
+     * level-of-detail has two: a single cut at 46 px means a world sitting on
+     * it flips state on alternate frames, and a 420ms fade restarted forty
+     * times a second is a flicker. It has to grow past 52 to lose the marker
+     * and shrink back below 44 to get it again.
+     */
+    const releaseAt = tourTargetMarkerShown ? 52 : 44;
+    const show = onScreen && radiusPixels < releaseAt;
+
+    if (!show) {
+      if (tourTargetMarkerShown) {
+        tourTargetMarker.classList.remove("is-visible");
+        tourTargetMarkerShown = false;
+      }
+      tourLeader.classList.remove("is-visible");
+      return;
+    }
+
+    const screenX = (tourMarkerProjection.x * 0.5 + 0.5) * window.innerWidth;
+    const screenY = (-tourMarkerProjection.y * 0.5 + 0.5) * window.innerHeight;
+    // The ring stands off the disc rather than sitting on it, so the world
+    // stays visible inside its own marker at every distance.
+    const ringSize = THREE.MathUtils.clamp(radiusPixels * 2 + 34, 44, 132);
+    tourTargetMarker.style.left = `${screenX}px`;
+    tourTargetMarker.style.top = `${screenY}px`;
+    tourTargetMarker.style.setProperty("--tour-target-size", `${ringSize}px`);
+    const name = body.userData?.name ?? body.name ?? "";
+    if (tourTargetLabel.textContent !== name) tourTargetLabel.textContent = name;
+    if (!tourTargetMarkerShown) {
+      tourTargetMarker.classList.add("is-visible");
+      tourTargetMarkerShown = true;
+    }
+
+    updateTourLeader(screenX, screenY, ringSize / 2);
+  }
+
+  function beginTourApproach(body, { arrivalPixels = 9, minimumStandoffRadii = 2.8 } = {}) {
+    if (!body) {
+      tourApproach = null;
+      return false;
+    }
+    tourApproach = {
+      body,
+      /*
+       * The gap is stated in *pixels of the world on screen*, not in radii.
+       *
+       * Radii were the first attempt and they are the wrong unit: the camera's
+       * field of view is animated, so 150 radii was measured putting Earth at
+       * 10 px in one part of the journey and 3.5 px in another -- the
+       * difference between a small world and a speck, from the same number.
+       * Nine pixels of radius is the thing actually wanted, so nine pixels of
+       * radius is what is written down, and the distance that produces it is
+       * solved for each frame from the live field of view.
+       */
+      arrivalPixels,
+      minimumStandoffRadii,
+      /*
+       * How much of the gap is left, driven by the wheel and nothing else.
+       *
+       * The first version scaled the gap by `journeyDistance / baseDistance`,
+       * which reads well and is wrong: the journey distance also changes when
+       * the *application* moves it, and leaving a focused body restores the
+       * scroll position on the way out. So arriving at step 5 from a focused
+       * world collapsed the gap on its own and the camera was measured 3.4
+       * units from Earth with the planet 258 px across and off the side of the
+       * frame. Reading the viewer's wheel directly cannot be confused by
+       * anything the application does to the scroll.
+       */
+      closing: 1,
+      closingTarget: 1,
+      // Frozen at engage. See the note where it is filled in.
+      approachDirection: new THREE.Vector3(),
+      engaged: false,
+    };
+
+    /*
+     * Leave whatever is being inspected first.
+     *
+     * This is the bug that put the viewer at Gonggong. Step 4 asks for a click
+     * on empty space, and out among the trans-Neptunian bodies it is very easy
+     * to hit one instead -- at which point step 5 began with a body focused,
+     * and *nothing happened at all*: while `focusedBody` is set the frame loop
+     * ignores the free-exploration offsets outright and `getFocusPoint`
+     * returns the focused body, so the approach rig is inert. The camera sat
+     * 1.4 units from Gonggong with the card saying "There is Earth. Go to it."
+     *
+     * The trail is cleared before leaving for the same reason
+     * `travelToWholeSystem` clears it: `focusBody(null)` routes through the
+     * back-navigation path, which would otherwise restore the *previous* body
+     * rather than exiting.
+     */
+    if (focusedBody) {
+      focusNavigationHistory.length = 0;
+      focusBody(null);
+    }
+    return true;
+  }
+
+  function updateTourApproach(journeyDistance) {
+    if (!tourApproach) return;
+
+    /*
+     * Nothing may be applied while a focus exit is still running: it restores
+     * the journey camera from a snapshot every frame, and that snapshot
+     * carries the very rig offsets this writes. Waiting is also how the two
+     * meanings of "a body is focused" are told apart -- before the approach has
+     * engaged it means "still leaving", and after it means the viewer has
+     * arrived and the approach is over.
+     */
+    if (focusedBody || focusExitTransition) {
+      if (tourApproach.engaged) tourApproach = null;
+      return;
+    }
+
+    const { body, arrivalPixels, minimumStandoffRadii } = tourApproach;
+
+    if (!tourApproach.engaged) {
+      tourApproach.engaged = true;
+
+      /*
+       * The direction the world is approached from is decided once.
+       *
+       * Recomputing it each frame from the live base pose is what made the
+       * camera "dance": the base pose is the scroll journey's, so every notch
+       * of the wheel moved it, the unit vector from it to Earth swung, and the
+       * standoff point swung with it -- the planet slid sideways across the
+       * frame while the viewer was trying to close on it. The gap is a
+       * distance along a fixed line now, and the line is chosen from where the
+       * viewer already was, so the approach still starts from their own
+       * vantage.
+       */
+      body.getWorldPosition(tourApproachTarget);
+      tourApproach.approachDirection
+        .copy(tourApproachTarget)
+        .sub(camera.position);
+      if (tourApproach.approachDirection.lengthSq() < 1e-8) {
+        tourApproach.approachDirection.set(0, 0, 1);
+      }
+      tourApproach.approachDirection.normalize();
+
+      /*
+       * Recalibrate the distance readout against the world itself.
+       *
+       * Left alone, the panel keeps reporting the scroll journey's figure --
+       * it was measured saying "10.0 light-years from Earth" with Earth a
+       * visible disc in the middle of the frame. Calibrating the way an
+       * empty-space click does is barely better: that scales the *journey's*
+       * kilometres onto the camera's scene separation and produced 0.093
+       * light-years for the same shot.
+       *
+       * Both are wrong for the same reason. The scene is deliberately not to
+       * scale -- orbits are compressed so the system is navigable -- so a
+       * ratio taken from the journey says nothing about how far the camera is
+       * from a body it is standing next to. What *is* to scale, locally, is
+       * the body: its rendered radius and its real one are a true
+       * correspondence. Checked both ways: 48.7 scene units becomes ~345,000
+       * km, and Earth subtends 1.06 degrees at both that distance and on
+       * screen.
+       */
+      const bodyRadiusKm = Number(body.userData?.physicalDiameterKm) / 2;
+      const bodyVisualRadius = Number(body.userData?.visualRadius);
+      if (Number.isFinite(bodyRadiusKm) && bodyRadiusKm > 0 && bodyVisualRadius > 0) {
+        freeExploreDistanceReference = {
+          kilometresPerSceneUnit: bodyRadiusKm / bodyVisualRadius,
+        };
+      }
+    }
+
+    body.getWorldPosition(tourApproachTarget);
+
+    getFocusPoint(journeyDistance, exploreBaseFocus);
+    setSphericalCameraOffset(sphericalCameraOffset, journeyDistance);
+    exploreBaseCamera.copy(exploreBaseFocus).add(sphericalCameraOffset);
+
+    const radius = Math.max(0.02, Number(body.userData?.visualRadius ?? 0.2));
+    // Vertical focal length in pixels, from the field of view as it is now.
+    const focalPixels = (window.innerHeight * 0.5)
+      / Math.tan(THREE.MathUtils.degToRad(camera.fov * 0.5));
+    const standoff = (radius * focalPixels) / Math.max(1, arrivalPixels);
+
+    // The wheel sets a target; the gap eases toward it. Applying each notch
+    // directly made the approach arrive in steps rather than as a movement.
+    tourApproach.closing += (tourApproach.closingTarget - tourApproach.closing) * 0.12;
+    const gap = Math.max(radius * minimumStandoffRadii, standoff * tourApproach.closing);
+
+    exploreDesiredCamera
+      .copy(tourApproachTarget)
+      .addScaledVector(tourApproach.approachDirection, -gap);
+    exploreDesiredFocus.copy(tourApproachTarget);
+
+    /*
+     * Deliberately without `exploreSpaceAtPointer`'s `maximumRigOffset` clamp.
+     * That clamp keeps *repeated* dives inside the useful scene; a single
+     * deliberate approach that stopped short of its destination would simply
+     * be broken.
+     */
+    freeExploreCameraOffsetTarget.copy(exploreDesiredCamera).sub(exploreBaseCamera);
+    freeExploreFocusOffsetTarget.copy(exploreDesiredFocus).sub(exploreBaseFocus);
+
+    /*
+     * Held exactly, not eased toward.
+     *
+     * The camera's world position is `base + offset`, and the base is the
+     * scroll journey's pose -- so it moves the instant the wheel turns, while
+     * the offset only catches up over the next dozen frames. The two together
+     * were the second half of the dancing: every notch produced a lurch in the
+     * base that the offset then walked back. Copying the offset onto its own
+     * current value cancels the base's motion in the same frame, and what the
+     * viewer sees is only the gap closing.
+     *
+     * Every other rig movement in the scene still eases normally; this is the
+     * one case where a scripted destination is being held against live scroll.
+     */
+    freeExploreCameraOffsetCurrent.copy(freeExploreCameraOffsetTarget);
+    freeExploreFocusOffsetCurrent.copy(freeExploreFocusOffsetTarget);
+    hasExploredFreeSpace = true;
+  }
+
+  /*
+   * The wheel closes the gap, and only the wheel.
+   *
+   * Registered once, passive, and it never cancels: the journey's own wheel
+   * handling runs exactly as it always does. This only reads the deltas, so
+   * "scroll in, then click it" is true of the distance to Earth rather than of
+   * the distance to the Sun.
+   */
+  addEventListener("wheel", (event) => {
+    if (!tourApproach?.engaged) return;
+    tourApproach.closingTarget = THREE.MathUtils.clamp(
+      tourApproach.closingTarget * Math.exp(event.deltaY * 0.0016),
+      0,
+      1,
+    );
+  }, { passive: true });
+
+  /*
+   * The tour asks; the application decides what the asking means.
+   *
+   * A CustomEvent rather than a callback, because the tour is a DOM component
+   * that knows about cards and buttons and should not learn about cameras. It
+   * fires on every step, so the absence of an action is also a message: the
+   * approach is released the moment the viewer moves on from the step that
+   * wanted it.
+   */
+  addEventListener("beyond-earth:tour-action", (event) => {
+    const action = event.detail?.action ?? null;
+    unlockTourControl(event.detail?.unlocks);
+    tourClickMode = event.detail?.clicks ?? "all";
+    tourClickOnly = event.detail?.only ?? null;
+    tourEmptySpaceOnly = tourClickMode === "space";
+
+    /*
+     * Each demonstration step tidies up after itself when the tour moves on.
+     *
+     * Both of these were reported: the events panel stayed open and covered the
+     * next card, and space mode stayed on so the step after it was explaining
+     * an interface that was no longer drawn. A step that asks the viewer to
+     * turn something on owns turning it off again -- leaving the scene as it
+     * found it is part of the step, not the viewer's problem.
+     */
+    const step = event.detail?.step;
+    if (step !== "events") spaceEventsDashboard?.close();
+    if (step !== "spacemode" && spaceModeActive) setSpaceMode(false);
+    if (step !== "distance") closeDistanceInfoPopover();
+    tourSuppressesHover = (event.detail?.veil ?? "full") !== "clear";
+    if (tourClickMode !== "all" || tourSuppressesHover) {
+      // Anything already offering itself stops doing so on the same frame.
+      clearCelestialHover();
+      clearPlanetOrbitHover();
+    }
+    if (action === "approach-earth") {
+      beginTourApproach(planets.find((planet) => planet.name === "Earth") ?? earth);
+      return;
+    }
+    tourApproach = null;
+    /*
+     * The return-to-the-system step needs somewhere to return *from*.
+     *
+     * Unlike the approach step, this one is not teaching how to arrive -- it is
+     * teaching the one press that undoes any amount of arriving. So it puts the
+     * viewer at Earth outright rather than asking them to travel there again,
+     * and the lesson is the press.
+     */
+    if (action === "focus-earth") {
+      const target = planets.find((planet) => planet.name === "Earth") ?? earth;
+      if (target && focusedBody !== target) {
+        focusNavigationHistory.length = 0;
+        focusBody(target);
+      }
+    }
+  });
+
+  addEventListener("beyond-earth:tour-state", (event) => {
+    if (event.detail?.open === false) {
+      tourApproach = null;
+      tourEmptySpaceOnly = false;
+      tourClickMode = "all";
+      tourClickOnly = null;
+      tourSuppressesHover = false;
+      // Whatever the tour did or did not reach, the interface is the viewer's
+      // once it ends. Skipping hands over the whole of it too.
+      setTourControlsLocked(false);
+      updateTourTargetMarker();
+      /*
+       * Finishing hands the viewer the whole system.
+       *
+       * Wherever the walkthrough left them -- beside Earth, at its moon, part
+       * way through an approach -- is a place the tour chose, not one they did.
+       * Backing all the way out gives them the same frame the experience opens
+       * on, which is the one every journey in it starts from. It applies to
+       * skipping too: a skip from the middle of the Earth approach would
+       * otherwise strand them at a vantage they never asked for.
+       */
+      travelToWholeSystem();
+    }
+  });
 
   const preventFocusedJourneyScroll = (event) => {
     // Cards and the distance explanation retain their own internal scrolling.
     if (event.target.closest?.(JOURNEY_UI_SELECTOR)) return;
+    // Read mode holds the journey still as well as the pointer -- the caption
+    // is describing this view, and it should still be this view when it ends.
+    if (isArrivalCaptionPlaying) {
+      event.preventDefault();
+      return;
+    }
     if (!isJourneyScrollLocked) return;
 
     event.preventDefault();
@@ -6398,10 +7319,66 @@ import { createCosmicIntro } from './scene/space/cosmicIntro.js';
       pointerDownPlanetOrbit = null;
       return;
     }
+    /*
+     * Read mode swallows the click outright.
+     *
+     * Nothing at all happens while the arrival caption is running: the viewer
+     * is being shown the place they arrived at, and a click that flew them
+     * somewhere else mid-sentence would be the opposite of that.
+     */
+    if (isArrivalCaptionPlaying) {
+      pointerDownCelestialBody = null;
+      pointerDownPlanetOrbit = null;
+      return;
+    }
+
+    /*
+     * The early tour steps suspend some or all of the other targets.
+     *
+     * "none" is the first three steps, which are about moving the camera: a
+     * stray click during "drag to look around" flies the viewer into a body and
+     * abandons the lesson, and they cannot see that they did anything wrong.
+     * "space" is the step that teaches the empty-space gesture -- there the
+     * click still works, it simply resolves to the region behind the pointer
+     * the way the card says it does, rather than to a planet that happened to
+     * be under it.
+     */
+    if (tourClickMode === "none") {
+      pointerDownCelestialBody = null;
+      pointerDownPlanetOrbit = null;
+      return;
+    }
+    if (tourClickMode === "only") {
+      const candidate = pointerDownCelestialBody ?? getBodyAtPointer();
+      const name = candidate?.userData?.name ?? candidate?.name ?? null;
+      pointerDownCelestialBody = null;
+      pointerDownPlanetOrbit = null;
+      // Silence rather than a wrong answer: everything except the named world
+      // is simply not there for this one step.
+      if (!name || !tourClickOnly?.includes(name)) return;
+      focusBody(candidate);
+      /*
+       * The step is satisfied by *arriving*, not by clicking.
+       *
+       * The generic click gesture counts any press on the scene, which was
+       * tolerable while a press only advanced the card and is not now that a
+       * satisfied step carries the viewer forward on its own: a stray click on
+       * empty space would have skipped past "click Earth" without them having
+       * clicked Earth. This says which world was actually reached.
+       */
+      window.dispatchEvent(new CustomEvent("beyond-earth:tour-target-reached", {
+        detail: { name },
+      }));
+      return;
+    }
+    const restrictedToSpace = tourClickMode === "space";
+
     // Prefer the press-time target in dense populations. Fall back to a fresh
     // visibility-aware scan only when the press began on empty space.
-    const body = pointerDownCelestialBody ?? getBodyAtPointer();
-    const ringSelection = isSaturnRingBody(hoveredCelestialBody)
+    const body = restrictedToSpace
+      ? null
+      : pointerDownCelestialBody ?? getBodyAtPointer();
+    const ringSelection = !restrictedToSpace && isSaturnRingBody(hoveredCelestialBody)
       ? hoveredCelestialBody
       : null;
     if (ringSelection?.userData?.parentPlanetObject) {
@@ -6413,7 +7390,7 @@ import { createCosmicIntro } from './scene/space/cosmicIntro.js';
         highlightRingName: ringSelection.userData?.name ?? null,
       });
     }
-    const orbit = body
+    const orbit = body || restrictedToSpace
       ? null
       : pointerDownPlanetOrbit ?? findPlanetOrbitAtPointer()?.orbit ?? null;
     pointerDownCelestialBody = null;
@@ -6469,7 +7446,26 @@ import { createCosmicIntro } from './scene/space/cosmicIntro.js';
       || freeExploreCameraOffsetCurrent.lengthSq() > 0.0001
       || freeExploreFocusOffsetCurrent.lengthSq() > 0.0001) {
       resetFreeExploration();
+      return;
     }
+    /*
+     * Space mode is the last thing Escape undoes, not the first.
+     *
+     * It is a way of looking rather than a place you have travelled to, so
+     * leaving a planet has to keep meaning "leave the planet" while the
+     * overlays are off, and the same for backing out of free space. Only once
+     * there is nothing left to return *from* does the key give the interface
+     * back -- which it has to do at all, because space mode hides the controls
+     * that would otherwise say how to leave it.
+     *
+     * Written as its own guarded branch above the free-exploration reset, this
+     * needed a copy of that reset's condition, and the copy was wrong: it
+     * tested the offset targets but not their current values, so a camera
+     * still easing home swallowed the press. Ordering the cascade instead of
+     * duplicating its tests means there is only one definition of "nothing to
+     * exit" and this branch is simply what is left.
+     */
+    if (spaceModeActive) setSpaceMode(false);
   }
 
   addEventListener("keydown", (event) => {
@@ -6488,13 +7484,15 @@ import { createCosmicIntro } from './scene/space/cosmicIntro.js';
     }
 
     // Keyboard controls modify the same targets as dragging, so smoothing still applies.
-    if (isJourneyScrollLocked && journeyKeys.includes(event.key)) {
+    if ((isJourneyScrollLocked || isArrivalCaptionPlaying) && journeyKeys.includes(event.key)) {
       event.preventDefault();
     }
 
     if (event.key === "Escape") {
       event.preventDefault();
-      exitCurrentView();
+      // The key and the button are the same control and unlock together, so
+      // that "Esc, or this" in the tour is true of both halves at once.
+      if (!isTourControlLocked("exit")) exitCurrentView();
       return;
     }
     if (event.key === "ArrowLeft") targetYaw += 0.18;
@@ -6996,6 +7994,8 @@ import { createCosmicIntro } from './scene/space/cosmicIntro.js';
 
     // ----- Calculate the camera's spherical orbit around its focus point -----
     const distance = getCameraDistance(smoothProgress);
+    // Re-aimed before the rig eases, so a world that is orbiting stays centred.
+    updateTourApproach(distance);
     const exploreRigEase = frameAdjustedEase(focusedBody ? 0.055 : 0.09, deltaTime);
     freeExploreCameraOffsetCurrent.lerp(freeExploreCameraOffsetTarget, exploreRigEase);
     freeExploreFocusOffsetCurrent.lerp(freeExploreFocusOffsetTarget, exploreRigEase);
@@ -7065,6 +8065,19 @@ import { createCosmicIntro } from './scene/space/cosmicIntro.js';
     }
     // lookAt rotates the camera so its forward direction points at the target.
     camera.lookAt(cameraFocusPoint);
+
+    /*
+     * The marker is projected here, and not where the approach is computed.
+     *
+     * It was being projected at the top of this block, before the camera had
+     * been moved or aimed for this frame -- so a fresh world position was
+     * being projected through last frame's camera. The disagreement is small
+     * and it changes every frame, which is exactly what a flicker is. Now the
+     * projection uses the same camera matrices the renderer is about to use,
+     * so the ring is where the planet is.
+     */
+    camera.updateMatrixWorld();
+    updateTourTargetMarker();
 
     // The 115-moon Jovian catalogue is rendered progressively. Invisible
     // sub-pixel moons no longer keep the GPU busy after returning to the broad
@@ -7278,6 +8291,7 @@ import { createCosmicIntro } from './scene/space/cosmicIntro.js';
     updateSatelliteAtlasDirectory();
     updateSatelliteNameLabels();
     updateInspectionInterface();
+    updateSpaceExitControl();
     /*
      * The last word on guide visibility, immediately before the draw.
      *
@@ -7386,6 +8400,11 @@ import { createCosmicIntro } from './scene/space/cosmicIntro.js';
      * -- but held back past the landfall as well, because a title card rising
      * over a white screen names nothing. It should appear on the system.
      */
+    isArrivalCaptionPlaying = true;
+    setTourControlsLocked(true);
+    clearCelestialHover();
+    clearPlanetOrbitHover();
+
     setTimeout(() => caption.classList.add("is-live"), 560);
 
     let arrivalLine = 0;
@@ -7394,6 +8413,12 @@ import { createCosmicIntro } from './scene/space/cosmicIntro.js';
       if (arrivalLine >= ARRIVAL_LINES.length) {
         caption.classList.remove("is-live");
         setTimeout(() => caption.remove(), 1600);
+        /*
+         * The handover. Read mode ends with the last line, and the tour opens
+         * once the card has actually faded rather than over the top of it.
+         */
+        isArrivalCaptionPlaying = false;
+        setTimeout(() => guidedTour?.start(), 1500);
         return;
       }
       arrivalBody.style.opacity = "0";
@@ -7425,6 +8450,16 @@ import { createCosmicIntro } from './scene/space/cosmicIntro.js';
     document.body.classList.remove("is-cosmic-intro");
     intro.dismiss();
     /*
+     * The walkthrough is *not* started here.
+     *
+     * It was, on a 1.4 second timer, which put it straight over the arrival
+     * caption -- the three lines that name the place the viewer has just spent
+     * seventy seconds travelling to. `announceArrival` below starts it instead,
+     * when its last line has gone. (Earlier still it was started at
+     * construction, which put it over the opening gate: explaining how to click
+     * a planet to somebody looking at a single point of light.)
+     */
+    /*
      * And deliberately not re-asserting the landing after this point.
      *
      * It looks like cheap insurance -- call `settleLandingView()` again once
@@ -7439,7 +8474,8 @@ import { createCosmicIntro } from './scene/space/cosmicIntro.js';
     announceArrival();
     openingMotionStartedAt = performance.now() + 500;
     setTimeout(() => {
-      systemReturnButton.disabled = false;
+      systemReturnButtonReleased = true;
+      applyTourControlLocks();
       systemReturnButton.classList.remove("is-awaiting-entrance");
       systemReturnButton.classList.add("is-entering");
       setTimeout(() => systemReturnButton.classList.remove("is-entering"), 1500);
