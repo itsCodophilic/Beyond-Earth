@@ -1379,7 +1379,7 @@ import { POINTER_PROXY_LAYER } from "./scene/pointerProxies.js";
      * of the camera and the Sun, the meteor stream is chosen relative to it --
      * so the shot is not decoration here. It is the input the staging reads.
      */
-    composeSolarEventShot();
+    composeSolarEventShot(definition.facesSun ? target : null);
 
     solarEventTitle.textContent = definition.title;
     solarEventDetail.textContent = definition.detail;
@@ -1938,6 +1938,10 @@ import { POINTER_PROXY_LAYER } from "./scene/pointerProxies.js";
    * takes this up the moment the transition releases -- inside two seconds, and
    * the countdown is five.
    */
+  /*
+   * False when nothing is pending; otherwise either `true` for the plain
+   * composed angle or the body the shot should be framed sunward of.
+   */
   let pendingSolarEventShot = false;
 
   /**
@@ -1954,15 +1958,38 @@ import { POINTER_PROXY_LAYER } from "./scene/pointerProxies.js";
    * nearest where the camera already is gives the same view by the shortest
    * way round.
    */
-  function composeSolarEventShot() {
+  const solarEventShotPosition = new THREE.Vector3();
+
+  function composeSolarEventShot(sunwardOf = null) {
     if (focusExitTransition) {
-      pendingSolarEventShot = true;
+      pendingSolarEventShot = sunwardOf ?? true;
       return;
     }
     pendingSolarEventShot = false;
+
+    /*
+     * Some events have to be watched from the day side.
+     *
+     * A dust storm is dust catching sunlight; staged over the night side there
+     * is a storm and nothing to see it by, and the fixed composed angle put the
+     * viewer there about as often as not. So an event can ask to be framed
+     * sunward of its body, and this works out the azimuth that does it: the
+     * camera sits at the focus point plus an offset whose horizontal direction
+     * is (sin yaw, cos yaw), so pointing that offset back along the way to the
+     * Sun -- which, the Sun being at the origin, is simply the way back to the
+     * origin -- puts the camera between the Sun and the body, looking at the
+     * lit face.
+     */
+    let shotYaw = SOLAR_EVENT_SHOT_YAW;
+    if (sunwardOf?.getWorldPosition) {
+      sunwardOf.getWorldPosition(solarEventShotPosition);
+      if (solarEventShotPosition.lengthSq() > 1e-6) {
+        shotYaw = Math.atan2(-solarEventShotPosition.x, -solarEventShotPosition.z);
+      }
+    }
+
     const turn = Math.PI * 2;
-    targetYaw = SOLAR_EVENT_SHOT_YAW
-      + Math.round((yaw - SOLAR_EVENT_SHOT_YAW) / turn) * turn;
+    targetYaw = shotYaw + Math.round((yaw - shotYaw) / turn) * turn;
     targetPitch = SOLAR_EVENT_SHOT_PITCH;
     // Any zoom the viewer applied to the last event is theirs, not the next
     // one's; 1 is the distance the body's own focus framing was authored at.
@@ -8034,7 +8061,9 @@ import { POINTER_PROXY_LAYER } from "./scene/pointerProxies.js";
     const isRestoringFocusExit = advanceFocusExitTransition(deltaTime);
     // A shot that had to wait for the camera to be handed back. See
     // `composeSolarEventShot`.
-    if (pendingSolarEventShot && !focusExitTransition) composeSolarEventShot();
+    if (pendingSolarEventShot && !focusExitTransition) {
+      composeSolarEventShot(pendingSolarEventShot === true ? null : pendingSolarEventShot);
+    }
     // Focus mode and its short deterministic exit hold slow physical scene motion
     // without slowing input during ordinary exploration.
     // Asteroid hover slows the belt locally inside updateAsteroidBelt(). It must

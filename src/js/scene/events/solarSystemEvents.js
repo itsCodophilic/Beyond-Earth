@@ -399,7 +399,7 @@ function createSurfaceCap(radius, normal, kind) {
     mesh,
     material,
     /*
-     * `along` and `across` are the half-widths of the ellipse in radians at
+     * `along` and across are the half-widths of the ellipse in radians at
      * the centre of the body -- along the wind and across it. `drift` slides
      * the whole patch that many radians downwind. `level` is how much of the
      * effect is present at the middle, and it falls to none at the rim.
@@ -2841,7 +2841,7 @@ function createSolarEjection(target, camera) {
  * fading out over days until nothing is left but a featureless butterscotch
  * ball.
  */
-function createMarsDustStorm(target) {
+function createMarsDustStorm(target, camera) {
   const group = new THREE.Group();
   group.name = "Mars global dust storm";
   const radius = localRadius(target);
@@ -2852,15 +2852,170 @@ function createMarsDustStorm(target) {
    * terminator; a flat billboard would sit in front of the night side too and
    * light up a hemisphere the Sun is not on.
    */
+  /*
+   * Dust of uneven thickness, not a coat of paint.
+   *
+   * The first version of this was a single flat shell at nine-tenths opacity,
+   * and what it produced was a featureless ochre ball -- which is a fair
+   * description of a *fully* enveloped Mars and a poor picture of one, because
+   * the planet stops being a planet. It also is not what the storm does. Global
+   * dust storms are global in reach and nowhere near uniform in depth: optical
+   * depth during 2018 ran from about 2 over some regions to well past 8 over
+   * others, and through the thinner windows the dark albedo features -- Syrtis
+   * Major, Solis Lacus -- stay faintly readable the whole way through.
+   *
+   * So the shell carries a drifting field of optical depth instead of a
+   * constant, and it is capped well short of opaque. The surface shows through
+   * everywhere a little and through the thin patches clearly, which is both the
+   * more honest picture and the one where Mars is still recognisably Mars.
+   */
+  const veilUniforms = {
+    uGain: { value: 0 },
+    uTime: { value: 0 },
+    uSun: { value: new THREE.Vector3(0, 0, 1) },
+    uView: { value: new THREE.Vector3(0, 0, 1) },
+    uDust: { value: new THREE.Color(0xd9a778) },
+    uPale: { value: new THREE.Color(0xf2d6ac) },
+  };
+
   const veil = new THREE.Mesh(
-    new THREE.SphereGeometry(1, 40, 28),
-    new THREE.MeshStandardMaterial({
-      color: 0xc98a4e,
-      roughness: 1,
-      metalness: 0,
+    new THREE.SphereGeometry(1, 48, 32),
+    new THREE.ShaderMaterial({
+      uniforms: veilUniforms,
       transparent: true,
-      opacity: 0,
       depthWrite: false,
+      side: THREE.FrontSide,
+      toneMapped: true,
+      vertexShader: /* glsl */`
+        varying vec3 vDirection;
+
+        void main() {
+          vDirection = position;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+      `,
+      fragmentShader: /* glsl */`
+        varying vec3 vDirection;
+
+        uniform float uGain;
+        uniform float uTime;
+        uniform vec3 uSun;
+        uniform vec3 uView;
+        uniform vec3 uDust;
+        uniform vec3 uPale;
+
+        ${VOLUME_NOISE}
+
+        void main() {
+          vec3 d = normalize(vDirection);
+
+          /*
+           * Two separate things the Sun does to dust, and the first version
+           * conflated them.
+           *
+           * coverage is whether there is any dust in front of this part of
+           * the planet to be seen at all, and lit is how brightly what is
+           * there is being lit. The old shader had only the first: the veil's
+           * colour was a fixed bright ochre and just its opacity fell away past
+           * the terminator. So on the night side it laid a *bright* wash over
+           * ground that had gone dark, and near the terminator a half-opaque
+           * bright patch over a half-dark surface -- which is exactly the
+           * blotching that was reported, and it moved as the noise drifted.
+           *
+           * Dust is lit, not luminous. Fading the colour is what the ground
+           * under it is doing, so the dust has to do it too.
+           *
+           * Coverage is tested first, and that ordering is the whole
+           * performance story of this shader. Unlike a storm confined to a
+           * band there is no cheap geometric test to throw fragments out on --
+           * every one of them would otherwise pay for the noise below. Half of
+           * what the shell covers is night; one dot product is what it costs to
+           * find that out. Coverage is already zero where the test cuts, so the
+           * boundary cannot be seen.
+           */
+          float sunDot = dot(d, uSun);
+          /*
+           * One ramp, and it has to be one ramp.
+           *
+           * The previous pass used two: coverage, which reached full at the
+           * terminator, and brightness, which only reached full well onto the
+           * day side. Between them lay a wide band where the veil was at its
+           * full opacity with its colour multiplied by almost nothing -- so it
+           * painted near-black over the twilight at eighty-seven per cent, and
+           * the drifting cells came out as dark smudges crossing into the night
+           * side. That is the same bug as the first version wearing the other
+           * face: then the dust was bright where the ground was dark, now it
+           * was dark where the ground was not.
+           *
+           * What both attempts missed is that opacity and brightness are not
+           * independent here. Alpha blending means an unlit shell does not
+           * merely fail to add light, it *removes* what is behind it. So the
+           * dust has to stop covering at exactly the rate it stops being lit;
+           * anything else leaves a shroud. Sharing the ramp guarantees it.
+           */
+          float lit = smoothstep(-0.22, 0.36, sunDot);
+          if (lit < 0.008) discard;
+
+          /*
+           * Optical depth: broad cells drifting with the wind with a finer
+           * field over the top. Two octaves by hand rather than the shared
+           * four-octave walk, because this runs on every pixel of the planet
+           * and the octaves past the second are finer than the dust looks at
+           * any distance anyone views Mars from. Sampled in three dimensions on
+           * the direction itself, so there is no seam at the date line and no
+           * pinching at the poles -- the two things that give a flat noise
+           * texture wrapped on a sphere away.
+           */
+          vec3 drift = vec3(uTime * 0.05, 0.0, uTime * 0.02);
+          float broad = noise3D(d * 2.6 + drift) * 0.66
+            + noise3D(d * 6.3 - drift * 0.7) * 0.34;
+          float fine = 0.5;
+          /*
+           * Stretched across its useful range before it is used.
+           *
+           * Summed octaves of noise pile up around the middle: measured, the
+           * raw field spent nine tenths of the disc inside a span of three
+           * tenths, so every part of the planet was hidden by very nearly the
+           * same amount and the veil came out as a flat wash with a slight
+           * texture. Pulling the middle of that distribution out to the full
+           * zero-to-one range is what turns it into weather -- thick knots and
+           * thin windows, which is what an optical depth map of a real storm
+           * looks like.
+           */
+          float cell = smoothstep(0.30, 0.76, broad);
+          float depth = 0.26 + 1.30 * cell + 0.28 * fine;
+
+          /*
+           * Thicker towards the limb, because a line of sight that grazes the
+           * planet travels much further through the same atmosphere than one
+           * looking straight down. It is why the limb of a dusty Mars goes
+           * solid while the middle of the disc is still translucent.
+           */
+          float toward = dot(d, uView);
+          float slant = 1.0 + 0.85 * (1.0 - smoothstep(0.0, 0.75, toward));
+
+          float alpha = clamp(depth * slant * uGain, 0.0, 0.87) * lit;
+
+          /*
+           * Thicker dust scatters paler, which is what makes the deepest part
+           * of a storm look like cloud rather than like ground -- and both ends
+           * of that ramp are brighter than the terrain they cover, because a
+           * planet under a global storm gets *lighter*, not darker. The first
+           * pass used a tone darker than the dust-brightened surface around it,
+           * so the thickest cells read as dirty smudges lying on Mars rather
+           * than as the storm itself.
+           */
+          vec3 tone = mix(uDust, uPale, clamp((depth - 0.55) * 0.9, 0.0, 1.0));
+          /*
+           * The colour keeps a floor while the coverage does not. Dust in
+           * twilight is dim but not black, and by the time this matters the
+           * alpha above has already taken the shell most of the way out.
+           */
+          gl_FragColor = vec4(tone * (0.12 + 0.88 * lit), alpha);
+          #include <tonemapping_fragment>
+          #include <colorspace_fragment>
+        }
+      `,
     }),
   );
   veil.scale.setScalar(radius * 1.022);
@@ -2882,6 +3037,9 @@ function createMarsDustStorm(target) {
   haze.scale.setScalar(radius * 1.055);
   group.add(haze);
 
+  const sunLocal = new THREE.Vector3();
+  const viewLocal = new THREE.Vector3();
+
   return {
     group,
     duration: 22,
@@ -2891,8 +3049,25 @@ function createMarsDustStorm(target) {
       const grow = smoothstep(0.02, 0.34, progress);
       const clear = 1 - smoothstep(0.55, 1, progress);
       const strength = grow * clear;
-      veil.material.opacity = strength * 0.92;
-      haze.material.opacity = strength * 0.16;
+
+      localSunDirection(target, sunLocal);
+      localCameraDirection(target, camera, viewLocal);
+      veilUniforms.uSun.value.copy(sunLocal);
+      veilUniforms.uView.value.copy(viewLocal);
+      /*
+       * The ceiling that keeps Mars visible.
+       *
+       * Measured over the lit disc at the height of the storm: about 0.28
+       * opaque in the thin windows, 0.87 in the thickest knots, and a shade
+       * under a half in the middle. So the surface is putting up the majority
+       * of the light across roughly half the disc, a little of it everywhere,
+       * and nowhere is the planet completely gone. The old flat shell was 0.92
+       * from limb to limb.
+       */
+      veilUniforms.uGain.value = strength * 0.68;
+      veilUniforms.uTime.value = progress * 22;
+
+      haze.material.opacity = strength * 0.13;
       // The dust is in the atmosphere and the atmosphere is turning.
       veil.rotation.y += 0.0016;
       haze.rotation.y -= 0.0011;
@@ -2924,74 +3099,415 @@ function createMarsDustStorm(target) {
  * Staged as a bright head appearing at northern mid-latitude and drawing
  * itself out into a band that wraps the planet.
  */
-function createSaturnWhiteSpot(target) {
+function createSaturnWhiteSpot(target, camera) {
   const group = new THREE.Group();
   group.name = "Saturn Great White Spot";
   const radius = localRadius(target);
 
   /*
-   * The band, as a latitude ring: a torus sitting on the northern mid-latitude
-   * circle. Growing the arc of that ring from nothing to the whole way round
-   * is exactly what the storm does, and it stays glued to the right latitude
-   * for free as the planet turns.
+   * Drawn into the cloud deck, not hung above it.
+   *
+   * The first version was a torus ring with a glow blob running round the front
+   * of it, and the trouble with a torus is that it is a tube: a smooth,
+   * even-width, perfectly circular tube, which is the one shape a convective
+   * storm never has. Set against Saturn's banding it read as a hoop of neon
+   * laid over a planet rather than as weather happening in it.
+   *
+   * The Cassini photographs are the argument. The storm is a compact turbulent
+   * head at northern mid-latitude with a tail streaming away behind it along
+   * its own latitude; the tail is mottled, lumpy and uneven, wider than the
+   * head and ragged at both edges where the wind shear tears at it; and all of
+   * it is *cloud* -- near-white where it is thickest, cream and blue-grey in
+   * the hollows, sitting in Saturn's butterscotch and letting the banding
+   * either side of it stay visible.
+   *
+   * So this is a shell just above the cloud tops, under Saturn's own
+   * atmosphere layer, carrying the storm as a field: a head, a tail behind it,
+   * a latitude envelope, and turbulence through all of it. Alpha blended
+   * rather than added, because clouds cover what is under them; they do not
+   * glow through it.
    */
-  const bandLatitude = THREE.MathUtils.degToRad(37);
-  const bandRadius = Math.cos(bandLatitude);
-  const band = new THREE.Mesh(
-    new THREE.TorusGeometry(radius * bandRadius * 1.005, radius * 0.055, 10, 128, 0.1),
-    new THREE.MeshBasicMaterial({
-      color: 0xfff1d8,
-      transparent: true,
-      opacity: 0,
-      depthWrite: false,
-      blending: THREE.AdditiveBlending,
-    }),
+  const SPOT_LATITUDE = THREE.MathUtils.degToRad(37);
+
+  const uniforms = {
+    uGain: { value: 0 },
+    uTime: { value: 0 },
+    // Where the head is, and how far the tail reaches back from it. Both in
+    // radians of longitude, both growing across the event.
+    uHeadLongitude: { value: 0 },
+    uTail: { value: 0 },
+    uLatitude: { value: Math.sin(SPOT_LATITUDE) },
+    uSun: { value: new THREE.Vector3(0, 0, 1) },
+    uView: { value: new THREE.Vector3(0, 0, 1) },
+    // The cloud's colour, in three: lit tops, shaded hollows, and the warm
+    // tan where it thins back towards Saturn's own banding.
+    uBright: { value: new THREE.Color(0xfdfbf4) },
+    uShade: { value: new THREE.Color(0xa9b7c7) },
+    uWarm: { value: new THREE.Color(0xb8996f) },
+  };
+
+  const material = new THREE.ShaderMaterial({
+    uniforms,
+    transparent: true,
+    depthWrite: false,
+    side: THREE.FrontSide,
+    toneMapped: true,
+    vertexShader: /* glsl */`
+      varying vec3 vDirection;
+
+      void main() {
+        vDirection = position;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }
+    `,
+    fragmentShader: /* glsl */`
+      varying vec3 vDirection;
+
+      uniform float uGain;
+      uniform float uTime;
+      uniform float uHeadLongitude;
+      uniform float uTail;
+      uniform float uLatitude;
+      uniform vec3 uSun;
+      uniform vec3 uView;
+      uniform vec3 uBright;
+      uniform vec3 uShade;
+      uniform vec3 uWarm;
+
+      ${VOLUME_NOISE}
+
+      const float TAU = 6.28318530718;
+      const float PI = 3.14159265359;
+
+      void main() {
+        vec3 d = normalize(vDirection);
+
+        /*
+         * How far behind the head this point lies, measured along the storm's
+         * own latitude and wrapped into one full turn. Everything the storm is
+         * shaped like is a function of this one number and of how far the point
+         * sits from the band's centre line.
+         */
+        float longitude = atan(d.z, d.x);
+        /*
+         * Two ways of measuring the same angle, and the storm needs both.
+         *
+         * behind wraps into a full turn, which is what the tail wants -- it
+         * has to be able to reach most of the way round the planet. across is
+         * the signed version of the same difference, and it exists because the
+         * wrapped one has a cliff in it: at the head's own longitude it jumps
+         * from zero to a full turn, so everything keyed to it changed abruptly
+         * along that one meridian. That is the straight diagonal line the storm
+         * appeared to start from -- not a shape, a discontinuity, drawn where
+         * the coordinate wrapped.
+         */
+        float behind = mod(uHeadLongitude - longitude, TAU);
+        float across = behind > PI ? behind - TAU : behind;
+
+        /*
+         * How long ago this material left the head, which is what decides how
+         * far the shear has had time to spread it.
+         *
+         * Everything past the end of the tail is ahead of the head, where there
+         * is no material at all, and counts as brand new. That is not cosmetic:
+         * keyed to the raw wrapped angle, the band came out 1.17 times its width
+         * on one side of the head's meridian and 0.62 on the other, with the
+         * step falling straight through the middle of the head. Together with
+         * the tail switching on across that same line, it is what drew the hard
+         * diagonal the storm appeared to start from. Where this does still step
+         * -- at the very end of the tail -- the tail has already faded to
+         * nothing, so there is nothing left there to show it.
+         */
+        float age = behind * (1.0 - step(uTail, behind));
+
+        /*
+         * The tail is broader than the head, because the zonal wind shear that
+         * drags it out sideways also spreads it in latitude as it goes.
+         */
+        float widen = 0.62 + 0.55 * smoothstep(0.0, 2.2, age);
+        float offLatitude = (d.y - uLatitude) / (0.105 * widen);
+        /*
+         * A band that ends, rather than a Gaussian that merely gets small.
+         *
+         * Left as a bare exponential this never reaches zero, and the
+         * turbulence below multiplies it by as much as 1.65 -- so the faint
+         * outer wing came back up above the threshold and the storm measured
+         * from ten degrees of latitude to eighty, a smear over most of the
+         * hemisphere. Cassini's storm sat between about twenty-five and
+         * forty-five. Subtracting a floor and renormalising gives it a real
+         * outer edge at roughly that width, and the mottling then makes that
+         * edge ragged instead of making it enormous.
+         */
+        float band = max(0.0, exp(-offLatitude * offLatitude) - 0.06) / 0.94;
+
+        /*
+         * The head: the spot the event is named after, and a shape of its own
+         * rather than a bright stretch of the band.
+         *
+         * It used to be one Gaussian in longitude multiplied by the band's
+         * latitude envelope, and that arithmetic could only ever produce a
+         * smear: twenty-seven degrees long by five tall, six to one, lying
+         * along the tail instead of leading it. What the photographs show at
+         * the front is a knot -- round, bulging past the width of the trail it
+         * is laying down, and the brightest thing on the planet.
+         *
+         * So it gets its own two-dimensional envelope, and it is measured in
+         * angle on the sphere rather than in the coordinates. Those are not the
+         * same thing: a degree of longitude is a shorter arc than a degree of
+         * latitude everywhere except the equator, by the cosine of the latitude
+         * -- which at thirty-seven degrees is a fifth. A spot built without that
+         * factor comes out visibly squashed, and the correction is the
+         * difference between a circle and an egg.
+         *
+         * cos(latitude) comes free from the latitude uniform, which is already
+         * its sine.
+         */
+        float cosLat = sqrt(max(1e-4, 1.0 - uLatitude * uLatitude));
+        float spotLat = (d.y - uLatitude) / cosLat;
+        float spotLon = across * cosLat;
+        float spot = (spotLat * spotLat + spotLon * spotLon) / (0.150 * 0.150);
+        // A dense core inside a softer surround: a convective knot, not a dot.
+        float head = exp(-spot) + 0.35 * exp(-spot * 3.0);
+
+        /*
+         * The tail: everything the head has already laid down, thinning with
+         * distance behind it and ending where the storm has not reached yet.
+         *
+         * It fades in at both ends, and both are expressed in the wrapped angle
+         * so that neither can straddle the wrap.
+         *
+         * tailIn stops it appearing all at once along the head's meridian: the
+         * wrapped angle says "behind" for everything right up to the head's own
+         * longitude, so without it the trailing material switched on across a
+         * line one pixel wide, and the head's blob was not wide enough to hide
+         * that out where the band is thin. Ramping in over half a radian gives
+         * the storm a rounded leading edge with the tail growing out from under
+         * it, which is what the photographs show and what a plume shedding
+         * material downwind actually looks like.
+         *
+         * tailOut fades the far end over most of the tail's length rather than
+         * cutting near it, so the oldest material thins out until it is
+         * indistinguishable from the banding instead of stopping at a line.
+         */
+        float tailIn = smoothstep(0.0, 0.55, behind);
+        float tailOut = 1.0 - smoothstep(uTail * 0.38, uTail, behind);
+        float tail = tailIn * tailOut * (0.30 + 0.70 * exp(-behind * 0.42));
+
+        /*
+         * The head is added to the band rather than multiplied by it, which is
+         * what lets it bulge outside the trail. Roughly half again the tail's
+         * density at its centre, so it stays the brightest thing on the planet
+         * and saturates to solid white in its core while the turbulence still
+         * breaks up its edges.
+         */
+        float shape = head * 1.0 + band * tail * 0.9;
+
+        /*
+         * Lit cloud, so it has a day side and a terminator like everything else
+         * on the planet, and dissolved before the limb rather than drawn up to
+         * it.
+         *
+         * The day side is computed here rather than left to the renderer, for
+         * the reason given on localSunDirection -- Saturn fakes its own
+         * illumination and a lit material would disagree with it. The limb fade
+         * is the one the impact scars needed: two curved surfaces this close
+         * disagree about where the horizon is from pixel to pixel, and fading
+         * out before reaching it leaves no boundary to argue about. It is also
+         * what a cloud seen edge-on does anyway.
+         */
+        float day = smoothstep(-0.04, 0.36, dot(d, uSun));
+        float horizon = smoothstep(0.05, 0.30, dot(d, uView));
+        float visible = shape * day * horizon;
+
+        /*
+         * The one test worth making, and it is made before the turbulence
+         * rather than after: outside the head and its tail, or round the far
+         * side, there is no storm and no reason to sample two fields of noise.
+         * The band geometry has already spared the rest of the planet.
+         */
+        if (visible < 0.004) discard;
+
+        /*
+         * Turbulence, and the reason it is sampled on a direction that has
+         * been squashed in y and turned slowly about the axis: squashing
+         * stretches the cells along the latitude the way shear stretches real
+         * ones, and turning advects them without ever crossing a seam. A flat
+         * noise wrapped on a sphere would show its join straight down the
+         * middle of the tail.
+         */
+        float spin = uTime * 0.035;
+        float cs = cos(spin);
+        float sn = sin(spin);
+        vec3 turned = vec3(d.x * cs - d.z * sn, d.y * 3.2, d.x * sn + d.z * cs);
+        float churn = fbm3D(turned * 5.5);
+        float lumps = noise3D(turned * 15.0 + vec3(0.0, spin * 2.0, 0.0));
+
+        /*
+         * Mottled, never flat. The multiplier runs from well under one to well
+         * over it, so the same storm has holes you can see Saturn through and
+         * knots that are solid cloud.
+         */
+        float density = shape * (0.30 + 1.35 * churn) * (0.72 + 0.52 * lumps);
+        density = clamp(density, 0.0, 1.0);
+
+        /*
+         * Three colours, not two.
+         *
+         * White where the cloud is thickest, blue-grey in the hollows between
+         * the knots, and warm tan where it thins out towards Saturn -- which is
+         * what the Cassini frames show, and the reason the storm reads as
+         * weather sitting in the banding rather than as a white shape laid over
+         * it. A two-colour ramp made a monochrome cloud; the third one is what
+         * ties it to the planet underneath.
+         *
+         * The warm end is driven by the same field that drives the density, so
+         * tan appears exactly where the cloud is thin enough for Saturn's own
+         * colour to belong, and the finer field breaks it up so the boundary is
+         * mottled rather than a contour line.
+         */
+        /*
+         * Stretched across the turbulence's real range first, for the same
+         * reason the Mars veil's optical depth is. Summed octaves of noise sit
+         * between about 0.36 and 0.64, never near the ends -- so a ramp written
+         * across nought to one spends its whole life in the top third. Measured
+         * before this line went in: 98 per cent of the storm came out neutral
+         * white, nought per cent blue, two per cent warm. All three colours
+         * were in the shader and only one of them could ever be reached.
+         */
+        /*
+         * Driven by the finer field, not by the one that sets the thickness.
+         *
+         * Tying colour to density looked reasonable and put every tint in the
+         * wrong place: the thin parts are the faint parts, so all the blue and
+         * all the tan landed exactly where there was too little cloud to show
+         * them, and the storm still read as white with some dim edges. Colour
+         * and thickness are separate things in the photographs -- there are
+         * warm lanes cutting through the bright knots and cool shadow inside
+         * them -- so they are separate fields here.
+         */
+        float lift = smoothstep(0.30, 0.70, lumps);
+        vec3 cloud = mix(uShade, uBright, lift);
+
+        /*
+         * Warm where the cloud is thin, and driven by the thickness field
+         * rather than the shading one -- two different conditions, or the two
+         * tints land on the same pixels and cancel. That is what happened when
+         * both came off the same number: every blue pixel was also being made
+         * tan, the two averaged back to neutral, and the storm measured nought
+         * per cent blue with all three colours present in the shader.
+         *
+         * Thin cloud is where Saturn's own banding is closest to showing
+         * through, so tan belongs there; the shadowed hollows between the knots
+         * can be thick and blue at the same time, and now are.
+         */
+        float thin = 1.0 - smoothstep(0.38, 0.62, churn);
+        vec3 tone = mix(cloud, uWarm, thin * 0.50);
+
+        gl_FragColor = vec4(tone, density * uGain * day * horizon);
+        #include <tonemapping_fragment>
+        #include <colorspace_fragment>
+      }
+    `,
+  });
+
+  /*
+   * A band of sphere, not a whole one.
+   *
+   * This is the fix for the storm being unbearably slow to the point of not
+   * being able to turn the planet, and it is a geometry problem rather than a
+   * shader one. A full shell rasterises every pixel of Saturn and then throws
+   * five sixths of them away inside the fragment shader -- and discard is the
+   * one instruction that makes a tile-based GPU, which is what a Mac has, give
+   * up hidden-surface removal for the entire draw. So the cost was the whole
+   * disc, twice over, to draw a stripe.
+   *
+   * A sphere segment covering only eighteen to sixty-two degrees of latitude
+   * generates fragments for the stripe and nowhere else. Same picture, no
+   * discard needed for the shape, and the rasteriser never touches the rest of
+   * the planet.
+   *
+   * The width segments match Saturn's own 192 so the two surfaces curve
+   * together. That matters: at 1.006 radii the shell's polygonal sag was
+   * 0.0025 of a radius against an offset of 0.006, and two curved surfaces that
+   * close, disagreeing about where they are from pixel to pixel, is exactly the
+   * crawling distortion the impact scars had. At 1.012 radii with this
+   * tessellation the sag is 0.0001 -- a hundred times the margin -- and it
+   * still sits under Saturn's atmosphere shell at 1.018, so the planet's haze
+   * passes over the storm the way it passes over the bands.
+   */
+  const BAND_TOP = THREE.MathUtils.degToRad(62);
+  const BAND_BOTTOM = THREE.MathUtils.degToRad(18);
+  const clouds = new THREE.Mesh(
+    new THREE.SphereGeometry(
+      1, 192, 40,
+      0, Math.PI * 2,
+      Math.PI / 2 - BAND_TOP,
+      BAND_TOP - BAND_BOTTOM,
+    ),
+    material,
   );
-  band.rotation.x = Math.PI / 2;
-  band.position.y = radius * Math.sin(bandLatitude);
-  group.add(band);
+  clouds.scale.setScalar(radius * 1.012);
+  clouds.renderOrder = 1;
+  group.add(clouds);
 
-  // The head of the storm: the convective plume that is doing the work, and
-  // the brightest thing on the planet while it lasts.
-  const head = makeGlow(0xffffff, 0);
-  group.add(head);
+  const sunLocal = new THREE.Vector3();
+  const viewLocal = new THREE.Vector3();
 
-  let arc = 0.1;
+  /*
+   * Where on the planet the storm breaks out.
+   *
+   * Not an arbitrary longitude. A storm that erupts on the far side, or on the
+   * night side, is a storm nobody watching the event ever sees -- and both were
+   * a coin toss, because the head started at longitude zero in Saturn's own
+   * frame, which is wherever the planet happens to have turned to.
+   *
+   * The bisector of the way the camera is and the way the Sun is puts it on the
+   * part of the planet that is both facing the viewer and lit, which is the
+   * same rule the impacts use. The head then starts a little upwind of that so
+   * it drifts across the visible face rather than away from it, and the tail it
+   * lays down runs back across the middle of the disc.
+   */
+  const stormOrigin = new THREE.Vector3();
+  localSunDirection(target, sunLocal);
+  localCameraDirection(target, camera, viewLocal);
+  stormOrigin.copy(sunLocal).add(viewLocal);
+  if (stormOrigin.lengthSq() < 1e-6) stormOrigin.copy(viewLocal);
+  const originLongitude = Math.atan2(stormOrigin.z, stormOrigin.x);
 
   return {
     group,
     duration: 24,
     update(progress) {
-      const onset = smoothstep(0, 0.14, progress);
-      const spread = smoothstep(0.05, 0.72, progress);
-      const fade = 1 - smoothstep(0.78, 1, progress);
+      const onset = smoothstep(0, 0.12, progress);
+      const fade = 1 - smoothstep(0.82, 1, progress);
 
-      // Rebuilding the torus geometry every frame to grow its arc would be
-      // absurd; scaling the drawn range is what the geometry's own draw range
-      // is for.
-      const wanted = 0.1 + spread * (Math.PI * 2 - 0.1);
-      if (Math.abs(wanted - arc) > 0.01) {
-        arc = wanted;
-        band.geometry.dispose();
-        band.geometry = new THREE.TorusGeometry(
-          radius * bandRadius * 1.005, radius * 0.055 * (0.6 + spread * 0.6), 10, 128, arc,
-        );
-      }
-      band.material.opacity = onset * fade * 0.62;
-      band.rotation.z += 0.004;
+      localSunDirection(target, sunLocal);
+      localCameraDirection(target, camera, viewLocal);
+      uniforms.uSun.value.copy(sunLocal);
+      uniforms.uView.value.copy(viewLocal);
 
-      // The head runs ahead of the band it is laying down.
-      const headAngle = arc;
-      head.position.set(
-        Math.cos(headAngle + band.rotation.z) * radius * bandRadius * 1.01,
-        radius * Math.sin(bandLatitude),
-        Math.sin(headAngle + band.rotation.z) * radius * bandRadius * 1.01,
-      );
-      head.scale.setScalar(radius * (0.10 + onset * 0.16));
-      head.material.opacity = onset * fade * 0.9;
+      /*
+       * Slowly. The real storm takes months to get round the planet, and the
+       * previous version crossed it several times in twenty seconds, which is
+       * most of why it read as a spinning hoop rather than as weather. The head
+       * covers about a hundred and fifty degrees across the whole event -- a
+       * drift you can see if you watch it and not one that draws the eye away
+       * from what it is doing. It starts most of a radian upwind of the middle
+       * of the visible face and crosses it as the event runs.
+       */
+      uniforms.uHeadLongitude.value = originLongitude - 0.9 + progress * 2.6;
+      /*
+       * The tail outruns the head, because it is not only what the head left
+       * behind: the shear goes on pulling the trailing end further back long
+       * after the head has passed. By the end it is most of the way round.
+       */
+      uniforms.uTail.value = 0.35 + smoothstep(0.02, 0.9, progress) * 4.9;
+      uniforms.uTime.value = progress * 24;
+      uniforms.uGain.value = onset * fade * 0.94;
     },
     dispose() {
-      band.geometry.dispose(); band.material.dispose(); head.material.dispose();
+      clouds.geometry.dispose();
+      material.dispose();
     },
   };
 }
@@ -4162,6 +4678,11 @@ const EVENTS = [
     frequency: "Once every three Mars years on average — about 5½ Earth years",
     cause: "Mars's orbit is eccentric, so southern summer coincides with perihelion. The planet gets hot enough for the radiative forcing to lift dust faster than it settles; the airborne dust then absorbs sunlight, heats the air, and drives the winds that lift more.",
     note: "The winds top out around 60 mph, and in an atmosphere 1% as dense as ours they could not knock you over. The 2018 storm ended Opportunity's mission all the same.",
+    /*
+     * Watched from the day side. Dust is only dust when there is sunlight on
+     * it; see `composeSolarEventShot`.
+     */
+    facesSun: true,
     build: createMarsDustStorm,
   },
   {
@@ -4172,6 +4693,9 @@ const EVENTS = [
     frequency: "Roughly once per Saturnian year — once every 30 Earth years. The last was 2010",
     cause: "Water vapour is heavy enough to sit far below the visible cloud deck and cannot convect through the lighter dry air above it. Heat accumulates underneath for decades until the layer finally overturns all at once.",
     note: "The 2010 outbreak Cassini watched was the largest ever recorded — it ran for months and altered Saturn's atmospheric temperature and composition for over three years.",
+    // The storm places itself on the lit, viewer-facing part of the planet,
+    // and framing the day side is what makes that reachable.
+    facesSun: true,
     build: createSaturnWhiteSpot,
   },
   {
@@ -4437,6 +4961,11 @@ export function createSolarSystemEvents({
       frequency: event.frequency,
       cause: event.cause,
       note: event.note,
+      /**
+       * True when this event has to be watched from the body's day side.
+       * Read by the staging in main.js when it composes the shot.
+       */
+      facesSun: event.facesSun === true,
     })),
 
     getState: snapshot,
