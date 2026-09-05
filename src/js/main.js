@@ -1348,10 +1348,38 @@ import { POINTER_PROXY_LAYER } from "./scene/pointerProxies.js";
      * move is to do nothing at all.
      */
     if (definition.isSky) {
-      if (focusedBody) focusBody(null);
+      /*
+       * All the way out, not one step back.
+       *
+       * `focusBody(null)` routes through the ordinary back gesture, which pops
+       * the focus history -- so asking for a supernova after looking at Io took
+       * the viewer to Jupiter and played the sky event with a gas giant filling
+       * the frame. Which planet, and whether any, depended entirely on where
+       * they had been. Clearing the history first sends the same exit down the
+       * path that returns to the journey, which is the sky this event needs.
+       */
+      if (focusedBody) {
+        focusNavigationHistory.length = 0;
+        focusBody(null);
+      }
     } else if (focusedBody !== target) {
       focusBody(target);
     }
+
+    /*
+     * And then compose the shot, every time -- including, and especially, when
+     * the body was already focused and none of the above ran.
+     *
+     * That was the gap: the branch above correctly declines to re-focus a body
+     * the viewer is already sitting on, but "the camera is already where it
+     * needs to be" was only true the first time. After one event the viewer has
+     * usually turned the planet, and the second run of the same event played
+     * from that angle instead of the one it was staged for. Every event picks
+     * its own geometry from where the camera is -- impacts land on the bisector
+     * of the camera and the Sun, the meteor stream is chosen relative to it --
+     * so the shot is not decoration here. It is the input the staging reads.
+     */
+    composeSolarEventShot();
 
     solarEventTitle.textContent = definition.title;
     solarEventDetail.textContent = definition.detail;
@@ -1887,6 +1915,59 @@ import { POINTER_PROXY_LAYER } from "./scene/pointerProxies.js";
   let focusZoomTarget = 1;
   let focusZoomCurrent = 1;
   let focusPinchDistance = null;
+
+  /*
+   * The shot every space event is staged in.
+   *
+   * These are the values the camera holds on a fresh page, and that is not a
+   * coincidence -- it is why the first event anyone watches is framed well and
+   * the second one is not. Nothing was ever composing that shot: the event
+   * simply inherited whatever angle the viewer had last dragged to, and on a
+   * fresh page that happened to be the opening composition. Turn the planet
+   * while a plume is running (which is the right thing to do, and deliberately
+   * allowed) and every later event on that body plays from wherever you left
+   * the camera.
+   */
+  const SOLAR_EVENT_SHOT_YAW = -0.55;
+  const SOLAR_EVENT_SHOT_PITCH = 0.22;
+  /*
+   * Set when the shot could not be composed yet because the camera was still
+   * being handed back from a focused body. That return pins every rig value to
+   * the pre-focus snapshot on each of its frames, including the yaw and pitch
+   * targets, so anything written before it finishes is written over. The loop
+   * takes this up the moment the transition releases -- inside two seconds, and
+   * the countdown is five.
+   */
+  let pendingSolarEventShot = false;
+
+  /**
+   * Puts the camera back into that shot, whatever the viewer has done since.
+   *
+   * Set as targets rather than assigned outright, so the camera eases into
+   * position across the five-second countdown instead of cutting -- the wait
+   * was already there to let a flight settle, and this gives it something to
+   * settle into.
+   *
+   * Yaw is unbounded: dragging round a planet several times leaves it at the
+   * composed angle plus some whole number of turns, and setting it to the bare
+   * value would unwind every one of them on screen. Choosing the revolution
+   * nearest where the camera already is gives the same view by the shortest
+   * way round.
+   */
+  function composeSolarEventShot() {
+    if (focusExitTransition) {
+      pendingSolarEventShot = true;
+      return;
+    }
+    pendingSolarEventShot = false;
+    const turn = Math.PI * 2;
+    targetYaw = SOLAR_EVENT_SHOT_YAW
+      + Math.round((yaw - SOLAR_EVENT_SHOT_YAW) / turn) * turn;
+    targetPitch = SOLAR_EVENT_SHOT_PITCH;
+    // Any zoom the viewer applied to the last event is theirs, not the next
+    // one's; 1 is the distance the body's own focus framing was authored at.
+    focusZoomTarget = 1;
+  }
   // Null in ordinary inspection; set to the parent of the complete catalogue
   // atlas while its alternate system-wide shot is active.
   let satelliteOverviewParentName = null;
@@ -2242,6 +2323,16 @@ import { POINTER_PROXY_LAYER } from "./scene/pointerProxies.js";
       hovered: hoveredPlanetOrbit?.name ?? null,
       hit: findPlanetOrbitAtPointer()?.orbit?.userData?.planetName ?? null,
       threshold: raycaster.params.Line.threshold,
+      // The composed shot, so the event framing can be checked without a
+      // visible tab: yaw and pitch ease toward their targets in the loop.
+      yaw,
+      pitch,
+      targetYaw,
+      targetPitch,
+      focusZoomTarget,
+      focusZoomCurrent,
+      pendingSolarEventShot,
+      exitingFocus: focusExitTransition !== null,
     });
     window.__scene = world;
     /*
@@ -2716,6 +2807,15 @@ import { POINTER_PROXY_LAYER } from "./scene/pointerProxies.js";
      * block runs before this object exists and `const` is not hoisted.
      */
     window.__events = solarSystemEvents;
+    /*
+     * The staged route, as distinct from `__events.trigger`.
+     *
+     * `trigger` starts an event where the camera happens to be; this is what
+     * the dashboard and the card actually call, and it is the one that travels
+     * to the body, composes the shot and counts down. Checking that the shot is
+     * composed on every run means calling this one.
+     */
+    window.__presentEvent = presentSolarEvent;
     window.__eventsPanel = spaceEventsDashboard;
     window.__tour = guidedTour;
     window.__replayTour = replayGuidedTour;
@@ -7932,6 +8032,9 @@ import { POINTER_PROXY_LAYER } from "./scene/pointerProxies.js";
     }
     elapsedTime += deltaTime;
     const isRestoringFocusExit = advanceFocusExitTransition(deltaTime);
+    // A shot that had to wait for the camera to be handed back. See
+    // `composeSolarEventShot`.
+    if (pendingSolarEventShot && !focusExitTransition) composeSolarEventShot();
     // Focus mode and its short deterministic exit hold slow physical scene motion
     // without slowing input during ordinary exploration.
     // Asteroid hover slows the belt locally inside updateAsteroidBelt(). It must

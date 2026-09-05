@@ -614,13 +614,36 @@ function getSoftTexture() {
  * That is why the Io plume was invisible, and it was silently doing the same to
  * the Enceladus jets and the Triton geysers. Dividing by the inherited scale
  * gives 7.4 for Jupiter, unchanged, and 1.0 for Io, correct.
+ *
+ * The body's *own* scale, though, and emphatically not its world scale.
+ *
+ * They are the same number for every body but one. The Sun is not drawn at a
+ * fixed size: `updateSunApparentScale` rescales the whole solar group every
+ * frame so the star keeps its true angular size from wherever the viewer is,
+ * and pulling back from a focused Sun deliberately takes it down to 18% of the
+ * model. That factor is in the world scale and has nothing to do with how the
+ * body was built.
+ *
+ * Dividing by it baked whatever the star happened to be doing at the instant
+ * the event was constructed into the event's size, permanently. Start a coronal
+ * mass ejection and zoom out while it counts down, and it is built at, say,
+ * 0.78: every distance in it comes out 1/0.78 too large, the shell that should
+ * span 6.2 solar radii spans 7.9, and the eruption's foot -- which the shader
+ * places at a fixed *fraction* of that shell -- ends up a third of a radius
+ * above the photosphere, with clear sky underneath it. Measured: built at 1.0
+ * the emission reaches the limb; built at 0.78 the innermost light is at 1.38
+ * radii and there is nothing below it; built at 0.3 the eruption is twenty
+ * radii out and not visible at all.
+ *
+ * The own scale is the one that describes construction, so it is the one that
+ * converts to the host's local units. Anything the scene does to an ancestor
+ * afterwards then moves the event and the body together, which is the whole
+ * point of it being a child.
  */
-const _eventScale = new THREE.Vector3();
 function localRadius(target) {
   const radius = Number(target?.userData?.visualRadius) || 1;
   if (!target) return radius;
-  target.getWorldScale(_eventScale);
-  const scale = Math.max(1e-6, _eventScale.x);
+  const scale = Math.max(1e-6, Math.abs(target.scale.x));
   return radius / scale;
 }
 
@@ -2310,7 +2333,14 @@ function createSolarEjection(target, camera) {
        * When the neck pinches and how fast the base then climbs. The big one
        * stays rooted longest, because it is being fed for longer.
        */
-      detachAt: heavy ? 0.46 : 0.3 + Math.random() * 0.12,
+      /*
+       * The heavy one stays rooted well past halfway now. Letting go at 0.46
+       * put the separation at about the moment the cloud cleared the star's
+       * glow, so the first clearly visible thing was already detached -- the
+       * eruption read as something that arrived rather than something that
+       * left.
+       */
+      detachAt: heavy ? 0.56 : 0.3 + Math.random() * 0.12,
       liftRate: heavy ? 0.5 : 0.75 + Math.random() * 0.4,
     });
 
@@ -2444,7 +2474,29 @@ function createSolarEjection(target, camera) {
              * the processor when the site is built.
              */
             if (toward > profile.w) {
-              float lobe = pow(toward, profile.x);
+              /*
+               * A narrow foot that opens as it rises.
+               *
+               * The lobe used to be one width at every height, which meant the
+               * eruption left the star across the same forty-odd degrees of
+               * limb that it ended up spanning five radii out -- a dome
+               * sitting on the surface rather than something coming out of a
+               * place on it. A real ejection leaves through one active region,
+               * a small patch, and only opens into a fan once it is clear of
+               * the field that held it.
+               *
+               * Tightening by a fixed amount rather than by a multiple keeps
+               * every site's foot the same size: the big one and the small
+               * ones all start as a spot and each opens to its own width.
+               *
+               * The cone cutoff in profile.w is computed for the widest this
+               * lobe ever gets, so a tighter one here can only fall inside it
+               * -- the test stays correct.
+               */
+              float height = clamp(
+                (r - uSunFraction) / max(1e-4, head - uSunFraction), 0.0, 1.0);
+              float rooted = (1.0 - height) * (1.0 - height);
+              float lobe = pow(toward, profile.x + 14.0 * rooted);
               /*
                * Where the point sits between the trailing and leading edges of
                * this bubble. Once the trailing edge lifts off the photosphere
@@ -2477,18 +2529,45 @@ function createSolarEjection(target, camera) {
                 float core = exp(-atCore * atCore) * shape.w
                   * smoothstep(0.55, 0.9, toward);
 
-                /*
-                 * The neck. While the rope is still anchored there is material
-                 * all the way down to the surface; as it pinches this fades,
-                 * and what is left is a bubble with nothing under it.
-                 */
-                float root = 0.0;
-                if (profile.y > 0.001) {
-                  float down = (r - uSunFraction) / max(1e-4, head - uSunFraction);
-                  root = profile.y / (1.0 + 22.0 * down * down);
-                }
+                total += (body * cavity + front + core) * lobe * strength;
+              }
 
-                total += (body * cavity + front + core + root) * lobe * strength;
+              /*
+               * The stem: the part that stays on the star.
+               *
+               * This used to be one term inside the bubble's band, and that is
+               * why the eruption looked like it began out in space. The band is
+               * measured from the trailing edge, so the moment that edge lifted
+               * off the photosphere every radius below it fell outside the band
+               * and the whole low corona was skipped -- the cloud kept its
+               * light and the star kept nothing, leaving a bright thing with a
+               * gap under it and no visible origin.
+               *
+               * A real ejection does detach, but it does not leave the surface
+               * empty. The legs go on feeding while the rope is anchored, and
+               * after it lets go the flare arcade underneath stays lit for
+               * hours. So this is its own structure now, living in the low
+               * corona whatever the bubble above it is doing, bright while the
+               * eruption is rooted and fading to a residue afterwards.
+               *
+               * Its brightness is carried entirely in profile.y rather than
+               * being multiplied by the site's strength, because strength falls
+               * away as the cloud expands and the footpoint does not.
+               *
+               * The 1.5 was picked by measuring, not by eye. Rendering the same
+               * five moments at a range of values and reading the peak
+               * brightness the eruption adds at each height: 2.2 blew a sixth
+               * of the disc to flat white, and 0.8 left the foot dimmer than
+               * the cloud above it. At 1.5 the limb reads 234 against the old
+               * build's 73 early on, and 77 against 30 once the bubble has
+               * detached, with nothing clipped anywhere.
+               */
+              if (profile.y > 0.001) {
+                float stemTop = uSunFraction * 2.4;
+                if (r < stemTop) {
+                  float down = (r - uSunFraction) / (stemTop - uSunFraction);
+                  total += profile.y * 1.5 / (1.0 + 9.0 * down * down) * lobe;
+                }
               }
             }
           }
@@ -2592,6 +2671,39 @@ function createSolarEjection(target, camera) {
   volume.scale.setScalar(bound);
   volume.frustumCulled = false;
   volume.renderOrder = 3;
+
+  const cameraObject = new THREE.Vector3();
+
+  /*
+   * Where the camera is, worked out at the moment this mesh is drawn.
+   *
+   * For a raymarched volume the viewpoint is not a detail of the shading -- it
+   * is the geometry. Every ray starts here, so if this uniform describes a
+   * different camera from the one the frame is being rendered with, the whole
+   * eruption is reconstructed around a viewpoint that is not there: it detaches
+   * from the star and floats, with an empty gap where the low corona should be.
+   *
+   * It used to be written in `update()`, once per animation step, which is a
+   * frame-ordering promise the renderer never made. Anything that draws the
+   * scene without an animation step first -- a second pass, a resize, a frame
+   * where the star's own scale settles after the events have run -- draws the
+   * eruption from wherever the camera was last time the clock ticked. Zooming
+   * while a CME is running is the case that shows it, because that is when the
+   * viewpoint moves fastest.
+   *
+   * `onBeforeRender` is called by the renderer immediately before this object
+   * is submitted, after every world matrix in the scene has been brought up to
+   * date, and it is handed the camera actually being rendered with. There is no
+   * ordering left to get wrong.
+   */
+  volume.onBeforeRender = (renderer, scene, renderCamera) => {
+    const eye = renderCamera ?? camera;
+    if (!eye) return;
+    eye.getWorldPosition(cameraObject);
+    volume.worldToLocal(cameraObject);
+    uniforms.uCameraObject.value.copy(cameraObject);
+  };
+
   group.add(volume);
 
   /*
@@ -2602,7 +2714,7 @@ function createSolarEjection(target, camera) {
   const kernel = makeSurfaceGlow(0xffffff, 0);
   group.add(kernel);
 
-  const cameraObject = new THREE.Vector3();
+  const kernelView = new THREE.Vector3();
 
   return {
     group,
@@ -2610,12 +2722,7 @@ function createSolarEjection(target, camera) {
     update(progress) {
       const fade = 1 - smoothstep(0.78, 1, progress);
 
-      // Where the camera is, in the unit-sphere space the ray marches through.
-      volume.updateWorldMatrix(true, false);
-      camera?.getWorldPosition(cameraObject);
-      volume.worldToLocal(cameraObject);
-      uniforms.uCameraObject.value.copy(cameraObject);
-
+      // The viewpoint is not set here; see `volume.onBeforeRender`.
       let maxHead = 0;
 
       for (let index = 0; index < SITES; index += 1) {
@@ -2626,6 +2733,7 @@ function createSolarEjection(target, camera) {
 
         if (age <= 0 || age > 1.25) {
           shape.z = 0;
+          profile.y = 0;
           continue;
         }
 
@@ -2633,7 +2741,7 @@ function createSolarEjection(target, camera) {
          * Self-similar expansion, starting slow: an ejection accelerates out
          * of the corona rather than appearing at speed.
          */
-        const climbed = Math.pow(Math.min(age, 1), 1.3) * site.reach;
+        const climbed = Math.pow(Math.min(age, 1), 1.5) * site.reach;
         shape.x = sunFraction * (1 + climbed);
 
         /*
@@ -2655,8 +2763,14 @@ function createSolarEjection(target, camera) {
         // The prominence leaves after the front does and climbs inside it.
         shape.w = smoothstep(0.1, 0.4, age) * 1.4 * (index === 0 ? 1 : 0.5);
 
-        // How much is still being fed up the legs, gone once the neck goes.
-        profile.y = (1 - smoothstep(site.detachAt - 0.08, site.detachAt + 0.16, age)) * 0.7;
+        /*
+         * The stem. Full while the rope is anchored, then a quarter of that
+         * once the neck pinches -- the arcade left behind rather than nothing
+         * -- and out with the rest of the event at the end.
+         */
+        const anchored = 1 - smoothstep(site.detachAt - 0.08, site.detachAt + 0.16, age);
+        const alive = 1 - smoothstep(0.8, 1.08, age);
+        profile.y = site.strength * alive * (0.26 + 0.74 * anchored);
 
         if (shape.z > 0 && shape.x > maxHead) maxHead = shape.x;
       }
@@ -2680,9 +2794,23 @@ function createSolarEjection(target, camera) {
       const kernelSize = radius * (0.03 + flare * 0.16);
       kernel.scale.setScalar(kernelSize);
       kernel.position.copy(sites[0].axis).multiplyScalar(radius * 1.01);
-      kernel.material.opacity = Math.pow(flare, 0.6) * 0.9;
+      /*
+       * Faded by which way the footpoint is facing, because it cannot be hidden
+       * any other way.
+       *
+       * `makeSurfaceGlow` turns depth testing off -- see the note there, on
+       * camera-facing quads being sliced by the sphere they sit on -- and the
+       * contract that comes with that is the caller honouring the limb itself.
+       * This one never did. Sites are placed close to the limb by design, so
+       * roughly half the time the flare's footpoint is on the far side of the
+       * star and its bright kernel was still drawn straight over the disc.
+       */
+      localCameraDirection(target, camera, kernelView);
+      const facing = smoothstep(-0.05, 0.22, sites[0].axis.dot(kernelView));
+      kernel.material.opacity = Math.pow(flare, 0.6) * 0.9 * facing;
     },
     dispose() {
+      volume.onBeforeRender = () => {};
       volume.geometry.dispose();
       material.dispose();
       kernel.material.dispose();
