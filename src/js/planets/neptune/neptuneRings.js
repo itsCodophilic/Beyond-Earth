@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { markPointerProxy } from "../../scene/pointerProxies.js";
 
 // Scratch vectors reused by the per-frame update below. Allocating a fresh
 // Vector3 on every animation frame produced steady garbage-collector pressure,
@@ -350,6 +351,7 @@ function createInteractionTarget({ group, planet, radius, region, regionIndex })
     }),
   );
   target.name = `${region.name} interaction field`;
+  markPointerProxy(target);
   target.rotation.x = Math.PI * 0.5;
   target.renderOrder = -100;
   target.userData = {
@@ -405,6 +407,7 @@ function createArcInteractionTarget({ group, planet, radius, arc, arcIndex }) {
     }),
   );
   target.name = `${arc.name} interaction field`;
+  markPointerProxy(target);
   target.rotation.x = Math.PI * 0.5;
   target.renderOrder = -101;
   target.userData = {

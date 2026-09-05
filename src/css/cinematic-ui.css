@@ -2567,6 +2567,27 @@ body:has(.satellite-atlas-directory.is-visible) .progress.distance-readout {
   padding-left: 0.75rem;
 }
 
+/*
+ * The last event played, still marked after it has finished.
+ *
+ * Deliberately quieter than `.is-running`: one of these is a live state and
+ * the other is a memory, and if they looked the same the list would claim two
+ * things are happening at once.
+ */
+.events-dashboard__event.is-selected {
+  border-left: 1px solid rgba(255, 255, 255, 0.28);
+  padding-left: 0.75rem;
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.045),
+    rgba(255, 255, 255, 0) 42%
+  );
+}
+
+.events-dashboard__event.is-selected.is-running {
+  border-left-color: var(--cin-amber);
+}
+
 .events-dashboard__event-head {
   display: flex;
   flex-direction: column;

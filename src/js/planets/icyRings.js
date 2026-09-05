@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { markPointerProxy } from "../scene/pointerProxies.js";
 
 /**
  * The two ring systems nobody expected to exist.
@@ -260,6 +261,7 @@ export function createIcyRingSystem({ planet, config, radius, hoverTargets = [],
     });
     const target = new THREE.Mesh(targetGeometry, targetMaterial);
     target.name = `${ring.name} interaction field`;
+    markPointerProxy(target);
     target.rotation.x = Math.PI * 0.5;
     target.userData = {
       name: ring.name,

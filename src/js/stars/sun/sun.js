@@ -599,6 +599,196 @@ function createSolarPlasmaTexture() {
   return texture;
 }
 
+
+/**
+ * Every plasma sprite on the Sun, drawn in one call.
+ *
+ * The flares, the jets and the coronal arches used to be six hundred and
+ * twenty-one separate `Sprite` objects, each with its own material. That is a
+ * perfectly reasonable way to author them and a very expensive way to draw
+ * them: a sprite is a draw call, and six hundred draw calls were over half of
+ * everything this scene submitted in a frame -- from anywhere in the Solar
+ * System, whether or not the Sun was more than a few pixels across. Measured
+ * against the rest of the scene it came to about four milliseconds a frame,
+ * roughly a third of the frame budget, spent on the star's decoration.
+ *
+ * They are all the same quad, with the same texture, blended the same way, so
+ * they can be one instanced mesh instead: position, size, colour and opacity
+ * become per-instance attributes and the whole star's plasma costs a single
+ * call. The billboarding is done in the vertex shader exactly the way a sprite
+ * does it -- offset the corners in view space, so the quad always faces the
+ * camera and never foreshortens.
+ *
+ * `acquire()` hands back an object with the same surface the animation code
+ * was already writing to (`position`, `scale`, `material.opacity`, `visible`,
+ * `userData`), which is why none of that code had to change. `flush()` copies
+ * the frame's worth of it into the buffers in one pass.
+ */
+function createSolarSpriteBatch(texture) {
+  const handles = [];
+  let mesh = null;
+  let offsets = null;
+  let scales = null;
+  let alphas = null;
+  const worldPoint = new THREE.Vector3();
+
+  return {
+    /**
+     * A stand-in for one `THREE.Sprite`.
+     *
+     * `frame` is an optional rotation applied at flush time, for the arches:
+     * their tilt used to live on the group they were parented to, and there is
+     * no per-particle parent any more.
+     */
+    acquire(colour, owner = null, frame = null) {
+      const handle = {
+        position: new THREE.Vector3(),
+        scale: new THREE.Vector3(1, 1, 1),
+        material: { opacity: 0, color: new THREE.Color(colour) },
+        visible: true,
+        userData: {},
+        owner,
+        frame,
+      };
+      handles.push(handle);
+      return handle;
+    },
+
+    /** Called once, after every sprite that will ever exist has been claimed. */
+    build(name) {
+      const count = handles.length;
+      const geometry = new THREE.InstancedBufferGeometry();
+      geometry.setAttribute("position", new THREE.BufferAttribute(new Float32Array([
+        -0.5, -0.5, 0,
+        0.5, -0.5, 0,
+        0.5, 0.5, 0,
+        -0.5, 0.5, 0,
+      ]), 3));
+      geometry.setAttribute("uv", new THREE.BufferAttribute(new Float32Array([
+        0, 0, 1, 0, 1, 1, 0, 1,
+      ]), 2));
+      geometry.setIndex([0, 1, 2, 0, 2, 3]);
+
+      offsets = new Float32Array(count * 3);
+      scales = new Float32Array(count * 2);
+      alphas = new Float32Array(count);
+      const colours = new Float32Array(count * 3);
+      for (let index = 0; index < count; index += 1) {
+        const { color } = handles[index].material;
+        colours[index * 3] = color.r;
+        colours[index * 3 + 1] = color.g;
+        colours[index * 3 + 2] = color.b;
+      }
+
+      geometry.setAttribute("iOffset", new THREE.InstancedBufferAttribute(offsets, 3));
+      geometry.setAttribute("iScale", new THREE.InstancedBufferAttribute(scales, 2));
+      geometry.setAttribute("iColour", new THREE.InstancedBufferAttribute(colours, 3));
+      geometry.setAttribute("iAlpha", new THREE.InstancedBufferAttribute(alphas, 1));
+      geometry.instanceCount = count;
+
+      const material = new THREE.ShaderMaterial({
+        uniforms: { map: { value: texture } },
+        transparent: true,
+        depthWrite: false,
+        depthTest: true,
+        blending: THREE.AdditiveBlending,
+        toneMapped: true,
+        vertexShader: /* glsl */`
+          attribute vec3 iOffset;
+          attribute vec2 iScale;
+          attribute vec3 iColour;
+          attribute float iAlpha;
+
+          varying vec2 vUv;
+          varying vec3 vColour;
+          varying float vAlpha;
+
+          void main() {
+            vUv = uv;
+            vColour = iColour;
+            vAlpha = iAlpha;
+            /*
+             * Billboarding, done the way a sprite does it: put the instance
+             * where it belongs in view space, then push the quad's corners out
+             * sideways from there. Because the offset happens after the view
+             * transform, the quad has no orientation of its own to turn away.
+             */
+            vec4 viewPosition = modelViewMatrix * vec4(iOffset, 1.0);
+            viewPosition.xy += position.xy * iScale;
+            gl_Position = projectionMatrix * viewPosition;
+          }
+        `,
+        fragmentShader: /* glsl */`
+          uniform sampler2D map;
+
+          varying vec2 vUv;
+          varying vec3 vColour;
+          varying float vAlpha;
+
+          void main() {
+            vec4 texel = texture2D(map, vUv);
+            gl_FragColor = vec4(vColour * texel.rgb, texel.a * vAlpha);
+            #include <tonemapping_fragment>
+            #include <colorspace_fragment>
+          }
+        `,
+      });
+
+      mesh = new THREE.Mesh(geometry, material);
+      mesh.name = name;
+      // The Sun's plasma sits in a known, fixed shell around the origin of the
+      // solar system, and the bounding sphere three would compute for a
+      // one-quad geometry is not that shell -- so culling is done by hand,
+      // which here means not at all.
+      mesh.frustumCulled = false;
+      // Not a pick target. The photosphere is the only clickable part of the
+      // star, and it is registered separately.
+      mesh.raycast = () => {};
+      return mesh;
+    },
+
+    mesh: () => mesh,
+
+    /**
+     * One pass over every sprite, once a frame.
+     *
+     * A sprite whose group is switched off, or which the animation has faded
+     * out, is collapsed to zero size rather than merely made transparent: a
+     * transparent quad still costs the pixels it covers, and a degenerate one
+     * costs nothing.
+     */
+    flush() {
+      if (!mesh) return;
+      for (let index = 0; index < handles.length; index += 1) {
+        const handle = handles[index];
+        const at2 = index * 2;
+        const live = handle.visible
+          && handle.material.opacity > 0.001
+          && (!handle.owner || handle.owner.visible);
+        if (!live) {
+          scales[at2] = 0;
+          scales[at2 + 1] = 0;
+          alphas[index] = 0;
+          continue;
+        }
+        worldPoint.copy(handle.position);
+        if (handle.frame) worldPoint.applyQuaternion(handle.frame);
+        const at3 = index * 3;
+        offsets[at3] = worldPoint.x;
+        offsets[at3 + 1] = worldPoint.y;
+        offsets[at3 + 2] = worldPoint.z;
+        scales[at2] = handle.scale.x;
+        scales[at2 + 1] = handle.scale.y;
+        alphas[index] = handle.material.opacity;
+      }
+      const { attributes } = mesh.geometry;
+      attributes.iOffset.needsUpdate = true;
+      attributes.iScale.needsUpdate = true;
+      attributes.iAlpha.needsUpdate = true;
+    },
+  };
+}
+
 /**
  * Creates one localized plasma eruption.
  *
@@ -606,7 +796,7 @@ function createSolarPlasmaTexture() {
  */
 function createPlasmaJet(
   { latitude, longitude, height, bend, phase },
-  fireTexture,
+  batch,
   particleCount = 42,
 ) {
   const direction = sphericalDirection(latitude, longitude);
@@ -635,23 +825,11 @@ function createPlasmaJet(
     },
 
     (_, index) => {
-      const material = new THREE.SpriteMaterial({
-        map: fireTexture,
-        color: colors[index % colors.length],
-        transparent: true,
-        opacity: 0,
-        blending: THREE.AdditiveBlending,
-        depthWrite: false,
-        depthTest: true,
-      });
-
-      const particle = new THREE.Sprite(material);
+      const particle = batch.acquire(colors[index % colors.length], group);
 
       particle.userData.offset = index / particleCount;
 
       particle.userData.phase = phase + index * 1.17;
-
-      group.add(particle);
 
       return particle;
     },
@@ -660,23 +838,13 @@ function createPlasmaJet(
   /*
    * Compact active-region glow at the plasma jet's base.
    */
-  const core = new THREE.Sprite(
-    new THREE.SpriteMaterial({
-      map: fireTexture,
-      color: 0xffffee,
-      transparent: true,
-      opacity: 0.52,
-      blending: THREE.AdditiveBlending,
-      depthWrite: false,
-      depthTest: true,
-    }),
-  );
+  const core = batch.acquire(0xffffee, group);
+
+  core.material.opacity = 0.52;
 
   core.position.copy(direction).multiplyScalar(SUN_RADIUS * 1.008);
 
   core.scale.set(0.46, 0.46, 1);
-
-  group.add(core);
 
   group.userData = {
     direction,
@@ -697,7 +865,7 @@ function createPlasmaJet(
  * The loop is built from individual plasma fragments instead of a continuous
  * tube, preventing the effect from looking like a decorative neon ring.
  */
-function createCoronalLoop({ angle, width, height, tilt, phase }, fireTexture, particleCount = 34) {
+function createCoronalLoop({ angle, width, height, tilt, phase }, batch, particleCount = 34) {
   const startAngle = angle - width * 0.5;
 
   const endAngle = angle + width * 0.5;
@@ -725,7 +893,15 @@ function createCoronalLoop({ angle, width, height, tilt, phase }, fireTexture, p
 
   group.name = "Coronal loop";
 
+  /*
+   * The arch's tilt. It used to be the group's own rotation, and the particles
+   * inherited it by being parented to the group. They are instances in a
+   * shared mesh now and have no parent to inherit from, so the same rotation
+   * is carried on each one and applied where the position is written out.
+   */
   group.rotation.x = tilt;
+  const tiltFrame = new THREE.Quaternion()
+    .setFromAxisAngle(new THREE.Vector3(1, 0, 0), tilt);
 
   const colors = [0xff4310, 0xff711b, 0xffa430, 0xffffa3];
 
@@ -735,23 +911,11 @@ function createCoronalLoop({ angle, width, height, tilt, phase }, fireTexture, p
     },
 
     (_, index) => {
-      const particle = new THREE.Sprite(
-        new THREE.SpriteMaterial({
-          map: fireTexture,
-          color: colors[index % colors.length],
-          transparent: true,
-          opacity: 0,
-          blending: THREE.AdditiveBlending,
-          depthWrite: false,
-          depthTest: true,
-        }),
-      );
+      const particle = batch.acquire(colors[index % colors.length], group, tiltFrame);
 
       particle.userData.offset = index / particleCount;
 
       particle.userData.phase = phase + index * 0.93;
-
-      group.add(particle);
 
       return particle;
     },
@@ -777,7 +941,7 @@ function createCoronalLoop({ angle, width, height, tilt, phase }, fireTexture, p
  */
 function createSolarFlare(
   { latitude, longitude, height, width, bend, phase },
-  glowTexture,
+  batch,
   { arcCount = 92, ejectaCount = 34, ringSegments = 96 } = {},
 ) {
   const group = new THREE.Group();
@@ -801,23 +965,11 @@ function createSolarFlare(
   /*
    * Bright flare footpoint.
    */
-  const core = new THREE.Sprite(
-    new THREE.SpriteMaterial({
-      map: glowTexture,
-      color: 0xffffd2,
-      transparent: true,
-      opacity: 0,
-      blending: THREE.AdditiveBlending,
-      depthWrite: false,
-      depthTest: true,
-    }),
-  );
+  const core = batch.acquire(0xffffd2, group);
 
   core.position.copy(direction).multiplyScalar(SUN_RADIUS * 1.008);
 
   core.scale.set(0.35, 0.35, 1);
-
-  group.add(core);
 
   /*
    * Build the curved magnetic flare path.
@@ -863,23 +1015,11 @@ function createSolarFlare(
     },
 
     (_, index) => {
-      const particle = new THREE.Sprite(
-        new THREE.SpriteMaterial({
-          map: glowTexture,
-          color: colors[index % colors.length],
-          transparent: true,
-          opacity: 0,
-          blending: THREE.AdditiveBlending,
-          depthWrite: false,
-          depthTest: true,
-        }),
-      );
+      const particle = batch.acquire(colors[index % colors.length], group);
 
       particle.userData.offset = index / arcCount;
 
       particle.userData.phase = phase + index * 0.63;
-
-      group.add(particle);
 
       return particle;
     },
@@ -894,25 +1034,13 @@ function createSolarFlare(
     },
 
     (_, index) => {
-      const particle = new THREE.Sprite(
-        new THREE.SpriteMaterial({
-          map: glowTexture,
-          color: colors[index % colors.length],
-          transparent: true,
-          opacity: 0,
-          blending: THREE.AdditiveBlending,
-          depthWrite: false,
-          depthTest: true,
-        }),
-      );
+      const particle = batch.acquire(colors[index % colors.length], group);
 
       particle.userData.offset = index / ejectaCount;
 
       particle.userData.angle = (index / ejectaCount) * Math.PI * 2;
 
       particle.userData.phase = phase + index * 1.13;
-
-      group.add(particle);
 
       return particle;
     },
@@ -1224,8 +1352,15 @@ export function createSun({ world, hoverTargets, texture, quality = "high" }) {
     },
   ];
 
+  /*
+   * One instanced mesh for the whole star's plasma. Every flare, jet and arch
+   * particle is claimed from it here and drawn from it once per frame; see
+   * `createSolarSpriteBatch` for why.
+   */
+  const spriteBatch = createSolarSpriteBatch(solarPlasmaTexture);
+
   const plasmaJets = jetData.map((config) =>
-    createPlasmaJet(config, solarPlasmaTexture, creationProfile.jetParticles),
+    createPlasmaJet(config, spriteBatch, creationProfile.jetParticles),
   );
 
   system.add(...plasmaJets);
@@ -1251,7 +1386,7 @@ export function createSun({ world, hoverTargets, texture, quality = "high" }) {
     },
   ].map((config) => createCoronalLoop(
     config,
-    solarPlasmaTexture,
+    spriteBatch,
     creationProfile.loopParticles,
   ));
 
@@ -1290,7 +1425,7 @@ export function createSun({ world, hoverTargets, texture, quality = "high" }) {
   ];
 
   const solarFlares = flareData.map((config) =>
-    createSolarFlare(config, solarPlasmaTexture, {
+    createSolarFlare(config, spriteBatch, {
       arcCount: creationProfile.flareArcParticles,
       ejectaCount: creationProfile.flareEjectaParticles,
       ringSegments: creationProfile.flareRingSegments,
@@ -1300,6 +1435,10 @@ export function createSun({ world, hoverTargets, texture, quality = "high" }) {
   system.add(...solarFlares);
 
   system.add(...coronalLoops);
+
+  // Built only now, because it sizes itself to exactly the number of sprites
+  // the three families between them turned out to want.
+  system.add(spriteBatch.build("Solar plasma sprites"));
 
   /*
    * The Sun lights the rest of the solar system.
@@ -1334,6 +1473,7 @@ export function createSun({ world, hoverTargets, texture, quality = "high" }) {
     plasmaJets,
     coronalLoops,
     solarFlares,
+    spriteBatch,
     light,
     capacityQualityName: qualityName,
     performanceSignature: "",
@@ -1682,4 +1822,10 @@ export function updateSun(sun, time, motionScale = 1) {
 
     shockWave.rotation.z += 0.0015 * motionScale;
   });
+
+  /*
+   * Everything the three loops above just wrote, copied into the instanced
+   * buffers in one pass. This is the only place the plasma reaches the GPU.
+   */
+  sun.spriteBatch?.flush();
 }

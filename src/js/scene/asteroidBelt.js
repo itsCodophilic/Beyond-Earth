@@ -18,6 +18,7 @@
 import * as THREE from "three";
 import { ImprovedNoise } from "three/addons/math/ImprovedNoise.js";
 import { SOLAR_ORBIT_SCALE, getAsteroidVisualRadius, getSizeComparisonText, parseDiameterKm } from "../config/celestialScale.js";
+import { markPointerProxy } from "./pointerProxies.js";
 
 const BELT_INNER_RADIUS = 44 * SOLAR_ORBIT_SCALE;
 const BELT_OUTER_RADIUS = 52 * SOLAR_ORBIT_SCALE;
@@ -1505,6 +1506,7 @@ function createAsteroidObject({
     }),
   );
   interactionTarget.name = `${name} interaction target`;
+  markPointerProxy(interactionTarget);
   group.add(interactionTarget);
 
   const physicalDiameterKm = parseDiameterKm(diameter);

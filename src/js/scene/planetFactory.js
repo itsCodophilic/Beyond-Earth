@@ -20,6 +20,7 @@ import {
   createNeptuneSurfaceMaterial,
   updateNeptuneAtmosphereLayers,
 } from "../planets/neptune/neptuneSurface.js";
+import { markPointerProxy } from "./pointerProxies.js";
 
 const GAS_PROFILES = {
   Jupiter: {
@@ -1473,6 +1474,7 @@ export function createPlanet({
       }),
     );
     hitTarget.name = `${config.name} interaction target`;
+    markPointerProxy(hitTarget);
     mesh.add(hitTarget);
   }
 

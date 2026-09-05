@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { markPointerProxy } from "../../scene/pointerProxies.js";
 
 // Scratch vectors reused by the per-frame update below. Allocating a fresh
 // Vector3 on every animation frame produced steady garbage-collector pressure,
@@ -614,6 +615,7 @@ export function createUranusRingSystem({ planet, radius, quality = "high", hover
       }),
     );
     target.name = `${ring.name} interaction field`;
+    markPointerProxy(target);
     target.rotation.x = Math.PI * 0.5;
     target.userData = {
       name: ring.name,

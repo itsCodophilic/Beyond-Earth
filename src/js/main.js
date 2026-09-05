@@ -102,6 +102,7 @@ const JOURNEY_UI_SELECTOR = [
 ].join(", ");
 import { createIntroSequence } from './ui/introSequence.js';
 import { createCosmicIntro } from './scene/space/cosmicIntro.js';
+import { POINTER_PROXY_LAYER } from "./scene/pointerProxies.js";
 
 // An async immediately-invoked function lets us await texture loading while
 // keeping all application variables private to this module.
@@ -1715,6 +1716,17 @@ import { createCosmicIntro } from './scene/space/cosmicIntro.js';
   timer.connect(document);
   // Raycaster projects an invisible ray from the camera through the mouse position.
   const raycaster = new THREE.Raycaster();
+  /*
+   * The pick proxies live on their own layer, and this is the half of that
+   * arrangement that keeps them clickable.
+   *
+   * Every generously-sized invisible mesh that exists to make a small thing
+   * easier to hit now sits on a layer the camera does not draw, which stopped
+   * four hundred-odd do-nothing draw calls a frame. Layer zero stays enabled
+   * here, so everything else is found exactly as before. See
+   * `scene/pointerProxies.js`.
+   */
+  raycaster.layers.enable(POINTER_PROXY_LAYER);
   // Line raycasting uses a world-space threshold. It is updated dynamically from
   // camera distance before every orbit scan so thin guides remain discoverable.
   raycaster.params.Line.threshold = 0.28;
@@ -2218,6 +2230,9 @@ import { createCosmicIntro } from './scene/space/cosmicIntro.js';
     window.__bodies = planets;
     window.__orbits = orbitTargets;
     window.__camera = camera;
+    // The star, so its plasma batching can be exercised without the render
+    // loop -- the only way to check that layer from an automated tab.
+    window.__sun = sun;
     window.__orbitProbe = () => ({
       hasLeftOpeningEarthView,
       focusedBody: focusedBody?.name ?? null,

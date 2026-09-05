@@ -37,6 +37,7 @@ import {
   TRANS_NEPTUNIAN_MOON_PARENTS,
   TRANS_NEPTUNIAN_MOON_SYSTEMS,
 } from "./transNeptunianMoonCatalog.js";
+import { markPointerProxy } from "../../scene/pointerProxies.js";
 
 const MOON_SYSTEMS = Object.freeze({
   Mars: [
@@ -480,6 +481,7 @@ function createSatelliteMesh(
       }),
     );
     hitTarget.name = `${profile.name} interaction target`;
+    markPointerProxy(hitTarget);
     const minimumHitRadius = parentName === "Pluto"
       ? (profile.name === "Charon" ? 0.012 : 0.040)
       : jovian ? 0.10 : 0.14;

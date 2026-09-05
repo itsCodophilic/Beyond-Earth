@@ -154,6 +154,15 @@ export function createSpaceEventsDashboard({ events, trigger = null, onView = nu
   let unsubscribe = null;
   let query = "";
   let lastActiveId = null;
+  /*
+   * The event most recently played, which outlives the event itself.
+   *
+   * `activeId` is only set while something is running, so on its own it marks
+   * a row for a few seconds and then lets go -- and by the time anyone opens
+   * this list to see what they just watched, nothing is marked at all. Holding
+   * the last one keeps the answer to "which was that?" on screen.
+   */
+  let selectedId = null;
 
   /* --------------------------------------------------------------- rendering */
 
@@ -165,6 +174,7 @@ export function createSpaceEventsDashboard({ events, trigger = null, onView = nu
    * of state that survives an event ending.
    */
   function renderCounts(state) {
+    selectedId = state.lastPlayedId ?? state.activeId ?? selectedId;
     roster.forEach((event) => {
       const row = rowFor.get(event.id);
       if (!row) return;
@@ -180,6 +190,9 @@ export function createSpaceEventsDashboard({ events, trigger = null, onView = nu
         chip.dataset.state = running ? "live" : seen === 0 ? "unseen" : "seen";
       }
       if (state.activeId !== lastActiveId) row.classList.toggle("is-running", running);
+      row.classList.toggle("is-selected", event.id === selectedId);
+      if (event.id === selectedId) row.setAttribute("aria-current", "true");
+      else row.removeAttribute("aria-current");
     });
     lastActiveId = state.activeId;
   }
@@ -245,6 +258,17 @@ export function createSpaceEventsDashboard({ events, trigger = null, onView = nu
       // thing that changes it is travelling, and travelling closes the panel.
       markAvailability();
       applyFilter();
+      /*
+       * Put the last event played where the viewer can see it. A list of
+       * seventeen rows opens at the top, and the one they just watched is
+       * usually not near it.
+       */
+      const marked = selectedId ? rowFor.get(selectedId) : null;
+      if (marked && !marked.hidden) {
+        requestAnimationFrame(() => {
+          marked.scrollIntoView({ block: "center", behavior: "auto" });
+        });
+      }
       // Deferred a frame: focusing inside a node that was hidden on the
       // previous frame is a no-op in some browsers.
       requestAnimationFrame(() => closeButton?.focus({ preventScroll: true }));

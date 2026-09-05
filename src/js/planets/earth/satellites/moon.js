@@ -14,6 +14,7 @@
 import * as THREE from "three";
 import { makeNoiseTexture } from "../../../graphics/proceduralTextures.js";
 import { EARTH_VISUAL_RADIUS, getMoonVisualRadius, getSizeComparisonText } from "../../../config/celestialScale.js";
+import { markPointerProxy } from "../../../scene/pointerProxies.js";
 
 const MOON_DIAMETER_KM = 3_474.8;
 const MOON_RADIUS = getMoonVisualRadius(MOON_DIAMETER_KM);
@@ -86,6 +87,7 @@ export function createMoonSystem({ earth, textures, hoverTargets, quality = "hig
     }),
   );
   moonHitTarget.name = "Moon interaction target";
+  markPointerProxy(moonHitTarget);
   moon.add(moonHitTarget);
 
   // The pivot remains at Earth's center; rotating it moves the offset Moon in a circle.

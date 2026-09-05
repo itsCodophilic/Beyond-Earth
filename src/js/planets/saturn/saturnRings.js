@@ -17,6 +17,7 @@
  * inner particles always overtake outer particles smoothly.
  */
 import * as THREE from "three";
+import { markPointerProxy } from "../../scene/pointerProxies.js";
 
 const TAU = Math.PI * 2;
 const SATURN_EQUATORIAL_RADIUS_KM = 60_268;
@@ -696,6 +697,7 @@ function createRingInteractionTargets({ group, planet, radius }) {
       }),
     );
     target.name = `${region.name} interaction field`;
+    markPointerProxy(target);
     target.rotation.x = Math.PI * 0.5;
     target.renderOrder = -100;
     target.userData = {
