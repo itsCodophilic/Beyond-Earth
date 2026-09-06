@@ -876,7 +876,23 @@ function createImpactSwarm(target, camera) {
      * all that arrives is a flash with no cause. So each run-in starts just
      * outside the frame edge, on its own azimuth.
      */
-    const offAxis = THREE.MathUtils.degToRad(24 + Math.random() * 40);
+    /*
+     * How far round from the middle of the lit face this one lands.
+     *
+     * The shot now stands sunward of the planet, so the staging direction and
+     * the day side are the same place and most of the swarm arrives where the
+     * light is -- which is what makes the scar and the plume's shadow readable
+     * at all. But a swarm that only ever hits the middle of the disc reads as
+     * aimed. Every third one is sent out to the terminator instead, where it
+     * detonates against the darkened limb: no scar to see there, just the
+     * fireball and the plume rising into sunlight above a surface still in
+     * night. Both of Jupiter's watched impact seasons produced exactly that
+     * shot, and it is the more dramatic of the two.
+     */
+    const atTerminator = index % 3 === 2;
+    const offAxis = THREE.MathUtils.degToRad(
+      atTerminator ? 72 + Math.random() * 18 : 18 + Math.random() * 34,
+    );
     const entry = new THREE.Vector3()
       .copy(staging).multiplyScalar(Math.cos(offAxis))
       .addScaledVector(stageRight, Math.sin(offAxis) * Math.cos(azimuth))
@@ -1235,108 +1251,166 @@ function createImpactSwarm(target, camera) {
  * The colour is the giveaway and it is real: these deposits are yellow, white
  * and red because they are sulphur allotropes, not rock dust.
  */
+/*
+ * The volcanoes of Io, which are not one thing.
+ *
+ * Io has more than four hundred active vents and they are not variations on a
+ * theme -- they are different machines, and a photograph shows it. What sets
+ * them apart is what is driving each one and how deep it comes from:
+ *
+ *   Prometheus and its kind, on the equatorial plains, are shallow. A lava
+ *   flow creeps over ground frosted with sulphur dioxide, the frost flashes to
+ *   vapour underneath it, and what rises is almost pure SO2 -- a faint,
+ *   translucent blue-white halo a hundred kilometres high that comes straight
+ *   back down as snow. The ground around them is bright yellow and, where the
+ *   fresh frost lands, pure white. These are the common ones.
+ *
+ *   Pele is not shallow. It is a lava lake venting from deep in the mantle,
+ *   and what it throws out is raw short-chain sulphur -- S3 and S4 -- from
+ *   hundreds of kilometres down. The plume is darker, blue-grey with an amber
+ *   core where the hot gas is still glowing, and it stands 300 kilometres tall
+ *   over a caldera ringed by a deposit the colour of dried blood, a thousand
+ *   kilometres across. There is one of these in view, not five.
+ *
+ *   The high-latitude vents are old. Their deposits have sat under Jupiter's
+ *   radiation belts long enough to be broken down, and what is left is the
+ *   pastel mustards and olive greens of altered sulphur, under a duller
+ *   grey-white plume.
+ *
+ *   And Tvashtar is a different chemistry altogether: molten silicate rock at
+ *   1,600 K tearing through the crust in a curtain of fire. It glows
+ *   orange-red at its base -- that is the lava itself, visible from orbit --
+ *   and lays down pitch-black basaltic streaks that nothing else on Io makes.
+ *
+ * So the field below places one of each in the right place for its kind, and
+ * the plains get several of the small frosted ones. Drawing five copies of the
+ * same vent was the thing this replaces, and it made Io look like a texture
+ * rather than a world.
+ */
+const IO_VENT_KINDS = {
+  sulphurDioxide: {
+    name: "Prometheus-type SO2 plume",
+    grains: 110,
+    // A hundred kilometres on an 1,821 km moon.
+    apex: 0.062,
+    span: 11,
+    tilt: [8, 40],
+    // Faint and translucent: the whole point of these is that you can see the
+    // ground through them.
+    base: 0xbcd8f2,
+    top: 0xe8f4ff,
+    brightness: 0.52,
+    hotspot: 0xffd9a0,
+    hotspotSize: 0.028,
+    deposit: 0xf0cf4e,
+    depositSpan: 7.5,
+    inner: 0xf7f4ea,
+    innerSpan: 3.0,
+  },
+  deepSulphur: {
+    name: "Pele-type deep sulphur vent",
+    grains: 380,
+    // 300-400 km, the tallest thing Io does.
+    apex: 0.26,
+    span: 24,
+    tilt: [6, 48],
+    base: 0xffab45,
+    top: 0x7f8ea4,
+    brightness: 1.0,
+    hotspot: 0xff7a2a,
+    hotspotSize: 0.055,
+    // The blood-red ring, and the dark caldera floor inside it.
+    deposit: 0x8f1d20,
+    depositSpan: 17,
+    inner: 0x2a1714,
+    innerSpan: 6.5,
+  },
+  irradiatedPolar: {
+    name: "high-latitude altered deposit",
+    grains: 80,
+    apex: 0.05,
+    span: 9,
+    tilt: [10, 38],
+    base: 0xb6bcbe,
+    top: 0xd2d6d4,
+    brightness: 0.44,
+    hotspot: 0xd8c8a4,
+    hotspotSize: 0.022,
+    deposit: 0xb59f5c,
+    depositSpan: 8.5,
+    inner: 0x8d9463,
+    innerSpan: 4.0,
+  },
+  silicate: {
+    name: "Tvashtar-type silicate fissure",
+    grains: 260,
+    apex: 0.19,
+    span: 18,
+    tilt: [5, 34],
+    base: 0xff5a1e,
+    top: 0x99a2ad,
+    brightness: 0.86,
+    hotspot: 0xffdc6a,
+    hotspotSize: 0.048,
+    deposit: 0x141110,
+    depositSpan: 11,
+    inner: 0x0a0908,
+    innerSpan: 4.5,
+  },
+};
+
+/*
+ * Where each one sits, in the moon's own latitude and in longitude measured
+ * from whichever meridian the camera happens to be over. Longitude near zero
+ * is the middle of the disc; near ninety it is the limb, which is where a
+ * plume stands up against black sky instead of being seen end-on as a ring.
+ *
+ * The big one is put on the limb deliberately. It is the only one tall enough
+ * to be worth that place, and everything else is arranged not to compete with
+ * it.
+ */
+const IO_VENT_FIELD = [
+  { kind: "deepSulphur", latitude: -19, longitude: 79 },
+  { kind: "silicate", latitude: 60, longitude: -66 },
+  { kind: "sulphurDioxide", latitude: -2, longitude: -34 },
+  { kind: "sulphurDioxide", latitude: 14, longitude: 22 },
+  { kind: "sulphurDioxide", latitude: -26, longitude: 41 },
+  { kind: "irradiatedPolar", latitude: 74, longitude: 14 },
+  { kind: "irradiatedPolar", latitude: -71, longitude: -20 },
+];
+
 function createIoPlume(target, camera) {
   const group = new THREE.Group();
   group.name = "Io eruption event";
   const radius = localRadius(target);
 
-  // A plume on the limb is the only place one reads: standing out of the middle
-  // of the disc it is seen end-on and looks like a painted circle.
   const facing = localCameraDirection(target, camera, new THREE.Vector3());
-  const vent = limbPoint(facing, new THREE.Vector3());
-  const ventDirection = vent.clone().normalize();
+  // The meridian the camera is over, so the field below can be laid out in
+  // longitudes relative to it and still land where it was meant to.
+  const centreLongitude = Math.atan2(facing.z, facing.x);
 
   /*
-   * Built from particles on ballistic arcs, not from a cone.
-   *
-   * A cone was the first attempt and it could never have worked: a mesh has an
-   * edge, and an edge is the one thing a plume has not got. It rendered as a
-   * grey ice-cream cone stuck to the limb.
-   *
-   * What is actually happening is simpler and easier to draw honestly. Io has
-   * no atmosphere, so every particle leaving a vent is on a ballistic arc --
-   * up, over, and back down. Nothing spreads it, nothing slows it. Draw a few
-   * hundred of those arcs and the umbrella shape appears on its own, because
-   * the umbrella *is* the envelope of the arcs. Pele and Tvashtar reach 300-500
-   * km above a 1,821 km moon, so the apex here is about a fifth of a radius.
+   * Every vent's spray shares one buffer, so the whole field is one draw call
+   * however many vents there are. This is the same trade the meteor shower
+   * makes and for the same reason: seven separate Points objects would cost
+   * seven state changes a frame to draw the same number of particles.
    */
-  const COUNT = 900;
-  const APEX = radius * 0.24;
-  // How far around the moon a grain can travel before it lands, as an angle at
-  // the centre. Pele's deposit ring is roughly 1,300 km across on a 1,821 km
-  // moon, so the far edge of the canopy sits about 20 degrees round the limb.
-  const SPAN = THREE.MathUtils.degToRad(23);
+  const vents = [];
+  let totalGrains = 0;
+  for (let index = 0; index < IO_VENT_FIELD.length; index += 1) {
+    totalGrains += IO_VENT_KINDS[IO_VENT_FIELD[index].kind].grains;
+  }
 
-  const positions = new Float32Array(COUNT * 3);
-  /*
-   * Per-grain colour, and it is doing the work that opacity cannot.
-   *
-   * With one flat colour for the whole spray the plume rendered as a splatter
-   * of identical hard dots -- countable, which is the one thing a cloud of
-   * ash must never be. Points have no per-particle alpha, but additive
-   * blending makes colour and brightness the same thing, so dimming a grain's
-   * colour is dimming the grain. Each one therefore fades up as it leaves the
-   * vent and down as it falls, and carries its own brightness, and the dots
-   * stop being countable.
-   */
-  const colors = new Float32Array(COUNT * 3);
+  const positions = new Float32Array(totalGrains * 3);
+  const colors = new Float32Array(totalGrains * 3);
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
   geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
 
-  // A basis on the surface at the vent, so launches can be tilted off the
-  // vertical in a real direction rather than a random one.
-  const tangentHelper = Math.abs(ventDirection.y) > 0.9
-    ? new THREE.Vector3(1, 0, 0)
-    : new THREE.Vector3(0, 1, 0);
-  const tangentA = new THREE.Vector3().crossVectors(ventDirection, tangentHelper).normalize();
-  const tangentB = new THREE.Vector3().crossVectors(ventDirection, tangentA).normalize();
-
-  const grains = [];
-  for (let index = 0; index < COUNT; index += 1) {
-    // Wide-angle: the big Ionian plumes leave at up to 45 degrees off vertical,
-    // which is what makes them umbrellas rather than fountains.
-    const tilt = THREE.MathUtils.degToRad(6 + Math.pow(Math.random(), 0.7) * 42);
-    const around = Math.random() * Math.PI * 2;
-    /*
-     * The launch is kept split into its two components rather than stored as
-     * one vector, and that is the whole of the difference between an umbrella
-     * and a hose.
-     *
-     * A single direction vector was the first attempt: the arc was then built
-     * by adding `direction * distance`, and because that direction is mostly
-     * *outward*, the horizontal spread pushed the grains away from the moon
-     * instead of across it. What came out was a jet firing sideways off the
-     * limb. Height belongs on the surface normal and distance belongs in the
-     * tangent plane, so they are tracked separately -- and the steeper a grain
-     * leaves, the higher it goes and the closer it lands, which is the
-     * ordinary trade every projectile makes.
-     */
-    const tangential = new THREE.Vector3()
-      .addScaledVector(tangentA, Math.cos(around))
-      .addScaledVector(tangentB, Math.sin(around));
-    grains.push({
-      tangential,
-      climb: Math.cos(tilt),
-      reach: Math.sin(tilt),
-      // Spread of muzzle speeds, so the envelope has depth instead of every
-      // grain tracing the same curve.
-      speed: 0.72 + Math.random() * 0.38,
-      phase: Math.random(),
-      rate: 0.55 + Math.random() * 0.5,
-      // Grains are not all the same size, so they are not all the same
-      // brightness. A wide spread is what stops the spray reading as a
-      // regular stipple.
-      glow: 0.25 + Math.pow(Math.random(), 1.8) * 0.95,
-    });
-  }
-
   const material = new THREE.PointsMaterial({
     map: getGlowTexture(),
     vertexColors: true,
-    // Small: a grain has to be smaller than the eye can resolve for a few
-    // hundred of them to read as one body of material rather than as dots.
-    size: radius * 0.034,
+    size: radius * 0.030,
     sizeAttenuation: true,
     transparent: true,
     opacity: 0,
@@ -1344,13 +1418,99 @@ function createIoPlume(target, camera) {
     blending: THREE.AdditiveBlending,
   });
   const spray = new THREE.Points(geometry, material);
+  spray.frustumCulled = false;
   group.add(spray);
 
-  // The vent itself: the hot floor of the caldera, small and bright.
-  const hotspot = makeGlow(0xff9a4a, 0);
-  group.add(hotspot);
+  const grains = [];
+  const baseTone = new THREE.Color();
+  const topTone = new THREE.Color();
+
+  let cursor = 0;
+  for (let index = 0; index < IO_VENT_FIELD.length; index += 1) {
+    const site = IO_VENT_FIELD[index];
+    const kind = IO_VENT_KINDS[site.kind];
+
+    const latitude = THREE.MathUtils.degToRad(site.latitude);
+    const longitude = centreLongitude
+      + THREE.MathUtils.degToRad(site.longitude + (Math.random() - 0.5) * 9);
+    const ventDirection = new THREE.Vector3(
+      Math.cos(latitude) * Math.cos(longitude),
+      Math.sin(latitude),
+      Math.cos(latitude) * Math.sin(longitude),
+    ).normalize();
+
+    // A basis on the surface at the vent, so launches tilt off the vertical in
+    // a real direction rather than a random one.
+    const tangentHelper = Math.abs(ventDirection.y) > 0.9
+      ? new THREE.Vector3(1, 0, 0)
+      : new THREE.Vector3(0, 1, 0);
+    const tangentA = new THREE.Vector3().crossVectors(ventDirection, tangentHelper).normalize();
+    const tangentB = new THREE.Vector3().crossVectors(ventDirection, tangentA).normalize();
+
+    baseTone.setHex(kind.base);
+    topTone.setHex(kind.top);
+
+    const first = cursor;
+    for (let n = 0; n < kind.grains; n += 1) {
+      const tilt = THREE.MathUtils.degToRad(
+        kind.tilt[0] + Math.pow(Math.random(), 0.7) * (kind.tilt[1] - kind.tilt[0]),
+      );
+      const around = Math.random() * Math.PI * 2;
+      grains.push({
+        tangential: new THREE.Vector3()
+          .addScaledVector(tangentA, Math.cos(around))
+          .addScaledVector(tangentB, Math.sin(around)),
+        climb: Math.cos(tilt),
+        reach: Math.sin(tilt),
+        speed: 0.72 + Math.random() * 0.38,
+        phase: Math.random(),
+        rate: 0.55 + Math.random() * 0.5,
+        glow: (0.25 + Math.pow(Math.random(), 1.8) * 0.95) * kind.brightness,
+      });
+      cursor += 1;
+    }
+
+    // The vent floor itself: the hot caldera, small and bright.
+    const hotspot = makeGlow(kind.hotspot, 0);
+    group.add(hotspot);
+
+    /*
+     * What it has laid down around itself, which on Io is the more permanent
+     * half of the picture -- plumes come and go over months, deposits last for
+     * years. Two caps: the outer ring colour and, over the middle of it, the
+     * darker floor. Layering them is what turns a filled patch into a ring,
+     * which is the shape Pele actually leaves.
+     */
+    const deposit = createSurfaceCap(radius, ventDirection, "stain");
+    group.add(deposit.mesh);
+    const inner = createSurfaceCap(radius, ventDirection, "stain");
+    group.add(inner.mesh);
+    inner.mesh.renderOrder = 2;
+
+    vents.push({
+      kind,
+      ventDirection,
+      hotspot,
+      deposit,
+      inner,
+      depositColour: new THREE.Color(kind.deposit),
+      innerColour: new THREE.Color(kind.inner),
+      first,
+      count: kind.grains,
+      apex: radius * kind.apex,
+      span: THREE.MathUtils.degToRad(kind.span),
+      baseR: baseTone.r, baseG: baseTone.g, baseB: baseTone.b,
+      topR: topTone.r, topG: topTone.g, topB: topTone.b,
+      // Each vent runs on its own clock, so the field is not one synchronised
+      // pulse. The big ones are steady; the small SO2 ones puff.
+      beat: site.kind === "sulphurDioxide" ? 0.55 + Math.random() * 0.7 : 0,
+      beatPhase: Math.random() * Math.PI * 2,
+    });
+  }
 
   const grain = new THREE.Vector3();
+  const sunLocal = new THREE.Vector3();
+  const viewLocal = new THREE.Vector3();
 
   return {
     group,
@@ -1360,72 +1520,90 @@ function createIoPlume(target, camera) {
       const settle = 1 - smoothstep(0.62, 1, progress);
       const strength = rise * settle;
 
+      localSunDirection(target, sunLocal);
+      localCameraDirection(target, camera, viewLocal);
+
       const attribute = geometry.getAttribute("position");
       const tint = geometry.getAttribute("color");
-      for (let index = 0; index < COUNT; index += 1) {
-        const item = grains[index];
-        // Each grain runs its own flight and relaunches, so the plume is a
-        // continuous eruption rather than one puff.
-        const flight = (item.phase + progress * item.rate * 2.4) % 1;
+
+      for (let v = 0; v < vents.length; v += 1) {
+        const vent = vents[v];
+        const {
+          ventDirection, apex, span, first, count,
+          baseR, baseG, baseB, topR, topG, topB,
+        } = vent;
         /*
-         * The arc. Up at the launch speed, pulled back by a constant
-         * downward acceleration -- which for a body with no air is the whole
-         * of the physics. `4 * t * (1 - t)` is that parabola normalised to
-         * peak at 1 halfway through, which keeps the apex where it was asked
-         * to be however the speeds are drawn.
+         * The little ones breathe. Prometheus-type plumes are driven by a lava
+         * flow front creeping over frost, and they visibly wax and wane over
+         * hours as it reaches new ground; the deep vents just run.
          */
-        const height = APEX * item.speed * item.climb * 4 * flight * (1 - flight);
-        /*
-         * Travel is an *angle*, not a straight offset in the tangent plane.
-         *
-         * Adding `tangential * distance` was the previous attempt, and it left
-         * the whole canopy hanging off the limb with a gap of empty space
-         * beneath it: a grain half a radius out along a flat tangent is
-         * sqrt(1 + 0.25) = 1.12 radii from the centre, so it lands well above
-         * the ground it is supposed to fall onto. Rotating the launch point
-         * along its great circle instead keeps the feet of the plume welded to
-         * the surface however far round the curve they get.
-         */
-        const swept = SPAN * item.speed * item.reach * flight * rise;
-        grain.copy(ventDirection).multiplyScalar(Math.cos(swept))
-          .addScaledVector(item.tangential, Math.sin(swept))
-          .multiplyScalar(radius + height * rise);
-        attribute.setXYZ(index, grain.x, grain.y, grain.z);
+        const pulse = vent.beat
+          ? 0.55 + 0.45 * Math.sin(progress * vent.beat * 12 + vent.beatPhase)
+          : 1;
+        const local = strength * pulse;
+
+        for (let n = 0; n < count; n += 1) {
+          const item = grains[first + n];
+          const flight = (item.phase + progress * item.rate * 2.4) % 1;
+          const height = apex * item.speed * item.climb * 4 * flight * (1 - flight);
+          const swept = span * item.speed * item.reach * flight * rise;
+          grain.copy(ventDirection).multiplyScalar(Math.cos(swept))
+            .addScaledVector(item.tangential, Math.sin(swept))
+            .multiplyScalar(radius + height * rise);
+          attribute.setXYZ(first + n, grain.x, grain.y, grain.z);
+
+          const lift = Math.min(1, height / apex);
+          const fade = Math.sin(Math.min(1, flight * 1.12) * Math.PI) ** 0.6;
+          const level = item.glow * fade * local;
+          // Hot at the vent, cold at the top of the arc, in this vent's own
+          // two colours rather than in one shared orange.
+          tint.setXYZ(
+            first + n,
+            level * (baseR + (topR - baseR) * lift),
+            level * (baseG + (topG - baseG) * lift),
+            level * (baseB + (topB - baseB) * lift),
+          );
+        }
+
+        const hotspotSize = radius * vent.kind.hotspotSize * (0.6 + local * 0.7);
+        vent.hotspot.scale.setScalar(hotspotSize);
+        vent.hotspot.position.copy(ventDirection)
+          .multiplyScalar(radius + hotspotSize * 0.35);
+        vent.hotspot.material.opacity = local * 0.9;
 
         /*
-         * Sulphur leaves the vent hot and orange and is cold and pale by the
-         * time it reaches the top of its arc, so the colour is read off the
-         * height rather than fixed. The fade at both ends of the flight is
-         * what hides the relaunch: without it every grain would pop into
-         * existence at the vent and vanish at its landing point.
+         * The deposits fade up early and stay: they are what the eruption
+         * leaves, so they must not go out with the plume.
          */
-        const lift = Math.min(1, height / APEX);
-        const fade = Math.sin(Math.min(1, flight * 1.12) * Math.PI) ** 0.6;
-        const level = item.glow * fade;
-        tint.setXYZ(
-          index,
-          level,
-          level * (0.72 + lift * 0.22),
-          level * (0.34 + lift * 0.48),
+        const laid = smoothstep(0.04, 0.4, progress);
+        const outer = THREE.MathUtils.degToRad(vent.kind.depositSpan);
+        const core = THREE.MathUtils.degToRad(vent.kind.innerSpan);
+        vent.deposit.set(
+          outer, outer * 0.86, 0, vent.depositColour, laid * 0.85, 2.1, sunLocal, viewLocal,
+        );
+        vent.inner.set(
+          core, core * 0.9, 0, vent.innerColour, laid * 0.9, 2.6, sunLocal, viewLocal,
         );
       }
+
       attribute.needsUpdate = true;
       tint.needsUpdate = true;
       material.opacity = strength * 0.85;
-
-      const hotspotSize = radius * (0.05 + strength * 0.07);
-      hotspot.scale.setScalar(hotspotSize);
-      hotspot.position.copy(ventDirection)
-        .multiplyScalar(radius + hotspotSize * 0.35);
-      hotspot.material.opacity = strength * 0.9;
     },
     dispose() {
       geometry.dispose();
       material.dispose();
-      hotspot.material.dispose();
+      vents.forEach((vent) => {
+        vent.hotspot.material.dispose();
+        vent.deposit.mesh.geometry.dispose();
+        vent.deposit.material.dispose();
+        vent.inner.mesh.geometry.dispose();
+        vent.inner.material.dispose();
+      });
     },
   };
 }
+
 
 /**
  * Enceladus vents its ocean into Saturn's E ring.
@@ -1679,6 +1857,84 @@ function createEnceladusPlumes(target) {
  * particles are travelling on parallel paths, and the radiant is the vanishing
  * point. That is what is drawn here.
  */
+/*
+ * What colour a meteor is, and why.
+ *
+ * The colour is a thermometer. A meteoroid does not burn like a coal; it
+ * ablates, and the light comes from two things -- metal atoms boiled off the
+ * grain, and the air itself, shocked and ionised in front of it. Which of
+ * those dominates is set almost entirely by how fast it arrived.
+ *
+ * A slow one, twenty kilometres a second, never gets the air hot enough to
+ * matter. What glows is sodium and iron coming off the rock, and those are the
+ * yellows, oranges and reds that make up most of what anyone ever sees.
+ *
+ * A fast one -- seventy kilometres a second, a Leonid arriving head-on into
+ * Earth's own orbital motion -- shocks the air hard enough to ionise nitrogen
+ * and oxygen, and those emit in the blue and violet. Magnesium boiling off at
+ * that speed adds the brilliant blue-green flash the brightest ones show.
+ *
+ * And a trail is not one colour along its length, because the head and the
+ * wake are not the same thing. The head is the shock front, hottest and most
+ * ionised; the wake behind it is recombining air, cooling as it goes, and in
+ * the fast ones that recombination is the green of atomic oxygen giving way to
+ * the red of nitrogen further back. So each kind carries a head colour and a
+ * tail colour and the trail runs between them.
+ *
+ * The weights are the sky's own: warm and slow is the common case by a long
+ * way, and the blue-violet ones are the rarity worth waiting for.
+ */
+const METEOR_KINDS = [
+  {
+    name: "slow sodium",
+    weight: 0.40,
+    speed: [0.42, 0.72],
+    head: 0xfff1c4,
+    tail: 0xff7a1e,
+  },
+  {
+    name: "iron, ordinary",
+    weight: 0.24,
+    speed: [0.60, 0.95],
+    head: 0xfff6e2,
+    tail: 0xff4d2a,
+  },
+  {
+    // The one that changes colour down its own length: oxygen green at the
+    // head, nitrogen red where the air behind it is recombining.
+    name: "oxygen green to nitrogen red",
+    weight: 0.16,
+    speed: [1.05, 1.55],
+    head: 0x9dffae,
+    tail: 0xff6f96,
+  },
+  {
+    name: "magnesium blue-green",
+    weight: 0.12,
+    speed: [1.25, 1.85],
+    head: 0x74ffdc,
+    tail: 0x38d8ff,
+  },
+  {
+    name: "ionised air, very fast",
+    weight: 0.08,
+    speed: [1.60, 2.30],
+    head: 0xc9d4ff,
+    tail: 0x7b5cff,
+  },
+];
+
+const METEOR_KIND_TOTAL = METEOR_KINDS.reduce((sum, kind) => sum + kind.weight, 0);
+
+function pickMeteorKind(random = Math.random) {
+  let ticket = random() * METEOR_KIND_TOTAL;
+  for (let index = 0; index < METEOR_KINDS.length; index += 1) {
+    ticket -= METEOR_KINDS[index].weight;
+    if (ticket <= 0) return METEOR_KINDS[index];
+  }
+  return METEOR_KINDS[0];
+}
+
 function createMeteorShower(target, camera) {
   const group = new THREE.Group();
   group.name = "Meteor shower event";
@@ -1829,24 +2085,33 @@ function createMeteorShower(target, camera) {
   }
 
   const meteors = [];
+  const kindHead = new THREE.Color();
+  const kindTail = new THREE.Color();
   for (let index = 0; index < COUNT; index += 1) {
     const scale = 0.55 + Math.pow(Math.random(), 2.2) * 1.5;
+    const kind = pickMeteorKind();
+    kindHead.setHex(kind.head);
+    kindTail.setHex(kind.tail);
 
     const rock = new THREE.Mesh(
       rockGeometry,
       new THREE.MeshStandardMaterial({
         color: 0x584a3e, roughness: 1, metalness: 0,
-        emissive: 0xff7a2a, emissiveIntensity: 0,
+        emissive: kind.head, emissiveIntensity: 0,
       }),
     );
     rock.scale.setScalar(scale);
     group.add(rock);
 
-    const head = makeGlow(0xfff0d8, 0);
+    const head = makeGlow(kind.head, 0);
     group.add(head);
 
     meteors.push({
-      rock, head, scale,
+      rock, head, scale, kind,
+      // Held as six scalars rather than as two Colors, because the trail loop
+      // that reads them runs sixty-four times per meteor per frame.
+      headR: kindHead.r, headG: kindHead.g, headB: kindHead.b,
+      tailR: kindTail.r, tailG: kindTail.g, tailB: kindTail.b,
       // Spread across the volume the stream passes through, so they arrive
       // scattered rather than as a sheet.
       offset: new THREE.Vector3(
@@ -1855,7 +2120,13 @@ function createMeteorShower(target, camera) {
         (Math.random() - 0.5) * radius * 3.4,
       ),
       phase: Math.random(),
-      speed: 0.55 + Math.random() * 0.7,
+      /*
+       * The kind sets the speed, not the other way round -- a meteor is blue
+       * BECAUSE it is fast. Across the table this runs from 0.42 to 2.3, a
+       * spread of five and a half to one, where the old single range was 2.3
+       * to one and every meteor in the shower moved at much the same rate.
+       */
+      speed: kind.speed[0] + Math.random() * (kind.speed[1] - kind.speed[0]),
       spin: 0.05 + Math.random() * 0.12,
       /*
        * A fixed hair of lateral scatter, and deliberately not one that grows
@@ -2024,9 +2295,15 @@ function createMeteorShower(target, camera) {
         item.head.material.opacity = glow * 0.95;
         item.head.visible = item.rock.visible;
 
-        // The wake, laid straight back along the path.
-        const length = WAKE * (0.45 + burn * 0.95) * item.scale;
-        const { hair } = item;
+        /*
+         * The wake, laid straight back along the path, and longer the faster
+         * the meteor is. A seventy-kilometre-a-second Leonid draws a far
+         * longer streak than a twenty-kilometre-a-second Taurid does, and the
+         * two used to be drawn the same length.
+         */
+        const length = WAKE * (0.45 + burn * 0.95) * item.scale
+          * (0.62 + item.speed * 0.55);
+        const { hair, headR, headG, headB, tailR, tailG, tailB } = item;
         const base = index * PUFFS * 3;
         for (let step = 0; step < PUFFS; step += 1) {
           const along = wakeAlong[step];
@@ -2044,10 +2321,18 @@ function createMeteorShower(target, camera) {
            * length; a gentle falloff spreads the same brightness evenly and
            * turns the streak into a smear.
            */
+          /*
+           * Head colour at the front, tail colour at the back, and the
+           * crossover pushed towards the head so most of the visible length
+           * carries the trail colour rather than the shock colour. This is
+           * where a green head over a red wake comes from, and where a violet
+           * head bleeds back into blue.
+           */
           const level = glow * hair[step * 3 + 2] * wakeFalloff[step];
-          wakeColors[at] = level;
-          wakeColors[at + 1] = level * (0.72 + (1 - along) * 0.28);
-          wakeColors[at + 2] = level * (0.34 + (1 - along) * 0.46);
+          const mix = along * along * 0.55 + along * 0.45;
+          wakeColors[at] = level * (headR + (tailR - headR) * mix);
+          wakeColors[at + 1] = level * (headG + (tailG - headG) * mix);
+          wakeColors[at + 2] = level * (headB + (tailB - headB) * mix);
         }
       }
 
@@ -2368,8 +2653,20 @@ function createSolarEjection(target, camera) {
     // x = lobe tightness, y = how attached to the surface, z = noise seed,
     // w = the axis alignment below which this lobe contributes nothing
     uProfile: { value: profiles },
-    uHot: { value: new THREE.Color(0xfff4e8) },
-    uCool: { value: new THREE.Color(0x6e86c8) },
+    /*
+     * White, and white all the way down.
+     *
+     * A coronagraph does not see a CME glowing. It sees ordinary photospheric
+     * sunlight -- every colour of it -- Thomson-scattered off free electrons in
+     * the ejected plasma, and scattering off free electrons has no colour
+     * preference at all. So the thing is the colour of the Sun's own light, and
+     * every white-light image of one from Skylab to LASCO shows exactly that:
+     * white where it is dense, grey where it is thin, and nothing else. The
+     * blue this used to fade to at low density was the one part of the picture
+     * with no observation behind it.
+     */
+    uHot: { value: new THREE.Color(0xffffff) },
+    uCool: { value: new THREE.Color(0xd3d7dd) },
     /*
      * The camera in the volume's own coordinates, worked out once a frame on
      * the processor rather than per fragment.
@@ -2498,7 +2795,18 @@ function createSolarEjection(target, camera) {
               float height = clamp(
                 (r - uSunFraction) / max(1e-4, head - uSunFraction), 0.0, 1.0);
               float rooted = (1.0 - height) * (1.0 - height);
-              float lobe = pow(toward, profile.x + 14.0 * rooted);
+              /*
+               * A cone that opens as it climbs, anchored on a small patch.
+               *
+               * Every photograph of one of these shows the same geometry: the
+               * legs converge on an active region a fraction of the Sun's
+               * width across, and the thing they carry is half a hemisphere
+               * wide by the time it clears the occulter. Raising the exponent
+               * near the surface and dropping it at the head is what draws
+               * that -- 22 at the footpoint is a lobe a few degrees across; 3
+               * at the front is a cone seventy degrees wide.
+               */
+              float lobe = pow(toward, profile.x + 22.0 * rooted);
               /*
                * Where the point sits between the trailing and leading edges of
                * this bubble. Once the trailing edge lifts off the photosphere
@@ -2517,17 +2825,17 @@ function createSolarEjection(target, camera) {
                  * come out as garbage across half their width.
                  */
                 // The swept-up front, compressed and bright.
-                float atFront = (x - 0.9) / 0.12;
-                float front = exp(-atFront * atFront) * 1.3;
+                float atFront = (x - 0.92) / 0.075;
+                float front = exp(-atFront * atFront) * 2.1;
                 // The body of the ejection, thinning as it expands.
                 float body = smoothstep(-0.15, 0.3, x)
                   * (1.0 - smoothstep(0.8, 1.15, x)) * 0.6;
                 // The cavity: emptier than what it displaced, so it reads as a
                 // hole rather than a glow.
-                float atCavity = (x - 0.55) / 0.17;
-                float cavity = 1.0 - 0.5 * exp(-atCavity * atCavity);
+                float atCavity = (x - 0.58) / 0.19;
+                float cavity = 1.0 - 0.78 * exp(-atCavity * atCavity);
                 // The prominence, rising later and only up the middle.
-                float atCore = (x - 0.3) / 0.14;
+                float atCore = (x - 0.28) / 0.105;
                 float core = exp(-atCore * atCore) * shape.w
                   * smoothstep(0.55, 0.9, toward);
 
@@ -2587,9 +2895,35 @@ function createSolarEjection(target, camera) {
          * material left in, so filaments stretch radially the way a real
          * outflow's do, and drifting slowly so the whole thing lives.
          */
-        vec3 q = d * 5.5;
+        /*
+         * Threads, not clouds.
+         *
+         * The structure inside a CME runs radially -- it is plasma strung
+         * along magnetic field lines that all point away from the Sun, and the
+         * coronagraph images are full of fine bright filaments running from
+         * the legs to the front. Sampling the noise on the *direction* alone
+         * gives exactly that, because a field that varies across the sphere
+         * and not along the radius is a set of rays. The old sampling added a
+         * strong radial term (r * 3.0) which broke the rays into blobs and
+         * made the ejection look like smoke.
+         */
+        vec3 q = d * 11.0;
         q.z += uTime * 0.04;
-        float turbulence = fbm3D(q + vec3(0.0, 0.0, r * 3.0));
+        /*
+         * Two octaves here rather than the shared three, and it is worth two
+         * milliseconds a frame.
+         *
+         * This is the most expensive shader in the project by a wide margin --
+         * the camera sits inside the volume, so every pixel on the screen walks
+         * fourteen samples and each sample asks for noise. Measured at the
+         * event's own framing it cost 8.0 ms a frame; the third octave lands at
+         * a frequency of forty-five across the sphere, which is finer than a
+         * screen pixel at any distance the Sun is ever framed from, so it was
+         * paying full price for detail that could not be resolved.
+         */
+        vec3 base = q + vec3(0.0, 0.0, r * 0.9);
+        float turbulence = (noise3D(base) * 0.5
+          + noise3D(base * 2.03 + vec3(6.4, 9.1, 3.7)) * 0.25) * 1.333;
 
         return max(0.0, total * (0.35 + 1.3 * turbulence));
       }
@@ -3320,9 +3654,20 @@ function createSaturnWhiteSpot(target, camera) {
     uView: { value: new THREE.Vector3(0, 0, 1) },
     // The cloud's colour, in three: lit tops, shaded hollows, and the warm
     // tan where it thins back towards Saturn's own banding.
-    uBright: { value: new THREE.Color(0xfdfbf4) },
-    uShade: { value: new THREE.Color(0xa9b7c7) },
-    uWarm: { value: new THREE.Color(0xb8996f) },
+    /*
+     * Read off the Cassini natural-colour frames rather than the false-colour
+     * mosaic, because the false-colour one is the famous picture and it is
+     * green. What the storm actually is: a head of near-white cloud, cool
+     * blue-grey in its hollows where the tops are lower, and -- immediately
+     * behind the head, where the storm has torn the haze open -- the rust and
+     * salmon of Saturn's own deeper cloud deck showing through. That rust is
+     * the detail that makes the photographs read as weather rather than as
+     * paint, and it was missing.
+     */
+    uBright: { value: new THREE.Color(0xfefdf8) },
+    uShade: { value: new THREE.Color(0xb9c6d4) },
+    uWarm: { value: new THREE.Color(0xc7a878) },
+    uRust: { value: new THREE.Color(0xb2704a) },
   };
 
   const material = new THREE.ShaderMaterial({
@@ -3352,6 +3697,7 @@ function createSaturnWhiteSpot(target, camera) {
       uniform vec3 uBright;
       uniform vec3 uShade;
       uniform vec3 uWarm;
+      uniform vec3 uRust;
 
       ${VOLUME_NOISE}
 
@@ -3444,7 +3790,22 @@ function createSaturnWhiteSpot(target, camera) {
         float cosLat = sqrt(max(1e-4, 1.0 - uLatitude * uLatitude));
         float spotLat = (d.y - uLatitude) / cosLat;
         float spotLon = across * cosLat;
-        float spot = (spotLat * spotLat + spotLon * spotLon) / (0.150 * 0.150);
+        /*
+         * A lumpy outline, not a circle.
+         *
+         * Every photograph of the head shows the same thing: a knot of
+         * convective cells piled against each other, so its edge is scalloped
+         * -- cauliflower, in the word every observer reaches for. A round
+         * gaussian cannot be that however it is shaded, because the shading
+         * sits inside a circular boundary and the boundary is what the eye
+         * reads. So the head's radius itself varies with the angle round it.
+         */
+        float headAngle = atan(spotLat, spotLon);
+        float lobes = 0.78 + 0.40 * noise3D(vec3(
+          cos(headAngle) * 2.3, sin(headAngle) * 2.3, uHeadLongitude * 0.5
+        ));
+        float headRadius = 0.150 * lobes;
+        float spot = (spotLat * spotLat + spotLon * spotLon) / (headRadius * headRadius);
         // A dense core inside a softer surround: a convective knot, not a dot.
         float head = exp(-spot) + 0.35 * exp(-spot * 3.0);
 
@@ -3495,6 +3856,18 @@ function createSaturnWhiteSpot(target, camera) {
         float tail = tailIn * tailOut * (0.46 + 0.54 * exp(-behind * 0.30));
 
         /*
+         * Continuous where it leaves the head, broken into separate patches
+         * further back -- which is what the natural-colour frames show and what
+         * a single continuous band did not. The storm is one body of cloud at
+         * the source and a train of detached wisps a quarter of the way round
+         * the planet, because the shear that stretches it also tears it. The
+         * break-up ramps in with distance, so the join is never abrupt.
+         */
+        float clumpField = noise3D(vec3(behind * 2.4, uLatitude * 9.0, 3.7));
+        float breakUp = smoothstep(0.5, 3.4, behind);
+        tail *= mix(1.0, 0.18 + 0.82 * smoothstep(0.26, 0.68, clumpField), breakUp);
+
+        /*
          * The head is added to the band rather than multiplied by it, which is
          * what lets it bulge outside the trail. Roughly half again the tail's
          * density at its centre, so it stays the brightest thing on the planet
@@ -3536,7 +3909,9 @@ function createSaturnWhiteSpot(target, camera) {
          * noise wrapped on a sphere would show its join straight down the
          * middle of the tail.
          */
-        float spin = uTime * 0.035;
+        // Slower than it was. Cassini's own movie of this storm is measured in
+        // months per frame; anything that visibly boils reads as smoke.
+        float spin = uTime * 0.021;
         float cs = cos(spin);
         float sn = sin(spin);
         vec3 turned = vec3(d.x * cs - d.z * sn, d.y * 3.2, d.x * sn + d.z * cs);
@@ -3612,8 +3987,19 @@ function createSaturnWhiteSpot(target, camera) {
          */
         float thin = 1.0 - smoothstep(0.38, 0.62, churn);
         vec3 tone = mix(cloud, uWarm, thin * (0.50 + headness * 0.22));
+
+        /*
+         * The torn wake. Just behind the head the storm has punched through
+         * the overlying haze, and what shows in the gaps is the rust-coloured
+         * deck below -- the salmon patches sitting immediately behind the white
+         * knot in every natural-colour frame Cassini took of it. It fades with
+         * distance, because further back the haze has closed over again.
+         */
+        float freshWake = smoothstep(3.0, 0.45, behind) * (1.0 - headness);
+        tone = mix(tone, uRust, freshWake * thin * 0.52);
+
         // and the core of the spot burns out towards white on top of all that.
-        tone = mix(tone, uBright, headness * smoothstep(0.55, 1.0, density) * 0.45);
+        tone = mix(tone, uBright, headness * smoothstep(0.42, 0.95, density) * 0.70);
 
         gl_FragColor = vec4(tone, density * uGain * day * horizon);
         #include <tonemapping_fragment>
@@ -4289,40 +4675,291 @@ function createTritonGeysers(target, camera) {
  * fifteen Earth years, in a season that lasts a few years. Saturn's northern
  * autumnal equinox falls on 6 May 2025, so this is spoke season now.
  */
+/*
+ * The spokes on Saturn's B ring.
+ *
+ * These are the strangest thing the rings do, and the first version drew them
+ * as bright bars laid across the ring, which is wrong in three separate ways.
+ *
+ * They are not gaps and they are not a different substance. The ring under a
+ * spoke is entirely intact: what a spoke is made of is the very finest end of
+ * the ring's own material -- ice grains a micron across, statically charged and
+ * levitated a few metres clear of the ring plane. Everything about how they
+ * look follows from that one fact.
+ *
+ * Because the grains are the size of the wavelength of light, they scatter it
+ * forwards rather than back. So a spoke has no colour of its own and no fixed
+ * brightness either: seen with the Sun behind the observer it hides the bright
+ * ring behind a veil of dust that is throwing its light the other way, and it
+ * reads as a dark, dirty smudge. Seen looking back towards the Sun the same
+ * dust lights up and the same spoke is a glowing white streak. Voyager
+ * photographed both on the same pass, which is how the mechanism was worked
+ * out. That flip is the single most characteristic thing about them and the
+ * old version could not do it at all.
+ *
+ * They are radial because the electrostatic force that lifts the dust acts
+ * along Saturn's magnetic field, and the field corotates with the planet in
+ * 10.6 hours while B-ring particles orbit in about 8. A patch of levitated
+ * dust therefore holds a radial line for a while instead of being sheared into
+ * an arc immediately -- and then it does shear, and the spoke dies, two or
+ * three ring rotations after it formed.
+ *
+ * And they are only on the B ring, between about 1.53 and 1.95 Saturn radii,
+ * concentrated where the orbital period matches the field's rotation. Nowhere
+ * else on the rings does this happen.
+ */
+const SPOKE_INNER = 1.53;
+const SPOKE_OUTER = 1.95;
+
+/*
+ * How far back the spoke shot stands, as a multiple of Saturn's own framing.
+ *
+ * RAISE it to stand further off -- more ring in frame, smaller planet; LOWER it
+ * to come in. Saturn's authored shot is composed for the planet and holds a
+ * little over one radius of margin, which crops the A ring; the rings reach
+ * 2.58 radii, so this has to roughly double it.
+ */
+const SPOKE_SHOT_ZOOM = 2.4;
+
 function createRingSpokes(target) {
   const group = new THREE.Group();
   group.name = "Saturn ring spoke event";
   const radius = localRadius(target);
 
-  /*
-   * Drawn in the ring plane and parented to the planet, so they inherit the
-   * ring's tilt for free. The B ring runs from about 1.53 to 1.95 Saturn radii,
-   * which is where these sit.
-   */
   const spokes = [];
-  const count = 7;
-  for (let index = 0; index < count; index += 1) {
-    const spoke = new THREE.Mesh(
-      new THREE.PlaneGeometry(radius * 0.42, radius * 0.10),
-      new THREE.MeshBasicMaterial({
-        color: 0xd8e4f2,
-        transparent: true,
-        opacity: 0,
-        depthWrite: false,
-        side: THREE.DoubleSide,
-        blending: THREE.AdditiveBlending,
-      }),
+  /*
+   * How many, and where they sit.
+   *
+   * Spread evenly round the whole circumference, one to a sector, with a small
+   * jitter inside each so the ring does not read as a cog. Grouping them into
+   * two crowded families was tried and is wrong for this: at the distance the
+   * event is watched from, half the ring is on the far side of the planet at
+   * any moment, so a family lands either entirely in view or entirely out of
+   * it, and a spoke season that shows nothing at all half the time is not the
+   * thing to draw. Evenly spaced, every viewpoint gets its share.
+   */
+  const SLOTS = 20;
+  const SECTOR = (Math.PI * 2) / SLOTS;
+  const spokeHere = new THREE.Vector3();
+  const spokeSun = new THREE.Vector3();
+  const spokeEye = new THREE.Vector3();
+
+  for (let index = 0; index < SLOTS; index += 1) {
+    /*
+     * Each one covers most of the B ring radially but only a sliver of it in
+     * longitude -- Voyager's are roughly as wide as the Earth, which on this
+     * ring is about a fifth of a Saturn radius, or seven degrees of arc.
+     */
+    /*
+     * And spread across the B ring radially as well as round it.
+     *
+     * Every spoke reaching from the inner edge to the outer one left the ring
+     * looking striped rather than spoked, and it is not what the frames show
+     * either: individual spokes cover different parts of the B ring's width,
+     * some running its full depth and others only the outer half. Each one
+     * here takes a random band of between three-fifths and all of it.
+     */
+    const span = SPOKE_OUTER - SPOKE_INNER;
+    const depth = span * (0.60 + Math.random() * 0.40);
+    const inner = SPOKE_INNER + Math.random() * (span - depth);
+    const outer = inner + depth;
+    const halfWidth = THREE.MathUtils.degToRad(2.6 + Math.random() * 3.4);
+
+    const geometry = new THREE.RingGeometry(
+      radius * inner, radius * outer, 1, 24, -halfWidth, halfWidth * 2,
     );
-    spoke.rotation.x = -Math.PI / 2;
-    group.add(spoke);
+    // Built in the XY plane; laid into the ring plane once, here, so the mesh
+    // is left free to turn about Y as the field carries it round.
+    geometry.rotateX(-Math.PI / 2);
+
+    const uniforms = {
+      uGain: { value: 0 },
+      uTime: { value: 0 },
+      uInner: { value: radius * inner },
+      uOuter: { value: radius * outer },
+      uHalfWidth: { value: halfWidth },
+      // +1 when the Sun is behind the viewer, -1 when the viewer is looking
+      // back into it. The whole appearance hangs off this one number.
+      uPhase: { value: 1 },
+      uSeed: { value: Math.random() * 40 },
+      /*
+       * Two tones, and both of them faintly red.
+       *
+       * A spoke in backscatter is not a black hole in the ring; every
+       * description of one reaches for the same phrase -- a faint grey smudge,
+       * a dirty fingerprint -- so the dark tone is a grey dark enough to read
+       * against bright ice and nowhere near black. In forward scatter the same
+       * dust blazes and the tone is white.
+       *
+       * The red is the part that is not obvious from the pictures. Multi-colour
+       * spectroscopy of the spoke material shows the grains are subtly redder
+       * than the ring they sit on -- the same reddening seen in the ring's own
+       * non-icy contaminant, concentrated in the finest particles. It is
+       * slight, and it should be. Measured at the event's own framing, the
+       * pixels a spoke covers come out at a warmth of 0.108 against the ring's
+       * own 0.082 underneath them: enough to read as "not blue", nowhere near
+       * enough to read as red. In forward scatter the bright tone measures
+       * 0.045 against the ring's 0.065 -- slightly cooler than the ring, which
+       * is what "bright white" means when the ring itself is butterscotch.
+       *
+       * The dark tone's value was picked the same way. It has to be a grey --
+       * a spoke seen in backscatter is a dirty fingerprint on bright ice, not a
+       * hole -- but too light a grey and there is nothing to see. Swept against
+       * the ring behind it, 0x332c26 darkened by a mean of 11 luminance levels
+       * and vanished; 0x1d1813 darkened by 43 and read as damage. This one
+       * lands at 31 in backscatter, against 43 of brightening seen from the
+       * other side.
+       */
+      uDark: { value: new THREE.Color(0x272119) },
+      uBright: { value: new THREE.Color(0xfff3e8) },
+    };
+
+    const material = new THREE.ShaderMaterial({
+      uniforms,
+      transparent: true,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+      toneMapped: true,
+      /*
+       * Ordinary alpha blending, deliberately, where everything else in this
+       * scene has been moved off it. Alpha is the only blend that can go both
+       * ways, and going both ways is the entire point: a dark source darkens
+       * what is behind it and a bright one brightens it, which is exactly the
+       * pair of behaviours a spoke has to be able to show. The dark tone is
+       * kept near black so that where a spoke crosses empty space between ring
+       * particles it adds nothing visible.
+       */
+      blending: THREE.NormalBlending,
+      vertexShader: /* glsl */`
+        varying vec3 vLocal;
+
+        void main() {
+          vLocal = position;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+      `,
+      fragmentShader: /* glsl */`
+        varying vec3 vLocal;
+
+        uniform float uGain;
+        uniform float uTime;
+        uniform float uInner;
+        uniform float uOuter;
+        uniform float uHalfWidth;
+        uniform float uPhase;
+        uniform float uSeed;
+        uniform vec3 uDark;
+        uniform vec3 uBright;
+
+        ${VOLUME_NOISE}
+
+        void main() {
+          float r = length(vLocal.xz);
+          float span = max(1e-4, uOuter - uInner);
+          float along = (r - uInner) / span;
+
+          /*
+           * Soft at every edge. A spoke has no boundary -- it is a patch of
+           * dust thinning out into the ring it sits on -- and the first thing
+           * that gives a drawn one away is a straight edge anywhere on it.
+           */
+          float radialBody = smoothstep(0.0, 0.16, along)
+            * (1.0 - smoothstep(0.68, 1.0, along));
+
+          float angle = atan(-vLocal.z, vLocal.x);
+          float across = clamp(abs(angle) / uHalfWidth, 0.0, 1.0);
+          /*
+           * Cubed rather than squared, so the sides of a spoke are a long
+           * gradient rather than a shoulder. Nothing about a spoke is a hard
+           * edge: they are dust thinning out into the ring, and the moment one
+           * has a definite boundary it stops reading as a smudge on the ring
+           * and starts reading as a gap in it -- which is precisely the thing
+           * every description of them takes pains to say they are not.
+           */
+          float acrossBody = pow(1.0 - across * across, 1.6);
+
+          /*
+           * Grain along the length. Spoke photographs are never uniform: the
+           * dust comes up in patches and the spoke is a chain of them, denser
+           * at the middle of its radial run and ragged at the ends.
+           */
+          // Named anything but the word sample, which is reserved in GLSL ES
+          // and silently costs the whole shader.
+          vec3 field = vec3(along * 5.5, uSeed, angle * 9.0 + uTime * 0.12);
+          vec3 fine = vec3(along * 17.0, uSeed * 3.1, angle * 26.0);
+          float grain = (0.44 + 0.62 * noise3D(field)) * (0.72 + 0.44 * noise3D(fine));
+
+          float body = radialBody * acrossBody * grain;
+          if (body < 0.01) discard;
+
+          /*
+           * Micron dust throws light forwards. With the Sun behind the viewer
+           * almost nothing comes back and the spoke is a shadow on the ring;
+           * looking towards the Sun the same grains blaze.
+           */
+          float back = clamp(uPhase, 0.0, 1.0);
+          float forward = clamp(-uPhase, 0.0, 1.0);
+          vec3 tone = mix(uDark, uBright, forward * forward);
+          /*
+           * Strong enough to read, short of looking like damage.
+           *
+           * There are two failure modes either side of this number. Too high
+           * and a spoke stops being a veil of dust over intact ring and starts
+           * looking like a sector cut out of it, which is the one thing every
+           * description of them takes pains to say they are not. Too low and it
+           * is invisible at the distance the event is actually watched from,
+           * which is where the previous setting landed: measured against the
+           * ring behind them it managed 15 luminance levels of darkening in
+           * backscatter and 27 of brightening in forward scatter, and that was
+           * not enough to see. These coefficients are a shade under twice that
+           * on both sides, which keeps the ring's own grain legible through a
+           * spoke while making it unmistakably there.
+           */
+          float alpha = body * uGain * (0.50 + 0.94 * back + 0.98 * forward);
+
+          gl_FragColor = vec4(tone, clamp(alpha, 0.0, 0.74));
+          #include <tonemapping_fragment>
+          #include <colorspace_fragment>
+        }
+      `,
+    });
+
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.frustumCulled = false;
+    // Over the ring particles, under nothing else.
+    mesh.renderOrder = 4;
+    /*
+     * The scattering angle is resolved at draw time, from whichever camera is
+     * actually drawing. Working it out in the animation step instead was the
+     * same mistake the surface shells made: the value is a property of the
+     * view, so it has to be read where the view is known.
+     */
+    mesh.onBeforeRender = (renderer, scene, renderCamera) => {
+      mesh.getWorldPosition(spokeHere);
+      spokeSun.copy(spokeHere).negate();
+      if (spokeSun.lengthSq() < 1e-8) spokeSun.set(0, 0, 1); else spokeSun.normalize();
+      if (!renderCamera) return;
+      renderCamera.getWorldPosition(spokeEye).sub(spokeHere);
+      if (spokeEye.lengthSq() < 1e-8) return;
+      uniforms.uPhase.value = spokeSun.dot(spokeEye.normalize());
+    };
+    group.add(mesh);
+
     spokes.push({
-      spoke,
-      angle: (index / count) * Math.PI * 2 + Math.random() * 0.4,
-      // 1.53 to 1.95 Saturn radii: the B ring.
-      reach: 1.53 + Math.random() * 0.34,
-      // Minutes to form, hours to shear away -- so each has its own life.
-      at: Math.random() * 0.45,
-      width: 0.22 + Math.random() * 0.24,
+      mesh,
+      uniforms,
+      // One per sector, jittered by up to a third of a sector either way --
+      // enough to break the regularity, not enough to leave a gap.
+      angle: index * SECTOR + (Math.random() - 0.5) * SECTOR * 0.66,
+      /*
+       * Minutes to form, two or three ring rotations to shear away. Each slot
+       * runs its life twice across the event with a different phase, so the
+       * field is never the same twice and spokes are seen both appearing and
+       * dying rather than all fading together.
+       */
+      at: Math.random() * 0.42,
+      width: 0.30 + Math.random() * 0.22,
+      encore: 0.52 + Math.random() * 0.30,
     });
   }
 
@@ -4332,30 +4969,31 @@ function createRingSpokes(target) {
     update(progress) {
       for (let index = 0; index < spokes.length; index += 1) {
         const item = spokes[index];
-        const since = progress - item.at;
-        // Fast on, slow off: forms in minutes, shears out over hours.
-        const level = since < 0
+        const first = progress - item.at;
+        const second = progress - item.encore;
+        const life = (moment) => (moment < 0
           ? 0
-          : smoothstep(0, 0.06, since) * (1 - smoothstep(item.width * 0.4, item.width, since));
+          : smoothstep(0, 0.05, moment) * (1 - smoothstep(item.width * 0.45, item.width, moment)));
+        const level = Math.max(life(first), life(second));
+
         /*
-         * They rotate with the magnetic field, not with the ring. Saturn's
-         * field rotates in about 10.6 hours while B-ring particles take about
-         * 8 -- so the spokes drift slowly *backwards* relative to the material
-         * they are made of, which is the observation that made the
-         * electrostatic explanation necessary.
+         * Carried round by the magnetic field rather than by the orbit. The
+         * field turns in 10.6 hours and the ring under it in about 8, so a
+         * spoke drifts slowly backwards through the material it is made of --
+         * the observation that forced the electrostatic explanation in the
+         * first place.
          */
-        const angle = item.angle + progress * 0.9;
-        item.spoke.position.set(
-          Math.cos(angle) * radius * item.reach,
-          0,
-          Math.sin(angle) * radius * item.reach,
-        );
-        item.spoke.rotation.z = -angle;
-        item.spoke.material.opacity = level * 0.42;
+        item.mesh.rotation.y = item.angle + progress * 0.55;
+        item.uniforms.uGain.value = level;
+        item.uniforms.uTime.value = progress * 20;
+        item.mesh.visible = level > 0.004;
       }
     },
     dispose() {
-      spokes.forEach((item) => { item.spoke.geometry.dispose(); item.spoke.material.dispose(); });
+      spokes.forEach((item) => {
+        item.mesh.geometry.dispose();
+        item.mesh.material.dispose();
+      });
     },
   };
 }
@@ -4897,6 +5535,7 @@ const EVENTS = [
     frequency: "Objects this size strike Jupiter tens of times a year; Earth-based amateurs catch one or two of the flashes",
     cause: "318 Earth masses of gravity sitting at the inner edge of the asteroid belt. Jupiter bends in main-belt strays kicked out by the 3:1 Kirkwood resonance, Jupiter-family comets, and Centaurs falling from beyond Saturn — so the arrivals come from every direction at once.",
     note: "There is no crater. A metre-scale body deposits its energy high in the atmosphere and leaves nothing behind — the flash is the whole event.",
+    facesSun: true,
     build: createImpactSwarm,
   },
   {
@@ -4907,6 +5546,7 @@ const EVENTS = [
     frequency: "Perhaps a fifth of Jupiter's rate — Saturn is further out and less massive, so its gravitational reach is smaller",
     cause: "The same accretion Jupiter does, and for the same reason. Saturn sweeps up Centaurs on their way in from the Kuiper Belt; several are on orbits that cross its own.",
     note: "Cassini found ring ripples that date a debris impact on the rings to 1983 — nobody was watching at the time.",
+    facesSun: true,
     build: createImpactSwarm,
   },
   {
@@ -4937,6 +5577,17 @@ const EVENTS = [
     frequency: "About a dozen major showers a year on fixed dates — the Perseids peak 12–13 August, the Geminids 13–14 December",
     cause: "Earth's orbit intersects streams of debris shed by comets on earlier passes. The dates are fixed because the streams are: the crossing point is a place in Earth's orbit, so it comes round once a year.",
     note: "The Perseids come from comet Swift–Tuttle; the Geminids from asteroid 3200 Phaethon, which is probably a burnt-out comet.",
+    /*
+     * Watched over the day side, and the shower is built for it.
+     *
+     * The stream's heading is chosen relative to the line between the viewer
+     * and the daylit face, and the few that reach the ground are aimed at land
+     * by reading the planet's own daytime map. Both of those assume the lit
+     * face is the one on screen; framed over the night side the trails still
+     * burn but they burn over a black planet, and the strikes land where
+     * nothing can be seen of what they hit.
+     */
+    facesSun: true,
     build: createMeteorShower,
   },
   {
@@ -4991,6 +5642,18 @@ const EVENTS = [
     // The storm places itself on the lit, viewer-facing part of the planet,
     // and framing the day side is what makes that reachable.
     facesSun: true,
+    /*
+     * And looked down on, rather than seen edge-on.
+     *
+     * The storm sits at 37 degrees north. From the default shot -- twelve
+     * degrees above the equator -- that latitude is up near the limb, so the
+     * head is foreshortened into a sliver and the tail disappears over the
+     * curve within a few tens of degrees of longitude. Raising the camera to
+     * the storm's own latitude puts the band across the middle of the disc,
+     * which is the view every Cassini frame of it was taken from and the only
+     * one where the head and the length of the tail are both readable.
+     */
+    shotPitch: THREE.MathUtils.degToRad(37),
     build: createSaturnWhiteSpot,
   },
   {
@@ -5001,6 +5664,19 @@ const EVENTS = [
     frequency: "Seasonal — around Saturn's equinoxes, so twice per 29.4-year orbit, roughly every 15 years. Northern autumn equinox fell on 6 May 2025, so this is spoke season",
     cause: "Dust-sized icy grains pick up electrical charge and levitate above the ring plane, where Saturn's rigidly rotating magnetic field controls them instead of Kepler's laws.",
     note: "That is why they can be radial at all. Anything on a normal orbit would shear into a spiral within minutes, because the inner edge of the ring laps the outer edge.",
+    /*
+     * Looked down on, from far enough back to hold the whole ring system.
+     *
+     * This is the one event whose subject is the ring rather than the planet.
+     * Seen from near the ring plane the spokes are edge-on -- radial features
+     * foreshortened into the line of the ring, which is exactly the geometry
+     * that hides them -- and the body's own framing crops the outer rings off
+     * the sides. So the camera climbs to sixty degrees, where the ring is a
+     * disc rather than a line, and stands back until the whole of it fits.
+     */
+    facesSun: true,
+    shotPitch: THREE.MathUtils.degToRad(60),
+    shotZoom: SPOKE_SHOT_ZOOM,
     build: createRingSpokes,
   },
   {
@@ -5262,6 +5938,11 @@ export function createSolarSystemEvents({
        */
       facesSun: event.facesSun === true,
       shotZoom: Number(event.shotZoom) || 1,
+      /**
+       * The camera elevation this event wants, in radians, or null for the
+       * composed default. Read by the staging in main.js alongside facesSun.
+       */
+      shotPitch: Number.isFinite(event.shotPitch) ? event.shotPitch : null,
     })),
 
     getState: snapshot,

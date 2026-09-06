@@ -690,9 +690,22 @@ import { POINTER_PROXY_LAYER } from "./scene/pointerProxies.js";
     if (shouldShow === spaceExitControlVisible && locked === spaceExitControlLocked) return;
     spaceExitControlVisible = shouldShow;
     spaceExitControlLocked = locked;
-    // Two independent reasons to be unavailable, and the control is available
-    // only when neither holds.
-    spaceExitControl.disabled = !shouldShow || locked;
+    /*
+     * Escape is always available.
+     *
+     * There used to be two reasons to disable it -- nothing to exit from, and
+     * the guided tour holding the control for a step -- and the second of them
+     * left a greyed-out Escape sitting on screen through a whole space event,
+     * which reads as the interface having seized rather than as a deliberate
+     * hold. Escape costs nothing to press when there is nothing to leave: the
+     * handler already falls through every branch and does nothing.
+     *
+     * `shouldShow` still governs whether there is anything to exit, so the
+     * control is only live when the viewer is actually inside something. The
+     * tour lock no longer disables it, because a viewer who wants out of a
+     * view should always be able to get out of it.
+     */
+    spaceExitControl.disabled = !shouldShow;
     spaceExitControl.classList.toggle("is-hidden", false);
   }
 
@@ -1379,7 +1392,11 @@ import { POINTER_PROXY_LAYER } from "./scene/pointerProxies.js";
      * of the camera and the Sun, the meteor stream is chosen relative to it --
      * so the shot is not decoration here. It is the input the staging reads.
      */
-    composeSolarEventShot(definition.facesSun ? target : null, definition.shotZoom ?? 1);
+    composeSolarEventShot(
+      definition.facesSun ? target : null,
+      definition.shotZoom ?? 1,
+      definition.shotPitch ?? null,
+    );
 
     solarEventTitle.textContent = definition.title;
     solarEventDetail.textContent = definition.detail;
@@ -1945,6 +1962,8 @@ import { POINTER_PROXY_LAYER } from "./scene/pointerProxies.js";
   let pendingSolarEventShot = false;
   // The zoom that went with the shot that could not be composed yet.
   let pendingSolarEventZoom = 1;
+  // And the elevation, for an event that wants to be looked down on.
+  let pendingSolarEventPitch = null;
 
   /**
    * Puts the camera back into that shot, whatever the viewer has done since.
@@ -1962,14 +1981,16 @@ import { POINTER_PROXY_LAYER } from "./scene/pointerProxies.js";
    */
   const solarEventShotPosition = new THREE.Vector3();
 
-  function composeSolarEventShot(sunwardOf = null, shotZoom = 1) {
+  function composeSolarEventShot(sunwardOf = null, shotZoom = 1, shotPitch = null) {
     if (focusExitTransition) {
       pendingSolarEventShot = sunwardOf ?? true;
       pendingSolarEventZoom = shotZoom;
+      pendingSolarEventPitch = shotPitch;
       return;
     }
     pendingSolarEventShot = false;
     pendingSolarEventZoom = 1;
+    pendingSolarEventPitch = null;
 
     /*
      * Some events have to be watched from the day side.
@@ -1994,7 +2015,19 @@ import { POINTER_PROXY_LAYER } from "./scene/pointerProxies.js";
 
     const turn = Math.PI * 2;
     targetYaw = shotYaw + Math.round((yaw - shotYaw) / turn) * turn;
-    targetPitch = SOLAR_EVENT_SHOT_PITCH;
+    /*
+     * The composed elevation, unless the event asks for its own.
+     *
+     * Most of these happen near the equator or are equally visible from
+     * anywhere, and the shared low angle is the more cinematic of the two. A
+     * storm at 37 degrees north is not one of those: from down here its own
+     * latitude is up against the limb.
+     */
+    targetPitch = Number.isFinite(shotPitch)
+      // The same limit the drag and the arrow keys use, so a composed shot is
+      // never somewhere the viewer cannot get back to by hand.
+      ? THREE.MathUtils.clamp(shotPitch, -1.1, 1.1)
+      : SOLAR_EVENT_SHOT_PITCH;
     /*
      * Any zoom the viewer applied to the last event is theirs, not the next
      * one's; 1 is the distance the body's own focus framing was authored at.
@@ -2123,7 +2156,17 @@ import { POINTER_PROXY_LAYER } from "./scene/pointerProxies.js";
     events: "#space-events-trigger",
     spacemode: "#space-mode-toggle",
     systemreturn: "#system-return-button",
-    exit: "#space-exit-control",
+    /*
+     * Escape is deliberately absent.
+     *
+     * It used to be locked here with the rest, which gave it the shared
+     * `.is-tour-locked` rule -- opacity 0.26 and pointer-events: none, both
+     * !important -- and that is what made the exit look permanently greyed
+     * out: the lock outlives the tour step that set it and covers a whole
+     * space event. Escape is the one control that must never be taken away,
+     * because it is the way out of anything the viewer no longer wants to be
+     * in, and pressing it when there is nothing to leave already does nothing.
+     */
     // Not a single button: the readout's unit badges and its measurement
     // control are several elements sharing one activation path, so this one is
     // enforced there rather than by a `disabled` attribute.
@@ -3790,6 +3833,19 @@ import { POINTER_PROXY_LAYER } from "./scene/pointerProxies.js";
       sunScreenProjection.x,
       sunScreenProjection.y,
       // Normalised device coordinates measure 2 across the viewport height.
+      Math.max(0.002, solarGlarePixels * 1.24 / Math.max(1, innerHeight)),
+      sunIsOnScreen ? 1 : 0,
+      Math.max(0.0001, innerWidth / Math.max(1, innerHeight)),
+    );
+
+    /*
+     * The same glare the guides use, handed to the deep-sky star field so the
+     * backdrop cannot be painted across the star. Screen space, exactly as
+     * above: normalised device coordinates, where the viewport height is 2.
+     */
+    spaceEnvironment.setSolarGlare(
+      sunScreenProjection.x,
+      sunScreenProjection.y,
       Math.max(0.002, solarGlarePixels * 1.24 / Math.max(1, innerHeight)),
       sunIsOnScreen ? 1 : 0,
       Math.max(0.0001, innerWidth / Math.max(1, innerHeight)),
@@ -7488,6 +7544,30 @@ import { POINTER_PROXY_LAYER } from "./scene/pointerProxies.js";
     }
 
     /*
+     * A staged or running space event swallows the click too, and for the same
+     * reason as the caption above: the viewer travelled out to watch this, and
+     * every branch below takes the view away from it.
+     *
+     * This is what the pause the viewer reported actually was. The click never
+     * touched the event system -- it landed on the focused planet and opened
+     * its dossier, and an open dossier is an information overlay, which the
+     * frame loop declines to run at all. The event did not stop; the whole
+     * simulation did, mid-impact, and stayed there until the panel was closed.
+     * The other branches are no better: a click into empty space exits the
+     * inspection, and leaving the body takes the event with it.
+     *
+     * `dismissFinishedEventCard` already declines while an event is staging.
+     * This is the same rule, applied where the click is resolved rather than
+     * where the card is dismissed. Escape still exits, because that is a
+     * deliberate instruction rather than an accident of where the pointer was.
+     */
+    if (isSolarEventStaging()) {
+      pointerDownCelestialBody = null;
+      pointerDownPlanetOrbit = null;
+      return;
+    }
+
+    /*
      * The early tour steps suspend some or all of the other targets.
      *
      * "none" is the first three steps, which are about moving the camera: a
@@ -7645,9 +7725,10 @@ import { POINTER_PROXY_LAYER } from "./scene/pointerProxies.js";
 
     if (event.key === "Escape") {
       event.preventDefault();
-      // The key and the button are the same control and unlock together, so
-      // that "Esc, or this" in the tour is true of both halves at once.
-      if (!isTourControlLocked("exit")) exitCurrentView();
+      // The key and the button are the same control, and neither is ever
+      // withheld. This used to check the tour lock; see TOUR_CONTROL_LOCKS for
+      // why Escape is no longer part of it.
+      exitCurrentView();
       return;
     }
     if (event.key === "ArrowLeft") targetYaw += 0.18;
@@ -8078,6 +8159,7 @@ import { POINTER_PROXY_LAYER } from "./scene/pointerProxies.js";
       composeSolarEventShot(
         pendingSolarEventShot === true ? null : pendingSolarEventShot,
         pendingSolarEventZoom,
+        pendingSolarEventPitch,
       );
     }
     // Focus mode and its short deterministic exit hold slow physical scene motion

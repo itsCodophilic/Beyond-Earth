@@ -5,7 +5,7 @@
  * combines several lightweight layers, each responsible for a different effect:
  *
  * - photosphere: animated granular surface
- * - chromosphere: thin red-pink rim above the photosphere
+ * - chromosphere: thin warm-white rim above the photosphere
  * - corona shells: white and silver-white plasma glow around the silhouette
  * - glow sprite: soft light extending into surrounding space
  * - spicules: tiny uneven flames attached to the outer edge
@@ -468,11 +468,17 @@ function createSpicules(count = 560) {
 
   const position = new THREE.Vector3();
 
+  /*
+   * Warm white, not fire. The spicules are the one plasma layer kept, because
+   * they are a tight fringe on the edge rather than something rising off it --
+   * but they sit exactly on the limb, so a saturated palette there tinted the
+   * whole rim.
+   */
   const palette = [
-    new THREE.Color(0xff4210),
-    new THREE.Color(0xff6d18),
-    new THREE.Color(0xff9a24),
-    new THREE.Color(0xffc34d),
+    new THREE.Color(0xffe9d2),
+    new THREE.Color(0xfff0e0),
+    new THREE.Color(0xfff6ec),
+    new THREE.Color(0xfffaf4),
   ];
 
   for (let index = 0; index < count; index += 1) {
@@ -657,6 +663,21 @@ function createSolarSpriteBatch(texture) {
     /** Called once, after every sprite that will ever exist has been claimed. */
     build(name) {
       const count = handles.length;
+      /*
+       * Nothing claimed a sprite, so there is nothing to draw.
+       *
+       * True now that the jets, arches and flares are gone -- they were the
+       * only three families that ever used this batch. Returning an empty
+       * Group rather than a zero-instance InstancedBufferGeometry keeps a
+       * degenerate draw call and a set of zero-length attribute buffers out
+       * of the renderer entirely; `mesh()` then reports null and `flush()`
+       * already returns early on it.
+       */
+      if (count === 0) {
+        const empty = new THREE.Group();
+        empty.name = name;
+        return empty;
+      }
       const geometry = new THREE.InstancedBufferGeometry();
       geometry.setAttribute("position", new THREE.BufferAttribute(new Float32Array([
         -0.5, -0.5, 0,
@@ -817,7 +838,7 @@ function createPlasmaJet(
 
   group.name = "Solar plasma jet";
 
-  const colors = [0xff3508, 0xff4f0b, 0xff7014, 0xff9d25, 0xffc84a, 0xffffa1];
+  const colors = [0xffc98a, 0xffd39b, 0xffdcac, 0xffe5bd, 0xffeed0, 0xfff7e6];
 
   const particles = Array.from(
     {
@@ -903,7 +924,7 @@ function createCoronalLoop({ angle, width, height, tilt, phase }, batch, particl
   const tiltFrame = new THREE.Quaternion()
     .setFromAxisAngle(new THREE.Vector3(1, 0, 0), tilt);
 
-  const colors = [0xff4310, 0xff711b, 0xffa430, 0xffffa3];
+  const colors = [0xffcb90, 0xffd7a6, 0xffe3bc, 0xfff1d8];
 
   const particles = Array.from(
     {
@@ -1007,7 +1028,7 @@ function createSolarFlare(
    * Sprites are used instead of a solid tube so the flare
    * feels like plasma rather than a neon wire.
    */
-  const colors = [0xff4210, 0xff6f18, 0xffa62d, 0xffd85c, 0xffffc4, 0xffffff];
+  const colors = [0xffc98a, 0xffd39b, 0xffdcac, 0xffe5bd, 0xffeed0, 0xffffff];
 
   const arcParticles = Array.from(
     {
@@ -1170,13 +1191,19 @@ export function createSun({ world, hoverTargets, texture, quality = "high" }) {
    * Chromosphere
    *
    * This shell stays very close to the photosphere and creates a narrow,
-   * irregular pale red-pink edge.
+   * irregular edge.
+   *
+   * The tint used to be the chromosphere's real H-alpha red, which is the
+   * right answer for an eclipse photograph and the wrong one here: over a
+   * white-light photosphere it drew a hard red-orange ring round the whole
+   * limb. A warm white keeps the soft irregular boundary the shell exists
+   * for and lets the disc stay white.
    */
   const chromosphere = new THREE.Mesh(
     new THREE.SphereGeometry(SUN_RADIUS * 1.012, ...creationProfile.chromosphereSegments),
 
     createAtmosphereMaterial({
-      color: 0xff6b4a,
+      color: 0xfff4ea,
 
       intensity: 0.3,
 
@@ -1318,39 +1345,30 @@ export function createSun({ world, hoverTargets, texture, quality = "high" }) {
    * Fewer and smaller eruptions prevent the Sun from looking constantly
    * explosive or game-like.
    */
-  const jetData = [
-    {
-      latitude: -24,
-      longitude: 18,
-      height: 1.75,
-      bend: 0.42,
-      phase: 0.4,
-    },
-
-    {
-      latitude: 32,
-      longitude: -48,
-      height: 1.15,
-      bend: -0.28,
-      phase: 1.9,
-    },
-
-    {
-      latitude: 8,
-      longitude: 72,
-      height: 1.45,
-      bend: 0.31,
-      phase: 3.2,
-    },
-
-    {
-      latitude: -46,
-      longitude: -82,
-      height: 0.95,
-      bend: -0.22,
-      phase: 4.5,
-    },
-  ];
+  /*
+   * No jets, no arches, no flares.
+   *
+   * The Sun grew three families of plasma that rise off the limb: four jets,
+   * two magnetic arches and three flares. Each was authored from a palette
+   * that starts at a saturated red -- 0xff3508, 0xff4310, 0xff4210 -- and
+   * each draws additively just outside the edge of the disc, so against black
+   * they read as red matter coming out of the star. That is the thing being
+   * removed, by request, and the request is right: this is a white-light Sun
+   * and it should read as a white star with sunspots.
+   *
+   * They are removed by emptying the lists they are built from. Nothing
+   * claims sprites from the batch, nothing animates them, and the runtime
+   * profile and the per-frame update both walk empty arrays without changing
+   * shape -- so the removal cannot break either. Putting any of them back is
+   * putting entries back in these three lists.
+   *
+   * Why this was missed the first time: only the flares were emptied, and the
+   * check was made with the Sun focused, where the disc overfills the frame
+   * and the limb -- the only place this plasma is ever visible -- sits outside
+   * the viewport. It shows when the whole disc is in view, which is what
+   * scrolling in towards the Sun gives you.
+   */
+  const jetData = [];
 
   /*
    * One instanced mesh for the whole star's plasma. Every flare, jet and arch
@@ -1368,23 +1386,7 @@ export function createSun({ world, hoverTargets, texture, quality = "high" }) {
   /*
    * Only two subtle coronal arches are retained.
    */
-  const coronalLoops = [
-    {
-      angle: 2.75,
-      width: 0.25,
-      height: 1.65,
-      tilt: 0.42,
-      phase: 1.2,
-    },
-
-    {
-      angle: 5.35,
-      width: 0.18,
-      height: 1.05,
-      tilt: -0.58,
-      phase: 4.1,
-    },
-  ].map((config) => createCoronalLoop(
+  const coronalLoops = [].map((config) => createCoronalLoop(
     config,
     spriteBatch,
     creationProfile.loopParticles,
@@ -1395,34 +1397,7 @@ export function createSun({ world, hoverTargets, texture, quality = "high" }) {
    *
    * These remain sparse so the Sun does not look permanently explosive.
    */
-  const flareData = [
-    {
-      latitude: 18,
-      longitude: 38,
-      height: 3.2,
-      width: 1.5,
-      bend: 0.45,
-      phase: 0.7,
-    },
-
-    {
-      latitude: -31,
-      longitude: -62,
-      height: 2.4,
-      width: 1.1,
-      bend: -0.34,
-      phase: 3.4,
-    },
-
-    {
-      latitude: 47,
-      longitude: 124,
-      height: 2.75,
-      width: 1.25,
-      bend: 0.28,
-      phase: 6.2,
-    },
-  ];
+  const flareData = [];
 
   const solarFlares = flareData.map((config) =>
     createSolarFlare(config, spriteBatch, {

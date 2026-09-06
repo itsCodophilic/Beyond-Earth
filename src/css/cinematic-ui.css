@@ -3023,7 +3023,17 @@ body.is-space-event .system-return-button {
   background: linear-gradient(180deg, rgba(9, 14, 26, 0.62), rgba(3, 5, 11, 0.56));
 }
 
-body.is-space-event .space-exit-control { opacity: 0.3; pointer-events: none; }
+/*
+ * The Escape control stays live during a space event.
+ *
+ * It used to be dimmed to 0.3 and given pointer-events: none while an
+ * event was staged, on the theory that the viewer should watch the event
+ * out. But Escape is the one control whose whole job is to be available:
+ * pressing it a few times more than necessary costs nothing, and a
+ * greyed-out exit during a two-minute event reads as the interface
+ * having locked up.
+ */
+body.is-space-event .space-exit-control { opacity: 1; pointer-events: auto; }
 
 /* ==================================================== space mode
 

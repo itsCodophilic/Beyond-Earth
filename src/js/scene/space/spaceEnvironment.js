@@ -133,6 +133,16 @@ export class SpaceEnvironment {
   }
 
   /**
+   * Where the Sun is on screen, and how far its glare reaches, in normalised
+   * device coordinates. The deep-sky star layers fade themselves out inside it
+   * so the backdrop cannot be painted across the star -- the same rule the
+   * orbit guides already follow, and for the same reason.
+   */
+  setSolarGlare(screenX, screenY, glareRadius, strength, aspect) {
+    this.deepSky?.setSolarGlare?.(screenX, screenY, glareRadius, strength, aspect);
+  }
+
+  /**
    * Updates uniforms only. Static star/galaxy buffer attributes never return to
    * the CPU, avoiding geometry uploads and allocations inside the render loop.
    */

@@ -460,6 +460,7 @@ const STAR_VERTEX = /* glsl */`
   uniform vec2 uShell;
   varying vec3 vColour;
   varying float vGain;
+  varying vec2 vScreen;
   void main() {
     vColour = aColour;
     /*
@@ -486,17 +487,48 @@ const STAR_VERTEX = /* glsl */`
     float scale = uAtten > 0.0 ? clamp(uAtten / depth, 0.25, 3.2) : 1.0;
     gl_PointSize = aSize * uPixel * scale;
     gl_Position = projectionMatrix * viewPosition;
+    // Where this star lands on screen, so the fragment shader can tell whether
+    // it is sitting inside the Sun's glare. A point is small enough that its
+    // centre is the right place to ask.
+    vScreen = gl_Position.xy / max(0.0001, gl_Position.w);
   }
 `;
 
 const STAR_FRAGMENT = /* glsl */`
   uniform sampler2D uMap;
   uniform float uOpacity;
+  uniform vec3 uSunScreen;
+  uniform float uSunGlare;
+  uniform float uAspect;
   varying vec3 vColour;
   varying float vGain;
+  varying vec2 vScreen;
   void main() {
     float mask = texture2D(uMap, gl_PointCoord).a;
     float alpha = mask * uOpacity * vGain;
+
+    /*
+     * Glare hides what is behind it -- and this layer is what made the Sun
+     * look transparent at full zoom-out.
+     *
+     * The sky is painted on a shell that rides with the lens, so once the
+     * journey pulls further from the Sun than that shell's radius, the Sun is
+     * behind the sky and stops occluding it. The Milky Way and its stars then
+     * draw straight across the star, which is exactly "I can see the space
+     * background through the Sun".
+     *
+     * Widening the shell fixes the depth test and nothing else -- but the
+     * sky's own glow is authored against that radius, so it is not a free
+     * knob to turn. This does the same job where the problem actually shows.
+     * A star inside the Sun's glare fades out, which is what a bright star
+     * does to everything faint beside it, in front of it or behind it. The z
+     * component of uSunScreen is zero when the Sun is off screen or behind the
+     * camera, which switches the whole term off.
+     */
+    vec2 toSun = (vScreen - uSunScreen.xy) * vec2(uAspect, 1.0);
+    float glare = 1.0 - smoothstep(0.16, 1.0, length(toSun) / max(0.0001, uSunGlare));
+    alpha *= 1.0 - glare * uSunScreen.z;
+
     if (alpha <= 0.003) discard;
     gl_FragColor = vec4(vColour, alpha);
   }
@@ -696,6 +728,9 @@ export function createDeepSky({
       uTwinkle: { value: twinkle },
       uAtten: { value: atten },
       uShell: { value: new THREE.Vector2(shell[0], shell[1]) },
+      uSunScreen: { value: new THREE.Vector3(0, 0, 0) },
+      uSunGlare: { value: 0.05 },
+      uAspect: { value: 1 },
     },
     transparent: true,
     depthWrite: false,
@@ -969,6 +1004,20 @@ export function createDeepSky({
         Math.round(camera.position.y / span) * span,
         Math.round(camera.position.z / span) * span,
       );
+    },
+
+    /**
+     * Tells the star layers where the Sun is on screen and how far its glare
+     * reaches, in the same normalised device coordinates the orbit guides use.
+     * The near-field motes are deliberately left out: they are foreground dust
+     * a few hundred units from the lens, not sky behind the star.
+     */
+    setSolarGlare(screenX, screenY, glareRadius, strength, aspect) {
+      for (const material of [fieldMaterial, namedMaterial]) {
+        material.uniforms.uSunScreen.value.set(screenX, screenY, strength);
+        material.uniforms.uSunGlare.value = glareRadius;
+        material.uniforms.uAspect.value = aspect;
+      }
     },
 
     resize(nextPixelRatio) {
