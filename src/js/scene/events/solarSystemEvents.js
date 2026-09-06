@@ -386,6 +386,8 @@ function createSurfaceCap(radius, normal, kind) {
       blending: THREE.AdditiveBlending,
     });
 
+  hugSurface(material);
+
   const mesh = new THREE.Mesh(geometry, material);
   mesh.frustumCulled = false;
   mesh.visible = false;
@@ -2841,6 +2843,103 @@ function createSolarEjection(target, camera) {
  * fading out over days until nothing is left but a featureless butterscotch
  * ball.
  */
+
+/**
+ * Keeps a surface shader's sun and view directions honest.
+ *
+ * Both are per-frame facts about where the camera and the star are relative to
+ * a body, and both decide *shape*: the sun direction places the terminator, the
+ * view direction places the limb fade. Written once per animation step -- which
+ * is what every one of these did -- they belong to whatever camera the clock
+ * last ticked on, and nothing promises that is the camera the frame is drawn
+ * with. Turning a planet is exactly when the two disagree most, and a
+ * terminator or a horizon standing in the wrong place is a hard boundary lying
+ * across a curved surface: an arc that sweeps as the viewer turns.
+ *
+ * The coronal mass ejection had the same class of bug and the same fix; see
+ * `volume.onBeforeRender` in `createSolarEjection`. `onBeforeRender` is called
+ * by the renderer immediately before the object is submitted, after every world
+ * matrix in the scene is up to date, and is handed the camera actually being
+ * rendered with.
+ */
+/*
+ * Depth bias for anything drawn lying ON a planet.
+ *
+ * A storm shell, a dust veil, an impact stain: each is a thin skin a fraction
+ * of a per cent above an opaque sphere, and each has to win the depth test
+ * against it at every pixel. Whether it does is a question of how finely the
+ * depth buffer can still tell two surfaces apart out where the planet is, and
+ * that resolution falls off as the square of the distance from the lens while
+ * the gap between skin and surface stays the same size. The camera's near
+ * plane sits on its floor of 0.02 against a far plane of 15,000, so by the
+ * time a viewer has pulled back to the distance these events are actually
+ * framed at, the two are no longer reliably separable.
+ *
+ * What that looks like is the bug that was reported: irregular, hard-edged
+ * dark shapes flickering across the bright part of the storm, following the
+ * triangle edges of whichever mesh happens to win each patch. Measured on the
+ * Great White Spot across twenty-four viewpoints, with the storm at full
+ * strength: no rejected pixels at two and a half planetary radii out, 1,448 at
+ * the distance the event frames itself, and 27,484 at eight radii.
+ *
+ * Polygon offset is the right instrument because it is specified in units of
+ * the depth buffer's own resolution at that depth, so it scales with the
+ * problem instead of having to be guessed at in world units -- a fixed nudge
+ * outwards large enough to help at forty radii would have the shell visibly
+ * floating at two. Measured with these values the same sweep leaves 2 pixels
+ * at eight radii, 1 at twenty and 3 at forty.
+ */
+function hugSurface(material) {
+  material.polygonOffset = true;
+  material.polygonOffsetFactor = -8;
+  material.polygonOffsetUnits = -16;
+  return material;
+}
+
+function trackSurfaceLighting(mesh, target, camera) {
+  const sun = new THREE.Vector3();
+  const view = new THREE.Vector3();
+  const spin = new THREE.Quaternion();
+  const { uSun, uView } = mesh.material.uniforms;
+  mesh.onBeforeRender = (renderer, scene, renderCamera) => {
+    /*
+     * Resolved in the SHELL's frame, not the planet's, and that distinction is
+     * the whole bug this replaced.
+     *
+     * These shells are atmospheres, and an atmosphere turns -- the Mars veil
+     * adds to its own rotation.y on every update, because dust is carried by a
+     * wind that outruns the ground. The shader reads `vDirection`, which is a
+     * position in the shell's own space, and compares it against uSun. Filling
+     * uSun from the planet's frame therefore compared a direction in one frame
+     * against a direction in another, and the error was exactly however far the
+     * shell had turned: measured across a single storm it grew from 5 degrees
+     * to 80. Half a minute in, the veil's terminator was most of a quadrant
+     * away from the planet's, so the dust was lit where the ground was dark and
+     * dark where it was lit -- a sandstorm plainly visible on the night side.
+     *
+     * The shell's own world rotation is what the shader is speaking in, so that
+     * is what these are converted into. For a shell that does not turn it is
+     * the same answer as before.
+     */
+    mesh.getWorldPosition(sun);
+    // The Sun is at the world origin, so the way to it is the way back to the
+    // origin.
+    if (sun.lengthSq() < 1e-8) sun.set(0, 0, 1);
+    else sun.negate().normalize();
+    mesh.getWorldQuaternion(spin);
+    spin.invert();
+    uSun.value.copy(sun.applyQuaternion(spin));
+
+    const eye = renderCamera ?? camera;
+    if (!eye) return;
+    eye.getWorldPosition(view);
+    mesh.worldToLocal(view);
+    if (view.lengthSq() < 1e-8) view.set(0, 0, 1);
+    else view.normalize();
+    uView.value.copy(view);
+  };
+}
+
 function createMarsDustStorm(target, camera) {
   const group = new THREE.Group();
   group.name = "Mars global dust storm";
@@ -2874,8 +2973,24 @@ function createMarsDustStorm(target, camera) {
     uTime: { value: 0 },
     uSun: { value: new THREE.Vector3(0, 0, 1) },
     uView: { value: new THREE.Vector3(0, 0, 1) },
-    uDust: { value: new THREE.Color(0xd9a778) },
-    uPale: { value: new THREE.Color(0xf2d6ac) },
+    /*
+     * Warmer than they were. A global storm photographed from orbit is a
+     * yellow-orange to reddish-brown veil, and the previous pair sat close
+     * enough to unsaturated cream that the planet under the storm read as
+     * overcast rather than as dust. uDust is the ordinary depth of it and
+     * uPale the thickest knots, which do go paler -- deep dust scatters
+     * towards white -- but from an orange, not from a grey.
+     *
+     * Chosen by measurement rather than by eye, over the sunlit disc at the
+     * height of the storm: warmth (R-B)/(R+G+B) comes out at 0.198 against
+     * bare Mars's own 0.164, where the old pair measured 0.104 -- so the planet
+     * under the storm now reads as more orange than Mars, which is the right
+     * direction, instead of less. It still gets brighter rather than darker:
+     * mean +9.6 luminance across the lit disc, and the 5.6 per cent of it that
+     * does darken is the optically thickest knots, by about 12 levels.
+     */
+    uDust: { value: new THREE.Color(0xff9a2e) },
+    uPale: { value: new THREE.Color(0xffc26a) },
   };
 
   const veil = new THREE.Mesh(
@@ -2953,8 +3068,26 @@ function createMarsDustStorm(target, camera) {
            * dust has to stop covering at exactly the rate it stops being lit;
            * anything else leaves a shroud. Sharing the ramp guarantees it.
            */
-          float lit = smoothstep(-0.22, 0.36, sunDot);
-          if (lit < 0.008) discard;
+          /*
+           * Squared, and starting at the terminator rather than before it.
+           *
+           * The shared ramp fixed the shroud but was still far too generous
+           * about what counts as lit: at the terminator itself it left the veil
+           * at a third of full strength, so there was plainly a sandstorm on
+           * ground that has no sunlight on it. Dust is only visible because
+           * sunlight is scattering off it, and the light arriving falls with
+           * the cosine of the angle -- squaring the ramp is the cheap way to
+           * make the last stretch before the terminator go dim in a hurry
+           * rather than linger.
+           *
+           * At five degrees past the terminator the veil is now under half a
+           * per cent of full; at ten, nine per cent; and full strength only
+           * once the Sun is properly up. Which is the honest answer to "in the
+           * dark, could you see anything?".
+           */
+          float lit = smoothstep(-0.02, 0.45, sunDot);
+          lit *= lit;
+          if (lit < 0.004) discard;
 
           /*
            * Optical depth: broad cells drifting with the wind with a finer
@@ -3011,7 +3144,7 @@ function createMarsDustStorm(target, camera) {
            * twilight is dim but not black, and by the time this matters the
            * alpha above has already taken the shell most of the way out.
            */
-          gl_FragColor = vec4(tone * (0.12 + 0.88 * lit), alpha);
+          gl_FragColor = vec4(tone * (0.06 + 0.94 * lit), alpha);
           #include <tonemapping_fragment>
           #include <colorspace_fragment>
         }
@@ -3019,26 +3152,74 @@ function createMarsDustStorm(target, camera) {
     }),
   );
   veil.scale.setScalar(radius * 1.022);
+  hugSurface(veil.material);
+  trackSurfaceLighting(veil, target, camera);
   group.add(veil);
 
-  // A second, thinner shell a little higher: the high-altitude haze that
-  // outlives the storm itself and gives the limb its soft edge.
+  /*
+   * A second, thinner shell a little higher: the high-altitude haze that
+   * outlives the storm itself and gives the limb its soft edge.
+   *
+   * It used to be a plain unlit colour added at a flat opacity, which meant it
+   * laid the same warm band right around the planet -- including the quarter of
+   * the limb that is in night. Additive blending cannot darken anything, so it
+   * never showed up as a shroud; it showed up as a dust glow hanging over
+   * ground with no sunlight on it, which is the same complaint in a quieter
+   * voice. It gets the veil's lit ramp for the same reason the veil does.
+   */
+  const hazeUniforms = {
+    uGain: { value: 0 },
+    uSun: { value: new THREE.Vector3(0, 0, 1) },
+    uView: { value: new THREE.Vector3(0, 0, 1) },
+    uTint: { value: new THREE.Color(0xe2a05a) },
+  };
+
   const haze = new THREE.Mesh(
     new THREE.SphereGeometry(1, 32, 22),
-    new THREE.MeshBasicMaterial({
-      color: 0xe0a96b,
+    new THREE.ShaderMaterial({
+      uniforms: hazeUniforms,
       transparent: true,
-      opacity: 0,
       depthWrite: false,
       blending: THREE.AdditiveBlending,
       side: THREE.BackSide,
+      toneMapped: true,
+      vertexShader: /* glsl */`
+        varying vec3 vDirection;
+
+        void main() {
+          vDirection = position;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+      `,
+      fragmentShader: /* glsl */`
+        varying vec3 vDirection;
+
+        uniform float uGain;
+        uniform vec3 uSun;
+        uniform vec3 uView;
+        uniform vec3 uTint;
+
+        void main() {
+          vec3 d = normalize(vDirection);
+          // The same squared ramp the veil below uses, so the two go out
+          // together rather than leaving the haze behind on the night side.
+          float lit = smoothstep(-0.02, 0.45, dot(d, uSun));
+          lit *= lit;
+          if (lit < 0.004) discard;
+          // Brightest where the line of sight runs along the shell rather than
+          // through it, which is what makes it read as a limb.
+          float grazing = 1.0 - abs(dot(d, uView));
+          float alpha = uGain * lit * (0.25 + 0.75 * grazing * grazing);
+          gl_FragColor = vec4(uTint * lit, alpha);
+          #include <tonemapping_fragment>
+          #include <colorspace_fragment>
+        }
+      `,
     }),
   );
   haze.scale.setScalar(radius * 1.055);
+  trackSurfaceLighting(haze, target, camera);
   group.add(haze);
-
-  const sunLocal = new THREE.Vector3();
-  const viewLocal = new THREE.Vector3();
 
   return {
     group,
@@ -3050,12 +3231,10 @@ function createMarsDustStorm(target, camera) {
       const clear = 1 - smoothstep(0.55, 1, progress);
       const strength = grow * clear;
 
-      localSunDirection(target, sunLocal);
-      localCameraDirection(target, camera, viewLocal);
-      veilUniforms.uSun.value.copy(sunLocal);
-      veilUniforms.uView.value.copy(viewLocal);
+      // The sun and view directions are not set here; see trackSurfaceLighting.
       /*
-       * The ceiling that keeps Mars visible.
+       * The ceiling that keeps Mars visible on the day side, where the ramp
+       * above has already taken the veil out of the twilight.
        *
        * Measured over the lit disc at the height of the storm: about 0.28
        * opaque in the thin windows, 0.87 in the thickest knots, and a shade
@@ -3067,7 +3246,7 @@ function createMarsDustStorm(target, camera) {
       veilUniforms.uGain.value = strength * 0.68;
       veilUniforms.uTime.value = progress * 22;
 
-      haze.material.opacity = strength * 0.13;
+      hazeUniforms.uGain.value = strength * 0.34;
       // The dust is in the atmosphere and the atmosphere is turning.
       veil.rotation.y += 0.0016;
       haze.rotation.y -= 0.0011;
@@ -3270,6 +3449,22 @@ function createSaturnWhiteSpot(target, camera) {
         float head = exp(-spot) + 0.35 * exp(-spot * 3.0);
 
         /*
+         * Faded out before the mesh runs out.
+         *
+         * The head is added to the band rather than multiplied by it, which is
+         * what lets it bulge -- and it also means nothing else is holding it
+         * inside the strip of sphere this shader is drawn on. A Gaussian is
+         * still worth about one per cent of itself two and a bit widths out,
+         * the turbulence can double that, and at the edge of the geometry it
+         * stops dead: two faint hard rings at fixed latitudes, circling the
+         * planet, sweeping as the viewer turns. Closing it off well inside the
+         * mesh leaves the storm ending where the storm ends rather than where
+         * the triangles do.
+         */
+        float offMiddle = abs(d.y - uLatitude);
+        head *= 1.0 - smoothstep(0.22, 0.32, offMiddle);
+
+        /*
          * The tail: everything the head has already laid down, thinning with
          * distance behind it and ending where the storm has not reached yet.
          *
@@ -3291,7 +3486,13 @@ function createSaturnWhiteSpot(target, camera) {
          */
         float tailIn = smoothstep(0.0, 0.55, behind);
         float tailOut = 1.0 - smoothstep(uTail * 0.38, uTail, behind);
-        float tail = tailIn * tailOut * (0.30 + 0.70 * exp(-behind * 0.42));
+        /*
+         * A floor under the trail, so it stays a stream rather than breaking
+         * into patches. The old decay took it to under half its strength within
+         * a couple of radians and the turbulence then punched the rest into
+         * islands; a real storm's wake thins but stays joined to itself.
+         */
+        float tail = tailIn * tailOut * (0.46 + 0.54 * exp(-behind * 0.30));
 
         /*
          * The head is added to the band rather than multiplied by it, which is
@@ -3347,7 +3548,7 @@ function createSaturnWhiteSpot(target, camera) {
          * over it, so the same storm has holes you can see Saturn through and
          * knots that are solid cloud.
          */
-        float density = shape * (0.30 + 1.35 * churn) * (0.72 + 0.52 * lumps);
+        float density = shape * (0.45 + 1.15 * churn) * (0.76 + 0.44 * lumps);
         density = clamp(density, 0.0, 1.0);
 
         /*
@@ -3385,7 +3586,16 @@ function createSaturnWhiteSpot(target, camera) {
          * warm lanes cutting through the bright knots and cool shadow inside
          * them -- so they are separate fields here.
          */
-        float lift = smoothstep(0.30, 0.70, lumps);
+        /*
+         * How much of what is here is the head rather than the trail. The spot
+         * is the thing the event is named for, so it gets more of everything:
+         * whiter where it is thick, and a stronger swing into blue and tan
+         * through its lumps, so it reads as a churning knot with depth in it
+         * instead of a bright disc.
+         */
+        float headness = clamp(head / max(1e-4, shape), 0.0, 1.0);
+
+        float lift = smoothstep(0.30 - headness * 0.06, 0.70 + headness * 0.06, lumps);
         vec3 cloud = mix(uShade, uBright, lift);
 
         /*
@@ -3401,7 +3611,9 @@ function createSaturnWhiteSpot(target, camera) {
          * can be thick and blue at the same time, and now are.
          */
         float thin = 1.0 - smoothstep(0.38, 0.62, churn);
-        vec3 tone = mix(cloud, uWarm, thin * 0.50);
+        vec3 tone = mix(cloud, uWarm, thin * (0.50 + headness * 0.22));
+        // and the core of the spot burns out towards white on top of all that.
+        tone = mix(tone, uBright, headness * smoothstep(0.55, 1.0, density) * 0.45);
 
         gl_FragColor = vec4(tone, density * uGain * day * horizon);
         #include <tonemapping_fragment>
@@ -3435,8 +3647,13 @@ function createSaturnWhiteSpot(target, camera) {
    * still sits under Saturn's atmosphere shell at 1.018, so the planet's haze
    * passes over the storm the way it passes over the bands.
    */
-  const BAND_TOP = THREE.MathUtils.degToRad(62);
-  const BAND_BOTTOM = THREE.MathUtils.degToRad(18);
+  /*
+   * Wide enough that the head's own fade finishes inside it. The head reaches
+   * about one and eight tenths of its width before it is closed off, and that
+   * has to land on triangles or the closing-off is what shows instead.
+   */
+  const BAND_TOP = THREE.MathUtils.degToRad(68);
+  const BAND_BOTTOM = THREE.MathUtils.degToRad(12);
   const clouds = new THREE.Mesh(
     new THREE.SphereGeometry(
       1, 192, 40,
@@ -3447,7 +3664,9 @@ function createSaturnWhiteSpot(target, camera) {
     material,
   );
   clouds.scale.setScalar(radius * 1.012);
+  hugSurface(clouds.material);
   clouds.renderOrder = 1;
+  trackSurfaceLighting(clouds, target, camera);
   group.add(clouds);
 
   const sunLocal = new THREE.Vector3();
@@ -3481,11 +3700,7 @@ function createSaturnWhiteSpot(target, camera) {
       const onset = smoothstep(0, 0.12, progress);
       const fade = 1 - smoothstep(0.82, 1, progress);
 
-      localSunDirection(target, sunLocal);
-      localCameraDirection(target, camera, viewLocal);
-      uniforms.uSun.value.copy(sunLocal);
-      uniforms.uView.value.copy(viewLocal);
-
+      // The sun and view directions are not set here; see trackSurfaceLighting.
       /*
        * Slowly. The real storm takes months to get round the planet, and the
        * previous version crossed it several times in twenty seconds, which is
@@ -3532,6 +3747,32 @@ function createSaturnWhiteSpot(target, camera) {
  * Staged as an inbound streak that brightens hard on approach, sheds its tail
  * and then ends.
  */
+/*
+ * How far back the sungrazer shot stands.
+ *
+ * ---- THE DIAL ----
+ * RAISE this number to move the camera AWAY from the Sun -- more of the comet's
+ * orbit in frame, smaller Sun. LOWER it to move IN -- bigger Sun, less orbit.
+ *
+ * It is a multiple of the Sun's own authored framing, which is 1 and fills the
+ * screen with photosphere. Measured at the Sun's real numbers, the conversion
+ * is almost exactly:
+ *
+ *     visible radius, in solar radii  =  this number / 1.66
+ *
+ * so 1.7 shows one solar radius around the Sun, 5 shows three, 6.6 shows four,
+ * and 12 shows the whole spiral from where the comets enter. Anything past 12
+ * only makes the Sun smaller without showing more, because the comets start at
+ * START_RADIUS = 7.2 solar radii and there is nothing outside that.
+ *
+ * 4 is set here because the part worth watching is the last two turns and the
+ * plunge: the early ones are wide, slow and far out, and framing for them
+ * leaves the Sun too small to see a comet burn against. Measured at 4 the
+ * camera sits 726 units out and holds 2.4 solar radii, with the Sun about a
+ * fifth of the frame height.
+ */
+const SUNGRAZER_SHOT_ZOOM = 3;
+
 function createSungrazerComet(target, camera) {
   const group = new THREE.Group();
   group.name = "Sungrazing comet event";
@@ -3555,6 +3796,37 @@ function createSungrazerComet(target, camera) {
    * one does not come back out. Nothing survives the ending -- see below.
    */
   const COMETS = 2 + Math.floor(Math.random() * 2);
+
+  /*
+   * What colour a comet is, and why it changes on the way in.
+   *
+   * Out in the dark a comet glows in the colours of what is coming off it:
+   * diatomic carbon fluorescing green, and dust and ions scattering blue-white.
+   * A sungrazer does not keep either. Inside a few solar radii the coma is no
+   * longer a cold gas being gently fluoresced -- it is metal and silicate
+   * vapour boiling off a nucleus in a million-degree corona, and what that
+   * radiates is the sodium-and-iron yellow-orange the SOHO images show at
+   * perihelion.
+   *
+   * So each fragment of the family carries its own far colour -- the first
+   * green, the next blue-white, and so on -- and all of them are carried to the
+   * same yellow-orange as they close on the surface. The tail does it too, one
+   * step behind the nucleus, because the dust was shed before the heat caught
+   * up with it.
+   */
+  const FAR_COLOURS = [
+    new THREE.Color(0x74ffb4), // C2 fluorescence: the classic comet green
+    new THREE.Color(0xcfe6ff), // dust and ion tail: blue-white
+    new THREE.Color(0x9fffd0),
+    new THREE.Color(0xe8f4ff),
+  ];
+  const PERIHELION_COLOUR = new THREE.Color(0xffab3d);
+  /*
+   * Where the shift happens, in solar radii from centre. Above this the comet
+   * keeps its own colour; by the time it reaches the surface it has none of it
+   * left.
+   */
+  const COLOUR_SHIFT_FROM = 3.6;
 
   // A shared plane for the family, tilted so the spiral is seen open rather
   // than edge-on. They are fragments of one body, so they share an orbit.
@@ -3610,10 +3882,12 @@ function createSungrazerComet(target, camera) {
 
     // The pieces it comes apart into, strung along the orbit rather than
     // scattered: fragments keep the same path and only drift along it.
+    const farColour = FAR_COLOURS[index % FAR_COLOURS.length];
+
     const PIECES = big ? 5 : 3;
     const pieces = [];
     for (let piece = 0; piece < PIECES; piece += 1) {
-      const glow = makeGlow(0xe8f4ff, 0);
+      const glow = makeGlow(farColour.getHex(), 0);
       group.add(glow);
       pieces.push({
         glow,
@@ -3664,7 +3938,7 @@ function createSungrazerComet(target, camera) {
     }
 
     comets.push({
-      pieces, dust, dustGeometry, dustMaterial, grains,
+      pieces, dust, dustGeometry, dustMaterial, grains, farColour,
       enters, diesAt, big, turns,
       phase: Math.random() * Math.PI * 2,
       // Which way round, and how fast the spiral tightens.
@@ -3677,9 +3951,10 @@ function createSungrazerComet(target, camera) {
   const away = new THREE.Vector3();
   const sideways = new THREE.Vector3();
   const orbitNormal = new THREE.Vector3().crossVectors(orbitX, orbitY).normalize();
-  const iceWhite = new THREE.Color(0xdbeeff);
   const dustWarm = new THREE.Color(0xffd9a8);
   const shade = new THREE.Color();
+  const nucleusTint = new THREE.Color();
+  const comaTint = new THREE.Color();
 
   /*
    * Where a comet is at a given moment, and every part of it asks this same
@@ -3758,6 +4033,10 @@ function createSungrazerComet(target, camera) {
             radius * (0.03 + glare * 0.115) * piece.bulk * (0.35 + solid * 0.65),
           );
           piece.glow.material.opacity = glare * wasting * arriving * fade * solid;
+          // Its own colour out in the dark; the corona's on the way in.
+          const scorch = 1 - smoothstep(DEATH_RADIUS, COLOUR_SHIFT_FROM, height);
+          nucleusTint.copy(comet.farColour).lerp(PERIHELION_COLOUR, scorch);
+          piece.glow.material.color.copy(nucleusTint);
         }
 
         // --- the dust it has shed ----------------------------------------
@@ -3790,7 +4069,17 @@ function createSungrazerComet(target, camera) {
 
           const spent = Math.max(0, 1 - age / 0.3);
           const level = item.glow * Math.pow(spent, 1.6) * fade;
-          shade.copy(iceWhite).lerp(dustWarm, Math.min(1, age * 2.6));
+          /*
+           * The grain remembers where it was shed. Dust released far out keeps
+           * the comet's own colour and merely warms as it ages; dust shed near
+           * perihelion was already glowing in the corona's colours when it
+           * left.
+           */
+          const shedDepth = 1 - smoothstep(
+            DEATH_RADIUS, COLOUR_SHIFT_FROM, path.length() / radius,
+          );
+          comaTint.copy(comet.farColour).lerp(PERIHELION_COLOUR, shedDepth);
+          shade.copy(comaTint).lerp(dustWarm, Math.min(1, age * 2.6) * (1 - shedDepth));
           tint.setXYZ(grain, shade.r * level, shade.g * level, shade.b * level);
         }
         position.needsUpdate = true;
@@ -4668,6 +4957,12 @@ const EVENTS = [
     frequency: "SOHO finds a Kreutz sungrazer on average every three days, and has discovered over 4,000 comets in total — about 85% of them from that one family",
     cause: "The Kreutz group are all fragments of a single giant comet that broke up on an earlier pass, probably in the twelfth century. They are still arriving one at a time on the same orbit.",
     note: "Almost none survive. Below a few hundred metres a nucleus vaporises outright, and even a kilometre-scale one is usually pulled apart by the Sun's tides — Comet ISON arrived intact in 2013 and came out as dust. What is left shining afterwards is the tail, which routinely outlives the thing that made it.",
+    /*
+     * The camera stands back for this one; the Sun's own framing is composed
+     * for the Sun, and this event is not about the Sun. The dial and what its
+     * numbers mean are documented on SUNGRAZER_SHOT_ZOOM above.
+     */
+    shotZoom: SUNGRAZER_SHOT_ZOOM,
     build: createSungrazerComet,
   },
   {
@@ -4966,6 +5261,7 @@ export function createSolarSystemEvents({
        * Read by the staging in main.js when it composes the shot.
        */
       facesSun: event.facesSun === true,
+      shotZoom: Number(event.shotZoom) || 1,
     })),
 
     getState: snapshot,

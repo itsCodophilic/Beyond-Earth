@@ -1379,7 +1379,7 @@ import { POINTER_PROXY_LAYER } from "./scene/pointerProxies.js";
      * of the camera and the Sun, the meteor stream is chosen relative to it --
      * so the shot is not decoration here. It is the input the staging reads.
      */
-    composeSolarEventShot(definition.facesSun ? target : null);
+    composeSolarEventShot(definition.facesSun ? target : null, definition.shotZoom ?? 1);
 
     solarEventTitle.textContent = definition.title;
     solarEventDetail.textContent = definition.detail;
@@ -1943,6 +1943,8 @@ import { POINTER_PROXY_LAYER } from "./scene/pointerProxies.js";
    * composed angle or the body the shot should be framed sunward of.
    */
   let pendingSolarEventShot = false;
+  // The zoom that went with the shot that could not be composed yet.
+  let pendingSolarEventZoom = 1;
 
   /**
    * Puts the camera back into that shot, whatever the viewer has done since.
@@ -1960,12 +1962,14 @@ import { POINTER_PROXY_LAYER } from "./scene/pointerProxies.js";
    */
   const solarEventShotPosition = new THREE.Vector3();
 
-  function composeSolarEventShot(sunwardOf = null) {
+  function composeSolarEventShot(sunwardOf = null, shotZoom = 1) {
     if (focusExitTransition) {
       pendingSolarEventShot = sunwardOf ?? true;
+      pendingSolarEventZoom = shotZoom;
       return;
     }
     pendingSolarEventShot = false;
+    pendingSolarEventZoom = 1;
 
     /*
      * Some events have to be watched from the day side.
@@ -1991,9 +1995,18 @@ import { POINTER_PROXY_LAYER } from "./scene/pointerProxies.js";
     const turn = Math.PI * 2;
     targetYaw = shotYaw + Math.round((yaw - shotYaw) / turn) * turn;
     targetPitch = SOLAR_EVENT_SHOT_PITCH;
-    // Any zoom the viewer applied to the last event is theirs, not the next
-    // one's; 1 is the distance the body's own focus framing was authored at.
-    focusZoomTarget = 1;
+    /*
+     * Any zoom the viewer applied to the last event is theirs, not the next
+     * one's; 1 is the distance the body's own focus framing was authored at.
+     *
+     * An event may ask for more than that. A body's framing is composed for the
+     * body -- for the Sun it fills the frame with photosphere -- and some
+     * events happen at a scale the body's own shot cannot hold: a sungrazer
+     * spirals in from seven solar radii, and none of that is on screen at 1.
+     * The event carries the multiplier because the event is what knows how big
+     * the thing it is staging is.
+     */
+    focusZoomTarget = THREE.MathUtils.clamp(Number(shotZoom) || 1, 0.5, 12);
   }
   // Null in ordinary inspection; set to the parent of the complete catalogue
   // atlas while its alternate system-wide shot is active.
@@ -8062,7 +8075,10 @@ import { POINTER_PROXY_LAYER } from "./scene/pointerProxies.js";
     // A shot that had to wait for the camera to be handed back. See
     // `composeSolarEventShot`.
     if (pendingSolarEventShot && !focusExitTransition) {
-      composeSolarEventShot(pendingSolarEventShot === true ? null : pendingSolarEventShot);
+      composeSolarEventShot(
+        pendingSolarEventShot === true ? null : pendingSolarEventShot,
+        pendingSolarEventZoom,
+      );
     }
     // Focus mode and its short deterministic exit hold slow physical scene motion
     // without slowing input during ordinary exploration.
