@@ -658,7 +658,11 @@ import { POINTER_PROXY_LAYER } from "./scene/pointerProxies.js";
       <kbd class="hud-control__key">Esc</kbd>
       <span class="hud-control__label">Exit view</span>
     `;
-    spaceExitControl.disabled = true;
+    // Enabled from the first frame. `updateSpaceExitControl` has an early
+    // return when nothing it watches has changed, so a control created
+    // disabled could stay that way until something else moved -- which is
+    // exactly the "it starts out greyed" the viewer described.
+    spaceExitControl.disabled = false;
     (document.querySelector(".hud-controls") ?? document.body).append(spaceExitControl);
   }
   spaceExitControl.addEventListener("click", (event) => {
@@ -700,12 +704,17 @@ import { POINTER_PROXY_LAYER } from "./scene/pointerProxies.js";
      * hold. Escape costs nothing to press when there is nothing to leave: the
      * handler already falls through every branch and does nothing.
      *
-     * `shouldShow` still governs whether there is anything to exit, so the
-     * control is only live when the viewer is actually inside something. The
-     * tour lock no longer disables it, because a viewer who wants out of a
-     * view should always be able to get out of it.
+     * And it is never disabled for having nothing to leave either, which was
+     * the last reason left. `exitCurrentView` is a cascade -- popover, focused
+     * body, free exploration, space mode -- and when none of them apply it
+     * reaches the end and does nothing at all. So a press with nothing to exit
+     * is already a no-op, and disabling the control to express that only made
+     * the interface look broken on arrival. Press it as many times as you like.
+     *
+     * `shouldShow` is kept because the visible/locked pair is what the early
+     * return above compares against; it no longer gates the control.
      */
-    spaceExitControl.disabled = !shouldShow;
+    spaceExitControl.disabled = false;
     spaceExitControl.classList.toggle("is-hidden", false);
   }
 

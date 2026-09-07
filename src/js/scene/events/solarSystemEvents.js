@@ -424,7 +424,34 @@ function createSurfaceCap(radius, normal, kind) {
       const attribute = geometry.getAttribute("position");
       const facing = geometry.getAttribute("normal");
       const tint = geometry.getAttribute("color");
-      const shell = radius * 1.0025;
+      /*
+       * How far the decal floats above the planet, and the reason it is not
+       * 1.0025 any more.
+       *
+       * At a quarter of a per cent, the gap at Saturn is 0.016 world units.
+       * The camera's near plane sits on its floor of 0.02 against a far plane
+       * of 15,000, so the depth buffer can resolve about 0.0024 units out at
+       * the distance these impacts are framed from -- a margin of six, which
+       * sounds like enough and is not. Measured at the framing the event
+       * composes for itself: with the polygon offset switched off, 10,070 of
+       * the scar's 15,299 pixels lose the depth test. Two thirds of the mark
+       * was being held on screen by the bias alone, and a bias is a fixed
+       * number of depth-buffer steps -- as the viewer pulls back and those
+       * steps grow in world terms it stops being a nudge and starts being a
+       * shove, which is when the scar breaks into hard-edged fragments.
+       *
+       * Six tenths of a per cent puts real geometry between the two surfaces
+       * instead. It is still well under the storm shell at 1.012 and under
+       * Saturn's own atmosphere at 1.018, so nothing is displaced or
+       * reordered, and at Saturn's radius it is a lift of four hundredths of
+       * a unit -- invisible, and the same fraction on every body because it
+       * is expressed as one.
+       *
+       * The cap's own tessellation is not the constraint: 9 rings across a
+       * scar 0.1 radians wide sag about 4e-5 of a radius between vertices,
+       * sixty times finer than this gap.
+       */
+      const shell = radius * 1.006;
 
       // Unpacked once. Reading .x off a vector object inside a four-hundred
       // iteration loop is not free, and there are ten of these loops running
