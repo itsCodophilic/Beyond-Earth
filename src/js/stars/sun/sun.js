@@ -1381,7 +1381,21 @@ export function createSun({ world, hoverTargets, texture, quality = "high" }) {
     createPlasmaJet(config, spriteBatch, creationProfile.jetParticles),
   );
 
-  system.add(...plasmaJets);
+  /*
+   * Guarded, because all three of these lists are now empty.
+   *
+   * The red plasma families were emptied rather than deleted, so the
+   * machinery that drives them stays in one piece and a future jet or arch
+   * only has to be put back in the list. What was missed is that
+   * `add(...[])` is `add()` with no arguments, and three.js reads that as
+   * "add undefined" and logs `THREE.Object3D.add: object not an instance of
+   * THREE.Object3D` -- three of them, on every load, which is exactly what
+   * turned up in the console.
+   *
+   * Nothing was broken by it; it was pure noise. But noise in a console is
+   * how a real error gets missed later.
+   */
+  if (plasmaJets.length) system.add(...plasmaJets);
 
   /*
    * Only two subtle coronal arches are retained.
@@ -1407,9 +1421,9 @@ export function createSun({ world, hoverTargets, texture, quality = "high" }) {
     }),
   );
 
-  system.add(...solarFlares);
+  if (solarFlares.length) system.add(...solarFlares);
 
-  system.add(...coronalLoops);
+  if (coronalLoops.length) system.add(...coronalLoops);
 
   // Built only now, because it sizes itself to exactly the number of sprites
   // the three families between them turned out to want.

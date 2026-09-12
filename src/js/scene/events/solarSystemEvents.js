@@ -292,14 +292,92 @@ function facingPoint(facing, spread, out) {
 const SURFACE_CAP_RINGS = 9;
 const SURFACE_CAP_SEGMENTS = 44;
 
-function createSurfaceCap(radius, normal, kind) {
+function createSurfaceCap(radius, normal, kind, options = {}) {
+  /*
+   * How torn the rim is, as a multiplier on the default.
+   *
+   * An impact scar has a violently ragged edge and 1 is drawn for that: the
+   * rim wanders by about a third of its radius. A methane cloud top does not
+   * look like that, and drawn at full roughness the Uranus storms came out as
+   * hard-edged lumps of cotton wool stuck on the planet -- which is exactly
+   * what was reported as distortion. A cloud wants a gentle undulation, so it
+   * asks for a fraction of it.
+   */
+  const roughness = Number.isFinite(options.roughness) ? options.roughness : 1;
+
+  /*
+   * How far above the surface the patch floats, and it is not one number for
+   * every body.
+   *
+   * The default -- six tenths of a per cent, reasoned out on the impact
+   * scars, see the long note in `set` -- assumes the thing the patch has to
+   * clear is the planet's own sphere. For a rocky body that is true. For a
+   * body with weather drawn on top of it, it is not: Earth carries a cloud
+   * shell at 1.020, an atmosphere at 1.026 and a glow out to 1.060, and
+   * Uranus a methane haze shell at 1.034 with a render order of five. A cap
+   * at 1.006 is *underneath* all of that.
+   *
+   * That was the whole of two separate bugs. The eclipse shadow was being
+   * drawn at full strength every frame -- a probe read its vertex alpha back
+   * at 0.92 -- and was simply behind Earth's cloud deck, so a frame grab
+   * showed a perfectly lit planet with no shadow anywhere on it. The Uranus
+   * storms were being washed out by the haze above them, which is why they
+   * kept reading as faint and flat no matter what the level was set to.
+   *
+   * Physically the raised shell is also the more correct of the two. A
+   * shadow falls on the top of the atmosphere before it reaches the ground,
+   * and a methane-ice cloud top is by definition above the haze.
+   */
+  const shellScale = Number.isFinite(options.shell) ? options.shell : 1.006;
   // East is the direction the winds run: the body spins about its own +Y, so
   // eastward at any point is the way the surface is already travelling.
   const spinAxis = new THREE.Vector3(0, 1, 0);
-  const east = new THREE.Vector3().crossVectors(spinAxis, normal);
-  if (east.lengthSq() < 1e-8) east.set(1, 0, 0);
-  east.normalize();
-  const north = new THREE.Vector3().crossVectors(normal, east).normalize();
+  const anchor = normal.clone().normalize();
+  const east = new THREE.Vector3();
+  const north = new THREE.Vector3();
+
+  /*
+   * Where the patch is centred, which most callers set once and one does not.
+   *
+   * A storm or a scar happens at a place and drifts from it, so the frame is
+   * built at construction and `drift` slides the patch along it. An eclipse
+   * shadow has no such place: it is wherever the line from the Sun through
+   * the Moon currently meets the ground, which is a new point every frame and
+   * not reachable by sliding -- the track runs across latitudes, and drift
+   * only moves along the one great circle the frame was built on.
+   *
+   * So the frame can be re-aimed. It is the same three lines that ran at
+   * construction, lifted into a function; nothing else in the cap knows the
+   * difference.
+   */
+  function aim(at, alongHint = null) {
+    anchor.copy(at).normalize();
+    /*
+     * Which way is "along", when it is not the way the body spins.
+     *
+     * The default is east, because on a planet the thing that stretches a
+     * patch is the wind and the wind runs with the rotation. Triton's plume
+     * deposits are the exception that proves it: they are laid down by one
+     * steady high-altitude wind and every fan on the moon points the same
+     * way, which near the pole -- where the vents are -- is nothing like
+     * east. Left to the default, ten fans clustered round the south pole
+     * fanned out in ten directions like a compass rose, which is the one
+     * thing the photographs say they do not do.
+     *
+     * So a caller with its own axis can give it, and it is projected into the
+     * tangent plane at the centre rather than used raw.
+     */
+    if (alongHint) {
+      east.copy(alongHint).addScaledVector(anchor, -alongHint.dot(anchor));
+      if (east.lengthSq() < 1e-8) east.crossVectors(spinAxis, anchor);
+    } else {
+      east.crossVectors(spinAxis, anchor);
+    }
+    if (east.lengthSq() < 1e-8) east.set(1, 0, 0);
+    east.normalize();
+    north.crossVectors(anchor, east).normalize();
+  }
+  aim(normal, options.along ?? null);
 
   const columns = SURFACE_CAP_SEGMENTS + 1;
   const vertexCount = (SURFACE_CAP_RINGS + 1) * columns;
@@ -327,7 +405,7 @@ function createSurfaceCap(radius, normal, kind) {
    */
   const rough = new Float32Array(columns);
   for (let segment = 0; segment < columns; segment += 1) {
-    rough[segment] = 0.68 + Math.random() * 0.64;
+    rough[segment] = 1 + (Math.random() - 0.5) * 0.64 * roughness;
   }
   rough[SURFACE_CAP_SEGMENTS] = rough[0];
   for (let pass = 0; pass < 2; pass += 1) {
@@ -387,12 +465,42 @@ function createSurfaceCap(radius, normal, kind) {
     });
 
   hugSurface(material);
+  /*
+   * Some callers have to turn the depth test off, and it is not a shortcut.
+   *
+   * A patch a few per cent above a planet normally wins the depth test
+   * easily, and every scar and storm in this file does. The eclipse shadow
+   * does not, and the measurement is unambiguous: a probe put its centre
+   * 0.41 disc radii from the middle of Earth with its outward normal 0.935
+   * aligned with the camera -- face on, near side, seven per cent clear of
+   * the surface, vertex alpha 0.92 -- and an A/B render with the caps
+   * toggled found *zero* changed pixels. Toggling only `depthTest` off, with
+   * everything else identical, produced 3,130. Whatever is in Earth's depth
+   * buffer at those pixels, and Earth carries five shells of cloud,
+   * atmosphere, lights and aurora, it is beating a surface that is in front
+   * of it.
+   *
+   * `makeSurfaceGlow` already documents the answer for exactly this case:
+   * switch the test off and take responsibility for the far side yourself.
+   * The cap can do that better than a sprite can, because it already
+   * dissolves itself towards the limb whenever a view direction is passed --
+   * so a patch on the far side is not hidden, it is simply not drawn.
+   */
+  if (options.depthTest === false) material.depthTest = false;
 
   const mesh = new THREE.Mesh(geometry, material);
   mesh.frustumCulled = false;
   mesh.visible = false;
-  // Above the opaque planet in the transparent queue, and under the fireball.
-  mesh.renderOrder = lit ? 1 : 2;
+  /*
+   * Above the opaque planet in the transparent queue, and under the fireball
+   * -- unless the caller has weather to get above as well, in which case it
+   * says so. Earth's glow and Uranus's haze are both transparent shells with
+   * render orders of their own, and a patch drawn before them is drawn
+   * under them.
+   */
+  mesh.renderOrder = Number.isFinite(options.renderOrder)
+    ? options.renderOrder
+    : (lit ? 1 : 2);
 
   const centre = new THREE.Vector3();
   const alongAxis = new THREE.Vector3();
@@ -400,6 +508,11 @@ function createSurfaceCap(radius, normal, kind) {
   return {
     mesh,
     material,
+    /**
+     * Re-centre the patch on a new point of the sphere, optionally giving the
+     * direction its long axis and its `drift` should run along.
+     */
+    aim,
     /*
      * `along` and across are the half-widths of the ellipse in radians at
      * the centre of the body -- along the wind and across it. `drift` slides
@@ -416,10 +529,10 @@ function createSurfaceCap(radius, normal, kind) {
       // Slide the patch downwind by rotating its centre about the north axis,
       // carrying the east vector round with it so the ellipse stays square to
       // the wind wherever it has got to.
-      centre.copy(normal).multiplyScalar(Math.cos(drift))
+      centre.copy(anchor).multiplyScalar(Math.cos(drift))
         .addScaledVector(east, Math.sin(drift));
       alongAxis.copy(east).multiplyScalar(Math.cos(drift))
-        .addScaledVector(normal, -Math.sin(drift));
+        .addScaledVector(anchor, -Math.sin(drift));
 
       const attribute = geometry.getAttribute("position");
       const facing = geometry.getAttribute("normal");
@@ -451,7 +564,7 @@ function createSurfaceCap(radius, normal, kind) {
        * scar 0.1 radians wide sag about 4e-5 of a radius between vertices,
        * sixty times finer than this gap.
        */
-      const shell = radius * 1.006;
+      const shell = radius * shellScale;
 
       // Unpacked once. Reading .x off a vector object inside a four-hundred
       // iteration loop is not free, and there are ten of these loops running
@@ -516,8 +629,26 @@ function createSurfaceCap(radius, normal, kind) {
            * It is also what the light does anyway: a mark seen at a grazing
            * angle is foreshortened into nothing.
            */
+          /*
+           * Dissolved a long way before the horizon, not just before it.
+           *
+           * 0.04 to 0.34 is a band that ends eleven degrees from the limb,
+           * which was enough while the patches were small and is not enough
+           * now. A storm cap two tenths of a radian across has vertices well
+           * outside its own centre, so as the viewer orbits, the far edge of
+           * a patch reaches that band while the near edge has not -- and the
+           * rim, which is a coarse ragged polygon fan, appears and
+           * disappears unevenly across the disc. That is the distortion
+           * reported when rotating round a zoomed-out Uranus.
+           *
+           * Starting the dissolve at 0.14 and finishing it at 0.52 -- about
+           * thirty-one degrees off the limb -- means no patch edge is ever
+           * drawn near the horizon at all, on any body, at any size. The
+           * cost is that a mark right at the limb fades early, which is what
+           * a mark at a grazing angle does anyway.
+           */
           const horizon = view
-            ? smoothstep(0.04, 0.34, px * viewX + py * viewY + pz * viewZ)
+            ? smoothstep(0.14, 0.52, px * viewX + py * viewY + pz * viewZ)
             : 1;
 
           const at4 = slot * 4;
@@ -608,6 +739,38 @@ let sharedSoftTexture = null;
  * pip to give away and overlaps its neighbours all the way in, so the sum of
  * many of them is smooth at any strength.
  */
+/*
+ * How big a point is, in pixels, given how big it is in the world.
+ *
+ * Every `Points` cloud in here needs this and the first two that tried it
+ * guessed. Mercury's exosphere sized its atoms `(2.2 + 5.0 * alpha) * 120.0 /
+ * -z`, which is a constant divided by a view depth -- and a view depth is in
+ * whatever units the body happens to be built in. At Mercury's focus distance
+ * that came out between two hundred and seven hundred pixels *per atom*, and
+ * two and a half thousand of them additively blended filled the entire frame
+ * with flat yellow. The event was not faint or thick or long; it was a wall.
+ *
+ * The correct conversion is not a guess. A length `w` in view space at depth
+ * `z` covers `w * P11 / -z` of normalised device space, and NDC runs -1 to 1
+ * across the viewport, so in pixels that is `w * P11 * height / (2 * -z)`.
+ * P11 is `projectionMatrix[1][1]`, which every vertex shader already has.
+ *
+ * Callers therefore give a size in world units -- a fraction of the body's own
+ * radius, which is a number with a meaning -- and get the same apparent size
+ * at any distance, on any body, at any field of view.
+ */
+const POINT_SIZE_GLSL = /* glsl */`
+  float pointPixels(float worldSize, float viewZ, float height) {
+    return worldSize * projectionMatrix[1][1] * height / (2.0 * max(1e-4, -viewZ));
+  }
+`;
+
+/** The drawing-buffer height these clouds size themselves against. */
+function viewportHeight() {
+  const pixelRatio = Math.min(2, window.devicePixelRatio || 1);
+  return Math.max(1, (window.innerHeight || 800) * pixelRatio);
+}
+
 function getSoftTexture() {
   if (sharedSoftTexture) return sharedSoftTexture;
   const size = 128;
@@ -669,6 +832,30 @@ function getSoftTexture() {
  * afterwards then moves the event and the body together, which is the whole
  * point of it being a child.
  */
+/*
+ * Point a mesh's own +Y along a direction given in the parent's local frame.
+ *
+ * `Object3D.lookAt` takes a point in **world** space -- it reads the object's
+ * world position and the parent's world rotation to work out the answer --
+ * and every event in this file works in the body's local frame, because that
+ * is what being parented to the body means. Handing it a local vector is
+ * therefore a silent bug, and it was live in two places: Triton's geyser
+ * columns aimed themselves with `lookAt(vent * -radius)`, which at Triton's
+ * real distance from the origin resolved to roughly "point at the Sun", so
+ * ten vertical stems all leaned the same wrong way; and the eclipse's shadow
+ * cone did the same.
+ *
+ * A unit-vector quaternion does the job with no frames involved at all. The
+ * cylinder geometries these orient are built along +Y, so that is the axis
+ * being rotated.
+ */
+const upAxis = new THREE.Vector3(0, 1, 0);
+const orientScratch = new THREE.Quaternion();
+function pointAlong(mesh, directionLocal) {
+  orientScratch.setFromUnitVectors(upAxis, directionLocal);
+  mesh.quaternion.copy(orientScratch);
+}
+
 function localRadius(target) {
   const radius = Number(target?.userData?.visualRadius) || 1;
   if (!target) return radius;
@@ -701,6 +888,23 @@ function makeSurfaceGlow(colour, opacity = 1) {
   sprite.material.depthTest = false;
   sprite.renderOrder = 4;
   return sprite;
+}
+
+/*
+ * The same billboard with the broad, edgeless falloff instead of the point of
+ * light -- for anything meant to read as a volume rather than as a spark.
+ */
+function makeHaze(colour, opacity = 1) {
+  const material = new THREE.SpriteMaterial({
+    map: getSoftTexture(),
+    color: colour,
+    transparent: true,
+    opacity,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    depthTest: true,
+  });
+  return new THREE.Sprite(material);
 }
 
 function makeGlow(colour, opacity = 1) {
@@ -4537,46 +4741,425 @@ function createLunarImpactFlash(target, camera) {
   group.name = "Lunar impact flash event";
   const radius = localRadius(target);
   const facing = localCameraDirection(target, camera, new THREE.Vector3());
+  const sunLocal = localSunDirection(target, new THREE.Vector3());
 
   /*
-   * Three of them, because at 0.68 an hour with a 66-millisecond flash the odds
-   * of ever catching one are what make this event worth staging at all, and
-   * because the point is that the Moon is being sandblasted continuously
-   * rather than struck once.
+   * The arrival is the event, not the flash.
+   *
+   * Three versions of this have been wrong in the same way. The first drew
+   * lights coming on at the surface with no rock to explain them. The second
+   * dropped rocks from one and a half lunar radii over two seconds at a tenth
+   * of a per cent of the Moon's width, which measured out on a frame grab as
+   * nothing on screen at all. The third released them from six to ten radii
+   * -- outside the frame -- so they appeared from nowhere just before they
+   * landed, which is exactly the "it seems like it randomly popped up" being
+   * reported.
+   *
+   * The fix for that last one is not a bigger number. It is that the release
+   * distance has to be read off the frame rather than chosen: far enough out
+   * that the rock enters from the edge of the picture, close enough that it
+   * is inside it. `RANGE` below is derived from the camera, so it holds
+   * whether the viewer is sitting at the composed shot or has zoomed in or
+   * out by hand.
    */
-  const flashes = [];
-  for (let index = 0; index < 3; index += 1) {
-    const site = facingPoint(facing, THREE.MathUtils.degToRad(66), new THREE.Vector3())
-      .multiplyScalar(radius * 1.004);
-    // 2,000-4,500 K: the cool end is orange, the hot end nearly white.
-    const heat = Math.random();
-    const flash = makeGlow(new THREE.Color().setRGB(1, 0.52 + heat * 0.34, 0.22 + heat * 0.42), 0);
-    flash.position.copy(site);
+  const COUNT = 12;
+  const rocks = [];
+
+  /*
+   * How far out, in lunar radii, the frame edge is.
+   *
+   * The half-height of the view at the Moon's distance is `distance *
+   * tan(fov/2)`; divided by the Moon's own radius that is the number of radii
+   * from the centre to the top of the picture. Rocks are released a little
+   * beyond it so they cross the edge on their way in rather than blinking on
+   * inside it -- and clamped, because a viewer who has zoomed a long way out
+   * should not get meteoroids arriving from the next planet.
+   */
+  const RANGE = (() => {
+    const distance = camera ? camera.position.distanceTo(
+      target.getWorldPosition(new THREE.Vector3()),
+    ) : radius * 6;
+    const worldRadius = radius * Math.max(1e-6, Math.abs(target.scale.x));
+    const halfHeight = distance * Math.tan(THREE.MathUtils.degToRad((camera?.fov ?? 40) * 0.5));
+    return THREE.MathUtils.clamp(halfHeight / worldRadius * 1.25, 2.2, 9.0);
+  })();
+
+  const helper = new THREE.Vector3();
+  const tangentA = new THREE.Vector3();
+  const tangentB = new THREE.Vector3();
+
+  for (let index = 0; index < COUNT; index += 1) {
+    /*
+     * Half on the lit side and half on the dark, deliberately rather than by
+     * chance -- the contrast between the two is the thing worth showing. A
+     * flash on the night side is the only light there is and reads like a
+     * struck match; the same flash on the day side has to beat the sunlit
+     * regolith, so it needs to be brighter to register at all.
+     */
+    const wantLit = index % 2 === 0;
+    const site = new THREE.Vector3();
+    for (let attempt = 0; attempt < 24; attempt += 1) {
+      facingPoint(facing, THREE.MathUtils.degToRad(74), site);
+      const lit = site.dot(sunLocal);
+      if (wantLit ? lit > 0.20 : lit < -0.05) break;
+    }
+
+    /*
+     * Size drives everything else, and it is drawn from a distribution with a
+     * long thin tail rather than uniformly: over three quarters of real
+     * impactors are between 1 and 200 grams, so most of these should be small
+     * and the occasional one should be notably bigger.
+     */
+    const size = 0.30 + Math.pow(Math.random(), 2.2) * 0.70;
+
+    /*
+     * What it is made of, and therefore what colour its wake is.
+     *
+     * This is the same table the Perseids are drawn from, and using it here
+     * is a deliberate borrowing rather than an oversight: these are the same
+     * population of bodies, arriving from the same places at the same speeds,
+     * and the two events should look like they are about the same thing. The
+     * licence is that on Earth the colours come from air -- sodium and iron
+     * boiling off the grain in the slow ones, ionised nitrogen and oxygen and
+     * magnesium in the fast ones -- and the Moon has no air to light up. What
+     * is drawn here is the material's own signature rather than an
+     * atmosphere's; the physics of the strike below, which is all in the
+     * flash, is not affected by it.
+     */
+    const kind = pickMeteorKind();
+    const head = new THREE.Color(kind.head);
+    const tail = new THREE.Color(kind.tail);
+
+    /*
+     * The swing plane.
+     *
+     * A body falling straight down a radius is a body that was already
+     * heading for the centre, which is the one arrival geometry that never
+     * happens: everything comes in with some sideways speed, misses the
+     * centre, and gets turned. `sweep` is how much of that turn is visible --
+     * the angle between where the rock enters the frame and where it lands --
+     * and at fifty to a hundred and twenty degrees the bend is the most
+     * obvious thing about the path.
+     */
+    helper.set(0, 1, 0);
+    if (Math.abs(site.y) > 0.9) helper.set(1, 0, 0);
+    tangentA.crossVectors(site, helper).normalize();
+    tangentB.crossVectors(site, tangentA).normalize();
+    const planeAround = Math.random() * Math.PI * 2;
+    const swing = new THREE.Vector3()
+      .addScaledVector(tangentA, Math.cos(planeAround))
+      .addScaledVector(tangentB, Math.sin(planeAround))
+      .normalize();
+
+    const sweep = THREE.MathUtils.degToRad(50 + Math.random() * 70);
+    const range = RANGE * (0.82 + Math.random() * 0.36);
+
+    // The rock itself: a hard mote catching sunlight, in its own head colour.
+    const rockGlow = makeGlow(head, 0);
+    group.add(rockGlow);
+
+    /*
+     * The flash. 2,000-4,500 K measured, which runs from a deep orange to
+     * nearly white, and the hotter end goes with the bigger impactor because
+     * more kinetic energy per gram lands as heat.
+     *
+     * The day-side ones are pulled towards grey rather than left at their
+     * full colour temperature. A flash on sunlit regolith is being seen
+     * against a bright neutral background and reads cooler for it, and it
+     * looks better -- which was the note.
+     */
+    const heat = Math.min(1, size * 0.72 + Math.random() * 0.3);
+    const flashColour = new THREE.Color().setRGB(1, 0.48 + heat * 0.38, 0.20 + heat * 0.48);
+    if (wantLit) flashColour.lerp(new THREE.Color(0xb9bec6), 0.42);
+    const flash = makeSurfaceGlow(flashColour, 0);
+    flash.position.copy(site).multiplyScalar(radius * 1.004);
     group.add(flash);
-    flashes.push({
-      flash,
-      at: 0.14 + index * 0.28 + Math.random() * 0.08,
-      // Under 66 ms in reality; the bigger impactors ring for longer.
-      width: 0.05 + Math.random() * 0.05,
-      size: 0.06 + Math.pow(Math.random(), 2) * 0.10,
+
+    // A brief hot core inside the flash, so a big one has structure rather
+    // than being one soft blob scaled up.
+    const core = makeSurfaceGlow(wantLit ? 0xeceff4 : 0xfffdf4, 0);
+    core.position.copy(flash.position);
+    group.add(core);
+
+    // And the ejecta: a fast, faint, expanding bloom that outlives the flash
+    // by a moment. There is no crater to see at this range, but a strike does
+    // throw a sheet of regolith up and it is what makes the flash read as an
+    // impact rather than as a light switching on.
+    const bloom = makeSurfaceGlow(0xc8ccd2, 0);
+    bloom.position.copy(flash.position);
+    group.add(bloom);
+
+    rocks.push({
+      site, swing, sweep, range, rockGlow, flash, core, bloom, size, wantLit,
+      headR: head.r, headG: head.g, headB: head.b,
+      tailR: tail.r, tailG: tail.g, tailB: tail.b,
+      /*
+       * When it lands. Spread right across the event, and the approaches are
+       * long enough to overlap heavily -- so at any moment there are five or
+       * six rocks visibly on their way in and the sky is never empty. That
+       * overlap is the "ten to twelve meteors coming around" the brief asks
+       * for; twelve strikes spaced out one at a time would only ever be one.
+       */
+      at: 0.13 + (index / COUNT) * 0.84 + (Math.random() - 0.5) * 0.045,
+      fall: 0.34 + size * 0.14,
+      /*
+       * Under 66 ms in reality, and that is genuinely not renderable: at
+       * sixty frames a second it is four frames, and at the frame rate a
+       * loaded scene actually runs it can fall between two of them and never
+       * be drawn. Stretched to about two thirds of a second for the small
+       * ones and nearly two for the big, which is the shortest a flash can be
+       * and still be something a person sees rather than something a camera
+       * catches.
+       */
+      decay: 0.034 + size * 0.055,
     });
+  }
+
+  /*
+   * The trails, all of them, in one object -- and coloured down their length.
+   *
+   * Each rock leaves a short tapering wake. Done with sprites that would be
+   * twelve rocks times sixteen samples of separate draw calls; as one `Points`
+   * buffer it is a single call. The colour runs from the head colour at the
+   * front to the tail colour at the back, which is what the meteor shower does
+   * and the reason its trails read as trails rather than as dotted lines.
+   */
+  /*
+   * How many samples make a wake, and why it is this many.
+   *
+   * Sixteen was not enough and a frame grab showed exactly why: the path is
+   * a capture, so it is moving fastest at the end, and sixteen points spread
+   * evenly across the last sixth of it land far apart near the impact. What
+   * the trail looked like was a dotted line -- a row of separate beads, not
+   * a streak.
+   *
+   * Forty of them overlap all the way down even at the plunge, which is what
+   * turns a row of points into something continuous. Twelve rocks' worth is
+   * four hundred and eighty points in one buffer and one draw call, so the
+   * cost of the fix is arithmetic nobody will notice.
+   */
+  const SAMPLES = 40;
+  const trailCount = COUNT * SAMPLES;
+  const trailPositions = new Float32Array(trailCount * 3);
+  const trailColours = new Float32Array(trailCount * 3);
+  const trailAlphas = new Float32Array(trailCount);
+  const trailGeometry = new THREE.BufferGeometry();
+  trailGeometry.setAttribute("position", new THREE.BufferAttribute(trailPositions, 3));
+  trailGeometry.setAttribute("aTint", new THREE.BufferAttribute(trailColours, 3));
+  trailGeometry.setAttribute("aAlpha", new THREE.BufferAttribute(trailAlphas, 1));
+  const trailMaterial = new THREE.ShaderMaterial({
+    uniforms: {
+      // Large enough that consecutive samples overlap rather than sitting
+      // apart as beads -- which is the other half of what makes a row of
+      // points read as a streak.
+      uGrain: { value: radius * 0.20 },
+      uHeight: { value: viewportHeight() },
+    },
+    transparent: true,
+    depthWrite: false,
+    depthTest: true,
+    blending: THREE.AdditiveBlending,
+    toneMapped: true,
+    vertexShader: POINT_SIZE_GLSL + /* glsl */`
+      attribute float aAlpha;
+      attribute vec3 aTint;
+      uniform float uGrain;
+      uniform float uHeight;
+      varying float vAlpha;
+      varying vec3 vTint;
+      void main() {
+        vAlpha = aAlpha;
+        vTint = aTint;
+        vec4 viewPosition = modelViewMatrix * vec4(position, 1.0);
+        gl_Position = projectionMatrix * viewPosition;
+        // Tapering: the wake is widest just behind the rock and finest at
+        // the far end, so the trail has a direction you can read.
+        gl_PointSize = clamp(
+          pointPixels(uGrain * (0.35 + 0.85 * aAlpha), viewPosition.z, uHeight),
+          1.0, 36.0
+        );
+      }
+    `,
+    fragmentShader: /* glsl */`
+      varying float vAlpha;
+      varying vec3 vTint;
+      void main() {
+        vec2 d = gl_PointCoord - vec2(0.5);
+        float falloff = 1.0 - smoothstep(0.0, 0.5, length(d));
+        float alpha = falloff * falloff * vAlpha;
+        if (alpha <= 0.003) discard;
+        gl_FragColor = vec4(vTint, alpha);
+        #include <tonemapping_fragment>
+        #include <colorspace_fragment>
+      }
+    `,
+  });
+  const trails = new THREE.Points(trailGeometry, trailMaterial);
+  trails.frustumCulled = false;
+  group.add(trails);
+
+  const point = new THREE.Vector3();
+  // Recomputed every frame, because the viewer can turn the Moon while this
+  // runs and the flashes have to know about it. See the note in `update`.
+  const view = new THREE.Vector3();
+
+  /*
+   * Where a rock is, `travel` of the way through its approach.
+   *
+   * A real capture is a hyperbola, and the two things that make one read as
+   * gravity rather than as a straight line with a kink are that the angular
+   * sweep is slow at the start and violent at the end, and that the radial
+   * fall does the same. Both exponents below are above one for that reason:
+   * at `travel = 0` each curve leaves its start value flat, and by the time
+   * it arrives it is moving as fast as it ever does. The rock therefore
+   * drifts in almost straight, then whips round and plunges -- which is what
+   * periapsis looks like.
+   */
+  function pathAt(item, travel, out) {
+    const angle = item.sweep * (1 - Math.pow(travel, 2.4));
+    const distance = 1 + (item.range - 1) * (1 - Math.pow(travel, 2.0));
+    return out.copy(item.site).multiplyScalar(Math.cos(angle))
+      .addScaledVector(item.swing, Math.sin(angle))
+      .normalize()
+      .multiplyScalar(radius * distance);
   }
 
   return {
     group,
-    duration: 12,
+    duration: 20,
     update(progress) {
-      for (let index = 0; index < flashes.length; index += 1) {
-        const item = flashes[index];
+      const positionAttribute = trailGeometry.getAttribute("position");
+      const alphaAttribute = trailGeometry.getAttribute("aAlpha");
+      const tintAttribute = trailGeometry.getAttribute("aTint");
+
+      /*
+       * Where the viewer is *now*, not where they were when this was built.
+       *
+       * The flashes are drawn with depth testing switched off, because a
+       * camera-facing quad sitting on a curving surface is otherwise sliced
+       * along a hard line wherever the two intersect -- see `makeSurfaceGlow`,
+       * which says the caller must fade each one out as its site turns past
+       * the limb, and then the first version of this did not.
+       *
+       * The result was the bug that was reported: turn the Moon while a flash
+       * is burning and the flash stays on screen, shining through the body
+       * from the far side, so the Moon reads as transparent. The fix is one
+       * dot product per rock per frame against the live camera direction.
+       */
+      localCameraDirection(target, camera, view);
+
+      for (let index = 0; index < rocks.length; index += 1) {
+        const item = rocks[index];
         const since = progress - item.at;
-        // Instantaneous on, exponential off: the light curve of a hot spot
-        // radiating into vacuum with nothing to sustain it.
-        const level = since < 0 ? 0 : Math.exp(-since / item.width);
-        item.flash.material.opacity = level;
-        item.flash.scale.setScalar(radius * item.size * (0.5 + level * 1.4));
+        const base = index * SAMPLES;
+
+        /*
+         * Before impact: the rock is falling. `since` runs negative for the
+         * whole approach, so the fraction completed is one plus the ratio,
+         * and it reaches the surface exactly as `since` hits zero.
+         */
+        const travel = since < 0 ? 1 + since / item.fall : 1;
+        const falling = travel > 0 && travel < 1;
+
+        if (falling) {
+          pathAt(item, travel, point);
+          item.rockGlow.position.copy(point);
+          const near = Math.pow(travel, 1.6);
+          item.rockGlow.scale.setScalar(radius * (0.045 + item.size * 0.075) * (0.55 + near));
+          item.rockGlow.material.opacity = (item.wantLit ? 1.0 : 0.78)
+            * smoothstep(0, 0.10, travel) * (0.55 + 0.45 * near);
+
+          // The wake: the path the rock has just come down, sampled back from
+          // where it is now, fading and cooling towards the far end.
+          for (let sample = 0; sample < SAMPLES; sample += 1) {
+            /*
+             * Sampled back with a bias towards the near end. An even spacing
+             * in `travel` is an uneven spacing in distance, because the rock
+             * accelerates -- so the samples are squeezed towards the rock,
+             * where the gaps would otherwise be widest.
+             */
+            const step = sample / SAMPLES;
+            const back = travel - Math.pow(step, 0.78) * 0.19;
+            const slot = base + sample;
+            if (back <= 0) {
+              alphaAttribute.setX(slot, 0);
+              continue;
+            }
+            pathAt(item, back, point);
+            positionAttribute.setXYZ(slot, point.x, point.y, point.z);
+            const mix = step;
+            tintAttribute.setXYZ(
+              slot,
+              item.headR + (item.tailR - item.headR) * mix,
+              item.headG + (item.tailG - item.headG) * mix,
+              item.headB + (item.tailB - item.headB) * mix,
+            );
+            alphaAttribute.setX(
+              slot,
+              Math.pow(1 - mix, 1.7) * (item.wantLit ? 0.85 : 0.60)
+                * smoothstep(0, 0.12, travel),
+            );
+          }
+        } else {
+          item.rockGlow.material.opacity = 0;
+          for (let sample = 0; sample < SAMPLES; sample += 1) {
+            alphaAttribute.setX(base + sample, 0);
+          }
+        }
+
+        /*
+         * On impact: instantaneous on, exponential off. That is the light
+         * curve of a hot spot radiating into vacuum with nothing to sustain
+         * it, and it is why these are measured in tens of milliseconds.
+         */
+        const level = since < 0 ? 0 : Math.exp(-since / item.decay);
+        /*
+         * And gone entirely once its site has turned away. Full brightness
+         * while the strike is square to the lens, dissolving through the last
+         * twenty degrees before the limb, nothing at all beyond it.
+         */
+        const onThisSide = smoothstep(-0.02, 0.32, item.site.dot(view));
+        if (level < 0.002 || onThisSide <= 0.002) {
+          item.flash.material.opacity = 0;
+          item.core.material.opacity = 0;
+          item.bloom.material.opacity = 0;
+          continue;
+        }
+
+        // A day-side flash competes with sunlit regolith, so it is given more
+        // to compete with.
+        const contrast = (item.wantLit ? 1.6 : 1.0) * onThisSide;
+        const reach = radius * (0.16 + item.size * 0.40);
+        item.flash.scale.setScalar(reach * (0.40 + level * 1.35));
+        item.flash.material.opacity = Math.min(1, level * contrast);
+
+        item.core.scale.setScalar(reach * (0.14 + level * 0.36));
+        item.core.material.opacity = Math.min(1, Math.pow(level, 1.7) * contrast);
+
+        /*
+         * The ejecta sheet. It keeps growing as the flash dies, which is the
+         * right way round: the light is over in a moment and the thrown
+         * material is still going up.
+         */
+        const age = 1 - level;
+        item.bloom.scale.setScalar(reach * (0.5 + age * 2.6));
+        item.bloom.material.opacity = Math.min(1, level * 0.42 * contrast) * (1 - age * 0.2);
       }
+
+      positionAttribute.needsUpdate = true;
+      alphaAttribute.needsUpdate = true;
+      tintAttribute.needsUpdate = true;
     },
-    dispose() { flashes.forEach((item) => item.flash.material.dispose()); },
+    dispose() {
+      rocks.forEach((item) => {
+        item.rockGlow.material.dispose();
+        item.flash.material.dispose();
+        item.core.material.dispose();
+        item.bloom.material.dispose();
+      });
+      trailGeometry.dispose();
+      trailMaterial.dispose();
+    },
   };
 }
 
@@ -4605,79 +5188,450 @@ function createTritonGeysers(target, camera) {
   group.name = "Triton geyser event";
   const radius = localRadius(target);
   const facing = localCameraDirection(target, camera, new THREE.Vector3());
+  const sunLocal = localSunDirection(target, new THREE.Vector3());
 
-  const columns = [];
-  // A shared downwind direction: they all feel the same wind, so the streaks
-  // must be parallel. Independently-oriented plumes would look like a bug.
-  const wind = new THREE.Vector3();
+  /*
+   * Two parts with completely different rules, and the ratio between them is
+   * the whole signature.
+   *
+   *   the column   sharp. Triton's atmosphere is 70,000 times thinner than
+   *                Earth's, so there is almost nothing near the surface to
+   *                scatter the erupting jet. It is a hard, narrow, vertical
+   *                line piercing straight up to 8 km.
+   *   the plume    soft. At 8 km the column hits the prevailing wind, stops
+   *                rising, bends abruptly and balloons into a smudge that
+   *                trails 100 to 150 km downwind, behaving like smoke.
+   *
+   * Eight kilometres up against a hundred and fifty sideways is nearly
+   * twenty to one, and the first attempt at this drew it at three to one --
+   * a stubby tuft rather than a stem with a long banner off the top of it.
+   * Everything below keeps the ratio at about thirteen, which is as far as it
+   * can be pushed before the stem is too short to see.
+   */
 
-  for (let index = 0; index < 4; index += 1) {
-    const vent = facingPoint(facing, THREE.MathUtils.degToRad(52), new THREE.Vector3());
-    if (index === 0) {
-      // Any tangent at the first vent will do; the rest inherit it.
-      const helper = Math.abs(vent.y) > 0.9
-        ? new THREE.Vector3(1, 0, 0) : new THREE.Vector3(0, 1, 0);
-      wind.crossVectors(vent, helper).normalize();
+  /*
+   * One wind for all of them. On the ground every fan points the same way,
+   * mapped neatly across the polar landscape, because they all follow the
+   * same steady high-altitude wind. Independently-oriented streaks would
+   * look like a bug, and would also be wrong -- and getting that right needs
+   * more than sharing this vector, because the surface caps that draw the
+   * ground fans orient themselves east by default and east near a pole
+   * points a different way at every longitude. They are given the wind
+   * explicitly; see `aim` on `createSurfaceCap`.
+   */
+  const spinAxis = new THREE.Vector3(0, 1, 0);
+  /*
+   * The summer pole, worked out rather than assumed.
+   *
+   * Voyager found the plumes in the *south* polar cap, and the first pass
+   * hard-coded (0, -1, 0) for that. But south is only where they were in
+   * 1989: the mechanism is a solid-state greenhouse, so they erupt wherever
+   * the Sun is heating the ice, which is the pole currently in summer. At
+   * this moon's orientation in this scene, hard-coding it put the whole cap
+   * on the far limb -- a frame grab showed the fans squeezed into a thin
+   * foreshortened band at the top edge of the disc.
+   *
+   * Taking the pole the Sun is actually on is both the correct physics and
+   * self-correcting: combined with this event being framed from the day
+   * side, the cap is guaranteed to be the part of the moon facing the lens.
+   */
+  const bisector = new THREE.Vector3().addVectors(facing, sunLocal).normalize();
+  const pole = new THREE.Vector3(0, bisector.y >= 0 ? 1 : -1, 0);
+  /*
+   * And then leaned off the pole towards the viewer, which is the difference
+   * between a cap that is there and a cap that can be seen.
+   *
+   * Choosing the summer pole is necessary and not sufficient. Triton's axis
+   * in this scene is nearly in the plane of the ecliptic, so "the sunlit
+   * pole" can still be a point on the terminator seen edge-on -- and a frame
+   * grab of exactly that showed the fans squeezed into a foreshortened band
+   * along the top limb, with every plume banner hanging off the edge of the
+   * disc into black space where a *dark* plume is by definition invisible.
+   *
+   * Blending the pole with the bisector of the view and Sun directions puts
+   * the middle of the cap on the lit face, where the banners lie across
+   * bright ice and the fans are seen from above rather than end-on. It is
+   * still a polar cap -- the cluster is centred well up the hemisphere the
+   * pole is on -- and it is still the sunlit one, which is the part the
+   * physics actually requires.
+   */
+  const south = pole.clone().multiplyScalar(0.62)
+    .addScaledVector(bisector, 0.58)
+    .normalize();
+  const wind = new THREE.Vector3().crossVectors(spinAxis, facing).normalize();
+  if (wind.lengthSq() < 1e-6) wind.set(1, 0, 0);
+
+  /*
+   * Concentrated in the south polar cap, not scattered over the moon.
+   *
+   * The geysers are solar-powered -- sunlight passes through the translucent
+   * nitrogen ice and warms darker material a metre or two down, the solid-
+   * state greenhouse -- so they happen where the Sun is actually heating the
+   * sheet. During the 1989 flyby the southern hemisphere was in summer, and
+   * that is where every plume Voyager saw was.
+   */
+  /*
+   * The south polar cap, painted, and this is not decoration.
+   *
+   * Triton is thirty astronomical units out and the scene lights it
+   * accordingly -- honestly, in fact: sunlight there is a nine-hundredth of
+   * what falls on Earth. A frame grab framed on the lit face still came back
+   * as a dim brown disc with no readable surface on it, and an event whose
+   * entire subject is *dark material on pale ice* has nothing to say against
+   * a dark moon. Every photograph anyone has of this is a long exposure.
+   *
+   * So the cap is drawn as the cap: a broad patch of creamy pinkish-white
+   * over the southern third of the moon, which is what is actually there --
+   * a giant sheet of nitrogen and methane ice, tinted by tholins, and the
+   * most reflective thing on the body. It is also exactly the region the
+   * geysers are confined to, because they are solar-powered and this is the
+   * hemisphere in summer. Brightening it is therefore the same statement as
+   * putting the vents in it.
+   */
+  const polarCap = createSurfaceCap(radius, south, "light", { roughness: 0.5 });
+  group.add(polarCap.mesh);
+  // Creamy pink-white: methane ice reddened by tholins, which is the colour
+  // every Voyager 2 mosaic of the cap shows.
+  const capTint = new THREE.Color(0xf7dcd0);
+
+  const VENTS = 10;
+  const GRAINS = 82;
+  const plumes = [];
+
+  for (let index = 0; index < VENTS; index += 1) {
+    /*
+     * Around the polar cap, and genuinely biased towards the part of it the
+     * camera can see -- which the first pass claimed in a comment and then
+     * drew `around` uniformly, so half the vents were on the far side of the
+     * moon every time.
+     *
+     * `helperB` works out to roughly the camera direction reversed, so an
+     * azimuth of pi points at the lens. A hundred and ten degrees of spread
+     * about that keeps them scattered across the cap without putting any
+     * round the back.
+     *
+     * The cap itself reaches further from the pole than it did, too. Twelve
+     * to forty-eight degrees is a tight ring round the pole, and a tight
+     * ring round a pole is the one place on a sphere that is edge-on from
+     * anywhere near the equator. Out to sixty-two the far vents are at
+     * twenty-eight degrees latitude, on the face of the disc rather than its
+     * rim, and the cap still reads as a cap.
+     */
+    const capAngle = THREE.MathUtils.degToRad(8 + Math.random() * 36);
+    const around = Math.PI + (Math.random() - 0.5) * Math.PI * 1.1;
+    const helper = new THREE.Vector3().crossVectors(south, facing).normalize();
+    const helperB = new THREE.Vector3().crossVectors(south, helper).normalize();
+    const vent = south.clone().multiplyScalar(Math.cos(capAngle))
+      .addScaledVector(helper, Math.sin(capAngle) * Math.cos(around))
+      .addScaledVector(helperB, Math.sin(capAngle) * Math.sin(around))
+      .normalize();
+
+    /*
+     * There is no column mesh any more, and that is the point.
+     *
+     * The stem was a `CylinderGeometry` -- a solid body with a silhouette --
+     * and however thin it was made, what it looked like from the event's own
+     * camera was a post standing on the moon. Which is fair: it *was* a post
+     * standing on the moon. A geyser is not a solid object. It is gas and
+     * dust leaving a hole in the ground under pressure, and the only thing
+     * there is to draw is the material itself.
+     *
+     * So the stem is built out of the same grains as the rest of the plume,
+     * just packed tightly and given almost no lateral spread -- which is
+     * what makes a real one look sharp: not an edge, but a very narrow
+     * column of very dense dust. See `offsets` below, where the first third
+     * of each plume's grains are assigned to the stem.
+     */
+    /*
+     * The ground deposit: a long fan-shaped dark smudge downwind of the
+     * vent. Dozens of these scar the real surface, and every one of them
+     * points the same way -- which is what `along: wind` is for.
+     */
+    const fan = createSurfaceCap(radius, vent, "stain", { along: wind, roughness: 0.75 });
+    group.add(fan.mesh);
+
+    /*
+     * Grains in two populations, because the plume has two parts.
+     *
+     *   the stem     the first third of them, riding straight up out of the
+     *                vent with almost no spread -- Triton's atmosphere is
+     *                70,000 times thinner than Earth's, so there is nothing
+     *                down there to scatter the jet. This is the hard narrow
+     *                line that rises 8 km.
+     *   the banner   the rest, released at the top of the stem and carried
+     *                downwind, spreading as they go. This is the soft smudge
+     *                that trails 100 to 150 km.
+     *
+     * One buffer, two behaviours, no geometry. The split is the shape.
+     */
+    const offsets = [];
+    for (let grain = 0; grain < GRAINS; grain += 1) {
+      const isStem = grain < GRAINS * 0.34;
+      offsets.push({
+        isStem,
+        along: isStem ? Math.random() : Math.pow(Math.random(), 0.8),
+        lift: Math.random() - 0.5,
+        side: Math.random() - 0.5,
+        /*
+         * The pore each grain left by. A vent is a hole rather than a point,
+         * and a little scatter across its mouth is what stops the column
+         * looking extruded -- "it should come from pores on the surface",
+         * which is both the note and the mechanism: the cap cracks and the
+         * gas finds its way out through the break.
+         */
+        pore: Math.random() * Math.PI * 2,
+        poreOff: Math.pow(Math.random(), 0.5),
+      });
     }
-    // 8 km up against a 1,353 km radius is 0.6% -- far too small to see, so
-    // the column is exaggerated to about a twentieth of the moon. Everything
-    // about its *shape* is kept: short vertical, long horizontal.
-    const column = new THREE.Mesh(
-      new THREE.CylinderGeometry(radius * 0.010, radius * 0.020, radius * 0.13, 8, 1, true),
-      new THREE.MeshBasicMaterial({
-        color: 0x8fa6c4, transparent: true, opacity: 0, side: THREE.DoubleSide,
-        depthWrite: false, blending: THREE.AdditiveBlending,
-      }),
-    );
-    group.add(column);
 
-    // The downwind streak: 150 km against 8 km up, so nearly twenty times as
-    // long as the column is tall. That ratio is the whole point.
-    const streak = new THREE.Mesh(
-      new THREE.CylinderGeometry(radius * 0.006, radius * 0.022, radius * 0.34, 6, 1, true),
-      new THREE.MeshBasicMaterial({
-        color: 0x6e7f99, transparent: true, opacity: 0, side: THREE.DoubleSide,
-        depthWrite: false, blending: THREE.AdditiveBlending,
-      }),
-    );
-    group.add(streak);
+    /*
+     * The wind at *this* vent, which is not the same vector as the wind.
+     *
+     * `wind` is one direction for the whole moon, which is the point -- the
+     * fans all run the same way. But a direction that is horizontal at one
+     * place on a sphere points into the ground at another, and the plumes
+     * were being carried along the raw vector from a tip only a tenth of a
+     * radius up. For most of the vents that ran the banner straight down
+     * into the moon, where the depth test removed it: a frame grab showed
+     * round dark blobs sitting on the surface and no trailing streak
+     * anywhere, which is the opposite of the shape this event is about.
+     *
+     * Projected into the tangent plane at the vent it is still the same
+     * wind -- every fan still points the same way as seen from above -- and
+     * it now runs along the surface instead of through it.
+     */
+    const flow = wind.clone().addScaledVector(vent, -wind.dot(vent));
+    if (flow.lengthSq() < 1e-8) flow.copy(wind);
+    flow.normalize();
 
-    columns.push({ vent, column, streak, phase: index * 0.17 });
+    plumes.push({
+      vent, fan, offsets, flow,
+      phase: index * 0.045 + Math.random() * 0.04,
+      // How far downwind, in moon radii. Thirteen times the stem.
+      reach: 0.85 + Math.random() * 0.35,
+      strength: 0.62 + Math.random() * 0.38,
+    });
   }
 
+  /*
+   * Every plume's smoke in one buffer.
+   *
+   * Ten separate `Points` clouds is ten draw calls for something that is one
+   * substance drawn one way, and the columns and the ground fans already
+   * take ten each. One geometry of eight hundred and twenty grains costs a
+   * single call and the per-frame work is unchanged, since the positions
+   * have to be written either way.
+   */
+  const smokeCount = VENTS * GRAINS;
+  const smokePositions = new Float32Array(smokeCount * 3);
+  const smokeAlphas = new Float32Array(smokeCount);
+  const smokeGeometry = new THREE.BufferGeometry();
+  smokeGeometry.setAttribute("position", new THREE.BufferAttribute(smokePositions, 3));
+  smokeGeometry.setAttribute("aAlpha", new THREE.BufferAttribute(smokeAlphas, 1));
+  const smokeMaterial = new THREE.ShaderMaterial({
+    uniforms: {
+      // Charcoal. Not black: a plume seen against the bright polar cap is
+      // dark grey, and pure black reads as a hole rather than as dust.
+      uColour: { value: new THREE.Color(0x17131c) },
+      uGrain: { value: radius * 0.055 },
+      uHeight: { value: viewportHeight() },
+      uGain: { value: 0 },
+    },
+    transparent: true,
+    depthWrite: false,
+    depthTest: true,
+    // Normal, emphatically. Additive blending cannot darken anything, and
+    // this plume's entire visual identity is that it is darker than the ice.
+    blending: THREE.NormalBlending,
+    toneMapped: true,
+    vertexShader: POINT_SIZE_GLSL + /* glsl */`
+      attribute float aAlpha;
+      uniform float uGrain;
+      uniform float uHeight;
+      varying float vAlpha;
+      void main() {
+        vAlpha = aAlpha;
+        vec4 viewPosition = modelViewMatrix * vec4(position, 1.0);
+        gl_Position = projectionMatrix * viewPosition;
+        /*
+         * Grains swell as the cloud disperses downwind, which is what gives
+         * the far end its soft edge rather than a scatter of dots. Stem
+         * grains arrive with an alpha above one and stay small and tight,
+         * which is the other half of what makes the column sharp.
+         */
+        float swell = aAlpha > 1.0 ? 0.55 : (0.9 + 2.6 * (1.0 - aAlpha));
+        gl_PointSize = clamp(
+          pointPixels(uGrain * swell, viewPosition.z, uHeight),
+          1.0, 72.0
+        );
+      }
+    `,
+    fragmentShader: /* glsl */`
+      uniform vec3 uColour;
+      uniform float uGain;
+      varying float vAlpha;
+      void main() {
+        vec2 d = gl_PointCoord - vec2(0.5);
+        float falloff = 1.0 - smoothstep(0.0, 0.5, length(d));
+        float alpha = falloff * falloff * min(vAlpha, 1.0) * uGain;
+        if (alpha <= 0.003) discard;
+        gl_FragColor = vec4(uColour, alpha);
+        #include <tonemapping_fragment>
+        #include <colorspace_fragment>
+      }
+    `,
+  });
+  const smoke = new THREE.Points(smokeGeometry, smokeMaterial);
+  smoke.frustumCulled = false;
+  smoke.renderOrder = 3;
+  group.add(smoke);
+
   const tip = new THREE.Vector3();
+  const point = new THREE.Vector3();
+  const sideways = new THREE.Vector3();
+  const deposit = new THREE.Color(0x231b22);
 
   return {
     group,
-    duration: 18,
+    duration: 20,
     update(progress) {
-      for (let index = 0; index < columns.length; index += 1) {
-        const item = columns[index];
+      const positionAttribute = smokeGeometry.getAttribute("position");
+      const alphaAttribute = smokeGeometry.getAttribute("aAlpha");
+      let loudest = 0;
+
+      /*
+       * The cap comes up first and stays for the whole event -- it is
+       * terrain, not weather. Broad falloff, because a polar ice sheet has
+       * no edge you could point at either: it grades into the mottled
+       * equatorial frost band over tens of degrees of latitude.
+       */
+      const capLevel = smoothstep(0, 0.08, progress) * (1 - smoothstep(0.92, 1, progress));
+      /*
+       * Half the strength it was, and much softer at the middle.
+       *
+       * At 0.5 with a broad falloff the cap did its job -- the plumes had
+       * pale ice to be dark against -- and did something else as well: it
+       * read as the moon *glowing*, which was the note. The difference
+       * between "this terrain is bright" and "this body is emitting" is
+       * mostly how hot the middle is and how abruptly it falls away, so the
+       * level comes down and the falloff goes up. It is still the brightest
+       * thing on the moon, which is what a polar ice sheet is.
+       */
+      polarCap.set(0.92, 0.92, 0, capTint, capLevel * 0.24, 2.0, sunLocal, facing);
+
+      for (let index = 0; index < plumes.length; index += 1) {
+        const item = plumes[index];
         const local = THREE.MathUtils.clamp(progress - item.phase, 0, 1);
-        const rise = smoothstep(0, 0.30, local);
-        const fade = 1 - smoothstep(0.66, 1, progress);
-        const strength = rise * fade;
+        const rise = smoothstep(0, 0.22, local);
+        const fade = 1 - smoothstep(0.80, 1, progress);
+        const strength = rise * fade * item.strength;
+        loudest = Math.max(loudest, strength);
 
-        item.column.position.copy(item.vent).multiplyScalar(radius * (1 + 0.065 * rise));
-        item.column.lookAt(scratchVector.copy(item.vent).multiplyScalar(-radius));
-        item.column.rotateX(Math.PI * 0.5);
-        item.column.scale.set(1, rise, 1);
-        item.column.material.opacity = strength * 0.55;
+        /*
+         * The bend. The stem stops rising at its peak and the banner starts
+         * there -- abruptly, at a sharp angle, which is what the photographs
+         * show and why the shape is so recognisable.
+         */
+        const stemHeight = 0.10 * rise;
+        tip.copy(item.vent).multiplyScalar(radius * (1 + stemHeight));
+        sideways.crossVectors(item.flow, item.vent).normalize();
 
-        // The streak begins where the column tops out and runs downwind.
-        tip.copy(item.vent).multiplyScalar(radius * (1 + 0.13 * rise));
-        item.streak.position.copy(tip).addScaledVector(wind, radius * 0.17 * rise);
-        item.streak.lookAt(scratchVector.copy(tip).addScaledVector(wind, -radius));
-        item.streak.rotateX(Math.PI * 0.5);
-        item.streak.scale.set(1, rise, 1);
-        item.streak.material.opacity = strength * 0.34;
+        const base = index * GRAINS;
+        for (let grain = 0; grain < GRAINS; grain += 1) {
+          const off = item.offsets[grain];
+          const slot = base + grain;
+
+          if (off.isStem) {
+            /*
+             * The stem: straight up out of the pore, with a spread of well
+             * under a hundredth of a radius. That is what makes it read as
+             * sharp -- density, not a silhouette.
+             */
+            const up = off.along * stemHeight;
+            point.copy(item.vent).multiplyScalar(radius * (1 + up))
+              .addScaledVector(
+                sideways,
+                radius * Math.cos(off.pore) * off.poreOff * 0.010 * (0.4 + off.along),
+              )
+              .addScaledVector(
+                item.flow,
+                radius * Math.sin(off.pore) * off.poreOff * 0.010 * (0.4 + off.along)
+                  // and leaning very slightly downwind as it climbs, because
+                  // the wind does not begin abruptly at eight kilometres
+                  + radius * 0.035 * off.along * off.along,
+              );
+            positionAttribute.setXYZ(slot, point.x, point.y, point.z);
+            alphaAttribute.setX(slot, item.strength * 1.15);
+            continue;
+          }
+
+          const along = off.along * item.reach * rise;
+          point.copy(tip)
+            .addScaledVector(item.flow, radius * along)
+            /*
+             * Spreading vertically as it goes, and sagging a little: the
+             * banner is thin where it leaves the column and several times
+             * thicker by the far end, which is what makes it read as smoke
+             * rather than as a ribbon.
+             */
+            /*
+             * Riding up as it goes, not sagging. The surface curves away
+             * under a straight-line drift, so a banner drawn flat sinks
+             * into the moon a third of a radius downwind; the quadratic
+             * term below is the correction for that curvature, and the
+             * linear one is the plume's own vertical spread.
+             */
+            .addScaledVector(
+              item.vent,
+              radius * (off.lift * 0.10 * along + 0.5 * along * along),
+            )
+            .addScaledVector(sideways, radius * off.side * 0.11 * (0.15 + along * 1.2));
+          positionAttribute.setXYZ(slot, point.x, point.y, point.z);
+          // Densest at the stem and thinning to nothing at the far end.
+          alphaAttribute.setX(slot, Math.pow(1 - off.along, 1.3) * item.strength);
+        }
+
+        /*
+         * The fan on the ground, growing downwind as the plume keeps
+         * depositing. The cap was aimed along the wind at construction, so
+         * `drift` slides it downwind rather than east, and the long axis is
+         * the wind axis -- which is what makes all ten of these parallel.
+         */
+        /*
+         * A streak, not a smudge. Six to one along the wind against across
+         * it -- the photographs show long narrow tails, and at three to one
+         * a cap seen at any angle but straight down reads as a round dark
+         * patch, which is what the first attempt produced.
+         */
+        /*
+         * A streak from the first frame, not a dot that grows into one.
+         *
+         * Scaling both axes by `rise` meant the fan began as a tiny circle
+         * and only became a streak later -- "the initial phase gives a
+         * circular part", which was the note. The deposit is laid down
+         * *downwind* from the moment the vent opens, so the length grows and
+         * the width does not.
+         */
+        const length = 0.10 + rise * 0.26;
+        item.fan.set(
+          length, 0.050, length * 0.95, deposit,
+          strength * 0.70, 1.7, sunLocal, facing,
+        );
       }
+
+      positionAttribute.needsUpdate = true;
+      alphaAttribute.needsUpdate = true;
+      smokeMaterial.uniforms.uGain.value = loudest * 0.55;
     },
     dispose() {
-      columns.forEach((item) => {
-        item.column.geometry.dispose(); item.column.material.dispose();
-        item.streak.geometry.dispose(); item.streak.material.dispose();
+      plumes.forEach((item) => {
+        item.fan.mesh.geometry.dispose();
+        item.fan.material.dispose();
       });
+      polarCap.mesh.geometry.dispose();
+      polarCap.material.dispose();
+      smokeGeometry.dispose();
+      smokeMaterial.dispose();
     },
   };
 }
@@ -5046,59 +6000,676 @@ function createSolarEclipse(target, camera) {
   const group = new THREE.Group();
   group.name = "Solar eclipse event";
   const radius = localRadius(target);
-  const facing = localCameraDirection(target, camera, new THREE.Vector3());
 
   /*
-   * Normal blending with a dark colour, not additive: this subtracts. Every
-   * other event in this file adds light, and using additive here would make
-   * the shadow glow, which took one look to notice and is worth a line of
-   * comment so it is never "tidied" into consistency with the others.
+   * Built on the real line, not on a random track.
+   *
+   * The first version slid a dark disc between two points drawn at random
+   * from the facing hemisphere, which meant the shadow could run uphill,
+   * sideways, or back the way it came. The second put it on the true Sun
+   * line and was still wrong, for three reasons a frame grab made obvious at
+   * once: the camera was left wherever it happened to be, so the alignment
+   * the event is *about* was off screen entirely; the eclipsing body was a
+   * plain dark ball while Earth's actual Moon was sitting in the same frame
+   * looking like a moon, so the shot had two of them and only one was
+   * convincing; and the shadow was a flat disc laid on a sphere, which at any
+   * angle but dead-on reads as a sticker.
+   *
+   * All three are fixed here. Everything below is in Earth's local frame, and
+   * the Sun is at the origin of the scene, so the direction to the Sun is
+   * simply the way back to the origin.
    */
-  const penumbra = new THREE.Mesh(
-    new THREE.CircleGeometry(radius * 0.46, 40),
+  /*
+   * Recomputed every frame, and this is the whole reason the shadow was
+   * missing.
+   *
+   * Every other event in this file captures the Sun direction once, and for
+   * every other event that is right: a storm, a scar, a deposit belongs to
+   * the surface and turns with it. An eclipse shadow is the exact opposite.
+   * It is pinned to a line through the Sun and the Moon, and the planet
+   * rotates *underneath* it -- which is precisely what makes a totality
+   * track a line across a map rather than a spot on one.
+   *
+   * Held as a build-time constant, the shadow rode round with Earth instead.
+   * An A/B render with the caps toggled off found them 1.04 Earth radii from
+   * the centre of the disc -- past the limb, off the visible face -- while a
+   * probe read their vertex alpha back at 0.92. The shadow was being drawn
+   * at full strength, in the wrong place, every frame. In the real app that
+   * is a drift of seventeen degrees across an event; in a software-rendered
+   * harness, where a frame costs a second of wall time and the planet gets
+   * through most of a rotation while the event plays, it was never near the
+   * sub-solar point at all, which is why four frame grabs in a row showed a
+   * cleanly lit planet and no shadow anywhere on it.
+   *
+   * `across` and `up` are derived from it and move with it.
+   */
+  const sunLocal = new THREE.Vector3();
+  const across = new THREE.Vector3();
+  const up = new THREE.Vector3();
+  const helperAxis = new THREE.Vector3();
+
+  function readSunFrame() {
+    localSunDirection(target, sunLocal);
+    /*
+     * The axis the Moon travels along as it slides across the Sun's face.
+     *
+     * Any direction perpendicular to the Sun line is geometrically valid,
+     * and the first choice -- perpendicular to the Sun line and to the
+     * world's vertical -- was one of them. It was also, from the angle this
+     * event is framed at, very nearly the direction *away from the camera*:
+     * two frames a quarter of the event apart showed the Moon in the same
+     * place on screen, having moved more than a full Earth radius directly
+     * towards the lens. The pass was happening and none of it was visible.
+     *
+     * Perpendicular to the Sun line *and* to the view direction is the one
+     * choice that puts the whole of the travel across the screen.
+     */
+    localCameraDirection(target, camera, helperAxis);
+    across.crossVectors(helperAxis, sunLocal);
+    if (across.lengthSq() < 1e-6) {
+      across.crossVectors(sunLocal, Math.abs(sunLocal.y) > 0.9
+        ? new THREE.Vector3(1, 0, 0)
+        : new THREE.Vector3(0, 1, 0));
+    }
+    across.normalize();
+    up.crossVectors(across, sunLocal).normalize();
+  }
+  readSunFrame();
+
+  /*
+   * The Moon is Earth's actual Moon.
+   *
+   * The scene already owns one -- cratered, displacement-mapped, and lit by
+   * the same sunlight as everything else -- and the event is parented to
+   * Earth, which is where that Moon lives. Drawing a second, plainer sphere
+   * next to it was the single biggest reason the shot did not read: there
+   * were two moons in frame and the eclipse was being performed by the fake
+   * one.
+   *
+   * So the real one's geometry and material are borrowed for a mesh placed
+   * on the Sun line, and the satellite system it normally rides -- the Moon
+   * and its orbit guide both -- is hidden for the length of the event and
+   * put back in `dispose`. Nothing is moved, nothing is rebuilt, and the body
+   * doing the eclipsing is the body the viewer already knows.
+   */
+  const satellites = target.getObjectByName("Earth satellite system") ?? null;
+  const realMoon = target.getObjectByName("Moon") ?? null;
+  const satellitesWereVisible = satellites ? satellites.visible : false;
+  if (satellites) satellites.visible = false;
+
+  /*
+   * Where the Moon was standing when the event began.
+   *
+   * Hiding the real one and lighting a stand-in on the Sun line is a
+   * substitution the viewer should never see happen, and in the first
+   * version they saw it twice: the Moon vanished from its orbit and
+   * reappeared somewhere else, then did the reverse at the end. Taking its
+   * actual position as the start of the pass -- and handing it back there --
+   * turns both cuts into a move along the orbit, which is what it should
+   * have been.
+   */
+  const moonHome = new THREE.Vector3();
+  if (realMoon) {
+    realMoon.getWorldPosition(moonHome);
+    target.worldToLocal(moonHome);
+  }
+  const hasHome = moonHome.lengthSq() > 1e-8;
+  const homeDirection = hasHome ? moonHome.clone().normalize() : new THREE.Vector3(1, 0, 0);
+  const homeDistance = hasHome ? moonHome.length() : 0;
+  // Scratch for the transfer arc below.
+  const transferDirection = new THREE.Vector3();
+  const transferTurn = new THREE.Quaternion();
+  const transferStep = new THREE.Quaternion();
+  const transferRest = new THREE.Quaternion();
+
+  const moonRadius = realMoon
+    ? (Number(realMoon.userData?.visualRadius) || radius * 0.372)
+    : radius * 0.372;
+
+  /*
+   * The real Moon's geometry, and a *copy* of its material.
+   *
+   * Sharing the material outright was tidier and is not possible any more,
+   * because this one has to be told to draw late -- see the render-order
+   * note below -- and the real Moon must not inherit that. Cloning a
+   * material shares its textures, so the copy costs a few uniforms.
+   */
+  const moon = realMoon
+    ? new THREE.Mesh(realMoon.geometry, realMoon.material.clone())
+    : new THREE.Mesh(
+      new THREE.SphereGeometry(moonRadius, 32, 24),
+      new THREE.MeshStandardMaterial({ color: 0x8d8d92, roughness: 1, metalness: 0 }),
+    );
+  moon.name = "Eclipsing Moon";
+  moon.frustumCulled = false;
+  /*
+   * Drawn after the shadow, and this is the other half of the depth fix.
+   *
+   * The shadow caps have their depth test switched off, because with it on
+   * they produced nothing -- and the reason, finally, was the Moon. The
+   * camera has to stand near the Sun line for the alignment to read at all,
+   * and from near the Sun line the Moon is directly in front of the very
+   * spot its own shadow makes. An opaque sphere five Earth radii nearer the
+   * lens was simply covering it; a probe measured zero pixels with the test
+   * on and 3,130 with it off, and a magnified crop of the frame with it off
+   * showed why -- a black patch drawn straight across the Moon's face.
+   *
+   * Switching the test off fixes the first problem and creates the second.
+   * Both go away if the Moon is drawn *after* the shadow rather than before
+   * it: opaque geometry is drawn first as a pass, so the Moon is moved into
+   * the transparent pass at full opacity with a render order above the
+   * caps'. It still writes depth, still looks identical, and now paints over
+   * the shadow wherever it is genuinely in front of it -- which, near the
+   * Sun line, is exactly where a real observer would lose sight of it too.
+   */
+  moon.material.transparent = true;
+  moon.material.depthWrite = true;
+  moon.renderOrder = 20;
+  group.add(moon);
+
+  /*
+   * Where it sits. The real Moon orbits at 3.15 Earth radii in this scene --
+   * a heavy compression of the true sixty, made long before this event
+   * existed -- and the eclipse uses the scene's own number rather than one of
+   * its own, so the Moon is exactly as far out during the event as it is
+   * every other time the viewer sees it.
+   */
+  /*
+   * How far out the Moon stands, solved from the camera rather than chosen.
+   *
+   * Two things have to be true at once and a fixed number cannot deliver
+   * both. The Moon has to be clear of Earth's disc, or the pair read as
+   * about to collide -- reported three times now, and a screenshot showed
+   * the Moon's dark limb resting exactly on Earth's bright one. And the
+   * sub-solar point, where the shadow lands, has to be near enough the
+   * middle of the disc that the whole crossing stays on the visible face.
+   *
+   * Both are governed by how far off the Sun line the camera is standing,
+   * and that angle is not knowable in advance: the viewer may have turned
+   * the planet, the composed shot may still be easing, the field of view
+   * differs by body. Guessing it produced 3.15, then 5.0, and neither was
+   * right at the angle the camera actually ended up at.
+   *
+   * So it is measured. With the camera at distance D from a body of radius
+   * R, and the Moon r body-radii along a Sun line that stands theta off the
+   * view direction, the Moon's offset from the disc centre comes out at
+   *
+   *     T = r * sin(theta) * D / (D - r * R * cos(theta))
+   *
+   * body radii. Solving that for r at a target separation T is one line,
+   * and it holds at any angle, distance and field of view -- including the
+   * degenerate one where the camera is nearly on the Sun line, where it
+   * asks for a very large r and is clamped.
+   */
+  const MOON_RANGE = (() => {
+    /*
+     * Two and a half Earth radii between the two centres, which at Earth's
+     * apparent size leaves a clear gap of about one and a half radii of
+     * empty space between the limbs. The shot has to hold it -- see
+     * `shotZoom` on the roster entry, which is set against this number.
+     */
+    const TARGET_SEPARATION = 2.5;
+    const earthAt = target.getWorldPosition(new THREE.Vector3());
+    const distance = camera ? camera.position.distanceTo(earthAt) : radius * 10;
+    const worldRadius = radius * Math.max(1e-6, Math.abs(target.scale.x));
+    // The angle at Earth between the way to the camera and the way to the Sun.
+    const toCamera = new THREE.Vector3().subVectors(camera.position, earthAt).normalize();
+    const toSun = earthAt.clone().negate().normalize();
+    const theta = Math.acos(THREE.MathUtils.clamp(toCamera.dot(toSun), -1, 1));
+    const sin = Math.sin(theta);
+    const cos = Math.cos(theta);
+    const denominator = sin * distance + TARGET_SEPARATION * worldRadius * cos;
+    if (!Number.isFinite(denominator) || denominator < 1e-4) return 14;
+    return THREE.MathUtils.clamp(
+      (TARGET_SEPARATION * distance) / denominator,
+      3.15,
+      14,
+    );
+  })();
+
+  /*
+   * Turning Earth so there is a continent under the shadow.
+   *
+   * An eclipse staged at whatever longitude happened to be facing the Sun
+   * put the umbra in the middle of the Pacific about as often as not, and a
+   * dark spot on an empty blue ocean says nothing about scale -- there is
+   * nothing in frame to measure it against. The brief asks for Asia, and
+   * specifically for India, which is the right instinct: it is the most
+   * legible landmass on the daylit side and the one most people can place.
+   *
+   * The rotation is worked out rather than guessed. `sampleSurfaceColour`
+   * documents the UV convention the planet's own texture is mapped with --
+   * longitude runs from +X through +Z and the texture origin is bottom-left
+   * -- so a target at 78 degrees east and 22 degrees north converts to a
+   * direction in the body's local frame, and the spin about Y needed to
+   * bring that direction under the Sun is the difference between its
+   * azimuth and the Sun's.
+   */
+  const INDIA_LON = THREE.MathUtils.degToRad(78);
+  const INDIA_LAT = THREE.MathUtils.degToRad(22);
+  const spinDelta = (() => {
+    // u for a longitude, then the angle the sampler's convention gives it.
+    const u = (THREE.MathUtils.radToDeg(INDIA_LON) + 180) / 360;
+    const theta = (u > 0.5 ? u - 1 : u) * Math.PI * 2;
+    const sunTheta = Math.atan2(sunLocal.z, -sunLocal.x);
+    // Rotating the body by d moves a fixed world direction by +d in this
+    // local angle, so this is the shortest turn that lands the Sun on India.
+    let delta = theta - sunTheta;
+    while (delta > Math.PI) delta -= Math.PI * 2;
+    while (delta < -Math.PI) delta += Math.PI * 2;
+    return delta;
+  })();
+  // Unused beyond documenting the latitude the target sits at; the shadow
+  // lands on the sub-solar point, which the spin above puts on that meridian.
+  void INDIA_LAT;
+  let spinApplied = 0;
+
+  /*
+   * The shadow, drawn as a patch of the planet rather than as a disc in
+   * front of it.
+   *
+   * `createSurfaceCap` bends an ellipse round the sphere, feathers its rim,
+   * and dissolves it before the limb -- so it foreshortens correctly, it
+   * cannot z-fight the surface, and it has no edge to catch the eye. That is
+   * what a shadow does and what a `CircleGeometry` cannot. Two of them,
+   * because a real shadow has two parts: the umbra, where the Sun is
+   * completely hidden, and the penumbra around it, several times wider,
+   * where it is only partly covered.
+   *
+   * Both are "stain" caps: normal blending with a dark colour, so they
+   * subtract. Every other event in this file adds light, and additive here
+   * would make the shadow glow -- which took one look to notice and is worth
+   * a line of comment so it is never tidied into consistency with the rest.
+   */
+  /*
+   * Above the clouds, the atmosphere and the glow -- 1.060 is the outermost
+   * of Earth's shells, so 1.068 clears the lot. A shadow on the top of the
+   * atmosphere is where a shadow actually starts.
+   */
+  const SHADOW_SHELL = 1.068;
+  const penumbraCap = createSurfaceCap(radius, sunLocal.clone(), "stain", {
+    shell: SHADOW_SHELL, renderOrder: 12, roughness: 0.25, depthTest: false,
+  });
+  group.add(penumbraCap.mesh);
+
+  const umbraCap = createSurfaceCap(radius, sunLocal.clone(), "stain", {
+    shell: SHADOW_SHELL + 0.004, renderOrder: 13, roughness: 0.15, depthTest: false,
+  });
+  group.add(umbraCap.mesh);
+
+  /*
+   * And the last stretch of the shadow, where the atmosphere reveals it.
+   *
+   * A shadow in vacuum cannot be seen. Light is invisible unless it reflects
+   * off something, and between the Moon and Earth there is nothing to
+   * reflect it -- so a cone of darkness drawn across that gap is a diagram,
+   * not an observation, and it was drawn the whole way. What astronauts
+   * actually see during an eclipse is the last part of that cone cutting
+   * through Earth's own air: nitrogen, oxygen and dust scatter the sunlight
+   * around it, and the sudden absence of that scattering is a dark tapering
+   * wedge standing on the surface inside a ring of sunset.
+   *
+   * So the cone is kept and shortened. It begins just above the atmosphere
+   * and lands on the shadow; nothing is drawn in the vacuum above that,
+   * because there is nothing there to be drawn.
+   */
+  const cone = new THREE.Mesh(
+    // Wide at the Moon (+Y, radiusTop) and narrowing to the umbra where it
+    // lands, which is the direction a real shadow cone converges in.
+    new THREE.CylinderGeometry(1, 0.34, 1, 40, 1, true),
     new THREE.MeshBasicMaterial({
-      color: 0x0a0d16, transparent: true, opacity: 0, depthWrite: false,
+      color: 0x05070d,
+      transparent: true,
+      opacity: 0,
       side: THREE.DoubleSide,
+      depthWrite: false,
     }),
   );
-  group.add(penumbra);
+  cone.frustumCulled = false;
+  cone.renderOrder = 11;
+  group.add(cone);
 
-  const umbra = new THREE.Mesh(
-    new THREE.CircleGeometry(radius * 0.075, 26),
-    new THREE.MeshBasicMaterial({
-      color: 0x04060c, transparent: true, opacity: 0, depthWrite: false,
-      side: THREE.DoubleSide,
-    }),
-  );
-  group.add(umbra);
+  /*
+   * One line of geometry to the console when the event is built.
+   *
+   * Temporary, and here because this event has now been "fixed" five times
+   * against a software-rendered harness that cannot reproduce the thing
+   * being reported -- its camera never finishes easing before the event
+   * plays, so every frame it captures is at a different, half-settled
+   * angle. The numbers below are the four that decide whether the Moon
+   * clears the disc, measured on the machine that is actually showing the
+   * problem. Remove once the framing is settled.
+   */
+  if (typeof console !== "undefined" && console.info) {
+    const earthAt = target.getWorldPosition(new THREE.Vector3());
+    const distance = camera ? camera.position.distanceTo(earthAt) : 0;
+    const worldRadius = radius * Math.max(1e-6, Math.abs(target.scale.x));
+    const toCamera = new THREE.Vector3().subVectors(camera.position, earthAt).normalize();
+    const toSun = earthAt.clone().negate().normalize();
+    const offSun = THREE.MathUtils.radToDeg(
+      Math.acos(THREE.MathUtils.clamp(toCamera.dot(toSun), -1, 1)),
+    );
+    const sin = Math.sin(THREE.MathUtils.degToRad(offSun));
+    const cos = Math.cos(THREE.MathUtils.degToRad(offSun));
+    const separation = MOON_RANGE * sin * distance
+      / Math.max(1e-4, distance - MOON_RANGE * worldRadius * cos);
+    console.info(
+      "[eclipse] cameraDistance=%s bodyRadius=%s offSunDeg=%s moonRange=%s "
+      + "predictedSeparation=%s bodyRadii (want 2.5) homeDistance=%s",
+      distance.toFixed(2), worldRadius.toFixed(3), offSun.toFixed(1),
+      MOON_RANGE.toFixed(2), separation.toFixed(2), homeDistance.toFixed(2),
+    );
+  }
 
-  // The track: shadows sweep roughly west to east across the facing
-  // hemisphere, entering at one limb and leaving at the other.
-  const entry = facingPoint(facing, THREE.MathUtils.degToRad(74), new THREE.Vector3());
-  const exit = facingPoint(facing, THREE.MathUtils.degToRad(74), new THREE.Vector3());
-  const track = new THREE.Vector3();
+  /** Set false to silence the temporary geometry trace. */
+  const SHOW_ECLIPSE_TRACE = true;
+  let tracedStep = -1;
+
+  const moonAt = new THREE.Vector3();
+  const landing = new THREE.Vector3();
+  const middle = new THREE.Vector3();
+  const shade = new THREE.Color(0x05070e);
 
   return {
     group,
-    duration: 16,
+    duration: 22,
     update(progress) {
-      const run = smoothstep(0.06, 0.94, progress);
-      // Great-circle interpolation, so the shadow stays on the surface rather
-      // than cutting through the planet as a straight lerp would.
-      track.copy(entry).lerp(exit, run).normalize();
-      const arrival = smoothstep(0, 0.12, progress) * (1 - smoothstep(0.88, 1, progress));
+      /*
+       * One slow pass. The Moon comes in from one side, crosses the Sun line
+       * at the middle of the event, and leaves the other side -- and the
+       * shadow is wherever the line from the Sun through the Moon meets the
+       * ground, so it is not animated separately. It follows because the
+       * geometry makes it follow, which is the point.
+       */
+      /*
+       * Earth turns into position over the opening fifth rather than
+       * snapping. The satellite system is counter-rotated by the same amount
+       * so the Moon does not get swung round its orbit by a spin that has
+       * nothing to do with it -- Earth's rotation carries its children, and
+       * the Moon is one of them.
+       */
+      // The Sun line, this frame. Everything below hangs off it.
+      readSunFrame();
 
-      penumbra.position.copy(track).multiplyScalar(radius * 1.006);
-      penumbra.lookAt(scratchVector.copy(track).multiplyScalar(radius * 4));
-      penumbra.material.opacity = arrival * 0.55;
+      const spinWanted = spinDelta * smoothstep(0, 0.22, progress);
+      const spinStep = spinWanted - spinApplied;
+      if (spinStep !== 0) {
+        target.rotation.y += spinStep;
+        if (satellites) satellites.rotation.y -= spinStep;
+        spinApplied = spinWanted;
+      }
 
-      umbra.position.copy(track).multiplyScalar(radius * 1.010);
-      umbra.lookAt(scratchVector.copy(track).multiplyScalar(radius * 4));
-      umbra.material.opacity = arrival * 0.92;
+      const travel = smoothstep(0, 1, progress) * 2 - 1;   // -1 .. +1
+      /*
+       * How far off the line the pass runs, either side.
+       *
+       * The shadow only exists while the Moon's offset from the Sun line is
+       * less than Earth's radius -- outside that it misses the planet
+       * altogether. At 1.45 radii of travel that condition held for about a
+       * third of the event, so two thirds of a twenty-two second run was a
+       * Moon sliding past with no shadow anywhere, and catching the crossing
+       * at all was luck. At 0.95 the shadow is on the disc from roughly a
+       * sixth of the way in to five sixths: it arrives, crosses the whole
+       * face, and leaves, which is the thing being depicted.
+       */
+      const offset = travel * radius * 0.95;
+
+      moonAt.copy(sunLocal).multiplyScalar(radius * MOON_RANGE)
+        .addScaledVector(across, offset)
+        // A slight climb, so it crosses on a tilt rather than dead level.
+        // The Moon's orbit is inclined about five degrees, and that tilt is
+        // exactly why most new moons produce no eclipse at all.
+        .addScaledVector(up, radius * 0.28 * travel);
+
+      /*
+       * And eased out of its real orbital position at the start, and back
+       * into it at the end.
+       *
+       * The pass itself is the middle three quarters of the event. The first
+       * eighth carries the Moon from wherever it actually was to where the
+       * alignment needs it, and the last eighth carries it home -- so what
+       * the viewer sees at both ends is the Moon travelling along its orbit,
+       * not teleporting. The real satellite system is uncovered again at the
+       * moment the stand-in arrives back on top of it.
+       */
+      if (hasHome) {
+        /*
+         * Arrived by a twentieth of the way in, not a tenth.
+         *
+         * The transfer starts at the Moon's real orbital position, which is
+         * 3.15 radii out and from most angles projects on top of the
+         * planet -- so the longer the handover takes, the longer the first
+         * thing the viewer sees is the two bodies touching. It still has to
+         * be a move rather than a cut; five per cent of twenty-two seconds
+         * is a little over a second, which reads as travel.
+         */
+        /*
+         * Two clocks, not one, and this is the last piece of the "the Moon
+         * is stuck to Earth" report.
+         *
+         * The handover starts at the Moon's real orbital position, which is
+         * 3.15 Earth radii out -- and from the angle this event is framed
+         * at, 3.15 radii projects onto Earth's limb. So for as long as the
+         * transfer took, the thing on screen was the two bodies touching.
+         * Measuring a screenshot settled it: the Moon's apparent diameter
+         * was 0.22 of Earth's when the size ratio is 0.372, which means it
+         * was further from the lens than Earth, not nearer -- it was still
+         * sitting on its own orbit, behind the planet, not out on the Sun
+         * line where the alignment puts it.
+         *
+         * Splitting the two components fixes it. The *distance* steps out
+         * almost at once, so the Moon leaves Earth's neighbourhood in the
+         * first fifth of a second and is never seen touching it. The
+         * *direction* swings round over three and a half seconds, which is
+         * the part that reads as travelling along an orbit. Together they
+         * are still one continuous move -- it is just that the move goes
+         * outwards first and round second, which is also the cheaper
+         * transfer in orbital mechanics and looks like one.
+         */
+        const reach = smoothstep(0, 0.012, progress);
+        const settle = smoothstep(0, 0.16, progress);
+        const leaving = smoothstep(0.94, 1, progress);
+        const going = 1 - leaving;
+        const blend = settle * going;
+        const span = reach * going;
+
+        /*
+         * Along the orbit, not across it.
+         *
+         * Interpolating the two *positions* draws a straight line between
+         * them, and a straight line between two points on a shell three
+         * radii out passes well inside that shell -- so the Moon dived
+         * towards Earth, and when the two ends were close to opposite it
+         * went through the planet. That was the report: the Moon looks like
+         * it is going to hit Earth, and merges into it while it takes
+         * position.
+         *
+         * Turning the *direction* and interpolating the *distance*
+         * separately keeps it on the shell the whole way. The turn is a
+         * slerp, so it is a great-circle move at a constant rate -- which is
+         * what travelling along an orbit looks like.
+         */
+        /*
+         * Read the target distance out *before* touching `moonAt`.
+         *
+         * This line is the bug that kept the Moon stuck to Earth through
+         * five rounds of framing changes, and it is worth spelling out
+         * because it hid so well. The old code was
+         *
+         *   moonAt.copy(direction).multiplyScalar(home + (moonAt.length() - home) * span)
+         *
+         * and JavaScript evaluates the chain left to right: `copy` replaces
+         * `moonAt` with a *unit* direction first, and only then is the
+         * argument worked out -- so `moonAt.length()` is 1, not the four
+         * units the alignment had just put there. The Moon was therefore
+         * parked at `home + (1 - home) * span`, which at full span is one
+         * world unit from Earth's centre against a planet radius of 0.9.
+         * Not near Earth. Touching it.
+         *
+         * Everything downstream was consistent with that and so looked like
+         * a framing fault: the Moon was the wrong size because it was in the
+         * wrong place, the shadow was hidden because the Moon was sitting on
+         * it, and each new camera angle moved the symptom without moving the
+         * cause. The diagnostic line above is what caught it -- the solver
+         * was reporting a clean 2.5 radii of separation for a position the
+         * Moon never actually took.
+         */
+        const targetDistance = moonAt.length();
+        transferTurn.setFromUnitVectors(homeDirection, scratchVector.copy(moonAt).normalize());
+        transferStep.copy(transferRest.identity()).slerp(transferTurn, blend);
+        transferDirection.copy(homeDirection).applyQuaternion(transferStep);
+        /*
+         * And `moonAt` becomes where the Moon actually is, not where the
+         * alignment wants it -- so the shadow below is cast by the body on
+         * screen rather than by an invisible ideal one. It slides onto the
+         * disc as the Moon arrives, which is the right way round.
+         */
+        moonAt.copy(transferDirection)
+          .multiplyScalar(homeDistance + (targetDistance - homeDistance) * span);
+      }
+      moon.position.copy(moonAt);
+
+      /*
+       * Where the shadow lands: the ray from the Sun through the Moon, hit
+       * against the sphere. The Sun is far enough away that its rays are
+       * parallel, so the ray direction is just -sunLocal, and the landing
+       * point is the Moon's position projected onto the globe along it.
+       *
+       * The component of the Moon's offset perpendicular to the Sun line is
+       * what decides where on the disc the shadow falls; the component along
+       * it only decides how far away the Moon is, which does not move the
+       * shadow at all.
+       */
+      landing.copy(moonAt).addScaledVector(sunLocal, -moonAt.dot(sunLocal));
+      const miss = landing.length() / radius;
+      landing.addScaledVector(sunLocal, radius * Math.sqrt(Math.max(0, 1 - miss * miss)));
+      landing.normalize();
+
+      /*
+       * Off the disc entirely when the Moon is too far to one side, and
+       * fading rather than clipping at the edge, because a shadow arriving at
+       * a grazing angle is smeared over a long oval and gets very faint
+       * before it goes.
+       */
+      const onDisc = 1 - smoothstep(0.74, 1.0, miss);
+      if (onDisc <= 0.002) {
+        penumbraCap.set(0, 0, 0, shade, 0);
+        umbraCap.set(0, 0, 0, shade, 0);
+        cone.material.opacity = 0;
+        return;
+      }
+
+      /*
+       * The size of each patch, in radians of Earth's own surface, and then
+       * stretched along the direction it is sliding -- because a shadow that
+       * lands off-centre lands at a slant and is drawn out into an oval, and
+       * at the limb it is drawn out a long way. That stretch is the whole
+       * reason totality tracks are the shape they are on a map.
+       */
+      const slant = 1 + miss * miss * 2.2;
+      const penumbraWidth = 0.30;
+      const umbraWidth = 0.115;
+
+      // The shadow's own frame: the cap builds its ellipse about the north
+      // axis, and `drift` is what slides it, so the patch is created at the
+      // sub-solar point and driven to the landing point by geometry below.
+      /*
+       * The view direction is passed now, and it is load-bearing rather than
+       * cosmetic: with the depth test off it is the only thing stopping a
+       * shadow on the far side of the planet from being drawn straight
+       * through it. The cap dissolves every vertex more than about sixty
+       * degrees from the sub-camera point, so the far hemisphere contributes
+       * nothing at all.
+       */
+      localCameraDirection(target, camera, helperAxis);
+      penumbraCap.aim(landing);
+      penumbraCap.set(
+        penumbraWidth * slant, penumbraWidth, 0, shade,
+        onDisc * 0.92, 1.25, null, helperAxis,
+      );
+
+      umbraCap.aim(landing);
+      // Totality is a much narrower thing, and it only exists near the middle
+      // of the pass, when the alignment is closest to exact.
+      const totality = 1 - smoothstep(0.0, 0.55, miss);
+      umbraCap.set(
+        umbraWidth * slant, umbraWidth, 0, shade,
+        onDisc * totality, 2.1, null, helperAxis,
+      );
+
+      /*
+       * The visible stretch of the cone: from the top of the atmosphere down
+       * to where it lands, and no further out than that.
+       *
+       * Earth's air is a few tenths of a per cent of its radius deep; drawn
+       * at true scale the wedge would be a smear one pixel tall. A quarter
+       * of a radius is the shortest length at which the tapering shape reads
+       * as a shape, and it keeps the whole of it well inside the region
+       * where there is air to scatter the light around it.
+       */
+      const CONE_REACH = 0.26;
+      landing.multiplyScalar(radius * SHADOW_SHELL);
+      scratchVector.subVectors(moonAt, landing).normalize();
+      const span = radius * CONE_REACH;
+      middle.copy(landing).addScaledVector(scratchVector, span * 0.5);
+      cone.position.copy(middle);
+      // Wide where it enters the air, narrowing to the umbra on the ground.
+      cone.scale.set(radius * 0.16, span, radius * 0.16);
+      pointAlong(cone, scratchVector);
+      // Fading out as the shadow slides towards the limb, where the wedge
+      // would be seen end-on and there would be nothing to see.
+      cone.material.opacity = onDisc * totality * 0.34;
+      landing.normalize();
+      /*
+       * Four samples across the event, reporting where the Moon actually
+       * ended up rather than where the geometry intended to put it.
+       *
+       * Temporary, same as the build-time line above. The distinction is
+       * the whole lesson of this event: the solver was reporting a correct
+       * 2.5 radii of separation for a position a chain-of-calls bug meant
+       * the Moon never took, and only a measurement taken *after* the
+       * assignment would have caught it.
+       */
+      if (SHOW_ECLIPSE_TRACE) {
+        const step = Math.floor(progress * 4);
+        if (step !== tracedStep) {
+          tracedStep = step;
+          const earthAt = target.getWorldPosition(scratchProjection);
+          const moonWorld = moon.getWorldPosition(new THREE.Vector3());
+          const bodyDistance = camera.position.distanceTo(earthAt);
+          const moonDistance = camera.position.distanceTo(moonWorld);
+          console.info(
+            "[eclipse] p=%s moonFromEarth=%s bodyRadii sunward=%s "
+            + "moonDist/earthDist=%s shadowOnDisc=%s",
+            progress.toFixed(2),
+            (moonAt.length() / radius).toFixed(2),
+            moonAt.clone().normalize().dot(sunLocal).toFixed(2),
+            (moonDistance / bodyDistance).toFixed(2),
+            onDisc.toFixed(2),
+          );
+        }
+      }
     },
     dispose() {
-      penumbra.geometry.dispose(); penumbra.material.dispose();
-      umbra.geometry.dispose(); umbra.material.dispose();
+      if (satellites) satellites.visible = satellitesWereVisible;
+      /*
+       * Earth is left where the event turned it, which costs nothing -- the
+       * planet is spinning anyway and its phase is arbitrary. The satellite
+       * system keeps its counter-rotation for the same reason: together they
+       * mean the Moon comes back exactly where it was.
+       */
+      /*
+       * The Moon's geometry and material are the scene's, not this event's.
+       * Disposing them here would take the real Moon down with them, and it
+       * would not come back -- so only what was actually built here is freed.
+       */
+      // The geometry is the scene's and must not be touched; the material
+      // is this event's own clone and must be.
+      if (!realMoon) moon.geometry.dispose();
+      moon.material.dispose();
+      penumbraCap.mesh.geometry.dispose(); penumbraCap.material.dispose();
+      umbraCap.mesh.geometry.dispose(); umbraCap.material.dispose();
+      cone.geometry.dispose(); cone.material.dispose();
     },
   };
 }
@@ -5141,63 +6712,260 @@ function createMercurySodiumTail(target, camera) {
   target.getWorldPosition(antiSunward);
   if (antiSunward.lengthSq() < 1e-8) antiSunward.set(1, 0, 0);
   antiSunward.normalize();
-  // Into the body's frame, ignoring translation: this is a direction.
   const away = antiSunward.clone().applyQuaternion(
     target.getWorldQuaternion(new THREE.Quaternion()).invert(),
   ).normalize();
 
   /*
-   * A long shallow cone. The real tail is 24 million km against Mercury's
-   * 2,440 km radius -- a ratio of ten thousand to one, which at this scale
-   * would run clean out of the Solar System. Compressed hard; what is kept is
-   * that it is very long relative to the planet, very narrow at the root, and
-   * opens slowly.
+   * Gas, not a cone.
+   *
+   * The old version was a `ConeGeometry` with a flat colour, and a cone is
+   * the one thing this cannot be: Mercury has no atmosphere, only an
+   * exosphere -- a cloud so thin its atoms never collide with each other.
+   * There is no surface to it, no edge, and nothing to give it a silhouette.
+   * What radiation pressure does to it is sweep the atoms into a long
+   * streaming plume that is densest at the planet and thins to nothing
+   * downwind, with no boundary anywhere.
+   *
+   * So it is built out of particles instead: a few thousand sodium atoms
+   * drawn as points, released from the day side, accelerated anti-sunward
+   * and fading as they spread. A cone has an edge; a cloud of points does
+   * not, and that is the whole difference between the two pictures.
    */
-  const tail = new THREE.Mesh(
-    new THREE.ConeGeometry(radius * 1.5, radius * 14, 20, 1, true),
-    new THREE.MeshBasicMaterial({
-      // Sodium D lines: 589 nm, the colour of a street lamp.
-      color: 0xffc65c,
-      transparent: true,
-      opacity: 0,
-      side: THREE.DoubleSide,
-      depthWrite: false,
-      blending: THREE.AdditiveBlending,
-    }),
-  );
-  group.add(tail);
+  const COUNT = 2600;
+  const positions = new Float32Array(COUNT * 3);
+  const alphas = new Float32Array(COUNT);
+  const seeds = new Float32Array(COUNT);
+  const lateral = [];
 
-  // The exosphere itself, hugging the planet: this is where the tail is fed.
-  const halo = makeGlow(0xffd98a, 0);
+  const helper = Math.abs(away.y) > 0.9
+    ? new THREE.Vector3(1, 0, 0)
+    : new THREE.Vector3(0, 1, 0);
+  const spreadA = new THREE.Vector3().crossVectors(away, helper).normalize();
+  const spreadB = new THREE.Vector3().crossVectors(away, spreadA).normalize();
+
+  for (let index = 0; index < COUNT; index += 1) {
+    /*
+     * Where along the tail this atom sits, as a fraction. Weighted towards
+     * the planet, because that is where they are liberated and the density
+     * falls off with distance as they spread into a larger and larger volume.
+     */
+    const along = Math.pow(Math.random(), 1.5);
+    // How far off the axis. The plume widens downwind, so the lateral spread
+    // grows with distance -- slowly, because radiation pressure is very
+    // nearly parallel.
+    const around = Math.random() * Math.PI * 2;
+    const off = Math.pow(Math.random(), 0.6) * (0.16 + along * 0.62);
+    /*
+     * Where this atom is in its own journey at the start, and how fast it
+     * makes it.
+     *
+     * The first version moved every atom by one shared factor that reached
+     * its limit at the halfway mark -- so the tail grew for ten seconds and
+     * then froze solid for ten more, which is exactly the "in the middle it
+     * gets stopped" that was reported. An exosphere never stops: atoms are
+     * being knocked off the surface continuously and swept away
+     * continuously, and the steady appearance of the thing is a flow, not a
+     * still.
+     *
+     * Each atom therefore carries its own phase and its own speed, and is
+     * released again from the surface when it reaches the end. Nothing about
+     * the tail's shape changes frame to frame; what changes is that the
+     * material inside it is always moving outward.
+     */
+    lateral.push({
+      along, around, off,
+      phase: Math.random(),
+      speed: 0.16 + Math.random() * 0.20,
+    });
+    seeds[index] = Math.random() * Math.PI * 2;
+  }
+
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+  geometry.setAttribute("aAlpha", new THREE.BufferAttribute(alphas, 1));
+  geometry.setAttribute("aSeed", new THREE.BufferAttribute(seeds, 1));
+
+  /*
+   * The colour is not a choice. Sodium's D lines are at 589 nanometres and
+   * that is the entire emission -- it is the colour of a low-pressure sodium
+   * street lamp, a strong yellow-orange, and there is nothing else in it.
+   */
+  const material = new THREE.ShaderMaterial({
+    uniforms: {
+      uColour: { value: new THREE.Color(0xffb347) },
+      uGain: { value: 0 },
+      /*
+       * The size of one atom, in world units, and it is deliberately small.
+       * A twelfth of Mercury's radius overlaps its neighbours enough to read
+       * as a continuous gas and is nowhere near large enough for any single
+       * one of them to be seen as a blob.
+       */
+      uGrain: { value: radius * 0.085 },
+      uHeight: { value: viewportHeight() },
+      uTime: { value: 0 },
+    },
+    transparent: true,
+    depthWrite: false,
+    depthTest: true,
+    blending: THREE.AdditiveBlending,
+    toneMapped: true,
+    vertexShader: POINT_SIZE_GLSL + /* glsl */`
+      attribute float aAlpha;
+      attribute float aSeed;
+      uniform float uGrain;
+      uniform float uHeight;
+      uniform float uTime;
+      varying float vAlpha;
+
+      void main() {
+        // A slow shimmer per atom. The exosphere is collisionless and
+        // genuinely unsteady -- atoms arrive as micrometeorites knock them
+        // loose, which is a random process, not a smooth flow.
+        vAlpha = aAlpha * (0.72 + 0.28 * sin(uTime * 0.8 + aSeed));
+        vec4 viewPosition = modelViewMatrix * vec4(position, 1.0);
+        gl_Position = projectionMatrix * viewPosition;
+        // Denser atoms near the planet are drawn a little larger, which is
+        // the only place the cloud has any structure to lose.
+        gl_PointSize = clamp(
+          pointPixels(uGrain * (0.6 + 0.8 * aAlpha), viewPosition.z, uHeight),
+          1.0, 48.0
+        );
+      }
+    `,
+    fragmentShader: /* glsl */`
+      uniform vec3 uColour;
+      uniform float uGain;
+      varying float vAlpha;
+
+      void main() {
+        // A soft round atom with no edge, which is the whole point.
+        vec2 d = gl_PointCoord - vec2(0.5);
+        float falloff = 1.0 - smoothstep(0.0, 0.5, length(d));
+        float alpha = falloff * falloff * vAlpha * uGain;
+        if (alpha <= 0.002) discard;
+        gl_FragColor = vec4(uColour, alpha);
+        #include <tonemapping_fragment>
+        #include <colorspace_fragment>
+      }
+    `,
+  });
+
+  const cloud = new THREE.Points(geometry, material);
+  cloud.frustumCulled = false;
+  group.add(cloud);
+
+  /*
+   * The exosphere hugging the planet, where the tail is fed. Faint, and
+   * yellow rather than white, because it is the same sodium.
+   */
+  const halo = makeGlow(0xffc46a, 0);
   group.add(halo);
+
+  /*
+   * The reach of the tail, and it is shorter than it was.
+   *
+   * 24 million km against Mercury's 2,440 km radius is ten thousand to one,
+   * which at this scale would run clean out of the Solar System, so it has
+   * to be compressed whatever happens. Eighteen radii was too much of it:
+   * at the distance the event is framed from, the plume ran off the side of
+   * the frame and what stayed on screen was a broad bright bar rather than
+   * something fading into nothing. Long enough to be obviously a tail and
+   * Two frame grabs bracket it. At eighteen radii the plume was a bright
+   * bar running off the side of the frame; at eleven, with the atoms pushed
+   * further down it and spread wider, so little was left near the planet
+   * that the whole tail disappeared. Seven puts the dense root just off the
+   * limb and the fade-out inside the frame, which is where the interesting
+   * part is -- it is where the thing stops looking like an object and starts
+   * looking like gas.
+   */
+  const REACH = 7;
+  const point = new THREE.Vector3();
 
   return {
     group,
     duration: 20,
-    update(progress) {
+    update(progress, api, elapsed = progress * 20) {
       /*
        * The 16-days-either-side-of-perihelion double peak, in one pass: the
        * tail brightens, dips slightly through perihelion itself, brightens
        * again, then fades. That dip is the real behaviour and it is the whole
-       * reason the timing is interesting.
+       * reason the timing is interesting -- Mercury's orbital speed Doppler-
+       * shifts the sodium line off the dark bottom of the Sun's own sodium
+       * line and into the bright continuum beside it, so the push peaks
+       * either side of closest approach rather than at it.
        */
-      const envelope = Math.sin(Math.min(1, progress / 0.92) * Math.PI);
+      const envelope = Math.sin(Math.min(1, progress / 0.94) * Math.PI);
       const doublePeak = 1 - 0.34 * Math.exp(-Math.pow((progress - 0.46) / 0.10, 2));
-      const strength = Math.pow(envelope, 0.7) * doublePeak;
+      /*
+       * And a long tail-off over the last third, so the event ends by the
+       * tail thinning away rather than by it being switched off. The atoms
+       * keep streaming the whole time; what stops is the light.
+       */
+      const ending = 1 - smoothstep(0.66, 1.0, progress);
+      const strength = Math.pow(envelope, 0.7) * doublePeak * ending;
 
-      // The cone's own axis is +Y, so it is aimed by looking down the tail.
-      tail.position.copy(away).multiplyScalar(radius * 7.4);
-      tail.lookAt(scratchVector.copy(away).multiplyScalar(-radius));
-      tail.rotateX(Math.PI * 0.5);
-      tail.scale.set(1, 0.6 + strength * 0.55, 1);
-      tail.material.opacity = strength * 0.24;
+      /*
+       * The tail still grows in at the start, because it should not simply
+       * be there when the event begins -- but it grows by the stream
+       * reaching further, not by the stream stopping.
+       */
+      const extent = 0.30 + 0.70 * smoothstep(0, 0.42, progress);
+
+      const attribute = geometry.getAttribute("position");
+      const alphaAttribute = geometry.getAttribute("aAlpha");
+      for (let index = 0; index < COUNT; index += 1) {
+        const item = lateral[index];
+        // Each atom runs its own lap from the surface outwards and starts
+        // again, so the flow is continuous for the whole event.
+        const lap = (item.phase + progress * item.speed) % 1;
+        const along = lap * extent;
+        /*
+         * And it starts *on the surface*. The old 1.1 left a tenth of a
+         * radius of clear sky between Mercury and the root of its own tail,
+         * which is the gap that was noticed: the exosphere is liberated from
+         * the ground by the solar wind and micrometeorites, so there is
+         * nowhere for it to begin except the ground.
+         */
+        const distance = radius * (1.0 + along * REACH);
+        point.copy(away).multiplyScalar(distance)
+          .addScaledVector(spreadA, Math.cos(item.around) * item.off * radius * along)
+          .addScaledVector(spreadB, Math.sin(item.around) * item.off * radius * along);
+        attribute.setXYZ(index, point.x, point.y, point.z);
+        /*
+         * Thinning with distance -- the same atoms in a bigger volume -- and
+         * faded back in at the very root as well, so an atom beginning its
+         * lap appears rather than pops.
+         */
+        alphaAttribute.setX(
+          index,
+          Math.pow(1 - lap, 1.5) * smoothstep(0, 0.06, lap),
+        );
+      }
+      attribute.needsUpdate = true;
+      alphaAttribute.needsUpdate = true;
+      material.uniforms.uTime.value = elapsed;
+
+      /*
+       * Faint, and meant to be.
+       *
+       * You cannot see this in the night sky: astronomers need a narrowband
+       * filter at 589 nm and a long exposure. Drawing it at filter brightness
+       * would be a lie about what is there, and drawing it at true naked-eye
+       * brightness would be drawing nothing at all. This sits just above the
+       * threshold -- visible if you look, easy to miss if you do not, which
+       * is the honest version of "barely there".
+       */
+      material.uniforms.uGain.value = strength * 0.105;
 
       halo.position.set(0, 0, 0);
-      halo.scale.setScalar(radius * (2.0 + strength * 1.0));
-      halo.material.opacity = strength * 0.42;
+      halo.scale.setScalar(radius * (1.35 + strength * 0.5));
+      halo.material.opacity = strength * 0.032;
     },
     dispose() {
-      tail.geometry.dispose(); tail.material.dispose(); halo.material.dispose();
+      geometry.dispose();
+      material.dispose();
+      halo.material.dispose();
     },
   };
 }
@@ -5227,43 +6995,243 @@ function createUranusStorms(target, camera) {
   group.name = "Uranus storm event";
   const radius = localRadius(target);
   const facing = localCameraDirection(target, camera, new THREE.Vector3());
+  const sunLocal = localSunDirection(target, new THREE.Vector3());
 
   /*
-   * Eight, because that is how many were counted on the night this is of.
-   * Northern hemisphere, at mid-latitudes, which is where they were.
+   * Drawn with the same surface caps the impact scars use, rather than as
+   * glow sprites -- and drawn much more softly than the first attempt at it.
+   *
+   * A sprite is a round soft blob that always faces the camera, which is fine
+   * for a flash and wrong for a cloud: it does not lie on the planet, it does
+   * not foreshorten towards the limb, and it cannot be stretched along a
+   * wind. A surface cap is a patch of the sphere, which is what the brief
+   * asked for and what Saturn's storm is built from.
+   *
+   * The first pass used one straight out of the box and a frame grab showed
+   * why that was not enough. A scar's cap has a violently torn rim and a
+   * broad, nearly flat falloff, because an impact stain really does have a
+   * hard edge -- and on Uranus that produced three lumps of cotton wool with
+   * jagged outlines pasted on the disc. Nothing about them read as being *on*
+   * a planet. Three things fix it and all three are in the numbers below: the
+   * rim roughness comes down to a gentle undulation, the falloff gets steep
+   * enough that the patch has a bright middle fading to nothing rather than a
+   * flat top ending at a boundary, and the level comes off maximum so
+   * additive white stops clipping into a featureless slab.
    */
-  const spots = [];
-  for (let index = 0; index < 8; index += 1) {
-    const site = facingPoint(facing, THREE.MathUtils.degToRad(64), new THREE.Vector3());
-    const spot = makeGlow(0xf2fbff, 0);
-    spot.position.copy(site).multiplyScalar(radius * 1.008);
-    group.add(spot);
-    spots.push({
-      spot,
-      // Methane-ice cloud tops brighten and dissipate on their own schedules.
-      at: Math.random() * 0.42,
-      life: 0.30 + Math.random() * 0.34,
-      size: 0.10 + Math.pow(Math.random(), 1.6) * 0.20,
-    });
+
+  /*
+   * Uranus's winds, by latitude, and they are strange.
+   *
+   *   Equator      the winds blow *backward* -- east to west, against the
+   *                rotation -- and slowly. A storm here lags everything.
+   *   Mid-latitude jet streams scream the other way, west to east, at up to
+   *                900 km/h. A cloud caught in one races across the disc.
+   *
+   * So the sign of the drift flips with latitude, and that flip is the whole
+   * reason two spots on the same planet can appear to move in opposite
+   * directions at once.
+   */
+  function windAt(latitude) {
+    const away = Math.abs(latitude) / (Math.PI * 0.5);
+    // Retrograde and slow near the equator, prograde and fast by 45 degrees,
+    // easing off again towards the pole.
+    const retrograde = -0.16 * (1 - smoothstep(0, 0.42, away));
+    const prograde = 1.0 * smoothstep(0.18, 0.62, away) * (1 - 0.45 * smoothstep(0.72, 1, away));
+    return retrograde + prograde;
   }
+
+  /*
+   * Four kinds of spot, because the brief is really about four behaviours.
+   *
+   *   vortex   a deeply rooted anchored storm. Massive enough to resist the
+   *            upper winds, so it sits at one latitude and spins in place
+   *            like a top while everything else is blown past it.
+   *   jet      an ordinary cloud in a mid-latitude jet stream. Moves fast,
+   *            and is drawn out along its own track by the shear.
+   *   equator  a cloud near the equator, drifting slowly the other way.
+   *   methane  a short-lived convective cloud: warm gas rises, hits the
+   *            freezing upper atmosphere, flashes into bright methane ice,
+   *            drifts briefly, then the crystals sink or evaporate and it is
+   *            gone. These are the ones that seem to stop and disappear.
+   *
+   * Fourteen of them rather than ten, and each smaller. Keck counted eight
+   * large storms in one night in 2014 and the disc was not empty between
+   * them; a handful of big blobs reads as decoration, a scattering of
+   * different sizes reads as weather.
+   */
+  /*
+   * The sizes are in radians of half-width at the planet's centre, and they
+   * are bigger than they look like they should be.
+   *
+   * A cap with a soft falloff puts most of its light in the middle third, so
+   * the number here is the reach of the *fade*, not the size of the visible
+   * spot -- which comes out at roughly a third of it. Measured on a frame
+   * grab: at 0.105 radians the biggest storm was a fifteen-pixel smudge on a
+   * three-hundred-pixel planet and the rest were invisible. Doubled, the
+   * bright core of a vortex is about a tenth of the disc across with a soft
+   * halo round it, which is what the Keck images show.
+   */
+  const PLAN = [
+    { kind: "vortex",  latitude: 0.62,  size: 0.200, life: [0.00, 1.00] },
+    { kind: "vortex",  latitude: -0.46, size: 0.160, life: [0.05, 1.00] },
+    { kind: "jet",     latitude: 0.78,  size: 0.120, life: [0.00, 1.00] },
+    { kind: "jet",     latitude: 0.70,  size: 0.092, life: [0.03, 1.00] },
+    { kind: "jet",     latitude: 0.55,  size: 0.110, life: [0.02, 1.00] },
+    { kind: "jet",     latitude: -0.64, size: 0.104, life: [0.08, 1.00] },
+    { kind: "jet",     latitude: -0.52, size: 0.080, life: [0.12, 1.00] },
+    { kind: "equator", latitude: 0.14,  size: 0.094, life: [0.00, 1.00] },
+    { kind: "equator", latitude: -0.06, size: 0.082, life: [0.06, 1.00] },
+    { kind: "equator", latitude: 0.02,  size: 0.068, life: [0.16, 1.00] },
+    { kind: "methane", latitude: 0.40,  size: 0.084, life: [0.10, 0.44] },
+    { kind: "methane", latitude: -0.28, size: 0.072, life: [0.30, 0.62] },
+    { kind: "methane", latitude: 0.86,  size: 0.066, life: [0.46, 0.78] },
+    { kind: "methane", latitude: -0.72, size: 0.060, life: [0.60, 0.94] },
+  ];
+
+  // Longitudes are spread around the hemisphere the camera can see, so the
+  // outbreak reads as an outbreak rather than as one cluster.
+  const facingLongitude = Math.atan2(facing.z, facing.x);
+  const spinAxis = new THREE.Vector3(0, 1, 0);
+
+  const spots = PLAN.map((plan, index) => {
+    const latitude = plan.latitude;
+    const longitude = facingLongitude
+      + (index / PLAN.length - 0.5) * Math.PI * 1.35
+      + (Math.random() - 0.5) * 0.4;
+    const cosLat = Math.cos(latitude);
+    const home = new THREE.Vector3(
+      Math.cos(longitude) * cosLat,
+      Math.sin(latitude),
+      Math.sin(longitude) * cosLat,
+    ).normalize();
+
+    /*
+     * Soft-rimmed, because these are clouds. A third of the scar's
+     * raggedness is enough to stop the outline being a circle without it
+     * reading as torn paper.
+     */
+    const cap = createSurfaceCap(radius, home, "light", {
+      roughness: 0.34,
+      /*
+       * Above the methane haze shell, which sits at 1.034 with a render
+       * order of five. Bright cloud tops that are *under* the haze are
+       * bright cloud tops you cannot see, and that is what these were.
+       */
+      shell: 1.042,
+      renderOrder: 7,
+    });
+    group.add(cap.mesh);
+
+    return {
+      cap,
+      plan,
+      latitude,
+      home,
+      centre: home.clone(),
+      // An anchored vortex does not drift at all; everything else rides the
+      // local wind. The methane clouds ride it only while they last.
+      rate: plan.kind === "vortex" ? 0 : windAt(latitude),
+      // A vortex still turns -- it spins in place -- which shows as its
+      // ellipse slowly changing which way it is elongated.
+      spin: plan.kind === "vortex" ? 0.9 + Math.random() * 0.5 : 0,
+      phase: Math.random() * Math.PI * 2,
+    };
+  });
+
+  // Brilliant white, as asked, and the same white for all of them: these are
+  // methane ice crystals, and ice does not have a range of colours.
+  const white = new THREE.Color(0xffffff);
 
   return {
     group,
-    duration: 19,
+    duration: 22,
     update(progress) {
       for (let index = 0; index < spots.length; index += 1) {
         const item = spots[index];
-        const since = progress - item.at;
-        const level = since < 0
-          ? 0
-          : smoothstep(0, 0.16, since / item.life) * (1 - smoothstep(0.55, 1, since / item.life));
-        item.spot.scale.setScalar(radius * item.size * (0.6 + level * 0.8));
-        item.spot.material.opacity = level * 0.80;
+        const [born, dies] = item.plan.life;
+
+        /*
+         * How present this spot is. The long-lived ones come up once and
+         * stay; the methane clouds rise fast, hold briefly and vanish, which
+         * is the convective cycle -- there is no slow decay to a short-lived
+         * ice cloud, it either exists or it has sublimated.
+         */
+        const span = dies - born;
+        const age = (progress - born) / span;
+        let level;
+        if (age < 0 || age > 1) {
+          level = 0;
+        } else if (item.plan.kind === "methane") {
+          level = smoothstep(0, 0.18, age) * (1 - smoothstep(0.62, 1, age));
+        } else {
+          level = smoothstep(0, 0.12, age) * (1 - smoothstep(0.90, 1, age));
+        }
+
+        if (level <= 0.002) {
+          item.cap.set(0, 0, 0, white, 0);
+          continue;
+        }
+
+        /*
+         * The drift, as a rotation about the planet's own axis rather than
+         * along a great circle.
+         *
+         * The cap's built-in `drift` slides the patch along the great circle
+         * through its centre and its east vector, which is right only at the
+         * equator. A jet-stream cloud at forty-five degrees driven that way
+         * climbs steadily out of its own latitude and, given enough of the
+         * event, wanders over the pole -- where the cap's frame is
+         * degenerate and the patch tears. Since a jet stream is by definition
+         * a band at one latitude, the honest motion is a rotation about the
+         * spin axis, and the cap can simply be re-aimed at the new point.
+         */
+        const travelled = Math.max(0, progress - born);
+        const drift = item.rate * travelled * 1.55;
+        item.centre.copy(item.home).applyAxisAngle(spinAxis, drift);
+        item.cap.aim(item.centre);
+
+        // A vortex spins: its long axis turns, so the ellipse swings round
+        // while staying where it is. Everything else is drawn out along its
+        // own track by the shear, in proportion to how fast it is moving.
+        const turn = item.spin * progress;
+        const stretch = item.plan.kind === "vortex"
+          ? item.plan.size * (1.25 + 0.35 * Math.sin(turn * 2 + item.phase))
+          : item.plan.size * (1.0 + 1.30 * Math.min(1, Math.abs(item.rate)));
+        const width = item.plan.kind === "vortex"
+          ? item.plan.size * (1.25 - 0.35 * Math.sin(turn * 2 + item.phase))
+          : item.plan.size * 0.78;
+
+        /*
+         * Soft falloff, and a strength found by measurement rather than by
+         * argument.
+         *
+         * The falloff is the whole difference between a cloud and a sticker.
+         * At 1.15 the patch holds nearly full brightness right out to its rim
+         * and then stops, so the rim is the shape you see -- and the rim is a
+         * ragged polygon fan, which is exactly why the first version looked
+         * torn. Pushing it to 2.9 and shrinking the spots at the same time
+         * then overshot completely: a frame grab at that setting came back
+         * with no spots on the planet at all, because the three changes
+         * multiplied -- six times less light spread over a third of the area.
+         *
+         * 2.1 keeps the brightness in the middle half with a long fade
+         * outwards, so there is no edge to catch on, and full strength
+         * against the bigger patches puts the light back. Full strength and
+         * no more: additive white on an already-bright planet saturates above
+         * this, and a saturated spot is a flat featureless shape again.
+         */
+        item.cap.set(
+          stretch, width, 0, white,
+          level, 2.1, sunLocal, facing,
+        );
       }
-      // The whole system turns with the planet: Uranus's day is 17.2 hours.
-      group.rotation.y += 0.0022;
     },
-    dispose() { spots.forEach((item) => item.spot.material.dispose()); },
+    dispose() {
+      spots.forEach((item) => {
+        item.cap.mesh.geometry.dispose();
+        item.cap.material.dispose();
+      });
+    },
   };
 }
 
@@ -5283,6 +7251,204 @@ function createUranusStorms(target, camera) {
  * the same (target, camera) signature as every other builder, and use the
  * target only for its scale.
  */
+
+/**
+ * Somewhere in front of the camera, on the sky shell.
+ *
+ * Staging a sky event at a random point on the shell puts it behind the
+ * viewer half the time, and an explosion nobody was facing is a highlight on
+ * an empty frame. This picks a direction a little off the view axis -- off
+ * centre, so it does not sit exactly under the crosshair and read as a UI
+ * element rather than as a star -- and returns both the site and the two
+ * tangents, which anything with an axis of its own needs.
+ */
+function placeInView(camera, scale, minDegrees, maxDegrees, clutter = []) {
+  const ahead = new THREE.Vector3();
+  camera.getWorldDirection(ahead);
+  const helper = Math.abs(ahead.y) > 0.9
+    ? new THREE.Vector3(1, 0, 0)
+    : new THREE.Vector3(0, 1, 0);
+  const right = new THREE.Vector3().crossVectors(ahead, helper).normalize();
+  const up = new THREE.Vector3().crossVectors(ahead, right).normalize();
+
+  const candidate = new THREE.Vector3();
+  let best = null;
+  let bestClearance = -Infinity;
+
+  /*
+   * Cast about for a patch of empty sky, rather than taking the first
+   * direction offered.
+   *
+   * A supernova staged at random lands on the Milky Way, the Magellanic
+   * Clouds or one of the big emission nebulae surprisingly often -- the
+   * catalogue holds fifty-odd of them and the largest subtend tens of
+   * degrees -- and a bright new point inside an already-bright cloud is not
+   * an event, it is a slightly brighter cloud. The brief is explicit that it
+   * should go where there is no dust, and that stars are fine, which is the
+   * right distinction: a star field is the backdrop, nebulosity is clutter.
+   *
+   * So sixty-four directions are tried inside the allowed cone and the one
+   * furthest from every cloud wins. `clearance` is measured in radians
+   * beyond each cloud's own angular radius, so a big nebula pushes harder
+   * than a small one at the same distance. If the whole cone is dusty -- the
+   * viewer happens to be facing straight down the galactic plane -- the
+   * least bad direction is still returned, which is the honest outcome.
+   */
+  /*
+   * On screen, checked against the real frustum rather than assumed.
+   *
+   * A cone measured in degrees off the view axis is not the same shape as
+   * the picture: the picture is a rectangle, it is wider than it is tall,
+   * and how wide depends on the field of view and the aspect the viewer
+   * happens to be running. Widening the search cone to forty-eight degrees
+   * to give the clear-sky hunt somewhere to look duly put the supernova off
+   * the side of the frame, and a frame grab at the middle of the event came
+   * back with an empty sky -- the event was running perfectly, somewhere
+   * nobody could see.
+   *
+   * Projecting each candidate and keeping it inside seven tenths of
+   * normalised device space is exact, costs a matrix multiply per candidate,
+   * and lets the cone stay as wide as the search needs.
+   */
+  const projected = new THREE.Vector3();
+  const onScreen = (direction) => {
+    /*
+     * Offset from the camera, then projected -- not projected as if it were
+     * a world position.
+     *
+     * The sky shell rides with the camera: a sky event's coordinates are
+     * relative to the lens, not to the Sun at the origin. Projecting the
+     * bare offset therefore asks "where would this point be if it were that
+     * far from the origin", and in free flight the camera is light-years
+     * from the origin, so the answer has nothing to do with what is on
+     * screen. Adding the camera's own position first makes it a real world
+     * point and the test exact.
+     */
+    projected.copy(direction).multiplyScalar(scale * 0.94)
+      .add(camera.position)
+      .project(camera);
+    if (!(projected.z > -1 && projected.z < 1)) return false;
+    if (Math.abs(projected.x) > 0.70 || Math.abs(projected.y) > 0.70) return false;
+    /*
+     * And clear of the two panels that are always on screen while an event
+     * plays: the dossier card on the right and the distance readout on the
+     * bottom left.
+     *
+     * This is not fussiness. A sky event has no body to look at, so the
+     * *only* thing on screen is the transient -- and a supernova staged
+     * behind the card describing it is an empty frame with a paragraph over
+     * it. Two frame grabs of the kilonova came back exactly like that while
+     * the supernova, from identical placement code, landed in open sky and
+     * looked right; the difference was luck about where the annulus put it.
+     *
+     * The rectangles are in normalised device space, measured off the
+     * layout, with a little margin. Being approximate is fine: they only
+     * remove candidates, and there is a whole ring of others.
+     */
+    const overCard = projected.x > 0.22 && projected.y < 0.20 && projected.y > -0.55;
+    const overReadout = projected.x < 0.05 && projected.y < -0.38;
+    return !overCard && !overReadout;
+  };
+
+  for (let attempt = 0; attempt < 96; attempt += 1) {
+    const offAxis = THREE.MathUtils.degToRad(
+      minDegrees + Math.random() * (maxDegrees - minDegrees),
+    );
+    const around = Math.random() * Math.PI * 2;
+    candidate.copy(ahead)
+      .addScaledVector(right, Math.tan(offAxis) * Math.cos(around))
+      .addScaledVector(up, Math.tan(offAxis) * Math.sin(around))
+      .normalize();
+
+    if (!onScreen(candidate)) continue;
+
+    let clearance = Infinity;
+    for (let index = 0; index < clutter.length; index += 1) {
+      const cloud = clutter[index];
+      const separation = Math.acos(
+        THREE.MathUtils.clamp(candidate.dot(cloud.direction), -1, 1),
+      );
+      clearance = Math.min(clearance, separation - cloud.spread * 0.5);
+    }
+
+    if (clearance > bestClearance) {
+      bestClearance = clearance;
+      best = candidate.clone();
+    }
+    // Twelve degrees clear of the nearest cloud is plenty; stop looking.
+    if (bestClearance > 0.21) break;
+  }
+
+  /*
+   * If every candidate fell outside the frame -- a very narrow field of
+   * view, say -- fall back to a modest offset from the view axis, which is
+   * always inside it and is not the dead centre of the screen. A transient
+   * sitting exactly under the crosshair reads as a piece of interface.
+   */
+  const fallback = ahead.clone()
+    .addScaledVector(right, Math.tan(THREE.MathUtils.degToRad(11)) * 0.8)
+    .addScaledVector(up, Math.tan(THREE.MathUtils.degToRad(11)) * 0.6)
+    .normalize();
+  const site = (best ?? fallback).multiplyScalar(scale * 0.94);
+  return { site, right, up, ahead, clearance: bestClearance };
+}
+
+/**
+ * The rig both sky transients are drawn with.
+ *
+ * A supernova and a kilonova are the same picture at different speeds and
+ * different brightnesses: a point that gets very bright, a halo where that
+ * light is reaching us through the gas around it, and a shell expanding
+ * outward through the surrounding dust. What separates them is the light
+ * curve and the colour run, not the parts -- so the parts live here and each
+ * event supplies its own behaviour.
+ *
+ * Sharing this is also the reason the kilonova looks like a smaller sibling
+ * of the supernova rather than a different kind of object, which is what it
+ * physically is.
+ */
+function makeSkyBurst(site) {
+  // The star itself: a point that gets very bright.
+  const star = makeGlow(0xdbe6ff, 0);
+  star.position.copy(site);
+
+  // The halo: the light of the star reaching us through the gas around it.
+  const halo = makeGlow(0xffd9a8, 0);
+  halo.position.copy(site);
+
+  /*
+   * The expanding light echo.
+   *
+   * Real ejecta leave at around 10,000 km/s, which sounds enormous and is
+   * still slow enough that a remnant takes centuries to become a visible ring
+   * -- Cassiopeia A is 340 years old and ten light-years across. What is drawn
+   * here is the light echo rather than the material: a bright front expanding
+   * outward through the surrounding dust at the speed of light, which is what
+   * is actually visible in the months after.
+   *
+   * Drawn as a soft billboard and not, as it was, as a back-faced sphere. A
+   * uniformly-coloured sphere shell has a hard silhouette however faint it
+   * is, and once it had expanded past the star it stopped reading as light
+   * spreading through dust and started reading as a grey marble hanging in
+   * space in front of the explosion -- which is exactly what a frame grab at
+   * the halfway mark showed, with the star hidden behind it. A haze sprite
+   * has no edge at any size, which is the entire property wanted here.
+   */
+  const echo = makeHaze(0xffc98a, 0);
+  echo.position.copy(site);
+
+  return {
+    star,
+    halo,
+    echo,
+    addTo(group) { group.add(star, halo, echo); },
+    dispose() {
+      star.material.dispose();
+      halo.material.dispose();
+      echo.material.dispose();
+    },
+  };
+}
 
 /**
  * A star explodes, and the dust around it lights up.
@@ -5316,66 +7482,93 @@ function createSupernova(target, camera, context = {}) {
    * empty frame. It is put a little off centre so it does not sit exactly
    * under the crosshair, which reads as a UI element rather than as a star.
    */
-  const ahead = new THREE.Vector3();
-  camera.getWorldDirection(ahead);
-  const helper = Math.abs(ahead.y) > 0.9
-    ? new THREE.Vector3(1, 0, 0)
-    : new THREE.Vector3(0, 1, 0);
-  const right = new THREE.Vector3().crossVectors(ahead, helper).normalize();
-  const up = new THREE.Vector3().crossVectors(ahead, right).normalize();
-  const offAxis = THREE.MathUtils.degToRad(9 + Math.random() * 11);
-  const around = Math.random() * Math.PI * 2;
-  const site = ahead.clone()
-    .addScaledVector(right, Math.tan(offAxis) * Math.cos(around))
-    .addScaledVector(up, Math.tan(offAxis) * Math.sin(around))
-    .normalize()
-    .multiplyScalar(scale * 0.94);
-
-  // The star itself: a point that gets very bright and stays bright.
-  const star = makeGlow(0xdbe6ff, 0);
-  star.position.copy(site);
-  group.add(star);
-
-  // The halo: the light of the star reaching us through the gas around it.
-  const halo = makeGlow(0xffd9a8, 0);
-  halo.position.copy(site);
-  group.add(halo);
+  /*
+   * Off the view axis, in clean sky, and closer in than it was.
+   *
+   * The cone is a little wider than the nine-to-twenty degrees it used to
+   * be, because the clear-sky hunt needs somewhere to look -- but only a
+   * little. Forty-eight degrees was tried and was much too much: most of
+   * that cone is outside the picture, so the search happily chose a lovely
+   * empty patch of sky off the side of the frame and the event played where
+   * nobody could see it. Six to twenty-six is inside the frame at any
+   * ordinary field of view, and there is a whole ring of azimuths at each
+   * radius, so there is still plenty of room to dodge a nebula.
+   *
+   * And the burst is drawn larger. "Take a zoom for that supernova" is a
+   * fair note -- at the old scale it was a bright point among a field of
+   * bright points, and the thing that separates a supernova from a star is
+   * that it has structure: a core, a halo, and a shell of lit dust spreading
+   * out of it. None of that is legible at four pixels across.
+   */
+  const { site } = placeInView(camera, scale, 6, 26, context.skyClutter ?? []);
+  const rig = makeSkyBurst(site);
+  rig.addTo(group);
+  const { star, halo, echo } = rig;
 
   /*
-   * The expanding shell.
+   * The colour is a temperature, and temperature runs on its own clock.
    *
-   * Real ejecta leave at around 10,000 km/s, which sounds enormous and is
-   * still slow enough that a remnant takes centuries to become a visible ring
-   * -- Cassiopeia A is 340 years old and ten light-years across. What is drawn
-   * here is the light echo rather than the material: a bright front expanding
-   * outward through the surrounding dust at the speed of light, which is what
-   * is actually visible in the months after.
+   * It used to be driven off the brightness -- `lerp(hot, cool, 1 - shape)` --
+   * which ties the colour to the light curve and gets the story backwards: the
+   * plateau holds the brightness roughly flat for a hundred days while the
+   * envelope is expanding and cooling hard, so a colour keyed to brightness
+   * sits still through exactly the stretch where the real thing does most of
+   * its reddening, and then swings back towards blue as the tail fades.
+   *
+   * What an eye would actually see is a run down the black-body sequence:
+   * blinding blue-white in the first hours while the shock breakout is at
+   * tens of thousands of kelvin, through white and then yellow as the
+   * photosphere cools past the Sun's 5,800 K, and into a deep red over the
+   * following weeks as hydrogen recombination parks it near 5,000 K and the
+   * expansion keeps taking energy out. Four stops, walked in order, on
+   * elapsed time.
    */
-  const echo = new THREE.Mesh(
-    new THREE.SphereGeometry(1, 32, 20),
-    new THREE.MeshBasicMaterial({
-      color: 0xffc98a,
-      transparent: true,
-      opacity: 0,
-      side: THREE.BackSide,
-      depthWrite: false,
-      blending: THREE.AdditiveBlending,
-    }),
-  );
-  echo.position.copy(site);
-  group.add(echo);
-
   const tint = new THREE.Color();
-  const hot = new THREE.Color(0.82, 0.88, 1.0);
-  const cool = new THREE.Color(1.0, 0.52, 0.28);
+  const TEMPERATURE_RUN = [
+    // days, colour
+    [0,   new THREE.Color(0.52, 0.72, 1.00)],   // shock breakout, blue-white
+    [8,   new THREE.Color(1.00, 0.98, 0.94)],   // white
+    [45,  new THREE.Color(1.00, 0.80, 0.34)],   // yellow
+    [140, new THREE.Color(1.00, 0.42, 0.13)],   // orange
+    [400, new THREE.Color(0.88, 0.13, 0.06)],   // deep red
+  ];
+
+  function colourAtDay(days, out) {
+    if (days <= TEMPERATURE_RUN[0][0]) return out.copy(TEMPERATURE_RUN[0][1]);
+    for (let i = 1; i < TEMPERATURE_RUN.length; i += 1) {
+      const [endDay, endColour] = TEMPERATURE_RUN[i];
+      if (days > endDay) continue;
+      const [startDay, startColour] = TEMPERATURE_RUN[i - 1];
+      const t = (days - startDay) / (endDay - startDay);
+      return out.copy(startColour).lerp(endColour, t);
+    }
+    return out.copy(TEMPERATURE_RUN[TEMPERATURE_RUN.length - 1][1]);
+  }
 
   return {
     group,
     duration: 26,
     sky: true,
     update(progress, api) {
-      // Type II-P, in days, at about 26 days per second of screen time.
-      const days = progress * 680;
+      /*
+       * Type II-P, in days -- on a clock that is stretched rather than
+       * linear, and the light curve and the colour now share it.
+       *
+       * They used to run on different ones: 680 days linearly for the
+       * brightness, and a stretched 400 for the colour. That was a patch on
+       * a patch, and it put the two out of step in exactly the wrong place.
+       * Linearly, the cobalt tail is at a two-hundred-and-fiftieth of peak
+       * by four fifths of the way through -- a frame grab there came back
+       * with an empty sky -- so the whole "fading over weeks into a deep
+       * red" half of the brief was being played on an invisible object.
+       *
+       * One stretched clock fixes both. The rise takes the first fifth of
+       * the event, the plateau runs from there to just past half way, the
+       * drop follows, and the last third is the cobalt tail -- which is
+       * where the colour run has reached orange and deep red. Rise, hold,
+       * fall, redden, in that order, each with screen time.
+       */
+      const days = 400 * Math.pow(progress, 2.2);
       let shape;
       if (days < 10) {
         const t = days / 10;
@@ -5392,32 +7585,85 @@ function createSupernova(target, camera, context = {}) {
       }
       shape = Math.max(0, shape);
 
-      // Ejecta cool as they expand, so it peaks blue-white and ends red.
-      tint.copy(hot).lerp(cool, Math.pow(1 - Math.min(1, shape), 1.5));
+      /*
+       * Ejecta cool as they expand: blue-white, white, yellow, red -- on the
+       * same stretched clock as the brightness, so the two agree. The stops
+       * and their temperatures are the real ones; what the stretch changes
+       * is how much screen time each gets. Blue-white for the first sixth,
+       * white through the plateau, yellow and orange across the drop, deep
+       * red for the tail.
+       */
+      colourAtDay(days, tint);
+      /*
+       * The breakout, which is a brightness as well as a colour.
+       *
+       * "Blinding" is not a hue -- it is the thing being over-exposed. The
+       * first tenth of the event therefore gets a bloom on top of the light
+       * curve: bigger, not just bluer, and decaying away as the photosphere
+       * cools into the plateau.
+       */
+      const breakout = Math.exp(-progress / 0.075);
+
+      /*
+       * Brightness on a compressed scale, which is how brightness is always
+       * reported for these: magnitudes are logarithmic because that is how
+       * the eye works.
+       *
+       * It matters here for a specific reason. The linear light curve falls
+       * to a sixtieth of peak by day four hundred, so drawn linearly the
+       * whole of the fading-into-deep-red phase -- which is half of what the
+       * brief asks to see -- happens on an object that is already invisible.
+       * A frame grab confirmed it: the last third of the event was an empty
+       * sky. Raised to a power, a sixtieth becomes a fifth, which is dim,
+       * obviously fading, and still there to be looked at.
+       *
+       * And the shock breakout is a brightness, not only a hue. "Blinding"
+       * is the thing being over-exposed, and the optical rise takes days --
+       * so on brightness alone the blue-white phase would be correctly
+       * coloured and dim, which is the opposite of what is being described.
+       * The spike decays over the first couple of seconds, by which time
+       * the rise has taken over.
+       */
+      const glow = Math.max(Math.pow(shape, 0.38), breakout * 0.95);
+
+      /*
+       * The core is deliberately not the brightest thing any more.
+       *
+       * A sprite at full opacity with a white-hot texture centre clips to
+       * pure white whatever colour is assigned to it -- so the colour run,
+       * which is the entire point of this rebuild, was being drawn onto a
+       * pixel that was already saturated. Two frames a quarter of the event
+       * apart, one meant to be white and one meant to be strongly orange,
+       * came back indistinguishable.
+       *
+       * So the core is held below saturation and the halo around it is made
+       * bigger and stronger. The halo is where the colour lives, and it is
+       * also the more truthful of the two: what you would see is not a point
+       * but a point inside a lit-up cloud.
+       */
       star.material.color.copy(tint);
-      star.material.opacity = Math.min(1, shape * 1.4);
-      star.scale.setScalar(scale * (0.004 + Math.pow(shape, 0.55) * 0.020));
+      star.material.opacity = Math.min(0.92, glow * 1.05);
+      star.scale.setScalar(scale * (0.008 + Math.pow(glow, 0.55) * 0.030) * (1 + breakout * 1.4));
 
       halo.material.color.copy(tint);
-      halo.material.opacity = shape * 0.5;
-      halo.scale.setScalar(scale * (0.02 + Math.pow(shape, 0.4) * 0.085));
+      halo.material.opacity = Math.min(0.95, glow * (0.78 + breakout * 0.4));
+      halo.scale.setScalar(scale * (0.05 + Math.pow(glow, 0.4) * 0.24) * (1 + breakout * 0.9));
 
       // The echo keeps expanding even as the star fades, because the light
-      // that left at peak is still on its way out through the cloud.
+      // that left at peak is still on its way out through the cloud -- and it
+      // is tinted too, since it is the same light.
       const spread = Math.pow(progress, 0.62);
-      echo.scale.setScalar(scale * (0.01 + spread * 0.30));
-      echo.material.opacity = shape * (1 - spread) * 0.18;
+      echo.material.color.copy(tint);
+      echo.scale.setScalar(scale * (0.02 + spread * 0.52));
+      echo.material.opacity = glow * (1 - spread) * 0.22;
 
       // And the sky itself comes on. This is the part that makes it read as an
       // explosion inside something rather than a dot in front of it.
-      api?.setSkyHighlight?.(Math.min(1, shape * 1.15));
+      api?.setSkyHighlight?.(Math.min(1, glow * 1.1));
     },
     dispose(api) {
       api?.setSkyHighlight?.(0);
-      star.material.dispose();
-      halo.material.dispose();
-      echo.geometry.dispose();
-      echo.material.dispose();
+      rig.dispose();
     },
   };
 }
@@ -5448,90 +7694,156 @@ function createKilonova(target, camera, context = {}) {
   group.name = "Kilonova event";
   const scale = context.skyRadius ?? 3000;
 
-  const ahead = new THREE.Vector3();
-  camera.getWorldDirection(ahead);
-  const helper = Math.abs(ahead.y) > 0.9
-    ? new THREE.Vector3(1, 0, 0)
-    : new THREE.Vector3(0, 1, 0);
-  const right = new THREE.Vector3().crossVectors(ahead, helper).normalize();
-  const up = new THREE.Vector3().crossVectors(ahead, right).normalize();
-  const offAxis = THREE.MathUtils.degToRad(7 + Math.random() * 10);
-  const around = Math.random() * Math.PI * 2;
-  const site = ahead.clone()
-    .addScaledVector(right, Math.tan(offAxis) * Math.cos(around))
-    .addScaledVector(up, Math.tan(offAxis) * Math.sin(around))
-    .normalize()
-    .multiplyScalar(scale * 0.94);
-
-  const core = makeGlow(0xeaf2ff, 0);
-  core.position.copy(site);
-  group.add(core);
-
-  const ejecta = makeGlow(0xff7a3c, 0);
-  ejecta.position.copy(site);
-  group.add(ejecta);
+  /*
+   * Drawn on the supernova's rig, deliberately.
+   *
+   * A kilonova is not a different kind of object to look at -- it is the same
+   * picture, smaller and very much faster. Building it from the same three
+   * parts is what makes that legible: put the two events side by side and the
+   * difference you see is the one that is real, which is the speed and the
+   * brightness, rather than a difference in how somebody chose to draw them.
+   */
+  // Clean sky, same as the supernova and for the same reason.
+  const { site } = placeInView(camera, scale, 6, 26, context.skyClutter ?? []);
+  const rig = makeSkyBurst(site);
+  rig.addTo(group);
+  const { star, halo, echo } = rig;
 
   /*
-   * The jet. GW170817's gamma-ray burst was seen off-axis, which is why it was
-   * faint in gamma rays and why the geometry mattered so much: a merger throws
-   * a narrow relativistic jet along its rotation axis, and whether you see a
-   * short gamma-ray burst depends entirely on whether you are in it.
+   * Dimmer than a supernova, and that is the headline number.
+   *
+   * A kilonova peaks at something like a thousand times a nova and a tenth to
+   * a hundredth of a core-collapse supernova in visible light -- bright, but
+   * never the brighter of the two. GW170817 sat around absolute magnitude
+   * -16 against a Type II-P's -17 to -18. Everything below is scaled by this,
+   * so the relationship holds at every moment of the event rather than only
+   * at the peak.
+   *
+   * Not so far under that it stops being a thing on screen, though. At 0.45
+   * the star's peak opacity came out at two thirds and the halo's at a
+   * quarter, which against the dust of the Milky Way is a faint smudge -- a
+   * dimmer supernova reads as a *dimmer supernova*, and something barely
+   * visible reads as a rendering fault. Six tenths keeps the gap unmistakable
+   * and keeps the event watchable.
    */
-  const jet = new THREE.Mesh(
-    new THREE.ConeGeometry(scale * 0.012, scale * 0.16, 14, 1, true),
-    new THREE.MeshBasicMaterial({
-      color: 0xa8d4ff, transparent: true, opacity: 0, side: THREE.DoubleSide,
-      depthWrite: false, blending: THREE.AdditiveBlending,
-    }),
-  );
-  const jetAxis = up.clone().addScaledVector(right, 0.4).normalize();
-  group.add(jet);
+  const PEAK = 0.62;
 
+  /*
+   * Blue to red, and drastically faster than a supernova's.
+   *
+   * The r-process builds lanthanides within seconds of the merger, and
+   * lanthanides are enormously opaque in the blue. So the ejecta go from a
+   * brief hot blue -- the lighter, lanthanide-poor material thrown off first
+   * -- into a deep dark red within about a day, and keep going redder into
+   * the infrared over the following week. That colour change happening in
+   * hours rather than months is exactly what identified GW170817's optical
+   * counterpart as a kilonova and not a supernova.
+   *
+   * Same shape of table as the supernova's, on a clock a hundred times
+   * shorter, and it ends darker: the last entry is not a bright red but a
+   * dim one, because by then most of the energy has left the visible band
+   * altogether.
+   */
   const tint = new THREE.Color();
-  const blue = new THREE.Color(0.86, 0.93, 1.0);
-  const red = new THREE.Color(1.0, 0.34, 0.16);
+  const COLOUR_RUN = [
+    // days, colour
+    [0.0,  new THREE.Color(0.40, 0.66, 1.00)],   // hot blue, the first hours
+    [0.5,  new THREE.Color(0.95, 0.92, 0.92)],   // through white, very quickly
+    [1.5,  new THREE.Color(1.00, 0.44, 0.20)],   // orange by the first day
+    [4.0,  new THREE.Color(0.78, 0.10, 0.06)],   // deep red
+    [12.0, new THREE.Color(0.34, 0.03, 0.03)],   // dark cosmic red, nearly gone
+  ];
+
+  function colourAtDay(days, out) {
+    if (days <= COLOUR_RUN[0][0]) return out.copy(COLOUR_RUN[0][1]);
+    for (let i = 1; i < COLOUR_RUN.length; i += 1) {
+      const [endDay, endColour] = COLOUR_RUN[i];
+      if (days > endDay) continue;
+      const [startDay, startColour] = COLOUR_RUN[i - 1];
+      const t = (days - startDay) / (endDay - startDay);
+      return out.copy(startColour).lerp(endColour, t);
+    }
+    return out.copy(COLOUR_RUN[COLOUR_RUN.length - 1][1]);
+  }
 
   return {
     group,
     duration: 20,
     sky: true,
     update(progress, api) {
-      // Hours to rise, days to fade -- a hundredth of a supernova's timescale.
-      const rise = smoothstep(0, 0.055, progress);
-      const fall = Math.exp(-Math.max(0, progress - 0.055) / 0.22);
-      const shape = rise * fall;
+      /*
+       * Hours to rise, days to fade -- a hundredth of a supernova's clock.
+       * Fourteen days across the event, against the supernova's six hundred
+       * and eighty.
+       */
+      /*
+       * Hours to rise, days to fade -- a hundredth of a supernova's clock,
+       * and stretched for the same reason its is. Linearly, the blue is
+       * over in half a day out of fourteen, which is seven tenths of a
+       * second of a twenty-second event; and the tail is a twentieth of
+       * peak by half way, so most of the run was a black frame. Squared,
+       * the blue holds for the first sixth, the drastic run through white
+       * and orange into deep red happens across the middle, and the dark
+       * cosmic red at the end is still bright enough to be a thing on
+       * screen.
+       */
+      const days = 12 * Math.pow(progress, 2.0);
+      const rise = smoothstep(0, 0.5, days);
+      /*
+       * Two components, which is what the real light curve has: a fast blue
+       * one from the lighter ejecta and a slower red one from the lanthanide
+       * -rich material behind it.
+       *
+       * The time constants are longer than the first pass used, and that was
+       * a real fault rather than a preference. At 1.1 and 5.5 days the thing
+       * had fallen to a sixth of peak by the event's halfway mark and to a
+       * twentieth by three quarters -- so two thirds of a twenty-second event
+       * was a black frame with a dying ember in it, and the "deep dark cosmic
+       * red" the brief is actually about arrived after there was anything
+       * left to be red. Stretched to 2.4 and 9.0 the fall is still obviously
+       * faster than a supernova's -- which is the distinguishing fact -- and
+       * the colour run happens while the thing is still bright enough to see.
+       */
+      const fall = 0.58 * Math.exp(-days / 2.4) + 0.42 * Math.exp(-days / 9.0);
+      const shape = Math.max(0, rise * fall) * PEAK;
+
+      // The colour follows the same clock, which is what makes the run read
+      // as one process rather than two.
+      colourAtDay(days, tint);
 
       /*
-       * Blue to red, and fast. The r-process builds lanthanides within
-       * seconds, and lanthanides are enormously opaque in the blue -- so the
-       * ejecta go from blue-white to deep infrared-red in about a day. That
-       * colour change is what identified GW170817's counterpart as a kilonova
-       * rather than anything else.
+       * Same compression as the supernova's, and the same reason for it:
+       * this fades a hundred times faster, so drawn linearly it is a black
+       * frame for most of its run. Same rebalance too -- a saturated white
+       * core cannot show a colour, and a colour is the whole identity of
+       * this event.
        */
-      tint.copy(blue).lerp(red, Math.min(1, progress * 4.2));
-      core.material.color.copy(tint);
-      core.material.opacity = Math.min(1, shape * 1.5);
-      core.scale.setScalar(scale * (0.004 + Math.pow(shape, 0.5) * 0.016));
+      const glow = Math.pow(shape, 0.38);
 
-      ejecta.material.opacity = shape * 0.55;
-      ejecta.scale.setScalar(scale * (0.014 + Math.pow(progress, 0.5) * 0.075));
+      star.material.color.copy(tint);
+      star.material.opacity = Math.min(0.92, glow * 1.05);
+      star.scale.setScalar(scale * (0.007 + Math.pow(glow, 0.55) * 0.026));
 
-      // The jet is brief and early: it is the gamma-ray burst.
-      const jetLevel = Math.max(0, 1 - progress / 0.16) * rise;
-      jet.position.copy(site).addScaledVector(jetAxis, scale * 0.085 * jetLevel);
-      jet.lookAt(scratchVector.copy(site).addScaledVector(jetAxis, -scale));
-      jet.rotateX(Math.PI * 0.5);
-      jet.scale.set(1, 0.4 + jetLevel, 1);
-      jet.material.opacity = jetLevel * 0.5;
+      halo.material.color.copy(tint);
+      halo.material.opacity = Math.min(0.9, glow * 0.72);
+      halo.scale.setScalar(scale * (0.05 + Math.pow(glow, 0.4) * 0.21));
 
-      api?.setSkyHighlight?.(Math.min(1, shape * 0.95));
+      /*
+       * The echo keeps expanding as the star fades, same as the supernova's
+       * -- but the ejecta here are moving at a fifth of the speed of light,
+       * so it runs out faster and the shell is thinner by the time anything
+       * is left to light it.
+       */
+      const spread = Math.pow(progress, 0.55);
+      echo.material.color.copy(tint);
+      echo.scale.setScalar(scale * (0.02 + spread * 0.38));
+      echo.material.opacity = glow * (1 - spread) * 0.20;
+
+      api?.setSkyHighlight?.(Math.min(1, glow * 1.0));
     },
     dispose(api) {
       api?.setSkyHighlight?.(0);
-      core.material.dispose();
-      ejecta.material.dispose();
-      jet.geometry.dispose();
-      jet.material.dispose();
+      rig.dispose();
     },
   };
 }
@@ -5710,10 +8022,40 @@ const EVENTS = [
     id: "lunar-impact-flash",
     body: "Moon",
     title: "Lunar impact flash",
-    detail: "Gravel-sized meteoroids hit the unlit hemisphere at full speed and flash",
+    detail: "Gravel-sized meteoroids hit the surface at full speed and flash",
     frequency: "About 0.68 validated flashes per hour of observation — NELIOTA recorded 192 in 283 hours between 2017 and 2023",
     cause: "No atmosphere. A meteoroid that would burn up harmlessly over Earth reaches the lunar surface at tens of kilometres a second and converts all of that energy to heat instantly.",
-    note: "Over three-quarters of the impactors weigh between 1 and 200 grams and are 0.5–3 cm across. Most flashes last under 66 milliseconds and peak between 2,000 and 4,500 K.",
+    note: "Over three-quarters of the impactors weigh between 1 and 200 grams and are 0.5–3 cm across. Most flashes last under 66 milliseconds and peak between 2,000 and 4,500 K. They fall on the whole Moon, not only the night side — the night side is simply the only place we can see them from Earth.",
+    /*
+     * Framed on the terminator, with the day side and the night side both on
+     * screen at once.
+     *
+     * The rock falls where it falls; the Moon does not sort its arrivals by
+     * which face is lit. The swarm is built to land on both -- alternating
+     * sites, resampled until each one is genuinely on the side it was asked
+     * for -- and that is only worth doing if the camera can see both. The
+     * default shot looks straight down the sunward line, which puts the whole
+     * lit disc on screen and the night side entirely behind the planet. A
+     * quarter turn off that line stands the camera over the terminator
+     * instead: half lit crescent, half earthshine grey, the dividing line up
+     * the middle. Day-side flashes then have to out-shine the ground they
+     * land on, which is why those get a contrast lift in the builder.
+     */
+    facesTerminator: true,
+    /*
+     * And stood back from, so there is sky for the rocks to arrive through.
+     *
+     * The default framing fills the frame with Moon -- measured on a frame
+     * grab, the disc ran off three sides of it. That is the right shot for a
+     * body and the wrong one for an arrival: the meteoroids come in from six
+     * to ten lunar radii out, and at the default standoff every one of them
+     * spawns off screen and is only visible for the last instant before it
+     * lands. Three times the distance puts the disc at about a quarter of
+     * the frame height with open sky all round it, which is where the
+     * approach happens -- and `range` in the builder is set against this
+     * number, so the two move together.
+     */
+    shotZoom: 3.0,
     build: createLunarImpactFlash,
   },
   {
@@ -5724,6 +8066,52 @@ const EVENTS = [
     frequency: "Between two and five solar eclipses a year; any given place on Earth waits an average of 375 years for a total one",
     cause: "The Moon's orbit is tilted about 5° to Earth's, so at most new moons the shadow passes above or below. Only a new moon near an orbital node puts the shadow on the surface.",
     note: "The umbra is at most about 270 km wide and crosses the surface at over 1,700 km/h, which is why totality anywhere lasts only minutes.",
+    /*
+     * Framed on the alignment, because the alignment is the event.
+     *
+     * Left at the default the camera sat wherever the viewer had left it, and
+     * the Moon -- three radii out along the Sun line -- was off screen for
+     * the whole pass. What was on screen was Earth, with a shadow crossing
+     * the far limb at a grazing angle. Everything that explains the picture
+     * was outside it.
+     *
+     * The angle is a trade and sixty degrees was the wrong side of it. Off
+     * the sunward line by sixty, the sub-solar point sits at sin 60 = 0.87 of
+     * the way to the limb -- so the place the shadow lands is a sliver on the
+     * edge of the disc, foreshortened into nothing, which is why the first
+     * framed attempt showed a convincing Moon and no shadow at all.
+     *
+     * The angle went down to eighteen degrees and had to come back up, and
+     * the round trip is worth recording because the two failures look the
+     * same from the outside and have nothing to do with each other.
+     *
+     * At thirty-eight the shadow was off the visible face -- but that was
+     * the stale Sun direction, fixed in `readSunFrame`, not the angle. At
+     * eighteen, with that fixed, the shadow landed correctly and still could
+     * not be seen: from almost straight down the Sun line the Moon is in
+     * front of the very spot its own shadow makes, so it covered it. Two
+     * frame grabs, one problem each, one number.
+     *
+     * Thirty-six separated the bodies and put the shadow's track out at the
+     * limb, where the far half of it ran off the visible face. The angle
+     * cannot satisfy both on its own, so it stopped being asked to: the
+     * Moon was moved further out instead (see MOON_RANGE), which buys the
+     * separation at a small angle.
+     *
+     * Twenty degrees -- twenty-three with the composed elevation -- puts the
+     * sub-solar point four tenths of the way out from the centre, so the
+     * shadow crosses the middle of the lit face, and still leaves the Moon
+     * two radii clear of the disc.
+     */
+    facesSun: true,
+    shotSwing: THREE.MathUtils.degToRad(20),
+    /*
+     * Far enough back to hold the Moon at the separation the builder solves
+     * for -- two and a half radii out from Earth's centre, plus its own
+     * width -- with margin. Earth's own framing holds a little over one
+     * radius, so this is not quite triple it.
+     */
+    shotZoom: 2.9,
     build: createSolarEclipse,
   },
   {
@@ -5754,6 +8142,27 @@ const EVENTS = [
     frequency: "Every orbit — 88 days — peaking about 16 days either side of perihelion",
     cause: "Solar wind and micrometeorites knock sodium off the surface into Mercury's exosphere, and radiation pressure at the 589 nm sodium line pushes it away from the Sun.",
     note: "The double peak is a Doppler effect: Mercury's orbital speed shifts the sodium line off the dark bottom of the Sun's own sodium line and into the bright continuum, so the atoms suddenly have far more light to absorb.",
+    /*
+     * Seen side-on, which for a tail is the only useful angle.
+     *
+     * The tail points away from the Sun by definition. Framed sunward it is
+     * directly behind the planet and there is nothing to see; framed from
+     * the night side it comes straight at the lens and is a blob. A quarter
+     * turn off the sunward line lays the whole length of it across the frame
+     * with a half-lit planet at one end, which is how every photograph of it
+     * is composed -- and the planet being half lit is itself worth having,
+     * since the exosphere is fed off the day side.
+     *
+     * The quarter turn is taken anticlockwise rather than clockwise, which
+     * is not arbitrary: the event dossier occupies the right of the screen,
+     * and swung the other way the tail streamed straight underneath it. The
+     * physics does not care which side the Sun is on; the composition does.
+     *
+     * And stood back from, because the point of the thing is its length.
+     */
+    facesSun: true,
+    shotSwing: THREE.MathUtils.degToRad(-90),
+    shotZoom: 2.2,
     build: createMercurySodiumTail,
   },
   {
@@ -5764,6 +8173,18 @@ const EVENTS = [
     frequency: "Seasonal. Activity has been climbing since the 2007 equinox; Keck counted eight large storms in a single night in August 2014",
     cause: "Uranus is tipped 98°, so for decades one pole faces the Sun and the atmosphere has nothing to drive it. Sunlight returning to both hemispheres after equinox restarts the weather.",
     note: "The 2014 outbreak was bright enough for amateurs with backyard telescopes to catch — on the planet Voyager 2 photographed in 1986 as a featureless ball.",
+    /*
+     * The whole disc in frame, because the outbreak is spread across it.
+     *
+     * The spots run from the equator to seventy degrees north and south and
+     * drift along their latitudes as the event goes; at the body's own
+     * framing the planet overfilled the frame and the high-latitude ones
+     * were off the top and bottom of it. Half again as far back holds the
+     * pole-to-pole spread with margin, which is what makes the point of the
+     * event -- that different bands move at different speeds and in
+     * different directions -- something the eye can actually compare.
+     */
+    shotZoom: 1.55,
     build: createUranusStorms,
   },
   {
@@ -5774,6 +8195,28 @@ const EVENTS = [
     frequency: "Individual vents can run for about a year; Voyager 2 caught at least two erupting during its 1989 flyby",
     cause: "A solid-state greenhouse. Sunlight passes through transparent nitrogen ice and warms darker material a metre or two below; the nitrogen there sublimates, pressure builds under the cap, and it vents — carrying dark dust with it.",
     note: "This happens on the coldest surface ever measured: 38 K, thirty-eight degrees above absolute zero.",
+    /*
+     * Watched from the day side, and without it there is nothing to watch.
+     *
+     * Triton is thirty astronomical units out and the scene lights it
+     * accordingly. A frame grab at the default angle came back as a black
+     * disc with a faint rim -- the moon was very nearly a silhouette, and
+     * this event's whole subject is dark material against pale pink ice.
+     * There has to be light on the ice.
+     *
+     * It is also what the physics says. These geysers are solar-powered: the
+     * sunlight that drives them has to be falling on the cap for them to be
+     * erupting at all, so the lit face is the only face where this happens.
+     */
+    facesSun: true,
+    /*
+     * No elevation of its own. Which pole the cap is on is decided at build
+     * time from where the Sun is, so a fixed pitch would be the right way up
+     * half the time and the wrong way up the other half. The builder puts
+     * the vents on the face the camera can see instead, which works from any
+     * angle.
+     */
+    shotZoom: 1.5,
     build: createTritonGeysers,
   },
 ];
@@ -5811,6 +8254,12 @@ export function createSolarSystemEvents({
   getSkyRadius = () => 3000,
   /** Lets a sky event brighten the dust while it burns. */
   setSkyHighlight = null,
+  /*
+   * Where the nebulosity is, so a sky event can be staged away from it.
+   * Deferred, like the two above, because the space environment is built
+   * after this system is.
+   */
+  getSkyClutter = () => [],
 } = {}) {
   let active = null;
   let paused = false;
@@ -5894,7 +8343,7 @@ export function createSolarSystemEvents({
       const instance = definition.build(
         definition.body === null ? host : host,
         camera,
-        { skyRadius: getSkyRadius() },
+        { skyRadius: getSkyRadius(), skyClutter: getSkyClutter() },
       );
       host.add(instance.group);
       active = { ...instance, definition, elapsed: 0 };
@@ -5964,6 +8413,24 @@ export function createSolarSystemEvents({
        * Read by the staging in main.js when it composes the shot.
        */
       facesSun: event.facesSun === true,
+      /**
+       * How far round from the sunward line the camera stands, in radians.
+       *
+       * Zero is straight sunward, a quarter turn puts the terminator down the
+       * middle, and anything between trades lit face for a view of the line
+       * the body is on. `facesTerminator: true` is kept as the readable
+       * spelling of the quarter turn; an event that wants something else says
+       * so in radians. Read by the staging in main.js.
+       */
+      shotSwing: event.facesTerminator === true
+        ? Math.PI * 0.5
+        : (Number.isFinite(event.shotSwing) ? event.shotSwing : 0),
+      /*
+       * Framed with the terminator down the middle instead of the lit face
+       * square on. For events whose whole subject is the difference between
+       * the two hemispheres. Read by the staging in main.js alongside facesSun.
+       */
+      facesTerminator: event.facesTerminator === true,
       shotZoom: Number(event.shotZoom) || 1,
       /**
        * The camera elevation this event wants, in radians, or null for the

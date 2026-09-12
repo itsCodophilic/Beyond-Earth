@@ -1401,10 +1401,11 @@ import { POINTER_PROXY_LAYER } from "./scene/pointerProxies.js";
      * of the camera and the Sun, the meteor stream is chosen relative to it --
      * so the shot is not decoration here. It is the input the staging reads.
      */
-    composeSolarEventShot(
-      definition.facesSun ? target : null,
+composeSolarEventShot(
+      definition.facesSun || definition.shotSwing ? target : null,
       definition.shotZoom ?? 1,
       definition.shotPitch ?? null,
+      definition.shotSwing ?? 0,
     );
 
     solarEventTitle.textContent = definition.title;
@@ -1969,6 +1970,8 @@ import { POINTER_PROXY_LAYER } from "./scene/pointerProxies.js";
    * composed angle or the body the shot should be framed sunward of.
    */
   let pendingSolarEventShot = false;
+  // Carried with the deferred shot so an off-sunward framing survives the wait.
+  let pendingSolarEventSwing = 0;
   // The zoom that went with the shot that could not be composed yet.
   let pendingSolarEventZoom = 1;
   // And the elevation, for an event that wants to be looked down on.
@@ -1990,16 +1993,18 @@ import { POINTER_PROXY_LAYER } from "./scene/pointerProxies.js";
    */
   const solarEventShotPosition = new THREE.Vector3();
 
-  function composeSolarEventShot(sunwardOf = null, shotZoom = 1, shotPitch = null) {
+  function composeSolarEventShot(sunwardOf = null, shotZoom = 1, shotPitch = null, shotSwing = 0) {
     if (focusExitTransition) {
       pendingSolarEventShot = sunwardOf ?? true;
       pendingSolarEventZoom = shotZoom;
       pendingSolarEventPitch = shotPitch;
+      pendingSolarEventSwing = shotSwing;
       return;
     }
     pendingSolarEventShot = false;
     pendingSolarEventZoom = 1;
     pendingSolarEventPitch = null;
+    pendingSolarEventSwing = 0;
 
     /*
      * Some events have to be watched from the day side.
@@ -2018,7 +2023,22 @@ import { POINTER_PROXY_LAYER } from "./scene/pointerProxies.js";
     if (sunwardOf?.getWorldPosition) {
       sunwardOf.getWorldPosition(solarEventShotPosition);
       if (solarEventShotPosition.lengthSq() > 1e-6) {
-        shotYaw = Math.atan2(-solarEventShotPosition.x, -solarEventShotPosition.z);
+        shotYaw = Math.atan2(-solarEventShotPosition.x, -solarEventShotPosition.z)
+          /*
+           * And then swung off that line, by however much the event asks for.
+           *
+           * Sunward frames the lit face, which is right for a dust storm and
+           * wrong for two of these. The lunar impacts land half on the night
+           * side and half on the day, and the whole point is watching a flash
+           * that is the only light there is next to one that has to beat
+           * daylight -- both hemispheres in frame at once, which is a quarter
+           * turn. The eclipse needs something between the two: far enough off
+           * the line to see that the Sun, the Moon and Earth are on one, and
+           * near enough to it to still be looking at the lit face the shadow
+           * falls on. Sixty degrees, and it is a dial rather than a flag
+           * because those two events want different answers.
+           */
+          + (Number.isFinite(shotSwing) ? shotSwing : 0);
       }
     }
 
@@ -2797,6 +2817,11 @@ import { POINTER_PROXY_LAYER } from "./scene/pointerProxies.js";
      */
     getSkyRadius: () => spaceEnvironment.skyShellRadius,
     setSkyHighlight: (value) => spaceEnvironment?.setSkyHighlight(value),
+    /*
+     * Where the nebulosity is, so a sky event can avoid it. Deferred for the
+     * same reason the two above are.
+     */
+    getSkyClutter: () => spaceEnvironment?.listSkyClutter() ?? [],
   });
 
   /*
@@ -8169,6 +8194,7 @@ import { POINTER_PROXY_LAYER } from "./scene/pointerProxies.js";
         pendingSolarEventShot === true ? null : pendingSolarEventShot,
         pendingSolarEventZoom,
         pendingSolarEventPitch,
+        pendingSolarEventSwing,
       );
     }
     // Focus mode and its short deterministic exit hold slow physical scene motion

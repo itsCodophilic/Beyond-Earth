@@ -1,8 +1,5 @@
 import * as THREE from "three";
-import {
-  makeGlowTexture,
-  makeNoiseTexture,
-} from "../../graphics/proceduralTextures.js";
+import { makeNoiseTexture } from "../../graphics/proceduralTextures.js";
 import { getMoonVisualRadius, getSizeComparisonText } from "../../config/celestialScale.js";
 import {
   PHOBOS_PROFILE,
@@ -76,38 +73,23 @@ const moonWorldPosition = new THREE.Vector3();
 const projectedParentPosition = new THREE.Vector3();
 const projectedMoonPosition = new THREE.Vector3();
 const sharedSatelliteResources = new Map();
-let sharedSatelliteGlintTexture = null;
 
-/**
- * Returns one soft point texture shared by every distant Uranian moon marker.
+/*
+ * There used to be a glint here, and it is gone.
  *
- * The marker is not a replacement moon and never appears during close
- * inspection. It is a tiny screen-space suggestion of reflected sunlight used
- * only while the real mesh would otherwise occupy less than a useful pixel.
+ * Uranus's two dozen small moons become sub-pixel objects in the broad system
+ * portrait, so each carried a tiny additive sprite -- a pale cyan point,
+ * `0xd9ffff` at up to 0.82 opacity -- to say "there is something here" at a
+ * distance where the real mesh covers less than a pixel.
+ *
+ * What it actually produced was a ring of blue lights round Uranus whenever
+ * the viewer pulled back, which reads as an effect rather than as moons, and
+ * which was reported as a bug twice. The moons themselves are still drawn at
+ * that range and are still selectable; what has been removed is the second,
+ * brighter thing standing in front of each of them. Everything downstream is
+ * guarded on the material existing, so declining to build it is the whole
+ * change.
  */
-function getSharedSatelliteGlintTexture() {
-  if (!sharedSatelliteGlintTexture) {
-    sharedSatelliteGlintTexture = makeGlowTexture();
-    sharedSatelliteGlintTexture.name = "Distant satellite sunlight glint";
-  }
-  return sharedSatelliteGlintTexture;
-}
-
-function createUranianDistantVisibilityMaterial() {
-  const material = new THREE.SpriteMaterial({
-    map: getSharedSatelliteGlintTexture(),
-    color: 0xd9ffff,
-    transparent: true,
-    opacity: 0,
-    blending: THREE.AdditiveBlending,
-    depthTest: true,
-    depthWrite: false,
-    sizeAttenuation: false,
-    toneMapped: false,
-  });
-  material.name = "Uranian distant moon reflected-light glint";
-  return material;
-}
 
 /**
  * Planet letters used inside IAU provisional natural-satellite designations.
@@ -895,12 +877,8 @@ export function createMajorSatelliteSystems({
         ? JUPITER_IAU_RECOGNIZED_COUNT
         : moonProfiles.length,
     };
-    // Uranus's 24 small moons become sub-pixel objects in the complete system
-    // portrait. One shared material lets their restrained location glints fade
-    // together without changing any moon surface, sunlight, or close-up model.
-    const distantMoonGlintMaterial = parentName === "Uranus"
-      ? createUranianDistantVisibilityMaterial()
-      : null;
+    // No distant-moon glint. See the note where it used to be built.
+    const distantMoonGlintMaterial = null;
     root.add(createOrbitLines(
       moonProfiles,
       parentRadius,

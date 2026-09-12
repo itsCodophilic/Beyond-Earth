@@ -230,6 +230,44 @@ export class SpaceEnvironment {
     return this.deepSkyTransients?.list() ?? [];
   }
 
+  /**
+   * Where the sky is *not* empty, as directions and angular sizes.
+   *
+   * Asked by anything that needs to stage something against clean sky. A
+   * supernova put down on top of the Carina Nebula is a bright smudge inside
+   * a bright smudge -- the thing the viewer is being asked to look at has to
+   * be the only thing there, or there is no event, just a busier patch.
+   *
+   * Both nebulosity layers are billboards on a shell that rides with the
+   * camera, so a sprite's own position is already the direction to it from
+   * the lens, and its scale against the shell radius is how wide it looks.
+   * Stars are deliberately not included: a star field is not clutter, it is
+   * the backdrop, and the brief says as much.
+   */
+  listSkyClutter() {
+    const shell = Math.max(1, this.skyShellRadius);
+    const found = [];
+    const collect = (layer) => {
+      const object = layer?.object;
+      if (!object) return;
+      object.traverse((node) => {
+        if (!node.isSprite || node.visible === false) return;
+        if (node.position.lengthSq() < 1e-6) return;
+        const spread = Math.max(node.scale.x, node.scale.y) / shell;
+        // Below about a degree across it is a point, not a cloud, and the
+        // sky has hundreds of those.
+        if (spread < 0.017) return;
+        found.push({
+          direction: node.position.clone().normalize(),
+          spread,
+        });
+      });
+    };
+    collect(this.deepSky);
+    collect(this.deepSkyTransients);
+    return found;
+  }
+
   dispose() {
     this.motionQuery.removeEventListener?.("change", this.handleMotionPreference);
     this.layers.forEach((layer) => layer.dispose?.());
