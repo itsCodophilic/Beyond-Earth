@@ -6254,14 +6254,49 @@ function createSolarEclipse(target, camera) {
     const sunTheta = Math.atan2(sunLocal.z, -sunLocal.x);
     // Rotating the body by d moves a fixed world direction by +d in this
     // local angle, so this is the shortest turn that lands the Sun on India.
+    /*
+     * Normalised forwards, into [0, 2pi), rather than to the shortest turn.
+     *
+     * The shortest turn is the right answer when it is the only rotation
+     * happening. It is the wrong answer now that the planet also spins
+     * steadily through the event: a negative alignment runs backwards
+     * against the spin, and the two together make Earth turn one way for
+     * four seconds and then the other, which reads as a wobble and is worse
+     * than not turning at all.
+     *
+     * Taking the long way round when the short way is backwards keeps every
+     * term in the same direction, so the total is monotonic and the planet
+     * simply turns -- briskly at first while it catches up, then at its
+     * steady rate.
+     */
     let delta = theta - sunTheta;
-    while (delta > Math.PI) delta -= Math.PI * 2;
-    while (delta < -Math.PI) delta += Math.PI * 2;
+    while (delta < 0) delta += Math.PI * 2;
+    while (delta >= Math.PI * 2) delta -= Math.PI * 2;
     return delta;
   })();
   // Unused beyond documenting the latitude the target sits at; the shadow
   // lands on the sub-solar point, which the spin above puts on that meridian.
   void INDIA_LAT;
+  /*
+   * And then Earth keeps turning, visibly, for the whole event.
+   *
+   * The scene does rotate its planets, but in focus mode the whole
+   * simulation is slowed to 2.6% -- about a degree a second -- so across
+   * twenty-two seconds Earth moves twenty-four degrees and reads as
+   * stationary. For most events that is right: a storm belongs to the
+   * surface and turning the planet would drag it round.
+   *
+   * An eclipse is the one case where it is exactly backwards. The shadow is
+   * pinned to the line through the Sun and the Moon and the planet rotates
+   * *underneath* it -- that is what makes a totality track a line drawn
+   * across a map rather than a dot placed on one. Standing still, the
+   * shadow looks painted on.
+   *
+   * A hundred and twenty degrees over the event is five and a half degrees
+   * a second: unmistakably turning, slow enough to follow, and enough for a
+   * continent to pass right through the shadow while you watch.
+   */
+  const EVENT_SPIN = THREE.MathUtils.degToRad(120);
   let spinApplied = 0;
 
   /*
@@ -6355,7 +6390,17 @@ function createSolarEclipse(target, camera) {
       // The Sun line, this frame. Everything below hangs off it.
       readSunFrame();
 
-      const spinWanted = spinDelta * smoothstep(0, 0.22, progress);
+      /*
+       * The alignment turn and the running spin, added -- and both always
+       * forwards, so the total never reverses.
+       *
+       * The alignment is spread over the opening two fifths rather than
+       * snapped, and the steady spin runs underneath it for the whole
+       * event. India passes under the shadow as the catch-up finishes, and
+       * the continents keep coming after it.
+       */
+      const spinWanted = spinDelta * smoothstep(0, 0.50, progress)
+        + EVENT_SPIN * progress;
       const spinStep = spinWanted - spinApplied;
       if (spinStep !== 0) {
         target.rotation.y += spinStep;
@@ -7598,19 +7643,38 @@ function createSupernova(target, camera, context = {}) {
        * fall, redden, in that order, each with screen time.
        */
       const days = 400 * Math.pow(progress, 2.2);
+
+      /*
+       * A rise, then one unbroken decline -- and the second half of that is
+       * a deliberate departure from the real light curve.
+       *
+       * A Type II-P genuinely does hold almost flat for a hundred days: the
+       * hydrogen recombination front eats inward through the expanding
+       * envelope at very nearly the rate that keeps the luminosity constant.
+       * It is the most distinctive thing about this class of supernova and
+       * the previous version drew it faithfully -- a ten-day rise, a flat
+       * plateau, a drop onto the cobalt tail.
+       *
+       * On screen a flat section does not read as "the physics is holding
+       * it steady". It reads as the animation having stopped, which is
+       * exactly what was reported: a pause in the middle. And the step down
+       * off the plateau onto the tail made it worse, because a pause
+       * followed by a jump reads as a glitch rather than as an event.
+       *
+       * So the plateau is rendered as a slow sag instead of a hold. The
+       * shape below falls continuously from peak to nothing with no flat
+       * part and no step, steepening as it goes -- so the star shrinks and
+       * reddens together, without interruption, the whole way down. The
+       * shoulder in the first third is still where the plateau was; it is
+       * just tilted enough to keep moving.
+       */
       let shape;
       if (days < 10) {
         const t = days / 10;
         shape = t * t * (3 - 2 * t);
-      } else if (days < 110) {
-        // The plateau. Not perfectly flat: real ones sag a few tenths.
-        shape = 1 - 0.14 * ((days - 110 + 100) / 100);
-      } else if (days < 136) {
-        const t = (days - 110) / 26;
-        shape = 0.86 + (0.16 - 0.86) * (t * t * (3 - 2 * t));
       } else {
-        // Cobalt-56: 77.2-day half-life, so an e-folding every 111.4 days.
-        shape = 0.16 * Math.exp(-(days - 136) / 111.4);
+        const fade = (days - 10) / 390;
+        shape = 0.97 * Math.pow(1 - fade, 1.3) + 0.03 * (1 - fade);
       }
       shape = Math.max(0, shape);
 
@@ -7688,11 +7752,17 @@ function createSupernova(target, camera, context = {}) {
        */
       star.material.color.copy(tint);
       star.material.opacity = Math.min(0.92, glow * 1.05);
-      star.scale.setScalar(scale * (0.008 + Math.pow(glow, 0.55) * 0.030) * (1 + breakout * 1.4));
+      /*
+       * Less of a fixed floor and a steeper response, so the shrinking is
+       * something you can watch rather than something you could measure.
+       * At the old 0.008 + 0.030 the star only lost half its width between
+       * peak and the end; now it loses four fifths of it.
+       */
+      star.scale.setScalar(scale * (0.003 + Math.pow(glow, 0.75) * 0.036) * (1 + breakout * 1.4));
 
       halo.material.color.copy(tint);
       halo.material.opacity = Math.min(0.95, glow * (0.78 + breakout * 0.4));
-      halo.scale.setScalar(scale * (0.05 + Math.pow(glow, 0.4) * 0.24) * (1 + breakout * 0.9));
+      halo.scale.setScalar(scale * (0.02 + Math.pow(glow, 0.6) * 0.27) * (1 + breakout * 0.9));
 
       // The echo keeps expanding even as the star fades, because the light
       // that left at peak is still on its way out through the cloud -- and it
