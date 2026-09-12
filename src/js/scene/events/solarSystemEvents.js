@@ -6664,7 +6664,20 @@ function createMercurySodiumTail(target, camera) {
    * and fading as they spread. A cone has an edge; a cloud of points does
    * not, and that is the whole difference between the two pictures.
    */
-  const COUNT = 2600;
+  /*
+   * Six and a half thousand, up from two and a half.
+   *
+   * The original count was right for a tail that was a thin needle. Giving
+   * the root a proper width -- a shade over a planet diameter across,
+   * instead of a point -- multiplied the volume the same atoms had to fill
+   * by something like two hundred at that end, and the whole thing went
+   * from visible to barely there. This is one draw call and the per-frame
+   * cost is writing the positions, so the ceiling is high; the reason not
+   * to go further is that the tail stops looking granular and starts
+   * looking like a solid object, which is the wrong end of the same
+   * mistake.
+   */
+  const COUNT = 6500;
   const positions = new Float32Array(COUNT * 3);
   const alphas = new Float32Array(COUNT);
   const seeds = new Float32Array(COUNT);
@@ -6688,16 +6701,25 @@ function createMercurySodiumTail(target, camera) {
     // nearly parallel.
     const around = Math.random() * Math.PI * 2;
     /*
-     * How far off the axis, and it is narrower than it was.
+     * Where this atom sits across the tail, as a fraction of the local
+     * half-width -- and heavily weighted towards the middle of it.
      *
-     * The plume widens downwind -- radiation pressure is very nearly
-     * parallel, so the spread is slow -- but at 0.16 plus 0.62 of the way
-     * along, the far end came out wider than the planet before the grains'
-     * own size was counted, and it read as a broad fan rather than as a
-     * tail. Brought down to about Mercury's own width at its widest, which
-     * is the note, and still obviously wider than the point it leaves from.
+     * This is the other half of the answer. An exponent below one spreads
+     * points evenly over the *disc*, which is what a uniformly grey tube
+     * looks like and, at this width, what nothing at all looks like: the
+     * atoms stop overlapping and each one is a separate faint speck.
+     *
+     * Above one they pile onto the axis instead. At 1.8 the surface density
+     * falls off as roughly r^-1.4 from the centre, so the tail has a bright
+     * spine with a soft envelope around it -- which is both far more
+     * visible and closer to the truth, since the escaping atoms are
+     * concentrated along the anti-sunward line and the wide part is the
+     * thin halo of the exosphere.
+     *
+     * The half-width itself is worked out per frame -- see `tailWidth`
+     * below -- because it depends on how far down the tail the atom is.
      */
-    const off = Math.pow(Math.random(), 0.6) * (0.09 + along * 0.36);
+    const off = Math.pow(Math.random(), 1.8);
     /*
      * Where this atom is in its own journey at the start, and how fast it
      * makes it.
@@ -6743,7 +6765,7 @@ function createMercurySodiumTail(target, camera) {
        * as a continuous gas and is nowhere near large enough for any single
        * one of them to be seen as a blob.
        */
-      uGrain: { value: radius * 0.070 },
+      uGrain: { value: radius * 0.090 },
       uHeight: { value: viewportHeight() },
       uTime: { value: 0 },
     },
@@ -6869,19 +6891,74 @@ function createMercurySodiumTail(target, camera) {
          * the ground by the solar wind and micrometeorites, so there is
          * nowhere for it to begin except the ground.
          */
-        const distance = radius * (1.0 + along * REACH);
+        /*
+         * Widest at the planet and tapering downwind -- which is the
+         * opposite of what this drew twice.
+         *
+         * Both earlier versions scaled the lateral offset *by* `along`, so
+         * the tail left the surface as a point and opened into a cone. That
+         * is the wrong shape twice over. It is wrong to look at: a funnel
+         * with its narrow end on the planet reads as something being poured
+         * in rather than streaming out. And it is wrong about the thing:
+         * what leaves Mercury is an exosphere, a cloud that envelops the
+         * whole planet, and what radiation pressure then does is *collimate*
+         * it -- the atoms are swept anti-sunward into an increasingly narrow
+         * stream as they accelerate away.
+         *
+         * So the half-width starts a shade over one planet radius, which
+         * makes the root about a quarter wider than Mercury itself, and
+         * falls away to a tenth of that by the far end. The exponent sets
+         * how quickly: at 1.4 most of the narrowing happens in the first
+         * third, which is where the acceleration is.
+         */
+        const tailWidth = radius * (1.15 * Math.pow(1 - along, 1.4) + 0.10);
+        const sideways = item.off * tailWidth;
+
+        /*
+         * Where this atom leaves the planet, which is the planet's surface
+         * -- not a flat plane tangent to it.
+         *
+         * Every atom used to start at exactly one radius along the axis
+         * whatever its sideways offset, which is a disc standing on end at
+         * the anti-sunward pole. On screen that is a straight vertical wall
+         * of gas cut off level with the limb, and it was the one thing left
+         * that gave the tail away as a construction.
+         *
+         * A sphere's surface at sideways distance y is at sqrt(R^2 - y^2)
+         * along the axis: atoms on the axis begin at the far pole, atoms
+         * out at the limb begin level with the planet's centre, and every
+         * one between follows the curve of the body. The leading edge of
+         * the tail then *is* the planet's silhouette, and the top and
+         * bottom of it sweep back round towards the poles, which is what
+         * an exosphere being stripped off a globe looks like.
+         *
+         * Atoms wider than the planet have no surface to start from -- they
+         * are the part of the cloud that is already clear of it -- so they
+         * begin a little sunward instead, trailing round the limb rather
+         * than appearing beside it.
+         */
+        const launch = sideways < radius
+          ? Math.sqrt(radius * radius - sideways * sideways)
+          : -(sideways - radius) * 0.85;
+        const distance = launch + radius * along * REACH;
+
         point.copy(away).multiplyScalar(distance)
-          .addScaledVector(spreadA, Math.cos(item.around) * item.off * radius * along)
-          .addScaledVector(spreadB, Math.sin(item.around) * item.off * radius * along);
+          .addScaledVector(spreadA, Math.cos(item.around) * sideways)
+          .addScaledVector(spreadB, Math.sin(item.around) * sideways);
         attribute.setXYZ(index, point.x, point.y, point.z);
         /*
          * Thinning with distance -- the same atoms in a bigger volume -- and
          * faded back in at the very root as well, so an atom beginning its
          * lap appears rather than pops.
          */
+        /*
+         * Thinning downwind, and only the very newest atoms faded in. The
+         * old 0.06 ramp dimmed the first twentieth of every atom's journey,
+         * which is precisely the dense root the tail is now built around.
+         */
         alphaAttribute.setX(
           index,
-          Math.pow(1 - lap, 1.5) * smoothstep(0, 0.06, lap),
+          Math.pow(1 - lap, 1.3) * smoothstep(0, 0.015, lap),
         );
       }
       attribute.needsUpdate = true;
@@ -6898,7 +6975,17 @@ function createMercurySodiumTail(target, camera) {
        * threshold -- visible if you look, easy to miss if you do not, which
        * is the honest version of "barely there".
        */
-      material.uniforms.uGain.value = strength * 0.105;
+      /*
+       * Faint, and meant to be -- but visible.
+       *
+       * 0.105 was tuned against the thin version of this tail, where the
+       * atoms sat almost on top of each other and every one of them counted
+       * several times over. Spread across a real width they overlap far
+       * less, so the same number produces a fraction of the light. 0.30 is
+       * back to roughly the brightness that was signed off, on geometry
+       * that is now the right shape.
+       */
+      material.uniforms.uGain.value = strength * 0.30;
 
       halo.position.set(0, 0, 0);
       halo.scale.setScalar(radius * (1.10 + strength * 0.4));
