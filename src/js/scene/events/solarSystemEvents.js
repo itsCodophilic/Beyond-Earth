@@ -5459,7 +5459,7 @@ function createTritonGeysers(target, camera) {
          * grains arrive with an alpha above one and stay small and tight,
          * which is the other half of what makes the column sharp.
          */
-        float swell = aAlpha > 1.0 ? 0.55 : (0.9 + 2.6 * (1.0 - aAlpha));
+        float swell = aAlpha > 1.0 ? 0.42 : (0.9 + 2.6 * (1.0 - aAlpha));
         gl_PointSize = clamp(
           pointPixels(uGrain * swell, viewPosition.z, uHeight),
           1.0, 72.0
@@ -5551,11 +5551,11 @@ function createTritonGeysers(target, camera) {
             point.copy(item.vent).multiplyScalar(radius * (1 + up))
               .addScaledVector(
                 sideways,
-                radius * Math.cos(off.pore) * off.poreOff * 0.010 * (0.4 + off.along),
+                radius * Math.cos(off.pore) * off.poreOff * 0.006 * (0.4 + off.along),
               )
               .addScaledVector(
                 item.flow,
-                radius * Math.sin(off.pore) * off.poreOff * 0.010 * (0.4 + off.along)
+                radius * Math.sin(off.pore) * off.poreOff * 0.006 * (0.4 + off.along)
                   // and leaning very slightly downwind as it climbs, because
                   // the wind does not begin abruptly at eight kilometres
                   + radius * 0.035 * off.along * off.along,
@@ -6329,42 +6329,6 @@ function createSolarEclipse(target, camera) {
   cone.renderOrder = 11;
   group.add(cone);
 
-  /*
-   * One line of geometry to the console when the event is built.
-   *
-   * Temporary, and here because this event has now been "fixed" five times
-   * against a software-rendered harness that cannot reproduce the thing
-   * being reported -- its camera never finishes easing before the event
-   * plays, so every frame it captures is at a different, half-settled
-   * angle. The numbers below are the four that decide whether the Moon
-   * clears the disc, measured on the machine that is actually showing the
-   * problem. Remove once the framing is settled.
-   */
-  if (typeof console !== "undefined" && console.info) {
-    const earthAt = target.getWorldPosition(new THREE.Vector3());
-    const distance = camera ? camera.position.distanceTo(earthAt) : 0;
-    const worldRadius = radius * Math.max(1e-6, Math.abs(target.scale.x));
-    const toCamera = new THREE.Vector3().subVectors(camera.position, earthAt).normalize();
-    const toSun = earthAt.clone().negate().normalize();
-    const offSun = THREE.MathUtils.radToDeg(
-      Math.acos(THREE.MathUtils.clamp(toCamera.dot(toSun), -1, 1)),
-    );
-    const sin = Math.sin(THREE.MathUtils.degToRad(offSun));
-    const cos = Math.cos(THREE.MathUtils.degToRad(offSun));
-    const separation = MOON_RANGE * sin * distance
-      / Math.max(1e-4, distance - MOON_RANGE * worldRadius * cos);
-    console.info(
-      "[eclipse] cameraDistance=%s bodyRadius=%s offSunDeg=%s moonRange=%s "
-      + "predictedSeparation=%s bodyRadii (want 2.5) homeDistance=%s",
-      distance.toFixed(2), worldRadius.toFixed(3), offSun.toFixed(1),
-      MOON_RANGE.toFixed(2), separation.toFixed(2), homeDistance.toFixed(2),
-    );
-  }
-
-  /** Set false to silence the temporary geometry trace. */
-  const SHOW_ECLIPSE_TRACE = true;
-  let tracedStep = -1;
-
   const moonAt = new THREE.Vector3();
   const landing = new THREE.Vector3();
   const middle = new THREE.Vector3();
@@ -6620,35 +6584,6 @@ function createSolarEclipse(target, camera) {
       // would be seen end-on and there would be nothing to see.
       cone.material.opacity = onDisc * totality * 0.34;
       landing.normalize();
-      /*
-       * Four samples across the event, reporting where the Moon actually
-       * ended up rather than where the geometry intended to put it.
-       *
-       * Temporary, same as the build-time line above. The distinction is
-       * the whole lesson of this event: the solver was reporting a correct
-       * 2.5 radii of separation for a position a chain-of-calls bug meant
-       * the Moon never took, and only a measurement taken *after* the
-       * assignment would have caught it.
-       */
-      if (SHOW_ECLIPSE_TRACE) {
-        const step = Math.floor(progress * 4);
-        if (step !== tracedStep) {
-          tracedStep = step;
-          const earthAt = target.getWorldPosition(scratchProjection);
-          const moonWorld = moon.getWorldPosition(new THREE.Vector3());
-          const bodyDistance = camera.position.distanceTo(earthAt);
-          const moonDistance = camera.position.distanceTo(moonWorld);
-          console.info(
-            "[eclipse] p=%s moonFromEarth=%s bodyRadii sunward=%s "
-            + "moonDist/earthDist=%s shadowOnDisc=%s",
-            progress.toFixed(2),
-            (moonAt.length() / radius).toFixed(2),
-            moonAt.clone().normalize().dot(sunLocal).toFixed(2),
-            (moonDistance / bodyDistance).toFixed(2),
-            onDisc.toFixed(2),
-          );
-        }
-      }
     },
     dispose() {
       if (satellites) satellites.visible = satellitesWereVisible;
@@ -6657,14 +6592,11 @@ function createSolarEclipse(target, camera) {
        * planet is spinning anyway and its phase is arbitrary. The satellite
        * system keeps its counter-rotation for the same reason: together they
        * mean the Moon comes back exactly where it was.
+       *
+       * The Moon's geometry belongs to the scene and must not be touched --
+       * disposing it would take the real Moon down with it and it would not
+       * come back. The material is this event's own clone, so that does go.
        */
-      /*
-       * The Moon's geometry and material are the scene's, not this event's.
-       * Disposing them here would take the real Moon down with them, and it
-       * would not come back -- so only what was actually built here is freed.
-       */
-      // The geometry is the scene's and must not be touched; the material
-      // is this event's own clone and must be.
       if (!realMoon) moon.geometry.dispose();
       moon.material.dispose();
       penumbraCap.mesh.geometry.dispose(); penumbraCap.material.dispose();
@@ -6755,7 +6687,17 @@ function createMercurySodiumTail(target, camera) {
     // grows with distance -- slowly, because radiation pressure is very
     // nearly parallel.
     const around = Math.random() * Math.PI * 2;
-    const off = Math.pow(Math.random(), 0.6) * (0.16 + along * 0.62);
+    /*
+     * How far off the axis, and it is narrower than it was.
+     *
+     * The plume widens downwind -- radiation pressure is very nearly
+     * parallel, so the spread is slow -- but at 0.16 plus 0.62 of the way
+     * along, the far end came out wider than the planet before the grains'
+     * own size was counted, and it read as a broad fan rather than as a
+     * tail. Brought down to about Mercury's own width at its widest, which
+     * is the note, and still obviously wider than the point it leaves from.
+     */
+    const off = Math.pow(Math.random(), 0.6) * (0.09 + along * 0.36);
     /*
      * Where this atom is in its own journey at the start, and how fast it
      * makes it.
@@ -6801,7 +6743,7 @@ function createMercurySodiumTail(target, camera) {
        * as a continuous gas and is nowhere near large enough for any single
        * one of them to be seen as a blob.
        */
-      uGrain: { value: radius * 0.085 },
+      uGrain: { value: radius * 0.070 },
       uHeight: { value: viewportHeight() },
       uTime: { value: 0 },
     },
@@ -6959,7 +6901,7 @@ function createMercurySodiumTail(target, camera) {
       material.uniforms.uGain.value = strength * 0.105;
 
       halo.position.set(0, 0, 0);
-      halo.scale.setScalar(radius * (1.35 + strength * 0.5));
+      halo.scale.setScalar(radius * (1.10 + strength * 0.4));
       halo.material.opacity = strength * 0.032;
     },
     dispose() {
@@ -7602,7 +7544,23 @@ function createSupernova(target, camera, context = {}) {
        * curve: bigger, not just bluer, and decaying away as the photosphere
        * cools into the plateau.
        */
-      const breakout = Math.exp(-progress / 0.075);
+      /*
+       * The breakout, and it no longer starts at full.
+       *
+       * It used to be `exp(-progress / 0.075)`, which is 1 at progress zero
+       * -- so the star arrived already blinding and could only get dimmer.
+       * That is defensible physics for a shock breakout, which really is
+       * near-instantaneous, and it is the wrong picture here: the kilonova
+       * comes up over its first fifth and reads far better for it, and this
+       * event should do the same.
+       *
+       * Multiplying by a rise turns the spike into a swell. It still peaks
+       * early -- about a twentieth of the way in, roughly a second -- and
+       * still decays into the plateau, so the blue-white phase is still the
+       * brightest the star ever is. It just gets there rather than starting
+       * there.
+       */
+      const breakout = smoothstep(0, 0.045, progress) * Math.exp(-progress / 0.10);
 
       /*
        * Brightness on a compressed scale, which is how brightness is always
@@ -7624,7 +7582,7 @@ function createSupernova(target, camera, context = {}) {
        * The spike decays over the first couple of seconds, by which time
        * the rise has taken over.
        */
-      const glow = Math.max(Math.pow(shape, 0.38), breakout * 0.95);
+      const glow = Math.max(Math.pow(shape, 0.38), breakout * 1.35);
 
       /*
        * The core is deliberately not the brightest thing any more.
