@@ -55,11 +55,21 @@ import {
  *               it parallaxes against everything above and gives the sky depth
  *
  * Layers 1-3 are parented to a group that is moved to the camera every frame.
- * At these distances that is not a cheat, it is the correct physics: nothing
- * in this list is closer than four light years and no amount of travelling
- * inside one planetary system moves any of it. It also means every vertex sits
- * at exactly the shell radius from the lens, so the far plane can never clip
- * the sky however far out the journey goes.
+ *
+ * Be precise about what that is and is not. It is a *rendering* rule: every
+ * object in those layers is placed on one shell at a fixed radius from the
+ * lens, in its real direction and at its real angular size, but not at its
+ * real distance. Alpha Centauri and the Andromeda Galaxy sit at the same
+ * radius here and are four light years and two and a half million light years
+ * away respectively.
+ *
+ * The rule is a good approximation rather than a cheat, and the reason is
+ * worth stating so nobody later mistakes it for a licence: the nearest thing
+ * in this catalogue is about 4.4 light years off, and the whole journey this
+ * site offers is a few hundred AU -- roughly a millionth of that -- so the
+ * parallax the shell throws away is far below one pixel. It also means every
+ * vertex sits at exactly the shell radius from the lens, so the far plane can
+ * never clip the sky however far out the journey goes.
  */
 
 const DEG = Math.PI / 180;

@@ -14,6 +14,7 @@ import { createSaturnSurfaceMaterial } from "../planets/saturn/saturn.js";
 import { createSaturnRingSystem, updateSaturnRingSystem } from "../planets/saturn/saturnRings.js";
 import { createUranusRingSystem, updateUranusRingSystem } from "../planets/uranus/uranusRings.js";
 import { createNeptuneRingSystem, updateNeptuneRingSystem } from "../planets/neptune/neptuneRings.js";
+import { createJupiterRingSystem, updateJupiterRingSystem } from "../planets/jupiter/jupiterRings.js";
 import {
   applyNeptuneOblateness,
   createNeptuneAtmosphereLayers,
@@ -1268,16 +1269,14 @@ function addGiantPlanetRings(planet, config, textures, segmentScale = 1, hoverTa
   }
 
   if (config.name === "Jupiter") {
-    const r = config.radius;
-    const bands = [
-      { innerRadius: r * 1.20, outerRadius: r * 1.28, color: 0x8b766b, opacity: 0.055 },
-      { innerRadius: r * 1.31, outerRadius: r * 1.47, color: 0x9f8d83, opacity: 0.040 },
-      { innerRadius: r * 1.49, outerRadius: r * 1.66, color: 0xb3a39a, opacity: 0.025 },
-    ];
-    bands.forEach((profile, index) => {
-      const band = createRingBand({ ...profile, segments: ringSegments });
-      band.name = `Jupiter dust ring ${index + 1}`;
-      group.add(band);
+    // Four named components at their measured radii (halo, main, and the two
+    // gossamer rings), each carrying its real vertical thickness rather than a
+    // flat annulus. Named and clickable, so they reach the dossier ring roster.
+    return createJupiterRingSystem({
+      planet,
+      radius: config.radius,
+      quality: segmentScale < 0.7 ? "low" : segmentScale < 0.9 ? "medium" : "high",
+      hoverTargets,
     });
   }
 
@@ -1493,7 +1492,26 @@ export function createPlanet({
   if (["Jupiter", "Saturn", "Uranus", "Neptune"].includes(config.name)) {
     mesh.userData.visualLayers.ringSystem = addGiantPlanetRings(mesh, config, textures, segmentScale, hoverTargets);
     const ringBoundsMultiplier = {
-      Jupiter: 1.92,
+      /*
+       * Framed on the main ring, not on the whole system.
+       *
+       * Thebe's gossamer ring fades out near 226,000 km -- 3.16 equatorial
+       * radii -- and framing for that was tried first. It is the wrong trade.
+       * Saturn earns its 2.58 because the thing being framed is bright and is
+       * the reason anyone looks at Saturn; Jupiter's outer two components are
+       * dust at a few hundredths of an opacity, so standing back far enough
+       * to hold them shrinks the planet, the Great Red Spot and 115 moons to
+       * fit something that is barely a smudge. Checked in a frame grab: at
+       * 3.30 Jupiter is a dot.
+       *
+       * The main ring's outer edge is at 129,000 km, 1.80 radii, and that is
+       * the part of the system that can actually be seen. Framing it with the
+       * same margin the old bands had leaves the planet almost exactly the
+       * size it has always been on arrival. The gossamer rings are still
+       * drawn and still clickable; they are simply not what the shot is
+       * composed for.
+       */
+      Jupiter: 2.10,
       Saturn: 2.58,
       Uranus: 2.34,
       // Adams lies at about 2.54 Neptune equatorial radii. A small margin keeps
@@ -1583,6 +1601,8 @@ export function updatePlanetVisuals(planet, time, motionScale = 1, camera = null
       updateUranusRingSystem(layers.ringSystem, time, camera);
     } else if (planet.name === "Neptune") {
       updateNeptuneRingSystem(layers.ringSystem, time, camera, motionScale);
+    } else if (planet.name === "Jupiter") {
+      updateJupiterRingSystem(layers.ringSystem, time, camera, motionScale);
     } else if (typeof layers.ringSystem.update === "function") {
       // Haumea and Quaoar: differential rotation, inner ring fastest.
       layers.ringSystem.update(0.016 * motionScale);

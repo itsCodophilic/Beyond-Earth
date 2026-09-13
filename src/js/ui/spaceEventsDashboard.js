@@ -72,12 +72,17 @@ export function createSpaceEventsDashboard({ events, trigger = null, onView = nu
    */
   const rows = roster.map((event) => `
     <li class="events-dashboard__event" data-event-id="${event.id}"
-        data-search="${normalise(`${event.body} ${event.title} ${event.detail} ${event.frequency} ${event.cause} ${event.note}`)}">
+        data-event-kind="${event.kind}"
+        data-search="${normalise(`${event.body} ${event.title} ${event.detail} ${event.frequency} ${event.cause} ${event.note} ${event.kindLabel} ${event.kindShort} ${event.familyLabel}`)}">
       <div class="events-dashboard__event-head">
         <span class="events-dashboard__event-body">${event.body}</span>
         <h3 class="events-dashboard__event-title">${event.title}</h3>
         <span class="events-dashboard__count" data-count-for="${event.id}"></span>
       </div>
+      <p class="events-dashboard__tags">
+        <span class="events-dashboard__tag events-dashboard__tag--${event.kind}" title="${event.kindBlurb}">${event.kindLabel}</span>
+        <span class="events-dashboard__tag events-dashboard__tag--family">${event.familyLabel}</span>
+      </p>
       <p class="events-dashboard__event-detail">${event.detail}</p>
       <dl class="events-dashboard__facts">
         <div>
@@ -88,6 +93,10 @@ export function createSpaceEventsDashboard({ events, trigger = null, onView = nu
           <dt>Why it happens</dt>
           <dd>${event.cause}</dd>
         </div>
+        ${event.accuracy ? `<div>
+          <dt>What you are watching</dt>
+          <dd>${event.accuracy}</dd>
+        </div>` : ""}
       </dl>
       <p class="events-dashboard__event-note">${event.note}</p>
       <button class="events-dashboard__play" type="button" data-play="${event.id}">
@@ -111,7 +120,10 @@ export function createSpaceEventsDashboard({ events, trigger = null, onView = nu
       <p class="events-dashboard__intro">
         Every one of these is real, and the rates are measured rather than
         invented. Pick one and you will be taken to the world it happens on to
-        watch it.
+        watch it. Each is tagged with what kind of thing it is: a
+        <strong>one-off event</strong> happens and is over, a
+        <strong>recurring event</strong> comes back on a schedule, and an
+        <strong>ongoing process</strong> never stops in the first place.
       </p>
 
       <div class="events-dashboard__search">

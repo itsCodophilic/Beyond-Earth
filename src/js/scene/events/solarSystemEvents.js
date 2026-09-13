@@ -7980,11 +7980,65 @@ function createKilonova(target, camera, context = {}) {
  * validated detections over 283 hours" tells them both the rate and how
  * confident to be about it.
  */
+/**
+ * What kind of thing an event is.
+ *
+ * The roster had grown to seventeen entries and was quietly mixing three
+ * different things under one word. A lunar impact flash happens once and is
+ * gone. A meteor shower comes back on the same dates every year because the
+ * debris stream is a fixed place in Earth's orbit. Io's volcanoes never stop
+ * at all -- what varies is which vent is running, not whether anything is.
+ *
+ * Calling all three "events" is not wrong so much as unhelpful: it tells a
+ * reader nothing about whether the thing they are watching is a rarity, a
+ * date in the calendar, or the normal state of that world. So each entry says
+ * which it is, in words a reader does not have to be taught.
+ */
+const EVENT_KINDS = Object.freeze({
+  transient: {
+    short: "one-off",
+    label: "One-off event",
+    blurb: "It happens, it runs its course, and it is over. The next one is a separate event.",
+  },
+  recurring: {
+    short: "recurring",
+    label: "Recurring event",
+    blurb: "The same thing comes back on a schedule, set by an orbit, a season, or the solar cycle.",
+  },
+  ongoing: {
+    short: "ongoing",
+    label: "Ongoing process",
+    blurb: "It never actually stops. What changes is how strong it is, not whether it is happening.",
+  },
+});
+
+/**
+ * And what kind of physics it belongs to.
+ *
+ * Grouping by the world an event lands on hides the thing they have in
+ * common: a sungrazing comet is filed under the Sun because that is where it
+ * is watched, but it is a comet dying, not the Sun doing anything. The family
+ * says what the event actually is.
+ */
+const EVENT_FAMILIES = Object.freeze({
+  solar: "Solar and heliophysical",
+  planetary: "Planetary atmosphere",
+  smallBody: "Small body and cometary",
+  impact: "Impact",
+  ring: "Ring",
+  surface: "Surface and interior activity",
+  alignment: "Orbital alignment",
+  deepSky: "Deep sky, beyond the Solar System",
+});
+
 const EVENTS = [
   {
     id: "jupiter-impact",
     body: "Jupiter",
     title: "Impact swarm",
+    kind: "transient",
+    family: "impact",
+    accuracy: "A representative impact, not a replay of one documented arrival. Bodies this size do strike Jupiter at the rate given, but each one comes in on its own orbit and nobody has photographed a swarm.",
     detail: "Several metre-scale asteroids fall in from different directions and detonate in Jupiter's upper atmosphere",
     frequency: "Objects this size strike Jupiter tens of times a year; Earth-based amateurs catch one or two of the flashes",
     cause: "318 Earth masses of gravity sitting at the inner edge of the asteroid belt. Jupiter bends in main-belt strays kicked out by the 3:1 Kirkwood resonance, Jupiter-family comets, and Centaurs falling from beyond Saturn — so the arrivals come from every direction at once.",
@@ -7996,6 +8050,9 @@ const EVENTS = [
     id: "saturn-impact",
     body: "Saturn",
     title: "Impact swarm",
+    kind: "transient",
+    family: "impact",
+    accuracy: "A representative impact. Saturn's share of the same debris is inferred from ring ripples and from Jupiter's observed rate rather than from a catalogue of watched strikes.",
     detail: "Saturn accretes its own share of the same debris, arriving on unrelated trajectories",
     frequency: "Perhaps a fifth of Jupiter's rate — Saturn is further out and less massive, so its gravitational reach is smaller",
     cause: "The same accretion Jupiter does, and for the same reason. Saturn sweeps up Centaurs on their way in from the Kuiper Belt; several are on orbits that cross its own.",
@@ -8007,6 +8064,8 @@ const EVENTS = [
     id: "io-eruption",
     body: "Io",
     title: "Volcanic plume",
+    kind: "ongoing",
+    family: "surface",
     detail: "Sulphur thrown 300 km above the most volcanic world in the Solar System",
     frequency: "Continuous. Io has around 400 active volcanoes and something is erupting at every moment; Loki Patera brightens on a roughly 500-day cycle",
     cause: "Tidal heating. Io is locked in a 4:2:1 resonance with Europa and Ganymede that keeps its orbit eccentric, so Jupiter's tides knead it constantly — enough to melt its interior.",
@@ -8017,6 +8076,8 @@ const EVENTS = [
     id: "enceladus-plumes",
     body: "Enceladus",
     title: "Ocean venting to space",
+    kind: "ongoing",
+    family: "surface",
     detail: "Over a hundred jets of salty water ice leaving the south pole",
     frequency: "Continuous, and modulated by the orbit — the jets are measurably stronger at apoapsis, when tidal stress pulls the fractures open",
     cause: "A global subsurface ocean under an ice shell, kept liquid by tidal flexing from Saturn, venting through four fractures across the south pole that Cassini named the tiger stripes.",
@@ -8027,6 +8088,9 @@ const EVENTS = [
     id: "meteor-shower",
     body: "Earth",
     title: "Meteor shower",
+    kind: "recurring",
+    family: "smallBody",
+    accuracy: "A representative shower rather than a named one. The rate, the radiant behaviour and the fixed annual dates are the real ones; the particular stream is not identified.",
     detail: "Earth crosses a comet's debris trail, as it does on the same dates each year",
     frequency: "About a dozen major showers a year on fixed dates — the Perseids peak 12–13 August, the Geminids 13–14 December",
     cause: "Earth's orbit intersects streams of debris shed by comets on earlier passes. The dates are fixed because the streams are: the crossing point is a place in Earth's orbit, so it comes round once a year.",
@@ -8048,6 +8112,8 @@ const EVENTS = [
     id: "solar-cme",
     body: "Sun",
     title: "Coronal mass ejection",
+    kind: "transient",
+    family: "solar",
     detail: "A billion tonnes of plasma leaving the corona at up to 3,000 km/s",
     frequency: "Several a day at solar maximum, about one every five days at minimum — an eleven-year cycle",
     cause: "Magnetic reconnection. The Sun's field gets wound up by differential rotation until a loop snaps and reconnects, releasing the stored energy and flinging the plasma it was containing.",
@@ -8058,6 +8124,8 @@ const EVENTS = [
     id: "sungrazer",
     body: "Sun",
     title: "Sungrazing comet",
+    kind: "transient",
+    family: "smallBody",
     detail: "A comet dives to within a couple of solar radii and does not come out",
     frequency: "SOHO finds a Kreutz sungrazer on average every three days, and has discovered over 4,000 comets in total — about 85% of them from that one family",
     cause: "The Kreutz group are all fragments of a single giant comet that broke up on an earlier pass, probably in the twelfth century. They are still arriving one at a time on the same orbit.",
@@ -8074,6 +8142,8 @@ const EVENTS = [
     id: "mars-dust-storm",
     body: "Mars",
     title: "Global dust storm",
+    kind: "recurring",
+    family: "planetary",
     detail: "A regional storm fails to die and instead wraps the entire planet",
     frequency: "Once every three Mars years on average — about 5½ Earth years",
     cause: "Mars's orbit is eccentric, so southern summer coincides with perihelion. The planet gets hot enough for the radiative forcing to lift dust faster than it settles; the airborne dust then absorbs sunlight, heats the air, and drives the winds that lift more.",
@@ -8089,6 +8159,8 @@ const EVENTS = [
     id: "saturn-white-spot",
     body: "Saturn",
     title: "Great White Spot",
+    kind: "recurring",
+    family: "planetary",
     detail: "A storm erupts and spreads along its latitude until it wraps the planet",
     frequency: "Roughly once per Saturnian year — once every 30 Earth years. The last was 2010",
     cause: "Water vapour is heavy enough to sit far below the visible cloud deck and cannot convect through the lighter dry air above it. Heat accumulates underneath for decades until the layer finally overturns all at once.",
@@ -8114,6 +8186,8 @@ const EVENTS = [
     id: "ring-spokes",
     body: "Saturn",
     title: "Ring spokes",
+    kind: "recurring",
+    family: "ring",
     detail: "Radial smears thousands of kilometres long form across the B ring and shear away",
     frequency: "Seasonal — around Saturn's equinoxes, so twice per 29.4-year orbit, roughly every 15 years. Northern autumn equinox fell on 6 May 2025, so this is spoke season",
     cause: "Dust-sized icy grains pick up electrical charge and levitate above the ring plane, where Saturn's rigidly rotating magnetic field controls them instead of Kepler's laws.",
@@ -8137,6 +8211,8 @@ const EVENTS = [
     id: "lunar-impact-flash",
     body: "Moon",
     title: "Lunar impact flash",
+    kind: "transient",
+    family: "impact",
     detail: "Gravel-sized meteoroids hit the surface at full speed and flash",
     frequency: "About 0.68 validated flashes per hour of observation — NELIOTA recorded 192 in 283 hours between 2017 and 2023",
     cause: "No atmosphere. A meteoroid that would burn up harmlessly over Earth reaches the lunar surface at tens of kilometres a second and converts all of that energy to heat instantly.",
@@ -8177,6 +8253,9 @@ const EVENTS = [
     id: "solar-eclipse",
     body: "Earth",
     title: "Solar eclipse",
+    kind: "recurring",
+    family: "alignment",
+    accuracy: "A representative total eclipse. Whether a real one is total, annular, partial or hybrid depends on how far away the Moon happens to be that day; this is the total case.",
     detail: "The Moon's shadow lands on Earth and races across it",
     frequency: "Between two and five solar eclipses a year; any given place on Earth waits an average of 375 years for a total one",
     cause: "The Moon's orbit is tilted about 5° to Earth's, so at most new moons the shadow passes above or below. Only a new moon near an orbital node puts the shadow on the surface.",
@@ -8233,6 +8312,8 @@ const EVENTS = [
     id: "supernova",
     body: null,
     title: "Supernova",
+    kind: "transient",
+    family: "deepSky",
     detail: "A massive star collapses and detonates, lighting up the dust around it for months",
     frequency: "About two per century in the Milky Way. The last one seen from Earth with the naked eye was probably in 1680",
     cause: "A star above about eight solar masses runs out of fuel, its iron core collapses to a neutron star in under a second, and the infalling envelope rebounds off it.",
@@ -8243,6 +8324,8 @@ const EVENTS = [
     id: "kilonova",
     body: null,
     title: "Kilonova",
+    kind: "transient",
+    family: "deepSky",
     detail: "Two neutron stars merge and throw off debris that builds gold and platinum in seconds",
     frequency: "Rare enough that one has been caught once — GW170817, on 17 August 2017, in a galaxy 130 million light-years away",
     cause: "Two neutron stars spiral together and merge, flinging out a few per cent of a solar mass of neutron-rich debris that runs rapid neutron capture and builds elements past iron.",
@@ -8253,6 +8336,8 @@ const EVENTS = [
     id: "mercury-sodium-tail",
     body: "Mercury",
     title: "Sodium tail",
+    kind: "ongoing",
+    family: "planetary",
     detail: "Mercury streams a comet-like tail of sodium roughly 24 million km anti-sunward",
     frequency: "Every orbit — 88 days — peaking about 16 days either side of perihelion",
     cause: "Solar wind and micrometeorites knock sodium off the surface into Mercury's exosphere, and radiation pressure at the 589 nm sodium line pushes it away from the Sun.",
@@ -8284,6 +8369,8 @@ const EVENTS = [
     id: "uranus-storms",
     body: "Uranus",
     title: "Bright storm outbreak",
+    kind: "recurring",
+    family: "planetary",
     detail: "Methane-ice cloud tops erupt across the northern hemisphere",
     frequency: "Seasonal. Activity has been climbing since the 2007 equinox; Keck counted eight large storms in a single night in August 2014",
     cause: "Uranus is tipped 98°, so for decades one pole faces the Sun and the atmosphere has nothing to drive it. Sunlight returning to both hemispheres after equinox restarts the weather.",
@@ -8306,6 +8393,8 @@ const EVENTS = [
     id: "triton-geysers",
     body: "Triton",
     title: "Nitrogen geysers",
+    kind: "ongoing",
+    family: "surface",
     detail: "Dark plumes rise 8 km and then bend over and stream 150 km downwind",
     frequency: "Individual vents can run for about a year; Voyager 2 caught at least two erupting during its 1989 flyby",
     cause: "A solid-state greenhouse. Sunlight passes through transparent nitrogen ice and warms darker material a metre or two below; the nitrogen there sublimates, pressure builds under the cap, and it vents — carrying dark dust with it.",
@@ -8355,9 +8444,11 @@ export function createSolarSystemEvents({
    * Where an event with no body is staged.
    *
    * A group that rides with the camera at the deep-sky shell radius -- the
-   * same trick `deepSky.js` uses, and correct rather than a cheat, since
-   * nothing on that shell is closer than four light-years and no amount of
-   * travelling inside one planetary system moves any of it.
+   * same rendering rule `deepSky.js` uses, and stated there: the shell radius
+   * is a drawing distance, not a physical one. It is a sound approximation
+   * because the nearest real thing on that shell is over four light years
+   * away and this journey spans a few hundred AU, so the parallax being
+   * discarded is well under a pixel.
    */
   skyAnchor = null,
   /**
@@ -8471,6 +8562,10 @@ export function createSolarSystemEvents({
         title: definition.title,
         detail: definition.detail,
         note: definition.note,
+        // So the card can say whether this is a rarity or the normal state of
+        // that world, which changes what the viewer is looking for.
+        kindShort: EVENT_KINDS[definition.kind]?.short ?? "",
+        kindLabel: EVENT_KINDS[definition.kind]?.label ?? "",
         // A sky event is staged in front of the lens by construction.
         visible: definition.body === null ? true : isOnScreen(host),
       });
@@ -8519,6 +8614,22 @@ export function createSolarSystemEvents({
       /** True when the event is staged against the sky rather than on a world. */
       isSky: event.body === null,
       title: event.title,
+      /**
+       * Transient, recurring, or ongoing -- and what kind of physics it is.
+       * Carried as the raw key plus the reader-facing words, so the dashboard
+       * never has to know the vocabulary and cannot drift out of step with it.
+       */
+      kind: event.kind,
+      kindLabel: EVENT_KINDS[event.kind]?.label ?? "",
+      kindShort: EVENT_KINDS[event.kind]?.short ?? "",
+      kindBlurb: EVENT_KINDS[event.kind]?.blurb ?? "",
+      family: event.family,
+      familyLabel: EVENT_FAMILIES[event.family] ?? "",
+      /**
+       * Present only where the staging is a representative case rather than a
+       * particular recorded occurrence, and says so in those words.
+       */
+      accuracy: event.accuracy ?? null,
       detail: event.detail,
       frequency: event.frequency,
       cause: event.cause,

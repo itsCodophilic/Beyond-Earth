@@ -1309,9 +1309,18 @@ import { POINTER_PROXY_LAYER } from "./scene/pointerProxies.js";
     if (!event) return;
     solarEventCurrentId = event.id ?? solarEventCurrentId;
     solarEventPhase = "running";
+    /*
+     * The eyebrow carries the kind as well as the world.
+     *
+     * "Happening now" is true of all seventeen and therefore says nothing
+     * about which of them this is. Io's volcanoes have been erupting the
+     * whole time the viewer has been in the system; a lunar impact flash is
+     * over in a second and will not repeat. One word separates them.
+     */
+    const kind = event.kindShort ? ` · ${event.kindShort}` : "";
     solarEventEyebrow.textContent = event.visible
-      ? `${event.body} · happening now`
-      : `${event.body} · happening now, off screen`;
+      ? `${event.body}${kind} · happening now`
+      : `${event.body}${kind} · happening now, off screen`;
     solarEventTitle.textContent = event.title;
     solarEventDetail.textContent = event.detail;
     solarEventNote.textContent = event.note;

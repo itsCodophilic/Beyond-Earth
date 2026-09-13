@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { markPointerProxy } from "../../scene/pointerProxies.js";
+import { ringProximityFade, applyRingProximityVisibility } from "../ringProximity.js";
 
 // Scratch vectors reused by the per-frame update below. Allocating a fresh
 // Vector3 on every animation frame produced steady garbage-collector pressure,
@@ -146,6 +147,7 @@ function createDustBandMaterial({ innerRadius, outerRadius, color, opacity }) {
       uBaseOpacity: { value: opacity },
       uHover: { value: 0 },
       uInspection: { value: 0 },
+      uFarFade: { value: 1 },
     },
     vertexShader: `
       varying vec2 vLocalPosition;
@@ -161,6 +163,7 @@ function createDustBandMaterial({ innerRadius, outerRadius, color, opacity }) {
       uniform float uBaseOpacity;
       uniform float uHover;
       uniform float uInspection;
+      uniform float uFarFade;
       varying vec2 vLocalPosition;
 
       float hash21(vec2 p) {
@@ -182,17 +185,18 @@ function createDustBandMaterial({ innerRadius, outerRadius, color, opacity }) {
         float lane = 0.66 + 0.34 * sin(radial * 74.0 + angle * 9.0);
         float dust = mix(0.23, 1.0, coarse * 0.58 + fine * 0.42) * lane;
 
-        // Keep Neptune's rings faint but continuously readable at every camera
-        // distance. Close inspection reveals more dust without making the ring
-        // sheet disappear completely.
-        float distanceVisibility = mix(1.18, 0.72, uInspection);
+        // Slightly stronger close up, where the ring is resolved, rather than
+        // the other way round. This read mix(1.18, 0.72, uInspection) and
+        // was the main reason Neptune's rings outshone Neptune from the
+        // system view -- see ringProximity.js.
+        float distanceVisibility = mix(0.88, 1.10, uInspection);
         float baseAlpha = uBaseOpacity * edge * (0.52 + dust * 0.48) * distanceVisibility;
 
         // Hover must produce an unmistakable full-ring highlight rather than
         // only brightening the few dust grains directly under the pointer.
         // On hover the full ring should become very easy to read, not just slightly brighter.
         float hoverAlpha = max(uBaseOpacity * 5.0, 0.36) * edge * (0.88 + dust * 0.12);
-        float alpha = mix(baseAlpha, hoverAlpha, uHover);
+        float alpha = mix(baseAlpha, hoverAlpha, uHover) * uFarFade;
         vec3 hoverColour = vec3(0.78, 0.86, 0.92);
         vec3 colour = mix(uColor, hoverColour, uHover * 0.72);
         gl_FragColor = vec4(colour, clamp(alpha, 0.0, 0.72));
@@ -545,7 +549,12 @@ export function updateNeptuneRingSystem(system, time, camera, motionScale = 1) {
     const targetInspection = 1 - THREE.MathUtils.smoothstep(normalizedDistance, 6.5, 22.0);
     inspection = THREE.MathUtils.lerp(inspection, targetInspection, 0.08);
     system.userData.inspection = inspection;
+
+    // Neptune's rings belong to Neptune, not to the system view.
+    system.userData.farFade = ringProximityFade(normalizedDistance);
   }
+  const farFade = system.userData.farFade ?? 1;
+  if (!applyRingProximityVisibility(system, farFade)) return;
 
   const activeIndex = system.userData.hoveredRegionIndex ?? -1;
   const hoverStrength = system.userData.hoverStrength ?? 0;
@@ -558,6 +567,9 @@ export function updateNeptuneRingSystem(system, time, camera, motionScale = 1) {
     if (band.material?.uniforms?.uInspection) {
       band.material.uniforms.uInspection.value = inspection;
     }
+    if (band.material?.uniforms?.uFarFade) {
+      band.material.uniforms.uFarFade.value = farFade;
+    }
   });
 
   system.userData.dustLayers?.forEach((dust, index) => {
@@ -569,7 +581,7 @@ export function updateNeptuneRingSystem(system, time, camera, motionScale = 1) {
       base * (0.46 + inspection * 1.10) * (isActive ? 1 + hoverStrength * 3.80 : 1),
       0.025,
       0.95,
-    );
+    ) * farFade;
     dust.rotation.y += (0.000015 + index * 0.000003) * motionScale;
   });
 
@@ -585,7 +597,7 @@ export function updateNeptuneRingSystem(system, time, camera, motionScale = 1) {
       base * proximityReveal * (arcHovered ? 1 + hoverStrength * 1.35 : 1),
       0.012,
       0.42,
-    );
+    ) * farFade;
     arc.rotation.y += (0.000028 + index * 0.000002) * motionScale;
   });
 }

@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { markPointerProxy } from "../../scene/pointerProxies.js";
+import { ringProximityFade, applyRingProximityVisibility } from "../ringProximity.js";
 
 // Scratch vectors reused by the per-frame update below. Allocating a fresh
 // Vector3 on every animation frame produced steady garbage-collector pressure,
@@ -333,6 +334,7 @@ function createFieldMaterial({ additive = false, glow = false, halo = false } = 
       uHoverBoost: { value: 1 },
       uPixelRatio: { value: PIXEL_RATIO },
       uDistanceVisibility: { value: 1 },
+      uFarFade: { value: 1 },
       uGlowLayer: { value: glow ? 1 : 0 },
       uHaloLayer: { value: halo ? 1 : 0 },
     },
@@ -353,6 +355,7 @@ function createFieldMaterial({ additive = false, glow = false, halo = false } = 
       varying float vHaloLayer;
       uniform float uPixelRatio;
       uniform float uDistanceVisibility;
+      uniform float uFarFade;
       uniform float uHover;
       uniform float uHoverBoost;
       uniform float uGlowLayer;
@@ -382,6 +385,7 @@ function createFieldMaterial({ additive = false, glow = false, halo = false } = 
       uniform float uHover;
       uniform float uSystemHover;
       uniform float uHoverBoost;
+      uniform float uFarFade;
       varying vec3 vColor;
       varying float vAlpha;
       varying float vSeed;
@@ -416,7 +420,7 @@ function createFieldMaterial({ additive = false, glow = false, halo = false } = 
           float glowMask = 1.0 - smoothstep(0.08, 0.50, r);
           float core = 1.0 - smoothstep(0.0, 0.22, r);
           float alpha = vAlpha * glowMask * (0.55 + core * 0.60) * uOpacityBoost;
-          alpha *= 1.0 + uHover * (1.45 + uHoverBoost * 0.22);
+          alpha *= (1.0 + uHover * (1.45 + uHoverBoost * 0.22)) * uFarFade;
           if (alpha < 0.008) discard;
           vec3 glowColour = mix(vColor, vec3(0.78, 0.95, 1.0), 0.56 + uHover * 0.18);
           gl_FragColor = vec4(glowColour, min(alpha, 0.92));
@@ -439,7 +443,7 @@ function createFieldMaterial({ additive = false, glow = false, halo = false } = 
         float nonSelectedDim = mix(1.0, 0.42, uSystemHover * (1.0 - uHover));
 
         float alpha = vAlpha * edge * selectedBoost * nonSelectedDim * roughShadow * twinkle * uOpacityBoost;
-        alpha *= (vHaloLayer > 0.5 ? 0.78 : 1.0);
+        alpha *= (vHaloLayer > 0.5 ? 0.78 : 1.0) * uFarFade;
         if (alpha < 0.010) discard;
 
         vec3 colour = vColor;
@@ -650,6 +654,9 @@ export function createUranusRingSystem({ planet, radius, quality = "high", hover
     glowFields,
     chunkFields,
     targets,
+    // The shared proximity helper takes the pointer targets out along with
+    // the rings; it looks for them under this name.
+    interactionTargets: targets,
     hover: -1,
     targetHover: -1,
     hoverStrength: 0,
@@ -675,7 +682,20 @@ export function updateUranusRingSystem(system, time, camera = null) {
     const worldPosition = uranusRingWorldPosition;
     system.getWorldPosition(worldPosition);
     const distance = camera.position.distanceTo(worldPosition);
-    distanceVisibility = THREE.MathUtils.clamp(0.98 + distance / 46.0, 1.0, 2.25);
+    /*
+     * Sprite inflation with distance, and it used to run to 2.25x.
+     *
+     * The intent was that a ring particle never shrinks below a pixel and
+     * winks out. The effect, from the system view, was that Uranus's rings
+     * grew while Uranus did not -- which is what was reported as the rings
+     * glowing from far away. Capped at 1.35x now, and the fade below takes
+     * the system off entirely long before the cap is reached, so the reason
+     * the inflation existed no longer applies.
+     */
+    distanceVisibility = THREE.MathUtils.clamp(0.98 + distance / 90.0, 1.0, 1.35);
+
+    const planetRadius = Number(system.parent?.userData?.visualRadius ?? 1);
+    system.userData.farFade = ringProximityFade(distance / Math.max(planetRadius, 0.001));
 
     // Apparent ring radius in pixels. The ring system spans roughly twice the
     // planet's visual radius, which is accurate enough to drive detail.
@@ -688,6 +708,9 @@ export function updateUranusRingSystem(system, time, camera = null) {
     );
   }
 
+  const farFade = system.userData.farFade ?? 1;
+  if (!applyRingProximityVisibility(system, farFade)) return;
+
   const hoverIndex = system.userData.hover;
   const systemHover = hoverIndex >= 0 ? system.userData.hoverStrength : 0;
   const updateField = (points, index, boost = 1) => {
@@ -698,6 +721,7 @@ export function updateUranusRingSystem(system, time, camera = null) {
     material.uniforms.uHover.value = selected ? system.userData.hoverStrength * boost : 0;
     material.uniforms.uSystemHover.value = systemHover;
     material.uniforms.uDistanceVisibility.value = distanceVisibility;
+    if (material.uniforms.uFarFade) material.uniforms.uFarFade.value = farFade;
   };
 
   system.userData.particleFields.forEach((points, index) => updateField(points, index, 1.0));
