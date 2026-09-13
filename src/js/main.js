@@ -46,6 +46,8 @@ import {
   updateAsteroidSpinClock,
   updateJupiterTrojanFrame,
 } from './scene/asteroidBelt.js';
+import { createKuiperBelt, updateKuiperBelt, applyKuiperBeltQuality } from './scene/kuiperBelt.js';
+import { createOuterBoundaries, updateOuterBoundaries, applyOuterBoundaryQuality } from './scene/outerBoundaries.js';
 import {
   ASTRONOMICAL_UNIT_KM,
   createEarthDistanceTracker,
@@ -1284,6 +1286,15 @@ import { POINTER_PROXY_LAYER } from "./scene/pointerProxies.js";
        * this handler is defined above it.)
        */
       spaceEventsDashboard?.close();
+      /*
+       * The dossier is the one surface space mode no longer fades, because a
+       * card that was clicked for has to be allowed to appear -- see the note
+       * beside the space-mode rule in cinematic-ui.css. That makes closing it
+       * on the way in this function's job instead of the stylesheet's: a
+       * full-viewport layer with a backdrop would otherwise sit over the empty
+       * sky that is the entire point of the mode.
+       */
+      celestialDetailsPanel?.hide({ restoreFocus: false });
     }
 
     if (spaceModeHintTimer) clearTimeout(spaceModeHintTimer);
@@ -1585,7 +1596,17 @@ composeSolarEventShot(
    * because everything that needs precision is inspected from close range,
    * where a perspective depth buffer has almost all of its resolution.
    */
-  const camera = new THREE.PerspectiveCamera(56, innerWidth / innerHeight, 0.1, 15000);
+  /*
+   * Far plane at 26,000 rather than 15,000.
+   *
+   * From the new maximum camera distance of 11,500 the far wall of the outer
+   * Oort shell is 11,500 + 3,465 = 14,965 away -- which the old far plane cut
+   * off by thirty-five units, so the boundary the viewer had pulled back to
+   * see would have been sliced in half. `near` scales with the focus range
+   * (see the note beside `desiredNear`), so the depth-buffer ratio stays in
+   * the same place it was rather than degrading with the reach.
+   */
+  const camera = new THREE.PerspectiveCamera(56, innerWidth / innerHeight, 0.1, 26000);
   // Keep normal scene layer 0 and also allow the isolated close-inspection
   // layers to participate. Without the Jovian layer the detailed moon geometry
   // existed, but its dedicated sculpting lights never reached the camera.
@@ -2431,6 +2452,12 @@ composeSolarEventShot(
   if (new URLSearchParams(location.search).get("bodyDebug") === "1") {
     window.__bodies = planets;
     window.__orbits = orbitTargets;
+    // Everything the pointer can find, so a target that never gets picked can
+    // be checked for membership rather than guessed at.
+    window.__hoverTargets = hoverTargets;
+    // The dossier, so its rendering can be checked without first solving the
+    // camera problem of getting a pointer onto the thing that opens it.
+    window.__details = celestialDetailsPanel;
     window.__camera = camera;
     // The star, so its plasma batching can be exercised without the render
     // loop -- the only way to check that layer from an automated tab.
@@ -2617,6 +2644,19 @@ composeSolarEventShot(
         focusedUiSuppressedByWideView,
       };
     };
+
+    /*
+     * What the last press resolved to, and what the scene did with it.
+     * A click that never landed and a click that landed on the wrong thing
+     * are indistinguishable from the outside.
+     */
+    window.__clickState = () => ({
+      lastClick: lastPointerResolution,
+      focused: focusedBody?.userData?.name ?? focusedBody?.name ?? null,
+      panelOpen: Boolean(celestialDetailsPanel?.isOpen()),
+      suppressedByWideView: focusedUiSuppressedByWideView,
+      exiting: Boolean(focusExitTransition),
+    });
 
     window.__pickAsteroidAt = (clientX, clientY) => {
       pointer.x = (clientX / innerWidth) * 2 - 1;
@@ -3164,6 +3204,23 @@ composeSolarEventShot(
     });
   }
 
+  /*
+   * Past Neptune there was nothing at all -- eight named worlds with empty
+   * space between them, which is the opposite of what is out there. The belt
+   * is a statistically honest population rather than a catalogue; see
+   * `scene/kuiperBelt.js` for what the five sub-populations are and why the
+   * classical belt has a hard outer edge.
+   */
+  let kuiperBelt = null;
+  /*
+   * And past the belt, the two outer boundaries -- which are not the same
+   * boundary. The heliopause is where the solar *wind* stops, at 120 AU; the
+   * Oort Cloud is where the Sun's *gravity* finally lets go, eight hundred
+   * times further out. Drawing them together is the clearest way to stop the
+   * first being called "the edge of the Solar System".
+   */
+  let outerBoundaries = null;
+
   async function buildAsteroidBeltProgressively() {
     if (asteroidBeltBuildStarted) return;
     asteroidBeltBuildStarted = true;
@@ -3176,6 +3233,24 @@ composeSolarEventShot(
     });
     performance.mark("BE:belt-end");
     setAsteroidBeltQuality(asteroidBelt, asteroidBeltDensity, cinematicPixelRatio);
+
+    // Points rather than sculpted rock, so this is a few milliseconds and does
+    // not need the co-operative yielding the main belt build does.
+    performance.mark("BE:kuiper-start");
+    kuiperBelt = createKuiperBelt({
+      world,
+      hoverTargets,
+      quality: asteroidBeltDensity === "low" ? "low" : "medium",
+      pixelRatio: cinematicPixelRatio,
+    });
+    performance.mark("BE:kuiper-end");
+
+    outerBoundaries = createOuterBoundaries({
+      world,
+      hoverTargets,
+      quality: asteroidBeltDensity === "low" ? "low" : "medium",
+      pixelRatio: cinematicPixelRatio,
+    });
   }
   const earthDistanceTracker = createEarthDistanceTracker({
     earth,
@@ -3376,8 +3451,47 @@ composeSolarEventShot(
      * 5,200 rather than the 7,200 first tried: that framed the system inside
      * a fifth of the height and the bodies stopped being findable, which is
      * the opposite problem to the one being solved.
+     *
+     * And then 11,500, because the system stopped at Sedna when 5,200 was
+     * chosen and it does not any more. The outer Oort Cloud shell sits 3,465
+     * units from the Sun, so from 5,200 out the camera is barely outside it
+     * and the shell subtends about eighty-three degrees -- nearly twice the
+     * frame. It could never be seen whole, only as a wall on both sides.
+     *
+     * The arithmetic for the new number: to fit a sphere of radius R inside a
+     * 56-degree frame with margin, the camera wants to be at about R / sin 18
+     * -- which for 3,465 is 11,200. 11,500 rounds that up and leaves the
+     * outermost boundary comfortably framed. The bodies are tiny there, which
+     * is correct: at that range the subject is the shape of the whole system,
+     * not the worlds in it.
      */
-    return THREE.MathUtils.lerp(4.8, 5200, eased);
+    return THREE.MathUtils.lerp(4.8, 11500, eased);
+  }
+
+  /**
+   * Pitch, wrapped rather than stopped.
+   *
+   * It used to clamp to ±1.1 radians -- 63 degrees -- so dragging up or down
+   * hit a wall well before the camera was over the pole, and the system could
+   * never be looked straight down on. It now goes all the way round.
+   *
+   * Two things have to be right for that to work.
+   *
+   * **The easing must take the short way.** `lerp(pitch, targetPitch, e)`
+   * across the ±π seam walks the long way round the circle -- the identical
+   * bug the eclipse's Earth rotation had, where a shortest-path alignment ran
+   * backwards against the spin. The delta is folded into (-π, π] first.
+   *
+   * **The up vector must flip.** Past the pole `cos(pitch)` goes negative, so
+   * the camera swings to the other side of the focus point and the world is
+   * upside down unless `camera.up` inverts with it. Exactly at the pole the
+   * view direction is parallel to up and `lookAt` is degenerate; three.js
+   * perturbs rather than producing NaN, so it passes through in one frame.
+   */
+  const TAU_ANGLE = Math.PI * 2;
+
+  function wrapAngle(value) {
+    return ((value + Math.PI) % TAU_ANGLE + TAU_ANGLE) % TAU_ANGLE - Math.PI;
   }
 
   /** Converts the current yaw/pitch into the camera offset used by the journey. */
@@ -3478,7 +3592,14 @@ composeSolarEventShot(
    * enough that an orbit guide cannot be seen through the middle of it.
    */
   const SUN_MINIMUM_PIXEL_RADIUS = 4.5;
-  const MAX_CINEMATIC_CAMERA_DISTANCE = 5200;
+  /*
+   * Matched to the journey's ceiling above, so pulling back from a focused
+   * body reaches the same outermost view the scroll does. Raising it also
+   * moves where `isFocusedWideView` trips and how the journey readout blends,
+   * which is the intended consequence rather than a side effect: the wide
+   * view now means the whole heliosphere-and-Oort picture, not the planets.
+   */
+  const MAX_CINEMATIC_CAMERA_DISTANCE = 11500;
   let currentSunAngularRadius = 0;
   let currentSunProjectedRadiusPixels = Infinity;
   let snapSunApparentScaleOnNextFrame = true;
@@ -4047,6 +4168,8 @@ composeSolarEventShot(
     spaceEnvironment.resize(innerWidth, innerHeight, pixelRatio);
     spaceEnvironment.setJourneyProgress(1);
     setAsteroidBeltQuality(asteroidBelt, asteroidBeltDensity, pixelRatio);
+    applyKuiperBeltQuality(kuiperBelt, asteroidBeltDensity === "low" ? "low" : "medium", pixelRatio);
+    applyOuterBoundaryQuality(outerBoundaries, pixelRatio);
 
     renderer.setRenderTarget(null);
     renderer.renderLists?.dispose?.();
@@ -4256,6 +4379,64 @@ composeSolarEventShot(
     return isPlanetRingBody(body);
   }
 
+  /*
+   * Which hovered things use the panel card instead of the locator ring.
+   *
+   * The locator cue and its retention test both assume a body: they project
+   * the object's centre and ask whether the cursor is still within its
+   * silhouette. That is wrong for anything shaped like a band. A ring's centre
+   * is its planet; a Kuiper Belt zone's centre is the Sun -- so hovering the
+   * belt's edge measured the cursor's distance from the Sun, failed, and threw
+   * the hover away on the next frame. The card rendered for a single frame and
+   * nobody ever saw it.
+   *
+   * Ring groups already had the answer: their own card, and a retention test
+   * that re-casts the ray instead of measuring a radius. Regions want exactly
+   * the same treatment, so they share it.
+   */
+  function usesPanelHoverCard(body) {
+    return isSaturnRingBody(body) || body?.userData?.isRegion === true;
+  }
+
+  /**
+   * Which region, when two of them claim the same pixel.
+   *
+   * The Kuiper zones and the outer boundaries are built by two modules that
+   * have never heard of each other, and each sizes its hover bands against
+   * its own neighbours. They overlap, because the things they describe
+   * overlap: the scattered disk really does reach past the termination
+   * shock, and at 85 AU both are genuinely there. So the raycast returns two
+   * valid hits and `.find()` took whichever happened to be nearer the camera
+   * -- which at a shallow angle is decided by the camera, not the cursor.
+   *
+   * Measured consequence: the termination shock's band (2,520 - 2,610) sits
+   * entirely inside the scattered disk's (2,371 - 2,604), so the shock was
+   * reachable only where its tail escaped, and a scan found 23 pixels of it
+   * against the scattered disk's 109.
+   *
+   * The tie-break is the narrower band. A band's width is how much sky the
+   * region is claiming, so the narrow one is making the more specific claim
+   * and is much more likely to be what the cursor was aimed at -- the same
+   * reasoning that made the visible ring the affordance and the band merely
+   * its target. Where nothing overlaps, this changes nothing.
+   */
+  function pickRegionCandidate(candidates) {
+    let best = null;
+    let bestWidth = Infinity;
+    for (const candidate of candidates) {
+      if (!candidate?.userData?.isRegion) continue;
+      const width = Number(candidate.userData.visualRadius);
+      const measured = Number.isFinite(width) && width > 0 ? width : Infinity;
+      if (measured < bestWidth) {
+        best = candidate;
+        bestWidth = measured;
+      } else if (!best) {
+        best = candidate;
+      }
+    }
+    return best;
+  }
+
   function getAsteroidEncounterIntensity() {
     return THREE.MathUtils.clamp(Number(asteroidBelt?.encounterIntensity ?? 0), 0, 1);
   }
@@ -4267,6 +4448,45 @@ composeSolarEventShot(
       viewportHeight: innerHeight,
       focusedBody,
     });
+  }
+
+  const focusedSilhouetteProbe = new THREE.Vector3();
+
+  /**
+   * Is the pointer inside the silhouette of the world already being inspected?
+   *
+   * Reported: fly to a belt rock, click it again to read its card, and the view
+   * *escapes* instead -- and then, confusingly, doing the same thing on a
+   * second rock works. The cause is that a click that resolves to nothing while
+   * a body is focused means "leave", and the rungs above can all decline a rock
+   * that is sitting right in front of the camera. The instanced-asteroid picker
+   * rejects anything past a maximum on-screen radius, which is the correct rule
+   * for picking one pebble out of a field and exactly the wrong one for a rock
+   * that has been flown to and now fills four hundred pixels of screen; the
+   * raycast rungs never see it either, because an instanced rock's inspection
+   * target is a bare `Object3D` with no geometry to hit.
+   *
+   * So the arithmetic disagreed with the view: the viewer was looking straight
+   * at a world, pressing on it, and being told they had pressed the sky.
+   *
+   * This rung says the obvious thing last -- if the press landed inside the
+   * projected disc of the body currently being inspected, it was a press on
+   * that body. It sits below every other rung, so anything passing in front
+   * still wins, and it is inset slightly so the very limb still counts as sky.
+   */
+  function pointerIsOnFocusedBody() {
+    if (!focusedBody || focusExitTransition) return false;
+    const radiusPixels = projectedBodyRadiusPixels(focusedBody);
+    if (!(radiusPixels > 0)) return false;
+    focusedBody.getWorldPosition(focusedSilhouetteProbe);
+    focusedSilhouetteProbe.project(camera);
+    // Behind the camera: `project` mirrors the point through the origin, so
+    // without this a body directly behind the viewer claims the centre of the
+    // screen.
+    if (focusedSilhouetteProbe.z > 1) return false;
+    const dx = (focusedSilhouetteProbe.x - pointer.x) * 0.5 * innerWidth;
+    const dy = (focusedSilhouetteProbe.y - pointer.y) * 0.5 * innerHeight;
+    return Math.hypot(dx, dy) <= radiusPixels * 0.92;
   }
 
   function projectedBodyRadiusPixels(body) {
@@ -4385,7 +4605,7 @@ composeSolarEventShot(
 
   function isPointerStillOnHoveredBody(body) {
     if (!body) return false;
-    if (isSaturnRingBody(body)) {
+    if (usesPanelHoverCard(body)) {
       raycaster.setFromCamera(pointer, camera);
       return raycaster.intersectObject(body, false).length > 0;
     }
@@ -5588,7 +5808,7 @@ composeSolarEventShot(
     }
     hoveredCelestialBody = body;
 
-    if (isSaturnRingBody(body)) {
+    if (usesPanelHoverCard(body)) {
       const ringData = body.userData?.ringData ?? {};
       body.userData?.setHovered?.(true);
       saturnRingHoverSystem.textContent = ringData.systemName ?? (body.userData?.isUranusRing ? "Uranus ring system" : "Saturn ring system");
@@ -5821,6 +6041,25 @@ composeSolarEventShot(
       return;
     }
 
+    /*
+     * Regions, last of the solid things.
+     *
+     * The ladder above is a list of specific kinds -- major body, Jovian moon,
+     * dense satellite, Plutonian moon, Saturn ring, asteroid, instanced rock --
+     * with no generic "whatever was hit" rung at the end. A raycast can land on
+     * something perfectly valid and still resolve to nothing, which is exactly
+     * what the Kuiper Belt's region markers did: one hit, no winner, no cue.
+     *
+     * They sit here rather than higher up because a region must never take a
+     * click from a world. Pluto, Haumea, Makemake, Gonggong, Eris and Sedna are
+     * all inside this belt, and every one of them wins first.
+     */
+    const directRegion = pickRegionCandidate(hitBodies);
+    if (directRegion) {
+      setCelestialHover(directRegion);
+      return;
+    }
+
     const orbitCandidate = overFocusedDisk ? null : findPlanetOrbitAtPointer();
     if (orbitCandidate) {
       setPlanetOrbitHover(orbitCandidate.orbit, orbitCandidate.point);
@@ -5852,7 +6091,7 @@ composeSolarEventShot(
   function updateCelestialHoverVisual() {
     if (!hoveredCelestialBody) return;
 
-    if (isSaturnRingBody(hoveredCelestialBody)) {
+    if (usesPanelHoverCard(hoveredCelestialBody)) {
       if (!isPointerStillOnHoveredBody(hoveredCelestialBody)) {
         clearCelestialHover();
         if (lastPointerType !== "touch" && !isDragging) scheduleCelestialHover();
@@ -5991,7 +6230,7 @@ composeSolarEventShot(
 
     // Instanced belt rocks use a strict visibility-aware fallback. The helper
     // rejects sub-pixel objects and uses a tight hit radius based on rendered size.
-    return findNearestAsteroidInstanceAtPointer({
+    const nearbyInstance = findNearestAsteroidInstanceAtPointer({
       meshes: asteroidBelt?.instancedBoulders ?? [],
       pointer,
       camera,
@@ -6015,6 +6254,38 @@ composeSolarEventShot(
       radiusMultiplier: THREE.MathUtils.lerp(1.45, 1.72, encounterIntensity),
       visibleRadiusPreference: THREE.MathUtils.lerp(0.10, 0.16, encounterIntensity),
     });
+    if (nearbyInstance) return nearbyInstance;
+
+    /*
+     * Regions, last -- and this resolver needs its own rung.
+     *
+     * `findCelestialForHover` and `getBodyAtPointer` are two separate ladders
+     * over the same raycast, one for the cue and one for the click, and adding
+     * a rung to the first does not add it to the second. Measured: hovering a
+     * Kuiper zone lit it correctly and clicking the same pixel fell straight
+     * through to "explore the empty space behind the pointer", because this
+     * function had never heard of regions.
+     *
+     * Last, for the same reason as in the hover ladder: every real world out
+     * here -- Pluto, Makemake, Eris, Sedna -- sits inside one of these zones,
+     * and a region must never take their click.
+     */
+    /*
+     * The world already being inspected, if the press landed on it -- and
+     * *above* the region rung, not below it.
+     *
+     * A region is a band drawn across the whole sky, so a ray leaving a rock in
+     * the asteroid belt will happily cross the Kuiper Belt's bands on its way
+     * out. Ordered the other way, pressing on a world that fills the frame
+     * would open a card about the scattered disk behind it. Anything solid
+     * still wins, because every rung above this one runs first.
+     */
+    if (pointerIsOnFocusedBody()) return focusedBody;
+
+    const directRegion = pickRegionCandidate(bodies);
+    if (directRegion) return directRegion;
+
+    return null;
   }
 
   /** Freezes the scroll journey without moving the user's current viewpoint. */
@@ -6575,6 +6846,11 @@ composeSolarEventShot(
     return context;
   }
 
+  // What the last press actually resolved to, for the debug hook. A click that
+  // never landed and a click that landed on the wrong thing look identical
+  // from the outside, and telling them apart is most of diagnosing a report.
+  let lastPointerResolution = null;
+
   function openCelestialDetails(body = focusedBody) {
     if (!body || focusExitTransition || !celestialDetailsPanel?.hasDetailsFor(body)) return false;
     const queuedContext = consumeQueuedCelestialDetailsContext(body);
@@ -6592,6 +6868,26 @@ composeSolarEventShot(
       opens the centred celestial dossier.
     - Escape/clicking empty space performs one Back step.
   */
+  /*
+   * "Travel there" from inside a region's dossier.
+   *
+   * The panel names a world and this finds it. Regions are places and the
+   * point of a place is that there is something in it, so the roster of named
+   * worlds inside each Kuiper zone is travellable -- Pluto and Orcus from the
+   * Plutinos, Makemake and Quaoar and Haumea from the classical belt, Eris and
+   * Gonggong from the scattered disk, Sedna from the detached objects.
+   */
+  addEventListener("beyond-earth:travel-to-body", (event) => {
+    const name = event?.detail?.name;
+    if (!name) return;
+    const target = planets.find((candidate) => (
+      (candidate.userData?.name ?? candidate.name) === name
+    ));
+    if (!target) return;
+    // A beat, so the dossier's close animation is not fighting the flight.
+    setTimeout(() => focusBody(target), 180);
+  });
+
   function focusBody(body) {
     if (focusExitTransition) return;
     const retainedAtlasParentName = body?.userData?.parentPlanet === satelliteOverviewParentName
@@ -7514,8 +7810,7 @@ composeSolarEventShot(
       );
       // Horizontal deltas orbit around Y (yaw); vertical deltas control pitch.
       targetYaw -= (event.clientX - lastPointer.x) * 0.006;
-      targetPitch -= (event.clientY - lastPointer.y) * 0.004;
-      targetPitch = THREE.MathUtils.clamp(targetPitch, -1.1, 1.1);
+      targetPitch = wrapAngle(targetPitch - (event.clientY - lastPointer.y) * 0.004);
     } else if (!spaceEnvironment.reducedMotion
       && !hoveredCelestialBody
       && !hoveredPlanetOrbit
@@ -7529,7 +7824,7 @@ composeSolarEventShot(
       // because moving the camera under the pointer makes tiny bodies appear to
       // repel the cursor before hover acquisition completes.
       targetYaw += pointer.x * 0.0005;
-      targetPitch += pointer.y * 0.00025;
+      targetPitch = wrapAngle(targetPitch + pointer.y * 0.00025);
     }
     lastPointer = { x: event.clientX, y: event.clientY };
     if (!isDragging && lastPointerType !== "touch" && !hoveredCelestialBody && !hoveredPlanetOrbit) {
@@ -7673,11 +7968,42 @@ composeSolarEventShot(
       : pointerDownPlanetOrbit ?? findPlanetOrbitAtPointer()?.orbit ?? null;
     pointerDownCelestialBody = null;
     pointerDownPlanetOrbit = null;
+    /*
+     * A region is a place, not a thing, so focusing it would fly the camera at
+     * the middle of an annulus -- a point in empty space with nothing at it.
+     * Clicking one opens its record instead.
+     */
+    lastPointerResolution = {
+      body: body?.userData?.name ?? body?.name ?? null,
+      isRegion: Boolean(body?.userData?.isRegion),
+      hasDetails: Boolean(body && celestialDetailsPanel?.hasDetailsFor(body)),
+      orbit: orbit?.userData?.planet?.userData?.name ?? null,
+    };
+    if (body?.userData?.isRegion) {
+      openCelestialDetails(body);
+      return;
+    }
     if (body) {
+      /*
+       * Two steps, and the order matters: travel first, record second.
+       *
+       * An earlier version opened the dossier automatically once the camera
+       * arrived. It was wrong for the obvious reason -- a click from across
+       * the system is a request to *go and look at* the world, and answering
+       * it with a full-screen panel is answering a different question. The
+       * journey is the thing being asked for. `focusBody` opens the record on
+       * the next press, when the viewer has already seen where they are.
+       */
       focusBody(body);
       return;
     }
     if (orbit?.userData?.planet) {
+      /*
+       * An orbit guide is deliberately not a body. Clicking the line is a
+       * navigation gesture -- "take me to whatever runs along here" -- and
+       * answering it with a full-screen record would make the guides unusable
+       * for getting around. It flies there and stops, as it always did.
+       */
       focusBody(orbit.userData.planet);
       return;
     }
@@ -7776,8 +8102,8 @@ composeSolarEventShot(
     }
     if (event.key === "ArrowLeft") targetYaw += 0.18;
     if (event.key === "ArrowRight") targetYaw -= 0.18;
-    if (event.key === "ArrowUp") targetPitch = THREE.MathUtils.clamp(targetPitch + 0.12, -1.1, 1.1);
-    if (event.key === "ArrowDown") targetPitch = THREE.MathUtils.clamp(targetPitch - 0.12, -1.1, 1.1);
+    if (event.key === "ArrowUp") targetPitch = wrapAngle(targetPitch + 0.12);
+    if (event.key === "ArrowDown") targetPitch = wrapAngle(targetPitch - 0.12);
   });
 
   addEventListener("resize", () => {
@@ -7788,6 +8114,8 @@ composeSolarEventShot(
     const pixelRatio = resizeCinematicRenderer();
     spaceEnvironment.resize(innerWidth, innerHeight, pixelRatio);
     setAsteroidBeltQuality(asteroidBelt, asteroidBeltDensity, pixelRatio);
+    applyKuiperBeltQuality(kuiperBelt, asteroidBeltDensity === "low" ? "low" : "medium", pixelRatio);
+    applyOuterBoundaryQuality(outerBoundaries, pixelRatio);
     cosmicIntro?.resize(innerWidth, innerHeight);
     distanceCinematicPanel?.position();
   });
@@ -8246,7 +8574,8 @@ composeSolarEventShot(
       );
       const cameraInputEase = frameAdjustedEase(0.075, deltaTime);
       yaw = THREE.MathUtils.lerp(yaw, targetYaw, cameraInputEase);
-      pitch = THREE.MathUtils.lerp(pitch, targetPitch, cameraInputEase);
+      // Short way round the seam, never the long way. See wrapAngle.
+      pitch = wrapAngle(pitch + wrapAngle(targetPitch - pitch) * cameraInputEase);
     }
 
     updateDistanceReadout(smoothProgress);
@@ -8352,6 +8681,12 @@ composeSolarEventShot(
         .add(sphericalCameraOffset)
         .add(freeExploreCameraOffsetCurrent);
     }
+    /*
+     * Up follows the pitch over the pole. Without this the horizon inverts the
+     * moment the camera passes above or below the system, which is exactly
+     * what a 63-degree clamp used to be hiding.
+     */
+    camera.up.set(0, Math.cos(pitch) >= 0 ? 1 : -1, 0);
     // lookAt rotates the camera so its forward direction points at the target.
     camera.lookAt(cameraFocusPoint);
 
@@ -8527,6 +8862,8 @@ composeSolarEventShot(
         hoveredBody: hoveredCelestialBody,
       },
     );
+    if (kuiperBelt) updateKuiperBelt(kuiperBelt, frameMotionScale, camera);
+    if (outerBoundaries) updateOuterBoundaries(outerBoundaries, frameMotionScale, camera);
     // One journey value coordinates renderer exposure and the zodiacal glow
     // for scroll, reverse travel, and body focus alike.
     // Events run on real seconds, not on the journey's motion scale: "every
@@ -8565,7 +8902,10 @@ composeSolarEventShot(
      * nothing is ever clipped.
      */
     const focusRange = camera.position.distanceTo(cameraFocusPoint);
-    const desiredNear = THREE.MathUtils.clamp(focusRange / 3600, 0.02, 2.4);
+    // The ceiling rises with the far plane: at the new maximum reach this
+    // gives near ≈ 3.2 against far 26,000, which is very nearly the same
+    // ratio 2.4 against 15,000 gave before.
+    const desiredNear = THREE.MathUtils.clamp(focusRange / 3600, 0.02, 4.2);
     // Only rewrite the projection when it has actually moved: this runs every
     // frame and updateProjectionMatrix is not free.
     if (Math.abs(desiredNear - camera.near) > camera.near * 0.06) {

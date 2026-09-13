@@ -56,6 +56,10 @@ const PLANET_ORBITAL_ELEMENTS = Object.freeze({
  */
 const DWARF_PLANET_ELEMENTS = Object.freeze({
   orcus: { semiMajorAxisAU: 39.377, eccentricity: 0.2201 },
+  ixion: { semiMajorAxisAU: 39.648, eccentricity: 0.2418 },
+  salacia: { semiMajorAxisAU: 42.181, eccentricity: 0.1062 },
+  varuna: { semiMajorAxisAU: 42.905, eccentricity: 0.0511 },
+  varda: { semiMajorAxisAU: 45.732, eccentricity: 0.1427 },
   haumea: { semiMajorAxisAU: 43.060, eccentricity: 0.1915 },
   quaoar: { semiMajorAxisAU: 43.156, eccentricity: 0.0350 },
   makemake: { semiMajorAxisAU: 45.571, eccentricity: 0.1612 },

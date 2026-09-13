@@ -20,6 +20,10 @@ import { uranus } from "./uranus/uranus.js";
 import { neptune } from "./neptune/neptune.js";
 import { pluto } from "./pluto/pluto.js";
 import { orcus } from "./orcus/orcus.js";
+import { ixion } from "./ixion/ixion.js";
+import { salacia } from "./salacia/salacia.js";
+import { varuna } from "./varuna/varuna.js";
+import { varda } from "./varda/varda.js";
 import { haumea } from "./haumea/haumea.js";
 import { quaoar } from "./quaoar/quaoar.js";
 import { makemake } from "./makemake/makemake.js";
@@ -47,9 +51,11 @@ import { sedna } from "./sedna/sedna.js";
 export const PLANET_CONFIGS = [
   mercury, venus, earth, mars, jupiter, saturn, uranus, neptune,
   pluto, orcus, haumea, quaoar, makemake, gonggong, eris, sedna,
+  ixion, salacia, varuna, varda,
 ];
 
 /** The worlds beyond Neptune, for anything that wants to treat them as a set. */
 export const TRANS_NEPTUNIAN_NAMES = Object.freeze([
   "Pluto", "Orcus", "Haumea", "Quaoar", "Makemake", "Gonggong", "Eris", "Sedna",
+  "Ixion", "Salacia", "Varuna", "Varda",
 ]);

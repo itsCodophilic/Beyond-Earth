@@ -3097,7 +3097,25 @@ body.is-space-event .space-exit-control { opacity: 1; pointer-events: auto; }
    main.js, which is also where the two independent reasons for hiding them --
    an event, and this -- are reconciled.
 */
-body.is-space-mode .planet-details,
+/*
+   One exception, and it is deliberate: `.planet-details`.
+
+   Space mode takes away the things that are *offered* to the viewer -- labels
+   riding on bodies, hover cards chasing the pointer, panels, the brand. It was
+   written as one blanket rule, and the dossier went out with the rest of it.
+   That made a whole class of object unreachable: in space mode you could still
+   fly to a planet and still click a boundary, the card still opened, and it
+   opened at zero opacity. The click did something and nothing happened.
+
+   A dossier is not offered. It is *asked for* -- it exists only because
+   someone clicked -- and a mode that removes unasked-for chrome has no
+   business refusing a direct request. So the card is summonable in space mode
+   and everything else here still goes.
+
+   Entering space mode closes any card already open (main.js), which is what
+   keeps the promise that the screen clears: the surfaces below leave quietly
+   and come back, the dossier leaves outright and comes back when asked.
+*/
 body.is-space-mode .celestial-selection-card,
 body.is-space-mode .satellite-system-overview,
 body.is-space-mode .satellite-atlas-directory,
@@ -3730,4 +3748,108 @@ body.is-tour-open .distance-cinematic-panel {
   color: var(--cin-ink);
   border-color: var(--cin-amber-soft);
   outline: none;
+}
+
+/* ================================================= regions in the dossier
+ * A region uses the same card a world does, because that is the card people
+ * have already learned. These are the two pieces a world has no equivalent
+ * of: the prose broken into labelled blocks, and a roster of named worlds
+ * inside the region that can be travelled to.
+ */
+
+/*
+ * Two columns where there is room for them.
+ *
+ * The block spans the full card, like the rings and story blocks do -- it was
+ * missing that rule at first and sat in one half of a two-column grid with
+ * the other half empty, which is what was reported. But full width on a wide
+ * card is a 1,300-pixel line, which is well past the point where the eye
+ * loses its place returning to the start of the next one. So the sections
+ * flow into columns of their own instead, and the card's width buys more
+ * sections on screen rather than longer lines.
+ */
+#planet-details-region-sections {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
+  gap: 16px 26px;
+  align-items: start;
+}
+
+.planet-details__region-section {
+  min-width: 0;
+  padding-top: 11px;
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.planet-details__region-section strong {
+  display: block;
+  font-family: var(--cin-mono);
+  font-size: var(--cin-micro);
+  font-weight: 400;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--cin-amber);
+  margin-bottom: 7px;
+}
+
+.planet-details__region-section p {
+  margin: 0;
+  max-width: 62ch;
+  font-size: 0.8rem;
+  font-weight: 300;
+  line-height: 1.74;
+  color: var(--cin-ink-soft);
+}
+
+/* The member roster gets the same treatment: several worlds side by side
+   rather than one long column the viewer has to scroll past. */
+#planet-details-member-roster {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
+  gap: 10px;
+  align-items: stretch;
+}
+
+.planet-details__member {
+  padding: 0;
+}
+
+.planet-details__member-button {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: 0;
+  padding: 12px 13px;
+  cursor: pointer;
+  color: inherit;
+  font: inherit;
+  transition: background 0.18s;
+}
+
+.planet-details__member-button:hover,
+.planet-details__member-button:focus-visible {
+  background: rgba(255, 196, 130, 0.07);
+}
+
+.planet-details__member-go {
+  margin-top: 4px;
+  font-family: var(--cin-mono);
+  font-size: var(--cin-micro);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--cin-amber-soft);
+  transition: color 0.18s, transform 0.18s;
+}
+
+.planet-details__member-button:hover .planet-details__member-go,
+.planet-details__member-button:focus-visible .planet-details__member-go {
+  color: var(--cin-amber);
+  transform: translateX(3px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .planet-details__member-go { transition: none; }
 }

@@ -45,6 +45,10 @@ export const TEXTURE_URLS = {
    * that was not. See tools/dwarf-textures/README.md for the method.
    */
   orcus: `${DWARF_TEXTURE_ROOT}/orcus-equirectangular.jpg`,
+  ixion: `${DWARF_TEXTURE_ROOT}/ixion-equirectangular.jpg`,
+  salacia: `${DWARF_TEXTURE_ROOT}/salacia-equirectangular.jpg`,
+  varuna: `${DWARF_TEXTURE_ROOT}/varuna-equirectangular.jpg`,
+  varda: `${DWARF_TEXTURE_ROOT}/varda-equirectangular.jpg`,
   haumea: `${DWARF_TEXTURE_ROOT}/haumea-equirectangular.jpg`,
   quaoar: `${DWARF_TEXTURE_ROOT}/quaoar-equirectangular.jpg`,
   makemake: `${DWARF_TEXTURE_ROOT}/makemake-equirectangular.jpg`,

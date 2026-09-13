@@ -28,6 +28,33 @@ import * as THREE from "three";
  */
 
 const WORLDS = {
+  ixion: {
+    base: "#8f6552", high: "#c19277", low: "#4f382c",
+    albedo: 0.11, mottle: 0.34, craters: 96, ice: 0.18, cap: 0.06,
+    // Strongly red and almost featureless in the near infrared: tholins over
+    // whatever ice is left, with only the faintest water signature.
+    iceTint: "rgba(226,236,244,0.26)",
+  },
+  salacia: {
+    base: "#4a4a4e", high: "#6e6f74", low: "#242427",
+    albedo: 0.042, mottle: 0.22, craters: 110, ice: 0.30, cap: 0.05,
+    // Four per cent albedo. Nearly everything here is about how little light
+    // comes back, which is the single most notable thing about the body.
+    iceTint: "rgba(220,232,242,0.30)",
+  },
+  varuna: {
+    base: "#a2664a", high: "#d49570", low: "#5a3323",
+    albedo: 0.127, mottle: 0.40, craters: 72, ice: 0.28, cap: 0.07,
+    // Very red, with real water ice underneath, on a body spinning fast
+    // enough that the shape itself is the headline.
+    iceTint: "rgba(228,240,248,0.34)",
+  },
+  varda: {
+    base: "#94705c", high: "#c49a80", low: "#513728",
+    albedo: 0.102, mottle: 0.30, craters: 88, ice: 0.36, cap: 0.08,
+    // Moderately red with clear crystalline water-ice bands.
+    iceTint: "rgba(224,238,248,0.40)",
+  },
   orcus: {
     base: "#b9bcc0", high: "#e8ecef", low: "#6f7479",
     albedo: 0.23, mottle: 0.30, craters: 90, ice: 0.55, cap: 0.16,

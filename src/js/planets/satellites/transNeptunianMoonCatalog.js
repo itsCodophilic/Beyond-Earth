@@ -4,11 +4,30 @@ import { PLANET_SCALE_PROFILES } from "../../config/celestialScale.js";
 /**
  * Satellites of the worlds beyond Neptune.
  *
- * Seven moons across six parents. None of them has ever been visited, and all
+ * Nine moons across eight parents. None of them has ever been visited, and all
  * but Vanth and Dysnomia are known only as a point of light whose brightness
  * and orbital period were measured over many nights -- so what is authored here
  * is what is actually established: the orbit, the size, and how dark the
  * surface is. The arrangement of the surface is invented, and has to be.
+ *
+ * ## Two things to know about the numbers in this table
+ *
+ * **Diameter and albedo are one choice, not two.** A moon that is only ever a
+ * point of light has a measured *brightness*; splitting that into a size and a
+ * reflectivity needs one of the two assumed. Assume the moon is as reflective
+ * as its parent and you get a small moon; measure the moon's own albedo and
+ * find it darker, and the same brightness needs a bigger one. Actaea is either
+ * 290 km at Salacia's albedo or 393 km at its own measured 0.021, and Ilmar\u00eb
+ * either 333 km or 403 km on exactly the same argument. This table takes the
+ * measured-albedo pairing in both cases, because pairing a measured albedo with
+ * the diameter derived from assuming a different one is internally inconsistent.
+ *
+ * **Angles are ecliptic.** Mutual-orbit solutions are published in whichever
+ * frame the authors preferred -- Salacia-Actaea in the J2000 ecliptic,
+ * Varda-Ilmar\u00eb in J2000 equatorial -- and mixing the two puts one moon
+ * twenty-three degrees out of plane. Everything below is ecliptic. Ilmar\u00eb's
+ * node is converted from its published orbit pole rather than quoted, because
+ * an ecliptic-frame node was never published for it.
  *
  * Sedna has no moon. Hubble searched in 2004 down to five hundred times fainter
  * than Sedna itself and found nothing, which is also why Sedna's mass is still
@@ -162,6 +181,65 @@ const RAW = Object.freeze({
         "Very dark carbon-rich body on a near-polar orbit, stripped of any volatile ice its weak gravity could not retain",
     },
   ],
+  Salacia: [
+    {
+      name: "Actaea",
+      designation: "(120347) Salacia I",
+      semiMajorAxisKm: 5_700,
+      eccentricity: 0.008,
+      inclinationDeg: 17.2,
+      nodeDeg: 108.9,
+      meanAnomalyDeg: 157.0,
+      periodDays: 5.49389,
+      diameterKm: 393,
+      diameterLabel: "≈ 393 ± 33 km",
+      albedo: 0.021,
+      shape: [1.02, 0.99, 0.98],
+      /*
+       * Measured off the reference image rather than chosen.
+       *
+       * The picture supplied for Actaea is of the *system*: Salacia fills the
+       * frame and Actaea is a disc twenty-one pixels across beside it. Twenty
+       * one pixels is not a map -- projecting it would invent a surface and
+       * call it a photograph -- but it is more than enough for a colour, and
+       * the colour is the thing that was wrong. Its lit face reads as neutral
+       * grey with the faintest warm cast (1.000, 0.993, 0.959), not the brown
+       * that was here before. So the hue is measured and the relief stays with
+       * the sculpt, which is exactly the path this factory already has for a
+       * moon with no photograph worth unwrapping.
+       */
+      colour: 0x4c4b49,
+      tidallyLocked: true,
+      discovered: "2006, Hubble Space Telescope",
+      description:
+        "Nearly half Salacia's diameter, and the darkest thing in a system that is already the darkest of its size known: Actaea reflects about two per cent of the light that reaches it, against Salacia's four. The two are doubly synchronous -- Salacia's day, Actaea's day and the month between them are all the same 5.49 days, so each keeps one face permanently turned to the other.",
+      structure:
+        "Very dark neutral body on a nearly circular, nearly ecliptic orbit, tidally locked to a primary that is itself locked back",
+    },
+  ],
+  Varda: [
+    {
+      name: "Ilmar\u00eb",
+      designation: "(174567) Varda I",
+      semiMajorAxisKm: 4_815,
+      eccentricity: 0.016,
+      inclinationDeg: 77.4,
+      nodeDeg: 3.0,
+      meanAnomalyDeg: 96.0,
+      periodDays: 5.750824,
+      diameterKm: 403,
+      diameterLabel: "≈ 403 ± 40 km",
+      albedo: 0.068,
+      shape: [1.04, 0.98, 0.96],
+      colour: 0x6a5647,
+      tidallyLocked: false,
+      discovered: "2009, Hubble Space Telescope",
+      description:
+        "Large enough that Varda holds only between eighty-four and ninety per cent of the system's mass -- very nearly the Pluto-Charon ratio, and one of the most evenly matched pairs known out here. The orbit is steeply tilted, about seventy-seven degrees to the ecliptic, but it is prograde, not retrograde, which is a thing several references still get the wrong way round.",
+      structure:
+        "Dark reddish companion on a steeply inclined prograde orbit; its own rotation has never been measured, so no spin is asserted here",
+    },
+  ],
   Gonggong: [
     {
       name: "Xiangliu",
@@ -309,10 +387,23 @@ export const TRANS_NEPTUNIAN_MOON_PARENTS = Object.freeze(
   Object.keys(TRANS_NEPTUNIAN_MOON_SYSTEMS),
 );
 
-/** How many moons each of these worlds is known to have. Sedna's is zero. */
+/**
+ * How many moons each of these worlds is known to have.
+ *
+ * Three of them have none, and the zeroes are stated rather than left out --
+ * "no moon" is a measured result here, not a gap in the table. Hubble searched
+ * around Sedna in 2004 down to five hundred times fainter than Sedna itself;
+ * a 2026 occultation and thermal campaign found nothing around Ixion and
+ * concluded that no sizeable satellite is needed to reconcile its data. Varuna
+ * is the interesting one: a residual wobble in its light curve has been read as
+ * a close-in companion at 1,300-2,000 km, which is a plausible explanation and
+ * not a detection, so it counts as none.
+ */
 export const TRANS_NEPTUNIAN_MOON_COUNTS = Object.freeze({
   ...Object.fromEntries(
     Object.entries(TRANS_NEPTUNIAN_MOON_SYSTEMS).map(([name, list]) => [name, list.length]),
   ),
   Sedna: 0,
+  Ixion: 0,
+  Varuna: 0,
 });

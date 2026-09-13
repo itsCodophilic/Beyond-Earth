@@ -299,9 +299,14 @@ function createPlutoMaterial(texture) {
  * is scaled by each body's real albedo, so the *relative* brightness stays
  * honest even though the absolute level does not.
  */
+/* Measured geometric albedo. It sets roughness and the exposure term, so a
+ * world this far out reads at the right brightness relative to its neighbours:
+ * Salacia at 0.041 beside Eris at 0.96 is a twentyfold difference and the most
+ * conspicuous thing about the set. */
 const DWARF_ALBEDO = {
   Orcus: 0.23, Haumea: 0.66, Quaoar: 0.12, Makemake: 0.82,
   Gonggong: 0.14, Eris: 0.96, Sedna: 0.41,
+  Ixion: 0.106, Salacia: 0.041, Varda: 0.099, Varuna: 0.127,
 };
 
 function createDwarfWorldMaterial(config, texture) {
@@ -497,6 +502,25 @@ function wrappedLongitudeDelta(a, b) {
  * as long as it is thick. Drawn as a sphere it would be a lie about the single
  * most interesting fact about it.
  */
+/*
+ * Which worlds are treated as dwarf worlds, and why forgetting one is visible.
+ *
+ * Membership of these two tables is what routes a body away from the generic
+ * rocky material -- and the generic material uses the surface map as a
+ * **displacement map**, pushing real vertices by the image's own brightness.
+ *
+ * That is fine for a procedural noise texture. It is wrong for an unwrapped
+ * photograph, and it is spectacular for a photograph with hard dark craters in
+ * it: every black pit becomes a pit in the mesh, every bright rim a peak, and
+ * the body comes out covered in spikes. Reported exactly that way, for Ixion,
+ * Salacia and Varuna -- the three whose new maps carry the most contrast.
+ * Varda escaped only because its map is soft and orange.
+ *
+ * So the four worlds added later belong in both tables, like the seven before
+ * them: `DWARF_ALBEDO` for the material (no displacement, a whisper of bump,
+ * an exposure scaled by real reflectivity) and `DWARF_TERRAIN` for the relief,
+ * which is carried in sculpted geometry where it belongs.
+ */
 const DWARF_TERRAIN = {
   Orcus: { relief: 0.020, craters: 74, seed: 90482, shape: null },
   Haumea: { relief: 0.008, craters: 30, seed: 136108, shape: { x: 1.0, y: 0.488, z: 0.795 } },
@@ -505,6 +529,17 @@ const DWARF_TERRAIN = {
   Gonggong: { relief: 0.016, craters: 70, seed: 225088, shape: null },
   Eris: { relief: 0.006, craters: 22, seed: 136199, shape: null },
   Sedna: { relief: 0.024, craters: 88, seed: 90377, shape: { x: 1.0, y: 0.92, z: 0.97 } },
+
+  // Shapes are the measured ones. Ixion's occultation ellipse is 727 x 668 km,
+  // an oblateness of 0.081; Varda's is 0.066. Varuna is the outlier and the
+  // point of it: spinning once every 6 h 21 m it is a Jacobi ellipsoid with
+  // b/a about 0.65 and c/a about 0.50 -- a rugby ball roughly a thousand
+  // kilometres along its long axis, which is the single most distinctive thing
+  // about it and was not being drawn at all.
+  Ixion: { relief: 0.018, craters: 76, seed: 28978, shape: { x: 1.0, y: 0.919, z: 1.0 } },
+  Salacia: { relief: 0.020, craters: 80, seed: 120347, shape: null },
+  Varda: { relief: 0.017, craters: 66, seed: 174567, shape: { x: 1.0, y: 0.934, z: 1.0 } },
+  Varuna: { relief: 0.022, craters: 70, seed: 20000, shape: { x: 1.0, y: 0.50, z: 0.65 } },
 };
 
 const DWARF_CRATERS = Object.fromEntries(

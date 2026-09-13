@@ -51,6 +51,22 @@ const MOON_SYSTEMS = Object.freeze({
   ...TRANS_NEPTUNIAN_MOON_SYSTEMS,
 });
 
+/*
+ * Every parent that has a moon needs a row here, and the cost of forgetting
+ * one is out of all proportion to the mistake.
+ *
+ * Adding Actaea and Ilmare to the catalogue was a two-entry change and it took
+ * the whole satellite queue down: the hydrator reads this table by parent
+ * name, the lookup came back `undefined`, and reading `.heliocentricAU` off it
+ * threw inside the idle callback that builds moons one at a time. That
+ * callback is the chain -- it schedules its own successor -- so the throw did
+ * not merely skip Salacia. It stopped every moon after it in the queue, and
+ * Gonggong's Xiangliu never appeared either, in a system nobody had touched.
+ *
+ * `parentOrbitalScale()` below now falls back and warns instead of throwing,
+ * so the next omission costs one wrong distance figure rather than every moon
+ * that would have been built afterwards.
+ */
 const PARENT_ORBITAL_SCALE = Object.freeze({
   Mars: { heliocentricAU: 1.5237, eccentricity: 0.0934 },
   Jupiter: { heliocentricAU: 5.2029, eccentricity: 0.0484 },
@@ -62,9 +78,23 @@ const PARENT_ORBITAL_SCALE = Object.freeze({
   Haumea: { heliocentricAU: 43.060, eccentricity: 0.1915 },
   Quaoar: { heliocentricAU: 43.156, eccentricity: 0.0350 },
   Makemake: { heliocentricAU: 45.571, eccentricity: 0.1612 },
+  Salacia: { heliocentricAU: 42.181, eccentricity: 0.1062 },
+  Varda: { heliocentricAU: 45.732, eccentricity: 0.1427 },
   Gonggong: { heliocentricAU: 66.867, eccentricity: 0.4999 },
   Eris: { heliocentricAU: 67.934, eccentricity: 0.4360 },
 });
+
+const FALLBACK_ORBITAL_SCALE = Object.freeze({ heliocentricAU: 40, eccentricity: 0.15 });
+
+function parentOrbitalScale(parentName) {
+  const scale = PARENT_ORBITAL_SCALE[parentName];
+  if (scale) return scale;
+  console.warn(
+    `[BeyondEarth] ${parentName} has moons but no entry in PARENT_ORBITAL_SCALE;`
+    + " its moons' distance-from-Earth figures will be wrong. Add a row.",
+  );
+  return FALLBACK_ORBITAL_SCALE;
+}
 
 const orbitPoint = new THREE.Vector3();
 const orbitTiltAxis = new THREE.Vector3(0, 0, 1);
@@ -315,7 +345,7 @@ function createSatelliteMesh(
   );
   if (profile.initialRotation) moon.rotation.set(...profile.initialRotation);
 
-  const orbitalScale = PARENT_ORBITAL_SCALE[parentName];
+  const orbitalScale = parentOrbitalScale(parentName);
   const sizeComparison = getSizeComparisonText({ diameterKm: profile.diameterKm, name: profile.name });
   const jovian = isJovianProfile(profile, parentName);
   const interactionTier = jovian ? getJovianInteractionTier(profile) : "direct";
@@ -500,7 +530,7 @@ const denseMoonColour = new THREE.Color();
 function createDenseSatelliteInteractionTarget(profile, parentName) {
   const target = new THREE.Object3D();
   const visualRadius = Number(profile.visualRadius ?? 0.02);
-  const orbitalScale = PARENT_ORBITAL_SCALE[parentName];
+  const orbitalScale = parentOrbitalScale(parentName);
   const diameterKm = Number(profile.diameterKm ?? 0);
   const sizeComparison = getSizeComparisonText({
     diameterKm,

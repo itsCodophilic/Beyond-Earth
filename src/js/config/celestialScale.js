@@ -29,6 +29,10 @@ export const HELIOCENTRIC_ORBIT_AU = Object.freeze({
   Gonggong: 66.867,
   Eris: 67.934,
   Sedna: 506.44,
+  Ixion: 39.648,
+  Salacia: 42.181,
+  Varuna: 42.905,
+  Varda: 45.732,
 });
 
 export const BODY_SIZE_DATA = Object.freeze({
@@ -57,6 +61,14 @@ export const BODY_SIZE_DATA = Object.freeze({
    */
   Ceres: { diameterKm: 939.4, diameterEarths: 0.0736, volumeEarths: 0.000399 },
   Orcus: { diameterKm: 958.4, diameterEarths: 0.0751, volumeEarths: 0.000424 },
+  // 2026 multi-chord occultation: equivalent diameter 696.8 (+10.8/-8.9) km,
+  // projected ellipse about 727 x 668 km. Supersedes the 617 km thermal value.
+  Ixion: { diameterKm: 697.0, diameterEarths: 0.05464, volumeEarths: 0.0001631 },
+  Salacia: { diameterKm: 838.0, diameterEarths: 0.06569, volumeEarths: 0.0002835 },
+  // Varuna is a Jacobi ellipsoid rather than a sphere -- see its own module.
+  // This is the equivalent diameter of a sphere with the same volume.
+  Varuna: { diameterKm: 668.0, diameterEarths: 0.05237, volumeEarths: 0.0001436 },
+  Varda: { diameterKm: 740.0, diameterEarths: 0.05801, volumeEarths: 0.0001952 },
   Haumea: { diameterKm: 1_544.0, diameterEarths: 0.1210, volumeEarths: 0.001773 },
   Quaoar: { diameterKm: 1_098.0, diameterEarths: 0.0861, volumeEarths: 0.000638 },
   Makemake: { diameterKm: 1_430.0, diameterEarths: 0.1121, volumeEarths: 0.001409 },
@@ -144,6 +156,30 @@ export const PLANET_SCALE_PROFILES = Object.freeze({
     visualRadius: compressedPlanetRadius(BODY_SIZE_DATA.Orcus.diameterEarths),
     orbitRadius: 189 * SOLAR_ORBIT_SCALE,
     focusDistance: 1.3,
+  },
+  Ixion: {
+    ...BODY_SIZE_DATA.Ixion,
+    visualRadius: compressedPlanetRadius(BODY_SIZE_DATA.Ixion.diameterEarths),
+    orbitRadius: 194 * SOLAR_ORBIT_SCALE,
+    focusDistance: 1.2,
+  },
+  Salacia: {
+    ...BODY_SIZE_DATA.Salacia,
+    visualRadius: compressedPlanetRadius(BODY_SIZE_DATA.Salacia.diameterEarths),
+    orbitRadius: 199 * SOLAR_ORBIT_SCALE,
+    focusDistance: 1.3,
+  },
+  Varuna: {
+    ...BODY_SIZE_DATA.Varuna,
+    visualRadius: compressedPlanetRadius(BODY_SIZE_DATA.Varuna.diameterEarths),
+    orbitRadius: 207 * SOLAR_ORBIT_SCALE,
+    focusDistance: 1.25,
+  },
+  Varda: {
+    ...BODY_SIZE_DATA.Varda,
+    visualRadius: compressedPlanetRadius(BODY_SIZE_DATA.Varda.diameterEarths),
+    orbitRadius: 225 * SOLAR_ORBIT_SCALE,
+    focusDistance: 1.28,
   },
   Haumea: {
     ...BODY_SIZE_DATA.Haumea,
@@ -261,6 +297,71 @@ export function parseDiameterKm(value) {
   const numbers = matches.slice(0, 2).map(Number).filter(Number.isFinite);
   if (!numbers.length) return null;
   return numbers.reduce((sum, item) => sum + item, 0) / numbers.length;
+}
+
+/**
+ * Astronomical units to scene units, for anything placed by real distance.
+ *
+ * This cannot be a multiplication. The scene compresses distance hard at the
+ * far end -- Neptune's 30.07 AU sits at 178 units and Sedna's 506 at 268 --
+ * so a linear mapping puts the Kuiper Belt on top of Neptune and the Oort
+ * Cloud a hundred screens away.
+ *
+ * The anchors below are the positions the existing bodies were actually
+ * placed at, interpolated in log space, so anything new lands *between* the
+ * worlds already there rather than on top of them. The final anchor is the
+ * extension for the outer boundaries: nothing was ever placed past Sedna, so
+ * it is chosen rather than measured, and it is what makes the heliosphere,
+ * Sedna's far point and the two Oort shells come out in the right order.
+ *
+ *   85 AU  termination shock   2,590
+ *   120 AU heliopause          2,633
+ *   937 AU Sedna at aphelion   3,220
+ *   2,000 AU inner Oort edge   3,722
+ *   100,000 AU outer Oort      6,310
+ *
+ * ## Why the far end was re-cut
+ *
+ * The first version ran [506.44, 268], [5,000, 292], [100,000, 330] -- 62
+ * scene units for the 2.3 decades past Sedna, about 27 units per decade,
+ * against 188 per decade through the Kuiper region. That is a seven-fold
+ * change in compression at one point on the curve, and it had a visible
+ * consequence: the heliopause came out at 2,633 and the outer Oort Cloud at
+ * 3,465, a ratio of 1.32 for a real ratio of **833**. The two shells were
+ * nearly the same size on screen, and once the heliosphere's tail was added
+ * the heliopause reached *further from the Sun than the Oort Cloud did* --
+ * so the scene said, plainly and wrongly, that the heliopause is the outer
+ * edge of the Solar System. Which is the exact misconception the whole
+ * boundary set exists to correct.
+ *
+ * Past Sedna the curve is now a single log-linear run to 100,000 AU at about
+ * 145 units per decade. It is still heavy compression -- 833x of real
+ * distance becomes 2.4x on screen -- but the ordering is now legible:
+ * heliosphere, then Sedna's far point, then the inner Oort, then the outer
+ * Oort at more than twice the heliopause's radius.
+ *
+ * The deep-sky shell rides with the camera at 3,000 and writes no depth, so
+ * the outer shells are never occluded by it; the far plane at 26,000 clears
+ * all of it.
+ */
+const AU_SCENE_ANCHORS = Object.freeze([
+  [30.07, 178], [39.48, 191], [45.57, 220], [67.93, 244],
+  [506.44, 268], [100_000, 601],
+]);
+
+export function auToSceneRadius(au) {
+  const x = Math.log10(Math.max(au, 1));
+  for (let i = 0; i < AU_SCENE_ANCHORS.length - 1; i += 1) {
+    const [a0, s0] = AU_SCENE_ANCHORS[i];
+    const [a1, s1] = AU_SCENE_ANCHORS[i + 1];
+    const l0 = Math.log10(a0);
+    const l1 = Math.log10(a1);
+    if (x <= l1 || i === AU_SCENE_ANCHORS.length - 2) {
+      const t = Math.min(1, Math.max(0, (x - l0) / (l1 - l0)));
+      return (s0 + (s1 - s0) * t) * SOLAR_ORBIT_SCALE;
+    }
+  }
+  return AU_SCENE_ANCHORS[0][1] * SOLAR_ORBIT_SCALE;
 }
 
 export function scaleSolarOrbit(sceneRadius) {

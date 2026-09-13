@@ -236,6 +236,7 @@ function resolveDetails(bodyOrName, context = {}) {
   const name = getBodyName(bodyOrName);
   const body = typeof bodyOrName === "string" ? null : bodyOrName;
   const info = body?.userData?.info ?? {};
+  const region = body?.userData?.region ?? null;
   const planet = PLANET_DETAILS[name];
   const override = BODY_OVERRIDES[name] ?? {};
   const relative = splitRelativeScale(planet?.relativeScale);
@@ -291,7 +292,62 @@ function resolveDetails(bodyOrName, context = {}) {
     scienceUrl: planet?.scienceUrl ?? null,
     showJplSource: Boolean(planet),
     breadcrumbTail: isSatellite && parentName ? `${parentName} system` : null,
+    /*
+     * A region uses the same card as a world, because that is the card people
+     * have learned. What it cannot use is the same *labels*: a zone of the
+     * Kuiper Belt has no mass, no diameter, no rotation and no gravity, and
+     * leaving "Physical diameter" over a radial span would be worse than
+     * having no row at all. So the region overrides the handful of terms that
+     * would otherwise be wrong, and everything it has nothing to say about
+     * stays empty and is hidden by the existing rules.
+     */
+    isRegion: Boolean(region),
+    region,
   };
+
+  if (region) {
+    details.classification = info.type ?? "Solar-System region";
+    details.massRelative = null;
+    details.sizeRelative = region.population ?? details.sizeRelative;
+    details.diameter = region.span ?? details.diameter;
+    details.orbital = region.period ?? details.orbital;
+    /*
+     * A region has no position, so it has no distance from Earth.
+     *
+     * The row was inherited from the body path and filled in from the
+     * hovered object's world position -- which, for anything centred on the
+     * Sun, is the Sun. The outer Oort Cloud was being labelled "1.01 AU from
+     * Earth", a shell 100,000 AU across reported as being one astronomical
+     * unit away. The radial span row already carries the honest number.
+     */
+    details.distance = null;
+    details.relationLabel = "Part of";
+    details.relationValue = region.systemName ?? "The Solar System";
+    details.lore = region.lede ?? details.lore;
+    details.atmosphere = null;
+    details.temperature = null;
+    details.rotation = null;
+    details.axialTilt = null;
+    details.gravity = null;
+    details.surface = null;
+    details.rings = null;
+    details.ringRoster = [];
+    details.showJplSource = false;
+    /*
+     * A region's rows are not a world's rows, and two regions are not each
+     * other's either. "Estimated population" is right for the Kuiper Belt and
+     * wrong for the heliopause, which has no population at all -- it is a
+     * place where two invisible gases balance, and the honest thing to put in
+     * that row is what a visitor would actually see there, which is nothing.
+     * So the defaults hold unless the region names its own terms.
+     */
+    details.labels = {
+      size: "Estimated population",
+      diameter: "Radial span",
+      orbital: "Orbital period",
+      ...(region.labels ?? {}),
+    };
+  }
 
   [
     "massRelative", "sizeRelative", "diameter", "distance", "orbital",
@@ -337,11 +393,11 @@ export function createCelestialDetailsPanel() {
             <dd id="planet-details-mass" data-cosmic-text>—</dd>
           </div>
           <div class="planet-details__fact" data-core-field="size">
-            <dt data-cosmic-text>Size vs Earth</dt>
+            <dt id="planet-details-size-label" data-cosmic-text>Size vs Earth</dt>
             <dd id="planet-details-size" data-cosmic-text>—</dd>
           </div>
           <div class="planet-details__fact" data-core-field="diameter">
-            <dt data-cosmic-text>Physical diameter</dt>
+            <dt id="planet-details-diameter-label" data-cosmic-text>Physical diameter</dt>
             <dd id="planet-details-diameter" data-cosmic-text>—</dd>
           </div>
           <div class="planet-details__fact" data-core-field="distance">
@@ -349,7 +405,7 @@ export function createCelestialDetailsPanel() {
             <dd id="planet-details-distance" data-cosmic-text>—</dd>
           </div>
           <div class="planet-details__fact" data-core-field="orbital">
-            <dt data-cosmic-text>Orbital period / motion</dt>
+            <dt id="planet-details-orbital-label" data-cosmic-text>Orbital period / motion</dt>
             <dd id="planet-details-orbital" data-cosmic-text>—</dd>
           </div>
           <div class="planet-details__fact" data-core-field="relation">
@@ -397,6 +453,14 @@ export function createCelestialDetailsPanel() {
               <p id="planet-details-rings" data-cosmic-text></p>
               <ol class="planet-details__ring-roster" id="planet-details-ring-roster" hidden></ol>
             </div>
+            <div class="planet-details__advanced-item planet-details__advanced-item--regions" data-planet-field="regionSections" hidden>
+              <span data-cosmic-text>How this region works</span>
+              <div id="planet-details-region-sections"></div>
+            </div>
+            <div class="planet-details__advanced-item planet-details__advanced-item--rings" data-planet-field="members" hidden>
+              <span data-cosmic-text>Worlds you can visit here</span>
+              <ol class="planet-details__ring-roster" id="planet-details-member-roster" hidden></ol>
+            </div>
             <div class="planet-details__advanced-item planet-details__advanced-item--lore" data-planet-field="lore">
               <span data-cosmic-text>Celestial story</span>
               <p id="planet-details-lore" data-cosmic-text></p>
@@ -434,6 +498,16 @@ export function createCelestialDetailsPanel() {
     relation: layer.querySelector("#planet-details-relation"),
   });
   const ringRoster = layer.querySelector("#planet-details-ring-roster");
+  const memberRoster = layer.querySelector("#planet-details-member-roster");
+  const regionSections = layer.querySelector("#planet-details-region-sections");
+  const sizeLabel = layer.querySelector("#planet-details-size-label");
+  const diameterLabel = layer.querySelector("#planet-details-diameter-label");
+  const orbitalLabel = layer.querySelector("#planet-details-orbital-label");
+  const DEFAULT_LABELS = Object.freeze({
+    size: "Size vs Earth",
+    diameter: "Physical diameter",
+    orbital: "Orbital period / motion",
+  });
   const advancedFields = Object.freeze({
     atmosphere: layer.querySelector("#planet-details-atmosphere"),
     temperature: layer.querySelector("#planet-details-temperature"),
@@ -522,6 +596,90 @@ export function createCelestialDetailsPanel() {
       append("planet-details__ring-description", ring.description, "p");
       append("planet-details__ring-motion", ring.motion);
       ringRoster.append(entry);
+    });
+  }
+
+  /**
+   * The region's prose, as several labelled blocks rather than one paragraph.
+   *
+   * A world's story is a paragraph. A region's is three: what the mechanism
+   * is, why it matters, and -- in most of these cases -- which part of it is
+   * still unresolved. Flattening them into the single "Celestial story" field
+   * produced a wall of text, so they keep their headings.
+   */
+  function writeRegionSections(sections) {
+    if (!regionSections) return;
+    regionSections.textContent = "";
+    const row = layer.querySelector('[data-planet-field="regionSections"]');
+    const available = Array.isArray(sections) && sections.length > 0;
+    if (row) row.hidden = !available;
+    if (!available) return;
+    sections.forEach(([heading, text]) => {
+      const block = document.createElement("div");
+      block.className = "planet-details__region-section";
+      const term = document.createElement("strong");
+      term.setAttribute("data-cosmic-text", "");
+      term.textContent = heading;
+      const copy = document.createElement("p");
+      copy.setAttribute("data-cosmic-text", "");
+      copy.textContent = text;
+      block.append(term, copy);
+      regionSections.append(block);
+    });
+  }
+
+  /**
+   * The named worlds inside a region, each one travellable.
+   *
+   * A region is a place, and the point of a place is that there is something
+   * in it. These are the individually modelled bodies that belong to this
+   * zone, in the same visual language as the ring roster, and pressing one
+   * closes the dossier and flies there -- which is the answer to "can I visit
+   * the members of each belt part".
+   */
+  function writeMemberRoster(members) {
+    if (!memberRoster) return;
+    memberRoster.textContent = "";
+    const row = layer.querySelector('[data-planet-field="members"]');
+    const available = Array.isArray(members) && members.length > 0;
+    memberRoster.hidden = !available;
+    if (row) row.hidden = !available;
+    if (!available) return;
+
+    members.forEach((member) => {
+      const entry = document.createElement("li");
+      entry.className = "planet-details__ring planet-details__member";
+
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "planet-details__member-button";
+      button.dataset.travelTo = member.body;
+      button.setAttribute("aria-label", `Travel to ${member.body}`);
+
+      const append = (className, text, tag = "span") => {
+        if (!text) return;
+        const node = document.createElement(tag);
+        node.className = className;
+        node.setAttribute("data-cosmic-text", "");
+        node.textContent = text;
+        button.append(node);
+      };
+
+      append("planet-details__ring-order", member.order);
+      append("planet-details__ring-name", member.body, "strong");
+      append("planet-details__ring-character", member.character);
+      append("planet-details__ring-range", member.range);
+      append("planet-details__ring-description", member.note, "p");
+      append("planet-details__ring-motion", member.motion);
+
+      const go = document.createElement("span");
+      go.className = "planet-details__member-go";
+      go.setAttribute("data-cosmic-text", "");
+      go.textContent = "Travel there →";
+      button.append(go);
+
+      entry.append(button);
+      memberRoster.append(entry);
     });
   }
 
@@ -702,6 +860,11 @@ export function createCelestialDetailsPanel() {
       ? `Milky Way Galaxy · Solar System · ${details.breadcrumbTail}`
       : "Milky Way Galaxy · Solar System";
     relationLabel.textContent = details.relationLabel;
+    const labels = { ...DEFAULT_LABELS, ...(details.labels ?? {}) };
+    if (sizeLabel) sizeLabel.textContent = labels.size;
+    if (diameterLabel) diameterLabel.textContent = labels.diameter;
+    if (orbitalLabel) orbitalLabel.textContent = labels.orbital;
+    layer.classList.toggle("is-region", Boolean(details.isRegion));
     writeCoreField("mass", details.massRelative);
     writeCoreField("size", details.sizeRelative);
     writeCoreField("diameter", details.diameter);
@@ -711,6 +874,8 @@ export function createCelestialDetailsPanel() {
     // The roster is written first so the rings row knows whether it has content
     // even when the body carries no descriptive paragraph.
     writeRingRoster(details.ringRoster, details.highlightRingName, details.name);
+    writeRegionSections(details.region?.sections);
+    writeMemberRoster(details.region?.members);
     Object.keys(advancedFields).forEach((key) => writeAdvancedField(key, details[key]));
 
     sources.hidden = !details.scienceUrl;
@@ -718,7 +883,13 @@ export function createCelestialDetailsPanel() {
       nasaSource.href = details.scienceUrl;
       nasaSource.setAttribute("aria-label", `Open NASA Science facts for ${details.name}`);
     }
-    advanced.open = false;
+    /*
+     * A world's dossier opens collapsed, because its six core facts are the
+     * answer and the rest is for anyone who wants more. A region's core facts
+     * are a span and a population -- the answer is entirely in the advanced
+     * block, so it opens with it already shown.
+     */
+    advanced.open = Boolean(details.isRegion);
 
     resetCosmicText();
     activeCosmicTarget = null;
@@ -877,6 +1048,23 @@ export function createCelestialDetailsPanel() {
       first.focus();
     }
   }, { capture: true });
+
+  /*
+   * The panel does not move the camera. It says which world was asked for and
+   * lets the scene decide -- the same separation the events dashboard already
+   * uses, where pressing an event calls back into `presentSolarEvent` rather
+   * than staging anything itself.
+   */
+  layer.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-travel-to]");
+    if (!button) return;
+    event.preventDefault();
+    const target = button.dataset.travelTo;
+    hide({ restoreFocus: false });
+    window.dispatchEvent(new CustomEvent("beyond-earth:travel-to-body", {
+      detail: { name: target },
+    }));
+  });
 
   return Object.freeze({
     show,
