@@ -25,7 +25,29 @@ surface, it has to happen inside `asteroidBelt.js`, and the note in the four
 traps applies: feed a photograph to the generic rocky material and the
 displacement map turns the body into a pincushion.
 
-**Rank 2 onward is untouched.**
+## Rank 2 is built
+
+**All eleven of the Rank 2 rows that were not already in the scene are now
+drawn**, in `src/js/scene/smallBodies/mainBeltCatalogue.js` — Interamnia,
+52 Europa, Davida, Sylvia, Eunomia, Euphrosyne, Cybele, Juno, Camilla,
+Kalliope and Kleopatra — together with six satellites: Romulus and Remus on
+Sylvia, Alexhelios and Cleoselene on Kleopatra, Linus on Kalliope, and
+S/2019 (31) 1 on Euphrosyne. Pallas, Hygiea and Psyche were already inside
+`asteroidBelt.js`, as Vesta is.
+
+The difference from Rank 1 is stated in every card. These have **measured
+shapes and borrowed surfaces**: VLT/SPHERE resolved each into a disc and a
+tri-axial ellipsoid, so the proportions, the sizes, the albedos and the
+orbits are real, and the relief is taken from the nearest spectral analogue
+anyone has photographed — Ida for the S-types, Mathilde for the C and P
+types, Lutetia for the M and X types.
+
+**107 Camilla's two satellites are deliberately not drawn.** They exist, but
+the published orbit solutions available here disagree by more than the
+separation itself, and a moon in the wrong place is worse than no moon. Its
+card says so.
+
+**Rank 3 onward is untouched.**
 
 ## Corrections to this list
 

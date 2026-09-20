@@ -169,3 +169,44 @@ costs about 2.3 MB.
 The run prints a `meanLinear` per body. Those numbers are pasted into
 `SMALL_BODY_TEXTURES` in `src/js/scene/smallBodies/smallBodies.js` and they
 must be regenerated whenever a map is rebuilt.
+
+
+## The size-dependence bugs, and the lab that found them
+
+A review split the bodies into two sets: the ones that looked right, and the
+ones that "seems like we are actually copy pasting one texture to all ...
+looks like mixture of black white spots". The two sets turned out to divide
+almost exactly along map size, and the reason is three separate places where
+this pipeline measured in **pixels** something that should have been measured
+in **degrees of the body**.
+
+`../../small-body-lab.html` is what made it visible: every body in one grid,
+same size on screen, same light, turning together. Side by side the
+difference was obvious in a second — the good set had fine even grain, the
+bad set had soft blotches — and it is not something you can see by flying to
+one body, then another, thirty seconds apart.
+
+The three:
+
+- **Stamp scale.** `grow_patch` scaled each stamp by a fraction of the
+  *patch*, so on a 512-wide map a stamp covered 11–31% of the width against
+  6–16% on a 1024-wide one. Twice the angular size. Now multiplied by
+  `W / 1024`, with a per-body `grain` on top so bodies sharing an analogue
+  do not come out identical.
+- **`equalise_resolution`'s floor.** `max(3, …)` pixels is three times the
+  angle at half size. Now derived from the angle throughout.
+- **`close_the_poles`' smoothing.** A fixed seven-row Gaussian is twice the
+  angle at 256 rows. Now scaled with the map height.
+
+A fourth change is a judgement rather than a bug: **`contrastCap`**. The
+target contrast is the source photograph's own, which is right in principle
+and wrong for a frame shot with hard shadows — 67P's NAVCAM patch comes in at
+0.47. The mesh already carries craters, boulders and relief in its vertices,
+lit by the real Sun; a map that contrasty adds a second, unlit crater field
+on top, and the two together read as dirt. The cap is set per body where the
+source is harsh.
+
+Lower contrast is also half the cure for the reported flicker on Apophis and
+Itokawa — the two smallest and most elongated bodies, which is the exact case
+where high-frequency texture aliases as a body turns. The other half is
+`anisotropy: 16` in `smallBodies.js`.

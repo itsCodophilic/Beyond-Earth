@@ -18,12 +18,32 @@ import numpy as np
 from PIL import Image, ImageFilter
 from scipy import ndimage
 
-W, H = 1024, 512
+_NOISE = {}
+
 REF = "reference"
 OUT = "../../public/assets/textures/smallbodies"
 
-LON, LAT = np.meshgrid(np.linspace(-180, 180, W, endpoint=False),
-                       np.linspace(90, -90, H))
+# Two sizes, and the reason is evidence rather than screen space.
+#
+# The fifteen Rank 1 bodies are grown from photographs of themselves, so there
+# is real detail to carry and they get 1024x512. The eleven large main-belt
+# worlds have never been photographed at all -- their relief is borrowed from
+# a spectral analogue and their shape is an ellipsoid -- so a map twice as
+# fine would be twice as much invented detail, and they get 512x256. It also
+# keeps the whole set under four megabytes.
+W, H = 1024, 512
+LON = LAT = None
+
+
+def set_size(width, height):
+    global W, H, LON, LAT
+    W, H = width, height
+    LON, LAT = np.meshgrid(np.linspace(-180, 180, W, endpoint=False),
+                           np.linspace(90, -90, H))
+    # Every cached noise field is the wrong shape now.
+    _NOISE.clear()
+
+
 
 
 # --------------------------------------------------------------------------
@@ -67,6 +87,7 @@ BODIES = {
         ],
     ),
     "itokawa": dict(
+        contrastCap=0.24,
         source="itokawa-hayabusa-amica.jpg",
         credit="JAXA -- Hayabusa AMICA, 2005. (Supplied as '99942 Apophis.jpg'; "
                "it is Itokawa. Apophis has never been resolved by a spacecraft.)",
@@ -80,6 +101,7 @@ BODIES = {
         features=[("smooth", dict(lat=-5.0, lon=0.0, radius=30.0, gain=0.13, blur=4.0))],
     ),
     "eros": dict(
+        contrastCap=0.2,
         source="eros-near-global-mosaic.jpg",
         credit="NASA/JHU APL -- NEAR Shoemaker MSI, global mosaic, 2000",
         detail=1.20, stamps=640, seed=104,
@@ -93,6 +115,7 @@ BODIES = {
         ],
     ),
     "gaspra": dict(
+        contrastCap=0.22,
         source="gaspra-galileo.jpg",
         credit="NASA/JPL -- Galileo SSI, 29 October 1991",
         detail=1.25, stamps=600, seed=105,
@@ -122,6 +145,7 @@ BODIES = {
         features=[("spot", dict(lat=68.0, lon=0.0, radius=30.0, gain=0.16, rim=0.06))],
     ),
     "comet67p": dict(
+        contrastCap=0.26,
         source="comet67p-rosetta-navcam.jpg",
         credit="ESA/Rosetta/NAVCAM, CC BY-SA IGO 3.0 -- 2014-2016",
         detail=1.40, stamps=700, seed=108,
@@ -185,6 +209,7 @@ BODIES = {
         features=[],
     ),
     "apophis": dict(
+        contrastCap=0.22,
         analogue="itokawa",
         credit="Apophis has never been resolved by any spacecraft -- everything "
                "known about its shape is from Goldstone and Arecibo radar "
@@ -197,6 +222,7 @@ BODIES = {
         features=[],
     ),
     "halley": dict(
+        contrastCap=0.26,
         analogue="comet67p",
         credit="Giotto's 1986 flyby is the only close look anyone has had, and "
                "no frame of it was supplied. Relief borrowed from 67P, the "
@@ -224,6 +250,76 @@ BODIES = {
         craters=(14, (5.0, 16.0), 0.16), boulders=(40, (0.5, 2.0), 0.20),
         features=[],
     ),
+
+    # ---- Rank 2: the eleven large main-belt worlds, and six moons --------
+    #
+    # None of these has ever been photographed by a spacecraft. Their shapes
+    # are measured -- VLT/SPHERE resolved every one of them into a disc and a
+    # tri-axial ellipsoid -- and their relief is borrowed from the nearest
+    # visited body of the same spectral class. Each card says so. The
+    # borrowing is per class, not per body, because that is the only claim the
+    # data supports: an S-type surface looks like an S-type surface.
+    #
+    # `size` halves the map for all of them. See the note at the top.
+    "interamnia": dict(analogue="mathilde", size=(512, 256), grain=1.18, detail=1.00, stamps=420, seed=704,
+        credit="B-type, never visited. Relief from Mathilde, the nearest imaged carbonaceous body. Shape from VLT/SPHERE (Hanus et al. 2020)",
+        craters=(120, (1.0, 9.0), 0.11), boulders=(0, (0.2, 1.0), 0.0), features=[]),
+    "europa52": dict(analogue="mathilde", size=(512, 256), grain=1.05, detail=1.05, stamps=420, seed=52,
+        credit="C-type, never visited. Relief from Mathilde. Shape from Keck AO (Merline et al. 2013)",
+        craters=(130, (1.0, 10.0), 0.12), boulders=(0, (0.2, 1.0), 0.0), features=[]),
+    "davida": dict(analogue="mathilde", size=(512, 256), grain=0.92, detail=1.05, stamps=420, seed=511,
+        credit="C-type, never visited. Relief from Mathilde. Shape from VLT/SPHERE (Vernazza et al. 2021)",
+        # SPHERE resolved one very large southern depression -- the only
+        # individual surface feature ever seen on Davida.
+        craters=(130, (1.0, 10.0), 0.12), boulders=(0, (0.2, 1.0), 0.0),
+        features=[("spot", dict(lat=-42.0, lon=20.0, radius=30.0, gain=-0.18, rim=0.12))]),
+    "euphrosyne": dict(analogue="mathilde", size=(512, 256), grain=1.12, detail=1.00, stamps=420, seed=31,
+        credit="C-type, never visited. Relief from Mathilde. Shape from VLT/SPHERE 2019",
+        craters=(115, (1.0, 9.0), 0.11), boulders=(0, (0.2, 1.0), 0.0), features=[]),
+    "cybele": dict(analogue="mathilde", size=(512, 256), grain=1.0, detail=1.00, stamps=420, seed=65,
+        credit="P-type, never visited. Relief from Mathilde, the darkest primitive body anyone has imaged closely",
+        craters=(120, (1.0, 9.0), 0.11), boulders=(0, (0.2, 1.0), 0.0), features=[]),
+    "eunomia": dict(analogue="ida", size=(512, 256), grain=0.86, detail=1.10, stamps=420, seed=15,
+        credit="S-type, never visited. Relief from Ida, an S-type of the same family kind. Shape from VLT/SPHERE (Vernazza et al. 2021)",
+        craters=(140, (0.8, 9.0), 0.13), boulders=(120, (0.15, 0.9), 0.16), features=[]),
+    "juno": dict(analogue="ida", size=(512, 256), grain=0.96, detail=1.10, stamps=420, seed=3,
+        credit="S-type, never visited. Relief from Ida. Shape from VLT/SPHERE 2021; the large southern crater was resolved from the ground in 2003",
+        craters=(135, (0.8, 9.0), 0.13), boulders=(120, (0.15, 0.9), 0.16),
+        features=[("spot", dict(lat=-36.0, lon=-60.0, radius=26.0, gain=-0.19, rim=0.13))]),
+    "sylvia": dict(analogue="lutetia", contrastCap=0.24, size=(512, 256), grain=1.08, detail=1.05, stamps=420, seed=87,
+        credit="X-type, never visited. Relief from Lutetia, the nearest imaged X-type. Shape from the 2021 ADAM model",
+        craters=(140, (0.9, 9.0), 0.12), boulders=(0, (0.2, 1.0), 0.0), features=[]),
+    "camilla": dict(analogue="lutetia", contrastCap=0.24, size=(512, 256), grain=0.9, detail=1.05, stamps=420, seed=107,
+        credit="X-type, never visited. Relief from Lutetia. Shape from Keck/VLT AO (Pajuelo et al. 2018)",
+        craters=(135, (0.9, 9.0), 0.12), boulders=(0, (0.2, 1.0), 0.0), features=[]),
+    "kalliope": dict(analogue="lutetia", contrastCap=0.25, size=(512, 256), grain=0.8, detail=1.10, stamps=420, seed=22,
+        credit="M-type, never visited. Relief from Lutetia, which is itself M/Xk. Shape from AO (Ferrais et al. 2022)",
+        craters=(110, (0.9, 8.0), 0.13), boulders=(0, (0.2, 1.0), 0.0), features=[]),
+    "kleopatra": dict(analogue="lutetia", contrastCap=0.25, size=(512, 256), grain=0.74, detail=1.10, stamps=420, seed=216,
+        credit="M-type dog-bone, never visited. Relief from Lutetia. Shape from Arecibo radar 2000 and VLT/SPHERE (Marchis et al. 2021)",
+        craters=(95, (0.9, 7.0), 0.13), boulders=(0, (0.2, 1.0), 0.0), features=[]),
+
+    # The six satellites take their parent's borrowed relief, at a quarter
+    # size again -- none is more than 28 km across and none has ever been
+    # resolved into anything but a point.
+    "romulus": dict(analogue="lutetia", contrastCap=0.21, size=(256, 128), grain=1.1, detail=1.20, stamps=260, seed=8701,
+        credit="Sylvia's outer moon. Never resolved; relief from Lutetia via its parent",
+        craters=(60, (2.0, 14.0), 0.15), boulders=(0, (0.2, 1.0), 0.0), features=[]),
+    "remus": dict(analogue="lutetia", contrastCap=0.21, size=(256, 128), grain=1.15, detail=1.20, stamps=260, seed=8702,
+        credit="Sylvia's inner moon. Never resolved; relief from Lutetia via its parent",
+        craters=(45, (2.5, 15.0), 0.15), boulders=(0, (0.2, 1.0), 0.0), features=[]),
+    "linus": dict(analogue="lutetia", contrastCap=0.21, size=(256, 128), grain=1.08, detail=1.20, stamps=260, seed=2201,
+        credit="Kalliope's moon. Never resolved; relief from Lutetia via its parent",
+        craters=(65, (2.0, 13.0), 0.15), boulders=(0, (0.2, 1.0), 0.0), features=[]),
+    "alexhelios": dict(analogue="lutetia", contrastCap=0.2, size=(256, 128), grain=1.2, detail=1.25, stamps=260, seed=21601,
+        credit="Kleopatra's outer moon. Never resolved; relief from Lutetia via its parent",
+        craters=(35, (3.0, 16.0), 0.16), boulders=(0, (0.2, 1.0), 0.0), features=[]),
+    "cleoselene": dict(analogue="lutetia", contrastCap=0.2, size=(256, 128), grain=1.22, detail=1.25, stamps=260, seed=21602,
+        credit="Kleopatra's inner moon. Never resolved; relief from Lutetia via its parent",
+        craters=(30, (3.0, 16.0), 0.16), boulders=(0, (0.2, 1.0), 0.0), features=[]),
+    "euphrosyne-moon": dict(analogue="mathilde", contrastCap=0.2, size=(256, 128), grain=1.25, detail=1.25, stamps=260, seed=3101,
+        credit="Euphrosyne's four-kilometre companion, provisional designation only. Never resolved; relief from Mathilde via its parent",
+        craters=(28, (3.0, 16.0), 0.16), boulders=(0, (0.2, 1.0), 0.0), features=[]),
 }
 
 
@@ -237,9 +333,6 @@ BODIES = {
 def smoothstep(a, b, x):
     t = np.clip((x - a) / (b - a), 0, 1)
     return t * t * (3 - 2 * t)
-
-
-_NOISE = {}
 
 
 def sphere_noise(freq, seed, octaves=3):
@@ -353,7 +446,7 @@ def relief_from(source, detail):
     return relief / relief.mean(), (y0, x0, size)
 
 
-def grow_patch(patch, count, seed):
+def grow_patch(patch, count, seed, uv_scale=1.0):
     """Stamped, never tiled -- a mirror-tiled patch prints an argyle lattice
     within one look.  Random position, scale, rotation and flip, each stamp
     faded through a cosine window, overlaps averaged."""
@@ -383,7 +476,7 @@ def grow_patch(patch, count, seed):
                                order=1, mode="constant", cval=0.0)
         tile = ndimage.rotate(tile, angle, reshape=True,
                               order=1, mode="constant", cval=1.0)
-        scale = rng.uniform(0.45, 1.25)
+        scale = rng.uniform(0.45, 1.25) * uv_scale
         th = max(8, int(tile.shape[0] * scale))
         tw = max(8, int(tile.shape[1] * scale))
         resize = lambda a, lo, hi: np.asarray(
@@ -587,7 +680,11 @@ def equalise_resolution(img, base_deg=0.55):
     caps detonate into a pinwheel the moment a camera looks down on them."""
     h, w = img.shape
     lat = np.radians(np.linspace(90, -90, h))
-    base = max(3, int(base_deg / 360.0 * w))
+    # In pixels, but derived from an *angle*, so it is the same blur on a
+    # 512-wide map as on a 1024-wide one. The old floor of 3 px was three
+    # times too strong at half size, which is part of why the Rank 2 maps
+    # came out softer and flatter than the Rank 1 ones.
+    base = max(1, int(round(base_deg / 360.0 * w)))
     triple = np.concatenate([img, img, img], axis=1)
     cs = np.concatenate([np.zeros((h, 1)), np.cumsum(triple, axis=1)], axis=1)
     idx = np.arange(w) + w
@@ -620,7 +717,9 @@ def close_the_poles(img, contrast):
     """
     lat = np.abs(np.linspace(90, -90, img.shape[0]))[:, None]
     p = smoothstep(78.0, 90.0, lat) ** 1.4
-    rows = ndimage.gaussian_filter1d(img.mean(axis=1), 7, mode="nearest")[:, None]
+    # Same again: seven rows is a different angle at 256 rows than at 512.
+    sigma = max(2.0, 7.0 * img.shape[0] / 512.0)
+    rows = ndimage.gaussian_filter1d(img.mean(axis=1), sigma, mode="nearest")[:, None]
     out = img * (1 - p) + rows * p
     grain = (sphere_noise(16.0, 137) * 0.62 + sphere_noise(44.0, 211, octaves=2) * 0.38)
     return out * (1 + grain * contrast * p)
@@ -632,8 +731,23 @@ def srgb_to_linear(x):
 
 # --------------------------------------------------------------------------
 
+def photographed_root(name):
+    """Follow `analogue` until a body with a real photograph is reached.
+
+    Mathilde borrows from Bennu, and Interamnia borrows from Mathilde -- so
+    resolving one link is not enough. Chains are short and the catalogue is
+    hand-written, but a cycle would hang the build, so it is bounded."""
+    seen = set()
+    while BODIES[name].get("analogue"):
+        if name in seen:
+            raise ValueError(f"analogue cycle at {name}")
+        seen.add(name)
+        name = BODIES[name]["analogue"]
+    return name
+
+
 def build(name, spec, cache):
-    src_name = spec.get("analogue", name)
+    src_name = photographed_root(name)
     if src_name not in cache:
         source = BODIES[src_name]["source"]
         cache[src_name] = relief_from(source, BODIES[src_name].get("detail", 1.2))
@@ -649,10 +763,25 @@ def build(name, spec, cache):
     # ground one stamp covers. A fixed count starves a small patch and wastes
     # time on a large one; overlap costs nothing here because the contrast is
     # restored below anyway.
-    side = patch.shape[0] * 0.85
+    #
+    # A stamp has to cover the same *angle* of the body whatever the map size.
+    #
+    # This is the bug that made the eleven Rank 2 worlds look like clouds
+    # rather than rock. Their maps are 512 wide; the patch is still 150 px of
+    # the original photograph; so each stamp covered 11-31% of the map width
+    # instead of the 6-16% it covers on a 1024-wide map. Twice the angular
+    # size, which is the difference between grain you read as regolith and
+    # blotches you read as weather. Reported exactly that way -- Object A has
+    # fine even grain, Object B has soft black-and-white patches -- and the
+    # two sets differ in nothing else but this.
+    #
+    # `grain` is a per-body multiplier on top of it, so two bodies that
+    # borrow the same analogue do not come out identical.
+    uv_scale = (W / 1024.0) * float(spec.get("grain", 1.0))
+    side = patch.shape[0] * 0.85 * uv_scale
     stamp_count = int(np.clip(6.0 * W * H / max(side * side, 1.0),
-                              spec.get("stamps", 600), 4200))
-    field = grow_patch(patch, stamp_count, spec.get("seed", 7))
+                              spec.get("stamps", 600), 5200))
+    field = grow_patch(patch, stamp_count, spec.get("seed", 7), uv_scale)
 
     # Stamping averages, and averaging flattens.
     #
@@ -666,6 +795,18 @@ def build(name, spec, cache):
     # than inventing one: the target is the photograph's own.
     field = field / field.mean()
     target = float(patch.std() / patch.mean())
+    #
+    # A ceiling on how much contrast a map may carry.
+    #
+    # The target is the photograph's own, which is right in principle and
+    # wrong for a source shot with hard shadows: 67P's NAVCAM frames and the
+    # Giotto-analogue material come in at 0.47, and a map that contrasty on a
+    # body whose *mesh* already carries craters reads as dirt rather than
+    # relief -- "mixture of black white spots". The geometry is doing the
+    # topography; the map only has to tint it.
+    cap = spec.get("contrastCap")
+    if cap:
+        target = min(target, float(cap))
     current = float(field.std())
     if current > 1e-4:
         field = np.clip(1.0 + (field - 1.0) * (target / current), 0.22, 2.4)
@@ -721,10 +862,17 @@ def build(name, spec, cache):
 
 
 def main():
-    cache = {}
     means = {}
-    for name, spec in BODIES.items():
-        means[name] = round(build(name, spec, cache), 4)
+    # Grouped by output size: the patch cache holds arrays that are only
+    # valid for one map geometry, and re-deriving a patch is cheap anyway.
+    for size in sorted({spec.get("size", (1024, 512)) for spec in BODIES.values()},
+                       reverse=True):
+        set_size(*size)
+        cache = {}
+        for name, spec in BODIES.items():
+            if spec.get("size", (1024, 512)) != size:
+                continue
+            means[name] = round(build(name, spec, cache), 4)
     print("\nPaste into smallBodies.js:")
     print(json.dumps(means, indent=2))
 

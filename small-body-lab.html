@@ -1,0 +1,470 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Small-body surface lab</title>
+<!--
+  A bench for looking at the small bodies side by side.
+
+  The scene draws each of these once, scattered across two and a half billion
+  kilometres, which makes comparing two surfaces a matter of flying for
+  thirty seconds, arriving, looking, flying back, and trying to remember what
+  the first one looked like. That is not a workable way to judge whether
+  fifteen textures are too similar to each other -- and "they all look the
+  same" is exactly the kind of thing you can only see when they are next to
+  each other.
+
+  So: every body in one grid, all drawn at the same size on screen, under one
+  light, turning together. Same geometry code, same catalogue, same texture
+  files as the real scene -- this imports them rather than copying them, so
+  what is here is what is there.
+-->
+<style>
+  :root {
+    --ink: #e8eef6;
+    --dim: #8a97a8;
+    --line: rgba(140, 170, 200, 0.16);
+    --panel: rgba(10, 14, 20, 0.82);
+    --accent: #77efff;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: #05070b; color: var(--ink);
+    font: 13px/1.5 ui-monospace, "SF Mono", Menlo, monospace; overflow: hidden; }
+  /* The stage is everything right of the control panel, so a body can
+     never end up behind it. Every projection below measures this box
+     rather than the window. */
+  #stage { position: fixed; inset: 0 0 0 300px; }
+  canvas { display: block; }
+  #ui {
+    position: fixed; top: 0; left: 0; padding: 14px 16px; z-index: 10;
+    background: var(--panel); border-right: 1px solid var(--line);
+    border-bottom: 1px solid var(--line); backdrop-filter: blur(8px);
+    max-height: 100vh; overflow: auto; width: 268px;
+  }
+  h1 { font-size: 13px; letter-spacing: .14em; text-transform: uppercase;
+    margin: 0 0 4px; color: var(--accent); font-weight: 600; }
+  .sub { color: var(--dim); margin: 0 0 14px; font-size: 11px; }
+  fieldset { border: 1px solid var(--line); border-radius: 6px; margin: 0 0 10px; padding: 8px 10px 10px; }
+  legend { color: var(--dim); font-size: 10px; letter-spacing: .12em; text-transform: uppercase; padding: 0 4px; }
+  label { display: flex; align-items: center; gap: 8px; margin: 5px 0; cursor: pointer; }
+  input[type=range] { width: 100%; accent-color: var(--accent); }
+  input[type=checkbox] { accent-color: var(--accent); }
+  button { font: inherit; color: var(--ink); background: rgba(120,220,255,.08);
+    border: 1px solid var(--line); border-radius: 5px; padding: 5px 9px; cursor: pointer; }
+  button:hover { background: rgba(120,220,255,.16); }
+  button.on { background: rgba(120,220,255,.24); border-color: var(--accent); }
+  .row { display: flex; gap: 6px; flex-wrap: wrap; }
+  .hint { color: var(--dim); font-size: 11px; margin-top: 10px; }
+  #readout { position: fixed; right: 0; bottom: 0; padding: 9px 13px; z-index: 10; opacity: .94;
+    background: var(--panel); border-left: 1px solid var(--line); border-top: 1px solid var(--line);
+    max-width: 46ch; font-size: 11px; color: var(--dim); }
+  #readout b { color: var(--ink); font-weight: 600; display: block; margin-bottom: 3px; letter-spacing: .06em; }
+  #labels { position: fixed; inset: 0 0 0 300px; pointer-events: none; z-index: 5; }
+  .tag { position: absolute; transform: translate(-50%, 0); font-size: 10.5px;
+    letter-spacing: .08em; color: var(--dim); white-space: nowrap; text-shadow: 0 1px 3px #000;
+    max-width: 15ch; overflow: hidden; text-overflow: ellipsis; }
+  .tag.hot { color: var(--accent); }
+</style>
+</head>
+<body>
+<div id="ui">
+  <h1>Surface lab</h1>
+  <p class="sub">Same geometry, catalogue and texture files as the scene.</p>
+
+  <fieldset>
+    <legend>Set</legend>
+    <div class="row">
+      <button id="set-b" class="on">Object B</button>
+      <button id="set-a">Object A</button>
+      <button id="set-all">All</button>
+    </div>
+  </fieldset>
+
+  <fieldset>
+    <legend>Surface</legend>
+    <label><input type="checkbox" id="tex" checked> Texture map</label>
+    <label><input type="checkbox" id="emis" checked> Emissive fill</label>
+    <label><input type="checkbox" id="wire"> Wireframe</label>
+    <label><input type="checkbox" id="flat"> Show the flat map</label>
+  </fieldset>
+
+  <fieldset>
+    <legend>Size</legend>
+    <label><input type="checkbox" id="equal" checked> Equalise on screen</label>
+    <p class="sub" style="margin:2px 0 0">Off = true relative diameters.</p>
+  </fieldset>
+
+  <fieldset>
+    <legend>Light</legend>
+    <label>Angle <input type="range" id="lightA" min="-180" max="180" value="-38"></label>
+    <label>Height <input type="range" id="lightB" min="-80" max="80" value="18"></label>
+    <label>Strength <input type="range" id="lightI" min="0" max="400" value="170"></label>
+  </fieldset>
+
+  <fieldset>
+    <legend>Motion</legend>
+    <label><input type="checkbox" id="spin" checked> Spin</label>
+    <label>Speed <input type="range" id="spinS" min="0" max="200" value="45"></label>
+  </fieldset>
+
+  <p class="hint">Drag to turn every body together · scroll to zoom · click one to isolate it, click empty space to go back.</p>
+</div>
+
+<div id="stage"></div>
+<div id="labels"></div>
+<div id="readout"><b>Nothing selected</b>Click a body.</div>
+
+<script type="module">
+import * as THREE from "three";
+import { SMALL_BODIES, albedoToLinearValue } from "/src/js/scene/smallBodies/smallBodyCatalogue.js";
+import { MAIN_BELT_WORLDS } from "/src/js/scene/smallBodies/mainBeltCatalogue.js";
+import { createSmallBodyGeometry } from "/src/js/scene/smallBodies/smallBodyShapes.js";
+
+/*
+ * The two sets the review split them into. A is "these are fine"; B is
+ * "these all look like the same texture". Kept as explicit name lists rather
+ * than derived from the catalogue, because the split is a judgement about
+ * how they *look*, which no field in the data records.
+ */
+const SET_A = new Set(["Lutetia", "Mathilde", "Ida", "Dactyl", "Ryugu",
+  "Didymos", "Dimorphos", "Bennu", "Arrokoth"]);
+
+const TEXTURE_ROOT = "/Beyond-Earth/assets/textures/smallbodies";
+const FILE = {
+  Arrokoth: "arrokoth", Apophis: "apophis", Bennu: "bennu", Ryugu: "ryugu",
+  "67P/Churyumov–Gerasimenko": "comet67p", Eros: "eros", Didymos: "didymos",
+  Dimorphos: "dimorphos", "1P/Halley": "halley", Ida: "ida", Dactyl: "dactyl",
+  Itokawa: "itokawa", Mathilde: "mathilde", Lutetia: "lutetia", Gaspra: "gaspra",
+  Interamnia: "interamnia", "52 Europa": "europa52", Davida: "davida",
+  Euphrosyne: "euphrosyne", Cybele: "cybele", Eunomia: "eunomia", Juno: "juno",
+  Sylvia: "sylvia", Camilla: "camilla", Kalliope: "kalliope", Kleopatra: "kleopatra",
+  Romulus: "romulus", Remus: "remus", Linus: "linus", Alexhelios: "alexhelios",
+  Cleoselene: "cleoselene", "S/2019 (31) 1": "euphrosyne-moon",
+};
+
+/* Flatten parents and their satellites into one list of things to draw. */
+const records = [];
+for (const record of [...SMALL_BODIES, ...MAIN_BELT_WORLDS]) {
+  records.push({ record, parent: null });
+  const moons = Array.isArray(record.moons) ? record.moons : (record.moon ? [record.moon] : []);
+  for (const moon of moons) {
+    records.push({
+      record: { ...moon, chroma: moon.chroma ?? record.chroma, metalness: record.metalness ?? 0 },
+      parent: record.name,
+    });
+  }
+}
+
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.0;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+const stage = document.getElementById("stage");
+stage.append(renderer.domElement);
+const W = () => stage.clientWidth;
+const H = () => stage.clientHeight;
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x05070b);
+const camera = new THREE.PerspectiveCamera(38, 1, 0.01, 400);
+
+/* One key light and a whisper of fill, so what you are judging is the map
+ * rather than the lighting rig. The scene's own Sun is a single point light
+ * too, which is why this is one as well. */
+const key = new THREE.DirectionalLight(0xfff6ec, 1.7);
+scene.add(key);
+scene.add(new THREE.AmbientLight(0x3a4a60, 0.10));
+
+const loader = new THREE.TextureLoader();
+const textureCache = new Map();
+function mapFor(name) {
+  const file = FILE[name];
+  if (!file) return null;
+  if (textureCache.has(file)) return textureCache.get(file);
+  const url = `${TEXTURE_ROOT}/${file}.jpg`;
+  const tex = loader.load(url);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.ClampToEdgeWrapping;
+  tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+  tex.minFilter = THREE.LinearMipmapLinearFilter;
+  textureCache.set(file, tex);
+  return tex;
+}
+
+/* The compensation the scene applies, so brightness here matches there.
+ * Measured on the saved files by the build script. */
+const MEAN_LINEAR = {
+  arrokoth: 0.2210, apophis: 0.2394, bennu: 0.2420, ryugu: 0.2386, comet67p: 0.2634,
+  eros: 0.2248, didymos: 0.2393, dimorphos: 0.2472, halley: 0.2624, ida: 0.2197,
+  dactyl: 0.2199, itokawa: 0.2416, mathilde: 0.2316, lutetia: 0.2566, gaspra: 0.2322,
+  interamnia: 0.2301, europa52: 0.2312, davida: 0.2320, euphrosyne: 0.2292,
+  cybele: 0.2292, eunomia: 0.2186, juno: 0.2189, sylvia: 0.2437, camilla: 0.2438,
+  kalliope: 0.2462, kleopatra: 0.2486, romulus: 0.2528, remus: 0.2533, linus: 0.2530,
+  alexhelios: 0.2561, cleoselene: 0.2552, "euphrosyne-moon": 0.2388,
+};
+
+const bodies = [];
+for (const { record, parent } of records) {
+  const chroma = record.chroma ?? [1, 1, 1];
+  /* The lab lights these far more strongly than the Sun does at 3 AU, so the
+   * albedo goes in raw rather than through the scene's distance
+   * compensation -- otherwise every one of them would be black. */
+  const baseValue = albedoToLinearValue(record.albedo) * 5.6;
+  const geometry = createSmallBodyGeometry(record.shape, {
+    widthSegments: 128, heightSegments: 86, chroma, baseValue,
+  });
+  const base = new THREE.Color().setRGB(
+    baseValue * chroma[0], baseValue * chroma[1], baseValue * chroma[2],
+    THREE.LinearSRGBColorSpace,
+  );
+  const material = new THREE.MeshStandardMaterial({
+    vertexColors: true, color: 0xffffff,
+    roughness: THREE.MathUtils.clamp(0.99 - record.albedo * 0.30, 0.80, 0.99),
+    metalness: record.metalness ?? 0,
+    emissive: base, emissiveIntensity: 0.28,
+    envMapIntensity: 0.04, dithering: true,
+  });
+  const file = FILE[record.name];
+  const mean = MEAN_LINEAR[file] ?? 1;
+  const mesh = new THREE.Mesh(geometry, material);
+  mesh.userData = { record, parent, file, mean, material };
+
+  /* Normalise so the longest axis is 1.0; the "true size" switch scales
+   * from here by the real mean diameter. */
+  geometry.computeBoundingSphere();
+  mesh.userData.unit = 1 / Math.max(1e-6, geometry.boundingSphere.radius);
+
+  const holder = new THREE.Group();
+  holder.add(mesh);
+  scene.add(holder);
+  bodies.push({ holder, mesh, record, parent, file, mean, material });
+}
+
+/* Flat map sheets, for reading the texture itself rather than the body. */
+const sheets = new Map();
+function sheetFor(entry) {
+  if (sheets.has(entry)) return sheets.get(entry);
+  const tex = mapFor(entry.record.name);
+  const mesh = new THREE.Mesh(
+    new THREE.PlaneGeometry(2, 1),
+    new THREE.MeshBasicMaterial({ map: tex, toneMapped: false }),
+  );
+  mesh.visible = false;
+  entry.holder.add(mesh);
+  sheets.set(entry, mesh);
+  return mesh;
+}
+
+let shown = [];
+let isolated = null;
+const state = { yaw: 0.6, pitch: 0.12, zoom: 1, spinT: 0 };
+
+function layout() {
+  const equal = ui.equal.checked;
+  const trueMax = Math.max(...shown.map((b) => b.record.diameterKm || 1));
+  const cols = Math.max(1, Math.ceil(Math.sqrt(shown.length * (W() / H()) * 0.62)));
+  const rows = Math.ceil(shown.length / cols);
+  shown.forEach((b, i) => {
+    const cx = (i % cols) - (cols - 1) / 2;
+    const cy = -(Math.floor(i / cols) - (rows - 1) / 2);
+    b.holder.position.set(cx * 2.55, cy * 2.75, 0);
+    const size = equal ? 1 : Math.max(0.16, Math.sqrt((b.record.diameterKm || 1) / trueMax));
+    b.mesh.scale.setScalar(b.mesh.userData.unit * size);
+  });
+  const span = Math.max(cols * 2.55 / (W() / H()), rows * 2.75) * 1.02;
+  camera.position.set(0, 0, span * 1.52 / state.zoom);
+  camera.lookAt(0, 0, 0);
+  return { cols, rows };
+}
+
+function setShown(list) {
+  bodies.forEach((b) => { b.holder.visible = false; });
+  shown = list;
+  shown.forEach((b) => { b.holder.visible = true; });
+  isolated = null;
+  state.zoom = 1;
+  layout();
+  drawTags();
+}
+
+const ui = {
+  tex: document.getElementById("tex"),
+  emis: document.getElementById("emis"),
+  wire: document.getElementById("wire"),
+  flat: document.getElementById("flat"),
+  equal: document.getElementById("equal"),
+  spin: document.getElementById("spin"),
+  spinS: document.getElementById("spinS"),
+  lightA: document.getElementById("lightA"),
+  lightB: document.getElementById("lightB"),
+  lightI: document.getElementById("lightI"),
+};
+
+function applySurface() {
+  for (const b of bodies) {
+    const m = b.material;
+    if (ui.tex.checked) {
+      const tex = mapFor(b.record.name);
+      m.map = tex; m.emissiveMap = tex;
+      m.color.setScalar(1 / b.mean);
+      m.emissiveIntensity = (ui.emis.checked ? 0.28 : 0) / b.mean;
+    } else {
+      m.map = null; m.emissiveMap = null;
+      m.color.setScalar(1);
+      m.emissiveIntensity = ui.emis.checked ? 0.28 : 0;
+    }
+    m.wireframe = ui.wire.checked;
+    m.needsUpdate = true;
+    const sheet = sheets.get(b);
+    if (sheet) sheet.visible = false;
+    if (ui.flat.checked) {
+      const s = sheetFor(b);
+      s.visible = true;
+      s.position.set(0, 0, 0.001);
+      s.scale.setScalar(1.05);
+      b.mesh.visible = false;
+    } else {
+      b.mesh.visible = true;
+    }
+  }
+}
+["tex", "emis", "wire", "flat"].forEach((k) => ui[k].addEventListener("change", applySurface));
+ui.equal.addEventListener("change", () => { layout(); drawTags(); });
+
+function applyLight() {
+  const a = THREE.MathUtils.degToRad(+ui.lightA.value);
+  const b = THREE.MathUtils.degToRad(+ui.lightB.value);
+  key.position.set(Math.sin(a) * Math.cos(b), Math.sin(b), Math.cos(a) * Math.cos(b)).multiplyScalar(10);
+  key.intensity = +ui.lightI.value / 100;
+}
+["lightA", "lightB", "lightI"].forEach((k) => ui[k].addEventListener("input", applyLight));
+applyLight();
+
+/* --- pointer ------------------------------------------------------------ */
+let dragging = false, moved = 0, last = { x: 0, y: 0 };
+addEventListener("pointerdown", (e) => {
+  if (e.target.closest("#ui")) return;
+  dragging = true; moved = 0; last = { x: e.clientX, y: e.clientY };
+});
+addEventListener("pointermove", (e) => {
+  if (!dragging) return;
+  const dx = e.clientX - last.x, dy = e.clientY - last.y;
+  moved += Math.abs(dx) + Math.abs(dy);
+  state.yaw += dx * 0.006;
+  state.pitch = THREE.MathUtils.clamp(state.pitch + dy * 0.005, -1.4, 1.4);
+  last = { x: e.clientX, y: e.clientY };
+});
+addEventListener("pointerup", (e) => {
+  const wasDrag = moved > 6;
+  dragging = false;
+  if (wasDrag || e.target.closest("#ui")) return;
+  const hit = pick(e.clientX, e.clientY);
+  if (hit) { isolated = isolated === hit ? null : hit; }
+  else { isolated = null; }
+  setShown(isolated ? [isolated] : shown.length === 1 ? currentSet() : shown);
+  if (isolated) { shown = [isolated]; bodies.forEach((b) => { b.holder.visible = b === isolated; }); layout(); drawTags(); }
+  describe(isolated);
+});
+addEventListener("wheel", (e) => {
+  if (e.target.closest("#ui")) return;
+  state.zoom = THREE.MathUtils.clamp(state.zoom * (e.deltaY > 0 ? 0.9 : 1.1), 0.25, 14);
+  layout();
+}, { passive: true });
+
+const raycaster = new THREE.Raycaster();
+function pick(x, y) {
+  const box = stage.getBoundingClientRect();
+  raycaster.setFromCamera(new THREE.Vector2(((x - box.left) / box.width) * 2 - 1, -((y - box.top) / box.height) * 2 + 1), camera);
+  const hits = raycaster.intersectObjects(shown.map((b) => b.mesh), false);
+  if (!hits.length) return null;
+  return shown.find((b) => b.mesh === hits[0].object) ?? null;
+}
+
+function describe(entry) {
+  const out = document.getElementById("readout");
+  if (!entry) { out.innerHTML = "<b>Nothing selected</b>Click a body."; return; }
+  const r = entry.record;
+  out.innerHTML = `<b>${r.name}${entry.parent ? ` &middot; moon of ${entry.parent}` : ""}</b>`
+    + `${r.classification ?? ""}<br>`
+    + `${r.diameterLabel ?? (r.diameterKm + " km")}<br>`
+    + `albedo ${r.albedo} &middot; map <code>${entry.file ?? "none"}.jpg</code>`;
+}
+
+/* --- labels ------------------------------------------------------------- */
+const labels = document.getElementById("labels");
+const tags = new Map();
+function drawTags() {
+  labels.textContent = "";
+  tags.clear();
+  for (const b of shown) {
+    const el = document.createElement("div");
+    el.className = "tag";
+    /* Long names collide in a tight grid; the full one is in the readout. */
+    const full = b.parent ? `${b.record.name} \u00b7 ${b.parent}` : b.record.name;
+    el.textContent = full.length > 15 ? `${full.slice(0, 14)}\u2026` : full;
+    el.title = full;
+    labels.append(el);
+    tags.set(b, el);
+  }
+}
+const scratch = new THREE.Vector3();
+function placeTags() {
+  for (const [b, el] of tags) {
+    scratch.copy(b.holder.position);
+    scratch.y -= 1.22;
+    scratch.project(camera);
+    el.style.left = `${(scratch.x * 0.5 + 0.5) * W()}px`;
+    el.style.top = `${(-scratch.y * 0.5 + 0.5) * H()}px`;
+    el.classList.toggle("hot", b === isolated);
+  }
+}
+
+/* --- sets --------------------------------------------------------------- */
+function currentSet() { return shown; }
+const setBtns = { b: document.getElementById("set-b"), a: document.getElementById("set-a"), all: document.getElementById("set-all") };
+function choose(which) {
+  Object.values(setBtns).forEach((el) => el.classList.remove("on"));
+  setBtns[which].classList.add("on");
+  const list = which === "all" ? bodies
+    : which === "a" ? bodies.filter((b) => SET_A.has(b.record.name))
+    : bodies.filter((b) => !SET_A.has(b.record.name));
+  setShown(list);
+  describe(null);
+}
+setBtns.b.addEventListener("click", () => choose("b"));
+setBtns.a.addEventListener("click", () => choose("a"));
+setBtns.all.addEventListener("click", () => choose("all"));
+
+function resize() {
+  renderer.setSize(W(), H(), false);
+  renderer.domElement.style.width = "100%";
+  renderer.domElement.style.height = "100%";
+  camera.aspect = W() / H();
+  camera.updateProjectionMatrix();
+  layout(); placeTags();
+}
+addEventListener("resize", resize);
+
+resize();
+applySurface();
+choose("b");
+
+let prev = performance.now();
+function frame(now) {
+  const dt = Math.min(0.05, (now - prev) / 1000);
+  prev = now;
+  if (ui.spin.checked) state.spinT += dt * (+ui.spinS.value / 100);
+  for (const b of shown) {
+    b.holder.rotation.set(state.pitch, state.yaw + state.spinT, 0);
+  }
+  placeTags();
+  renderer.render(scene, camera);
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

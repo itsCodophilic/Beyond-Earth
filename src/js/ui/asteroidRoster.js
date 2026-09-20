@@ -1,4 +1,5 @@
 import { SMALL_BODIES } from "../scene/smallBodies/smallBodyCatalogue.js";
+import { MAIN_BELT_WORLDS } from "../scene/smallBodies/mainBeltCatalogue.js";
 import { BELT_MAJOR_ROCKS } from "../scene/beltMajorOrbitGuides.js";
 
 /**
@@ -29,8 +30,9 @@ import { BELT_MAJOR_ROCKS } from "../scene/beltMajorOrbitGuides.js";
  *   - the **five belt majors**, from `BELT_MAJOR_ROCKS` -- they are built
  *     inside the frozen `asteroidBelt.js` and are invisible to every other
  *     module, so the orbit-guide table that already names them is the source;
- *   - the **thirteen small bodies**, read live from `SMALL_BODIES`, which is
- *     where their classifications and diameters are maintained.
+ *   - the **thirteen small bodies** and the **eleven large main-belt
+ *     worlds**, read live from `SMALL_BODIES` and `MAIN_BELT_WORLDS`,
+ *     which is where their classifications and diameters are maintained.
  *
  * Only the one-line characterisations are written here, because nothing else
  * holds prose at this length.
@@ -130,7 +132,7 @@ function buildNamedRocks() {
     });
   });
 
-  SMALL_BODIES.forEach((record) => {
+  [...SMALL_BODIES, ...MAIN_BELT_WORLDS].forEach((record) => {
     rows.push({
       group: groupFor(record),
       name: record.name,

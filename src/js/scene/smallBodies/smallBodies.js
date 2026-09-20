@@ -7,6 +7,19 @@ import {
 } from "../../config/celestialScale.js";
 import { markPointerProxy } from "../pointerProxies.js";
 import { SMALL_BODIES, albedoToLinearValue } from "./smallBodyCatalogue.js";
+import { MAIN_BELT_WORLDS } from "./mainBeltCatalogue.js";
+
+/*
+ * Two catalogues, one builder.
+ *
+ * Rank 1 is the bodies a spacecraft has photographed; Rank 2 is the eleven
+ * largest main-belt worlds nobody has been to, which have measured shapes
+ * and borrowed surfaces. They are kept in separate files because the
+ * evidence behind them is different and a reader should not have to check
+ * which kind a record is -- but they are the same *kind of object* to this
+ * module, so they go through one loop rather than two.
+ */
+const ALL_SMALL_BODIES = Object.freeze([...SMALL_BODIES, ...MAIN_BELT_WORLDS]);
 import { createSmallBodyGeometry, maxHalfExtent } from "./smallBodyShapes.js";
 
 /**
@@ -359,21 +372,44 @@ const PUBLIC_ASSET_ROOT = `${(import.meta.env && import.meta.env.BASE_URL) || "/
  * compensation baked into the vertex colours would leave it 4.5x too bright.
  */
 const SMALL_BODY_TEXTURES = Object.freeze({
-  Arrokoth: { file: "arrokoth", meanLinear: 0.2210 },
-  Apophis: { file: "apophis", meanLinear: 0.2394 },
-  Bennu: { file: "bennu", meanLinear: 0.2420 },
-  Ryugu: { file: "ryugu", meanLinear: 0.2386 },
-  "67P/Churyumov\u2013Gerasimenko": { file: "comet67p", meanLinear: 0.2634 },
+  Arrokoth: { file: "arrokoth", meanLinear: 0.2213 },
+  Apophis: { file: "apophis", meanLinear: 0.2281 },
+  Bennu: { file: "bennu", meanLinear: 0.2456 },
+  Ryugu: { file: "ryugu", meanLinear: 0.2413 },
+  "67P/Churyumov\u2013Gerasimenko": { file: "comet67p", meanLinear: 0.2324 },
   Eros: { file: "eros", meanLinear: 0.2248 },
-  Didymos: { file: "didymos", meanLinear: 0.2393 },
-  Dimorphos: { file: "dimorphos", meanLinear: 0.2472 },
-  "1P/Halley": { file: "halley", meanLinear: 0.2624 },
-  Ida: { file: "ida", meanLinear: 0.2197 },
-  Dactyl: { file: "dactyl", meanLinear: 0.2199 },
-  Itokawa: { file: "itokawa", meanLinear: 0.2416 },
-  Mathilde: { file: "mathilde", meanLinear: 0.2316 },
-  Lutetia: { file: "lutetia", meanLinear: 0.2566 },
-  Gaspra: { file: "gaspra", meanLinear: 0.2322 },
+  Didymos: { file: "didymos", meanLinear: 0.2424 },
+  Dimorphos: { file: "dimorphos", meanLinear: 0.2508 },
+  "1P/Halley": { file: "halley", meanLinear: 0.2326 },
+  Ida: { file: "ida", meanLinear: 0.2204 },
+  Dactyl: { file: "dactyl", meanLinear: 0.2208 },
+  Itokawa: { file: "itokawa", meanLinear: 0.2322 },
+  Mathilde: { file: "mathilde", meanLinear: 0.2340 },
+  Lutetia: { file: "lutetia", meanLinear: 0.2595 },
+  Gaspra: { file: "gaspra", meanLinear: 0.2273 },
+
+  /* Rank 2: the eleven large main-belt worlds and their six satellites.
+   * Half-size maps (512x256, and 256x128 for the moons), because none of
+   * these has ever been photographed and their relief is borrowed from a
+   * spectral analogue -- a finer map would only be more invented detail.
+   * See `mainBeltCatalogue.js` for what is measured on each and what is not. */
+  Interamnia: { file: "interamnia", meanLinear: 0.2413 },
+  "52 Europa": { file: "europa52", meanLinear: 0.2437 },
+  Davida: { file: "davida", meanLinear: 0.2437 },
+  Euphrosyne: { file: "euphrosyne", meanLinear: 0.2408 },
+  Cybele: { file: "cybele", meanLinear: 0.2400 },
+  Eunomia: { file: "eunomia", meanLinear: 0.2219 },
+  Juno: { file: "juno", meanLinear: 0.2217 },
+  Sylvia: { file: "sylvia", meanLinear: 0.2343 },
+  Camilla: { file: "camilla", meanLinear: 0.2347 },
+  Kalliope: { file: "kalliope", meanLinear: 0.2369 },
+  Kleopatra: { file: "kleopatra", meanLinear: 0.2379 },
+  Romulus: { file: "romulus", meanLinear: 0.2323 },
+  Remus: { file: "remus", meanLinear: 0.2314 },
+  Linus: { file: "linus", meanLinear: 0.2318 },
+  Alexhelios: { file: "alexhelios", meanLinear: 0.2303 },
+  Cleoselene: { file: "cleoselene", meanLinear: 0.2301 },
+  "S/2019 (31) 1": { file: "euphrosyne-moon", meanLinear: 0.2316 },
 });
 
 const smallBodyTextureCache = new Map();
@@ -485,7 +521,23 @@ function pumpSmallBodyTextures() {
       // body.
       map.wrapS = THREE.RepeatWrapping;
       map.wrapT = THREE.ClampToEdgeWrapping;
-      map.anisotropy = 4;
+      /*
+     * The hardware maximum, not 4.
+     *
+     * Apophis and Itokawa were reported as flickering, and they are the two
+     * smallest bodies with the most elongated silhouettes -- which is the
+     * exact case anisotropic filtering exists for. A long thin body seen
+     * obliquely compresses one texture axis far more than the other, and
+     * with too few samples the minification picks different texels from one
+     * frame to the next as it turns. That reads as a shimmer on the surface,
+     * which at this size reads as the whole rock shaking.
+     *
+     * 16 samples on a handful of textures costs nothing measurable; the
+     * lower contrast in the maps themselves is the other half of the fix.
+     */
+    // three.js clamps this to whatever the hardware actually supports at
+    // upload time, so asking for 16 is safe everywhere.
+    map.anisotropy = 16;
       map.minFilter = THREE.LinearMipmapLinearFilter;
       map.needsUpdate = true;
       smallBodyTextureCache.set(next.url, map);
@@ -595,9 +647,31 @@ const MOON_SIZE_EXPONENT = 0.62;
  * knowable before either body is built, which is what lets the parent's
  * framing and its pointer-proxy cap both be set without waiting for the moon.
  */
-function moonSeparation(record, renderedMeanRadius) {
-  if (!record.moon) return 0;
-  return renderedMeanRadius * (record.moon.separationKm / (record.diameterKm / 2));
+function moonSeparation(record, renderedMeanRadius, moon = null) {
+  const target = moon ?? satellitesOf(record)[0];
+  if (!target) return 0;
+  return renderedMeanRadius * (target.separationKm / (record.diameterKm / 2));
+}
+
+/**
+ * A body's satellites, however the catalogue spelled them.
+ *
+ * Ida and Didymos each carry one moon and were written as `moon: {...}`.
+ * Kleopatra has Alexhelios and Cleoselene; Sylvia has Romulus and Remus and
+ * was the first triple asteroid ever found -- which is the single most
+ * interesting thing about it and cannot be told with one satellite. So the
+ * catalogue now also takes `moons: [...]`, and this collapses both spellings
+ * into one list rather than having the builder branch on which was used.
+ *
+ * Sorted outward, so the innermost is always index 0. The parent's own
+ * pointer-proxy cap is derived from the nearest satellite, and a cap set
+ * from Romulus at 1,356 km would let Sylvia's proxy swallow Remus at 706.
+ */
+function satellitesOf(record) {
+  const list = Array.isArray(record?.moons)
+    ? record.moons.filter(Boolean)
+    : (record?.moon ? [record.moon] : []);
+  return [...list].sort((a, b) => (a.separationKm ?? 0) - (b.separationKm ?? 0));
 }
 
 /**
@@ -809,8 +883,9 @@ function buildBody(record, {
   /* A parent's own cap is derived from where its moon will sit, which is
    * knowable here: the separation is fixed by the real ratio to the parent's
    * radius and does not depend on anything the moon build decides. */
-  const selfCap = record.moon
-    ? moonSeparation(record, renderedMeanRadius) * 0.55
+  const nearestMoon = satellitesOf(record)[0];
+  const selfCap = nearestMoon
+    ? moonSeparation(record, renderedMeanRadius, nearestMoon) * 0.55
     : proxyCap;
 
   const group = new THREE.Group();
@@ -860,8 +935,8 @@ export async function createSmallBodies({
 
   const bodies = [];
 
-  for (let index = 0; index < SMALL_BODIES.length; index += 1) {
-    const record = SMALL_BODIES[index];
+  for (let index = 0; index < ALL_SMALL_BODIES.length; index += 1) {
+    const record = ALL_SMALL_BODIES[index];
     const orbit = prepareOrbit(record.orbit, referenceJD);
     /* The body's distance from the Sun has to be known *before* it is built,
      * because the colour baked into its vertices is pre-divided by the
@@ -901,24 +976,28 @@ export async function createSmallBodies({
       tumbleRate: record.rotationState === "tumbling"
         ? (Math.PI * 2) / visualPeriodSeconds(record.rotationHours) * 0.17
         : 0,
+      /* `moon` is kept as the innermost satellite so nothing that already
+       * reads it has to change; `moons` is the list everything new uses. */
       moon: null,
+      moons: [],
     };
 
-    if (record.moon) {
+    satellitesOf(record).forEach((moon, moonIndex) => {
       const moonRecord = {
-        ...record.moon,
-        id: `${record.id}-moon`,
+        ...moon,
+        id: `${record.id}-moon-${moonIndex + 1}`,
         detail: `Natural satellite | ${record.name} system`,
-        chroma: record.moon.chroma ?? record.chroma,
+        chroma: moon.chroma ?? record.chroma,
         metalness: record.metalness ?? 0,
-        rotationHours: record.moon.periodHours,
+        rotationHours: moon.periodHours,
         rotationState: "principal-axis",
         parentDiameterKm: record.diameterKm,
         orbit: null,
       };
       /* Separation at the real ratio to the parent's own radius: Dactyl at
-       * 5.7 Ida radii, Dimorphos at 3.2 Didymos radii. */
-      const separation = moonSeparation(record, built.renderedMeanRadius);
+       * 5.7 Ida radii, Dimorphos at 3.2 Didymos radii, Romulus at 9.9 Sylvia
+       * radii. */
+      const separation = moonSeparation(record, built.renderedMeanRadius, moon);
 
       const builtMoon = buildBody(moonRecord, {
         detailScale,
@@ -950,45 +1029,59 @@ export async function createSmallBodies({
         elements: orbit,
       });
       builtMoon.group.userData.info.distanceFromEarth =
-        `Orbits ${record.name} at ${record.moon.separationKm < 10
-          ? `${(record.moon.separationKm * 1000).toFixed(0)} m`
-          : `${record.moon.separationKm} km`}; distance from Earth continuously varies`;
+        `Orbits ${record.name} at ${moon.separationKm < 10
+          ? `${(moon.separationKm * 1000).toFixed(0)} m`
+          : `${moon.separationKm} km`}; distance from Earth continuously varies`;
 
       const pivot = new THREE.Group();
-      pivot.name = `${record.moon.name} orbit`;
-      pivot.rotation.x = (record.moon.inclinationDeg ?? 0) * DEG;
+      pivot.name = `${moon.name} orbit`;
+      pivot.rotation.x = (moon.inclinationDeg ?? 0) * DEG;
+      /*
+       * Two moons of the same parent start on opposite sides of it.
+       *
+       * Their periods differ, so they would drift apart on their own
+       * eventually -- but Romulus and Remus begin life at the same phase
+       * from the same `elapsed`, and a first frame with both satellites
+       * stacked on one side reads as one moon with a smear.
+       */
+      pivot.rotation.y = (moonIndex / Math.max(1, satellitesOf(record).length)) * Math.PI * 2;
       builtMoon.group.position.set(separation, 0, 0);
       pivot.add(builtMoon.group);
       built.group.add(pivot);
       /*
-       * And a drawn path, which these two were missing.
+       * And a drawn path, which these were missing.
        *
        * Every other orbit in the scene has a line on it -- the planets, the
        * dwarf worlds, the fifteen small bodies, the five named belt rocks,
-       * every major satellite system. These two did not, and they are the
-       * pair where it matters most: Dactyl is the reason anybody knows Ida's
-       * name, and with no ring around Ida there is nothing to say that the
-       * speck beside it is *going* anywhere.
+       * every major satellite system. These did not, and Dactyl is the pair
+       * where it matters most: it is the reason anybody knows Ida's name,
+       * and with no ring around Ida there is nothing to say that the speck
+       * beside it is *going* anywhere.
        *
        * Hung off a fixed sibling rather than off the pivot, which rotates. A
        * circle looks identical either way, and a ring that spins is one more
        * matrix multiply per frame for no picture.
        */
-      built.group.add(createMoonOrbitRing(separation, record.moon));
+      built.group.add(createMoonOrbitRing(separation, moon));
 
-      entry.moon = {
+      const moonEntry = {
         pivot,
         group: builtMoon.group,
         spinner: builtMoon.spinner,
-        rate: (Math.PI * 2) / visualPeriodSeconds(record.moon.periodHours),
+        rate: (Math.PI * 2) / visualPeriodSeconds(moon.periodHours),
         /* Dimorphos was tidally locked until DART hit it and now tumbles.
          * Dactyl's rotation was never measured. Both spin slowly here and
          * both cards say what is and is not known. */
-        spinRate: (Math.PI * 2) / visualPeriodSeconds(record.moon.periodHours) * 0.6,
+        spinRate: (Math.PI * 2) / visualPeriodSeconds(moon.periodHours) * 0.6,
+        /* The pivot starts turned, so its own clock has to start there too
+         * or the first update would snap it back to zero. */
+        phase: pivot.rotation.y,
       };
+      entry.moons.push(moonEntry);
+      if (!entry.moon) entry.moon = moonEntry;
       hoverTargets.push(builtMoon.group);
-      bodies.push({ ...entry.moon, record: moonRecord, isMoon: true, group: builtMoon.group });
-    }
+      bodies.push({ ...moonEntry, record: moonRecord, isMoon: true, group: builtMoon.group });
+    });
 
     system.add(built.group);
     hoverTargets.push(built.group);
@@ -1078,7 +1171,24 @@ const ORBIT_GUIDE_COLOURS = Object.freeze([
  * can tell apart.
  */
 const ORBIT_GUIDE_SEGMENTS = 2048;
-const ORBIT_GUIDE_PICK_STRIDE = 8;
+/*
+ * Every 16th vertex reaches the raycaster, not every 8th.
+ *
+ * Eight was right when there were thirteen of these. Rank 2 took the count
+ * to twenty-four, and the pick is not linear in the number of guides -- the
+ * camera sits *inside* most of these orbits, so every one of them passes
+ * three.js's bounding-sphere rejection and gets walked segment by segment.
+ * Measured at the wide view: 0.11 ms of added pick time with eighteen
+ * guides, 0.58 ms with twenty-nine.
+ *
+ * At stride 16 a pick path is 128 segments, whose worst deviation from the
+ * drawn line is about 0.3% of the orbit's radius -- one and a half scene
+ * units on a belt orbit, against a grab radius that is nineteen units wide
+ * at the view where these are picked. The drawn line is untouched: it is
+ * still 2,048 segments and still passes through the body to a hundredth of
+ * its radius.
+ */
+const ORBIT_GUIDE_PICK_STRIDE = 16;
 
 function orbitGuideColour(record) {
   const population = String(record?.info?.population ?? "");
@@ -1252,9 +1362,11 @@ export function updateSmallBodies(smallBodies, motionScale = 1, spinSeconds = 1 
     entry.spinner.rotation.y = entry.spinRate * elapsed;
     if (entry.tumbleRate) entry.spinner.rotation.z = entry.tumbleRate * elapsed;
 
-    if (entry.moon) {
-      entry.moon.pivot.rotation.y = entry.moon.rate * elapsed;
-      entry.moon.spinner.rotation.y = entry.moon.spinRate * elapsed;
+    const moons = entry.moons ?? (entry.moon ? [entry.moon] : []);
+    for (let m = 0; m < moons.length; m += 1) {
+      const moon = moons[m];
+      moon.pivot.rotation.y = (moon.phase ?? 0) + moon.rate * elapsed;
+      moon.spinner.rotation.y = moon.spinRate * elapsed;
     }
   }
 }
