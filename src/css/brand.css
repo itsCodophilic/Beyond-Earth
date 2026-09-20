@@ -214,14 +214,6 @@
   transform-style: preserve-3d;
 }
 
-.brand__kicker {
-  color: rgba(147, 226, 255, 0.82);
-  font-size: 0.49rem;
-  font-weight: 760;
-  line-height: 1.2;
-  letter-spacing: 0.21em;
-  text-transform: uppercase;
-}
 
 .brand__text {
   color: #f8fcff;

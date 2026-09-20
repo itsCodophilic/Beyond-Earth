@@ -853,16 +853,6 @@ body:has(.satellite-atlas-directory.is-visible) .progress.distance-readout {
 
 .brand__copy { gap: 0.28rem; }
 
-.brand__kicker {
-  font-family: var(--cin-mono);
-  font-size: var(--cin-micro);
-  font-weight: 400;
-  letter-spacing: 0.32em;
-  text-transform: uppercase;
-  color: var(--cin-amber);
-  background: none;
-  -webkit-text-fill-color: currentColor;
-}
 
 .brand__text {
   font-size: 1.06rem;

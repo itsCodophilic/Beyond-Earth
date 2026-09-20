@@ -161,6 +161,32 @@ function resolveOrbitalElements(body) {
     if (normalizedName.includes(smallBodyName)) return { ...elements };
   }
 
+  /*
+   * A body that carries its own fitted element set.
+   *
+   * The table above is a hard-coded list of five names, which was right while
+   * the only named small bodies in the scene were the belt's own. The visited
+   * small bodies in `scene/smallBodies/` each carry a JPL Small-Body Database
+   * solution quoted with its epoch and solution number, so they hand their
+   * semi-major axis and eccentricity over directly rather than asking for
+   * five more rows here and a sixth every time one is added.
+   *
+   * It has to sit above the `heliocentricAU` fallback below. That fallback
+   * treats a body's *current* distance from the Sun as its semi-major axis,
+   * which for anything on an eccentric orbit is simply a different number --
+   * Halley would have come out with a = 35 and e = 0.968, an orbit that does
+   * not exist -- and it reports the result as a generated orbit, which for
+   * these thirteen is the opposite of true.
+   */
+  const authored = body?.userData?.orbitalElements;
+  if (authored && Number.isFinite(Number(authored.semiMajorAxisAU))) {
+    return {
+      semiMajorAxisAU: Number(authored.semiMajorAxisAU),
+      eccentricity: THREE.MathUtils.clamp(Number(authored.eccentricity) || 0, 0, 0.99),
+      source: authored.source ?? "jpl-small-body",
+    };
+  }
+
   const explicit = Number(body?.userData?.heliocentricAU);
   const explicitEccentricity = Number(body?.userData?.orbitalEccentricity);
   if (Number.isFinite(explicit) && explicit >= 0) {

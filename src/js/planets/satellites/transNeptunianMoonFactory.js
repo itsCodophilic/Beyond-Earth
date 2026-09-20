@@ -37,6 +37,20 @@ const TRANS_NEPTUNIAN_SURFACE_ASSETS = Object.freeze({
   Namaka: { albedo: `${PUBLIC_ASSET_ROOT}/textures/dwarf/moons/namaka-equirectangular.jpg` },
   Dysnomia: { albedo: `${PUBLIC_ASSET_ROOT}/textures/dwarf/moons/dysnomia-equirectangular.jpg` },
   /*
+   * Ilmarë's reference is a single disc 98 pixels in radius -- between
+   * Hi'iaka's 66 and Quaoar's 147, so the map carries real tone and the gross
+   * light-and-dark of the surface and invents everything finer, which is the
+   * most any of these can honestly do.
+   *
+   * Actaea deliberately has no entry. Its reference is a picture of the
+   * *system*: Salacia fills the frame and Actaea is twenty-one pixels beside
+   * it. Twenty-one pixels is a colour, not a photograph, so the colour was
+   * measured off it and put on the profile instead, and the sculpt keeps the
+   * relief. Unwrapping it would have invented a surface and then presented the
+   * invention as a photograph.
+   */
+  "Ilmar\u00eb": { albedo: `${PUBLIC_ASSET_ROOT}/textures/dwarf/moons/ilmare-equirectangular.jpg` },
+  /*
    * Weywot and MK 2 have no entry on purpose: they read well from the sculpt
    * alone, and no reference for either exists that is not simply invented.
    *

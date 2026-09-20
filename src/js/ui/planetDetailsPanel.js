@@ -1,3 +1,5 @@
+import { buildAsteroidRoster, ASTEROID_ROSTER_LABEL } from "./asteroidRoster.js";
+
 /**
  * Reusable celestial dossier for planets, stars, moons, and asteroids.
  *
@@ -170,6 +172,48 @@ function splitRelativeScale(value = "") {
   return { massRelative, sizeRelative };
 }
 
+/**
+ * The three kinds of rock in the belt, and a way to get to one of each.
+ *
+ * There are about a million asteroids drawn here and, looked at one at a
+ * time, each is an unnamed grey lump with a serial number. What a viewer
+ * actually wants to know standing next to one is *what kind it is and what
+ * else is out there* -- and then to go and see the difference rather than
+ * read about it. So every asteroid's record now carries all three classes,
+ * with the one you are standing on marked, and each of the other two is a
+ * button that flies you to the best example of it in the scene.
+ *
+ * The representatives are the belt's own named bodies, which is what makes
+ * this honest: Ceres really is the C-type case, Vesta really is the S-type
+ * case, and Psyche is the M-type that a NASA mission is on its way to. The
+ * percentages are the standard taxonomic shares of the known population.
+ */
+function asteroidClassCode(body) {
+  const explicit = String(body?.userData?.composition ?? "").trim().toUpperCase();
+  if (["C", "S", "M"].includes(explicit)) return explicit;
+  // The instanced rocks carry their class in their name -- "S-class asteroid
+  // 2-1-0177", "C-type asteroid 001" -- and nowhere else this panel can
+  // reach. Both spellings are in use; matching only one silently dropped the
+  // "this one" mark on every resolved rock in the main belt.
+  const match = /^([CSM])-(?:class|type)/i.exec(String(body?.userData?.name ?? body?.name ?? ""));
+  return match ? match[1].toUpperCase() : null;
+}
+
+/*
+ * The roster itself lives in `asteroidRoster.js`, because it now reads the
+ * small-body catalogue and the belt's named rocks rather than being three
+ * hand-written rows. See that file for why it grew.
+ */
+function asteroidClassRoster(body) {
+  const name = String(body?.userData?.name ?? body?.name ?? "");
+  return buildAsteroidRoster(name, asteroidClassCode(body));
+}
+
+function isAsteroidRecord(body, info) {
+  if (body?.userData?.isAsteroid) return true;
+  return String(info?.type ?? "").toLowerCase().includes("asteroid");
+}
+
 function getBodyName(bodyOrName) {
   return typeof bodyOrName === "string"
     ? bodyOrName
@@ -269,9 +313,22 @@ function resolveDetails(bodyOrName, context = {}) {
           : isAsteroid
             ? "Solar-System region"
             : "Location",
+    /*
+     * `info.population` before the blanket "Asteroid population".
+     *
+     * That fallback fires for anything carrying `isAsteroid`, which is the
+     * flag the pointer uses to give a small irregular body the belt's
+     * generous grab radius and small-body cursor. It is the right flag for a
+     * comet nucleus and a Kuiper Belt object as well as a rock -- but the
+     * label that came with it was not: 1P/Halley's card read
+     * "Solar-System region: Asteroid population", which is wrong twice over
+     * in six words. A body that knows which population it belongs to says
+     * so; everything else keeps the old text.
+     */
     relationValue: planet?.moons
       ?? context.satelliteRankText
       ?? parentName
+      ?? info.population
       ?? (isAsteroid ? "Asteroid population" : "Milky Way · Solar System"),
     atmosphere: planet?.atmosphere ?? info.atmosphere,
     temperature: planet?.temperature ?? info.temperature,
@@ -303,6 +360,14 @@ function resolveDetails(bodyOrName, context = {}) {
      */
     isRegion: Boolean(region),
     region,
+    /*
+     * Asteroids get the class roster; nothing else does. It is synthesised
+     * here rather than attached to each rock because there are a million of
+     * them, they are built inside `asteroidBelt.js` which is frozen, and the
+     * roster is identical for every one -- only the "this one" mark moves.
+     */
+    relatedBodies: isAsteroidRecord(body, info) ? asteroidClassRoster(body) : null,
+    relatedBodiesLabel: ASTEROID_ROSTER_LABEL,
   };
 
   if (region) {
@@ -637,10 +702,14 @@ export function createCelestialDetailsPanel() {
    * closes the dossier and flies there -- which is the answer to "can I visit
    * the members of each belt part".
    */
-  function writeMemberRoster(members) {
+  function writeMemberRoster(members, label = null) {
     if (!memberRoster) return;
     memberRoster.textContent = "";
     const row = layer.querySelector('[data-planet-field="members"]');
+    // The same roster serves two purposes now -- the worlds inside a region,
+    // and the asteroid classes -- so the heading moves with the content.
+    const heading = row?.querySelector("span[data-cosmic-text]");
+    if (heading) heading.textContent = label ?? "Worlds you can visit here";
     const available = Array.isArray(members) && members.length > 0;
     memberRoster.hidden = !available;
     if (row) row.hidden = !available;
@@ -875,7 +944,7 @@ export function createCelestialDetailsPanel() {
     // even when the body carries no descriptive paragraph.
     writeRingRoster(details.ringRoster, details.highlightRingName, details.name);
     writeRegionSections(details.region?.sections);
-    writeMemberRoster(details.region?.members);
+    writeMemberRoster(details.region?.members ?? details.relatedBodies, details.relatedBodiesLabel);
     Object.keys(advancedFields).forEach((key) => writeAdvancedField(key, details[key]));
 
     sources.hidden = !details.scienceUrl;

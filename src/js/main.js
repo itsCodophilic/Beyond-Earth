@@ -22,6 +22,8 @@ import { createMarsVisualSystem, updateMarsVisualSystem } from './planets/mars/m
 import { createJupiterVisualSystem, updateJupiterVisualSystem } from './planets/jupiter/jupiterVisuals.js';
 import { createSaturnVisualSystem, updateSaturnVisualSystem } from './planets/saturn/saturnVisuals.js';
 import { createUranusVisualSystem, updateUranusVisualSystem } from './planets/uranus/uranusVisuals.js';
+import { createBeltMajorOrbitGuides } from './scene/beltMajorOrbitGuides.js';
+import { registerOrbitGuideHover } from './scene/orbitGuideHover.js';
 import { PLANET_CONFIGS } from './planets/index.js';
 import {
   createMajorSatelliteSystems,
@@ -48,6 +50,14 @@ import {
 } from './scene/asteroidBelt.js';
 import { createKuiperBelt, updateKuiperBelt, applyKuiperBeltQuality } from './scene/kuiperBelt.js';
 import { createOuterBoundaries, updateOuterBoundaries, applyOuterBoundaryQuality } from './scene/outerBoundaries.js';
+/*
+ * The small bodies a spacecraft has actually been to -- Rank 1 of
+ * `docs/bodies-to-draw-next.md`. Self-contained in `scene/smallBodies/`:
+ * measurements, silhouettes and motion all live there, so nothing about
+ * them is scattered through the shared registries. Fifteen meshes, fifteen
+ * draw calls, no textures.
+ */
+import { createSmallBodies, updateSmallBodies } from './scene/smallBodies/smallBodies.js';
 import {
   ASTRONOMICAL_UNIT_KM,
   createEarthDistanceTracker,
@@ -802,6 +812,10 @@ import { POINTER_PROXY_LAYER } from "./scene/pointerProxies.js";
   const orbitHoverName = orbitHoverTooltip.querySelector("#planet-orbit-hover-name");
   const orbitHoverAction = orbitHoverTooltip.querySelector("#planet-orbit-hover-action");
   const orbitHoverSatelliteAction = orbitHoverTooltip.querySelector("#planet-orbit-hover-satellite-action");
+  // The kicker is rewritten per guide now that asteroids and comets own guides
+  // too, so it needs a handle. Restored to this whenever a planet is acquired.
+  const orbitHoverEyebrow = orbitHoverTooltip.querySelector(".planet-orbit-hover-tooltip__eyebrow");
+  const ORBIT_HOVER_DEFAULT_EYEBROW = orbitHoverEyebrow?.textContent ?? "Planet route discovered";
 
   let celestialSelectionCard = document.querySelector("#celestial-selection-card");
   if (!celestialSelectionCard) {
@@ -2462,6 +2476,11 @@ composeSolarEventShot(
     // The star, so its plasma batching can be exercised without the render
     // loop -- the only way to check that layer from an automated tab.
     window.__sun = sun;
+    // The renderer, so draw calls and triangles can be read directly. The
+    // draw-call round found the scene's real cost that way and the note in
+    // `claude/measurement-method.md` says to trust that number over frame
+    // times, which drift twofold with GPU clock state inside one session.
+    window.__renderer = renderer;
     window.__orbitProbe = () => ({
       hasLeftOpeningEarthView,
       focusedBody: focusedBody?.name ?? null,
@@ -3220,6 +3239,12 @@ composeSolarEventShot(
    * first being called "the edge of the Solar System".
    */
   let outerBoundaries = null;
+  /*
+   * And the objects we have actually been to. Thirteen small bodies plus
+   * Dactyl and Dimorphos, each drawn from its published shape model rather
+   * than from an archetype -- see `scene/smallBodies/smallBodies.js`.
+   */
+  let smallBodies = null;
 
   async function buildAsteroidBeltProgressively() {
     if (asteroidBeltBuildStarted) return;
@@ -3233,6 +3258,37 @@ composeSolarEventShot(
     });
     performance.mark("BE:belt-end");
     setAsteroidBeltQuality(asteroidBelt, asteroidBeltDensity, cinematicPixelRatio);
+
+    /*
+     * A path for each of the belt's five named rocks, added from outside
+     * because `asteroidBelt.js` is frozen. Five lines, no per-frame cost, and
+     * the difference between "Ceres is somewhere in that haze" and being able
+     * to see where it goes. The generic rocks stay unlined on purpose.
+     */
+    const beltMajorOrbitGuides = createBeltMajorOrbitGuides(
+      asteroidBelt?.mainBelt ?? asteroidBelt?.system ?? world,
+    );
+    /*
+     * ...and the paths answer the pointer, the same way a planet's does.
+     *
+     * A line that only draws tells you something is there. The question it
+     * raises immediately -- which of them is this, and can I go -- is the
+     * whole reason the lines were asked for, and it is already answered for
+     * the planets by machinery in this file. `registerOrbitGuideHover` hands
+     * these to it rather than growing a second copy of it.
+     *
+     * The bodies are found in `asteroidBelt.rocks` by name: the guides were
+     * built from orbital elements copied out of the frozen belt module and
+     * have never seen a mesh, and a click has to fly to an object.
+     */
+    registerOrbitGuideHover({
+      guides: beltMajorOrbitGuides,
+      orbitTargets,
+      eyebrow: "Belt route discovered",
+      resolveBody: (name) => (asteroidBelt?.rocks ?? []).find(
+        (rock) => (rock?.userData?.name ?? rock?.name) === name,
+      ) ?? null,
+    });
 
     // Points rather than sculpted rock, so this is a few milliseconds and does
     // not need the co-operative yielding the main belt build does.
@@ -3251,6 +3307,33 @@ composeSolarEventShot(
       quality: asteroidBeltDensity === "low" ? "low" : "medium",
       pixelRatio: cinematicPixelRatio,
     });
+
+    /*
+     * Last, because it is the cheapest of the four and because its bodies are
+     * scattered from 0.7 AU to 35 AU -- they have to be able to land between
+     * everything the three passes above have already placed. It yields
+     * between bodies like the belt does: sculpting fifteen measured shapes
+     * vertex by vertex is the expensive part and doing it in one synchronous
+     * pass visibly stalls the opening.
+     */
+    performance.mark("BE:smallBodies-start");
+    smallBodies = await createSmallBodies({
+      world,
+      hoverTargets,
+      quality: asteroidBeltDensity === "low" ? "low" : "medium",
+      yieldToBrowser,
+    });
+    performance.mark("BE:smallBodies-end");
+    // Thirteen more hoverable paths. These guides already carry their body,
+    // so nothing has to be looked up.
+    registerOrbitGuideHover({
+      guides: smallBodies?.orbitGuides,
+      orbitTargets,
+      eyebrow: "Small-body route discovered",
+    });
+    if (new URLSearchParams(location.search).get("bodyDebug") === "1") {
+      window.__smallBodies = smallBodies;
+    }
   }
   const earthDistanceTracker = createEarthDistanceTracker({
     earth,
@@ -4848,13 +4931,36 @@ composeSolarEventShot(
       hoveredPlanetOrbitPoint.copy(planetOrbitTooltipAnchorPoint);
     }
     const planetName = planet.userData?.name ?? planet.name ?? orbit.userData.planetName ?? "Planet";
+    /*
+     * A guide may bring its own wording.
+     *
+     * The three lines below were written when the only things with guides
+     * were planets, and they say planet things -- "Planet route discovered",
+     * and a count of moons. Bennu has no moons and is not a planet, and
+     * answering a hover on its path with "No natural satellites" is a card
+     * that tells you nothing you wanted and one thing that sounds like a
+     * fault. Guides built outside the planet factory therefore carry a
+     * `hover` block naming themselves; the planet defaults stay exactly as
+     * they were, including the kicker, which is restored every time so a
+     * comet's wording cannot persist onto Neptune.
+     */
+    const hover = orbit.userData?.hover ?? null;
     const satelliteCount = getSatelliteCountForPlanet(planetName);
-    orbitHoverName.textContent = `${planetName} orbit`;
-    orbitHoverAction.textContent = `Click this orbit to travel directly to ${planetName}`;
+    if (orbitHoverEyebrow) {
+      orbitHoverEyebrow.textContent = hover?.eyebrow ?? ORBIT_HOVER_DEFAULT_EYEBROW;
+    }
+    orbitHoverName.textContent = hover?.title ?? `${planetName} orbit`;
+    orbitHoverAction.textContent = hover?.action
+      ?? `Click this orbit to travel directly to ${planetName}`;
     if (orbitHoverSatelliteAction) {
-      orbitHoverSatelliteAction.textContent = satelliteCount > 0
-        ? `${satelliteCount.toLocaleString("en-US")} satellite${satelliteCount === 1 ? "" : "s"} available · named moons are clickable after arrival`
-        : "No natural satellites · click the orbit to inspect the planet";
+      const secondary = hover
+        ? hover.secondary
+        : satelliteCount > 0
+          ? `${satelliteCount.toLocaleString("en-US")} satellite${satelliteCount === 1 ? "" : "s"} available · named moons are clickable after arrival`
+          : "No natural satellites · click the orbit to inspect the planet";
+      orbitHoverSatelliteAction.textContent = secondary ?? "";
+      // A body with nothing extra to say gets no empty line reserved for it.
+      orbitHoverSatelliteAction.hidden = !secondary;
     }
     orbit.material.opacity = Math.max(Number(orbit.material.opacity ?? 0), 0.88);
     orbit.material.color.lerp(orbitHoverColour, 0.82);
@@ -6880,9 +6986,28 @@ composeSolarEventShot(
   addEventListener("beyond-earth:travel-to-body", (event) => {
     const name = event?.detail?.name;
     if (!name) return;
-    const target = planets.find((candidate) => (
-      (candidate.userData?.name ?? candidate.name) === name
-    ));
+    /*
+     * Three places a travellable name can live, and it used to look in one.
+     *
+     * `planets` holds the worlds. It does not hold the fifteen small bodies,
+     * and it does not hold Ceres, Vesta, Pallas, Hygiea or Psyche, which are
+     * built inside the asteroid belt. So the asteroid class roster -- "the
+     * three kinds of rock out here", with a button to the best example of
+     * each -- pointed at three bodies this listener could not find, and every
+     * press did nothing at all.
+     *
+     * Searched in order of specificity: named worlds, then the small bodies,
+     * then the belt's own resolved rocks.
+     */
+    const matches = (candidate) => (candidate?.userData?.name ?? candidate?.name) === name;
+    let target = planets.find(matches)
+      ?? (smallBodies?.allTargets ?? []).find(matches)
+      ?? null;
+    if (!target && asteroidBelt?.system) {
+      asteroidBelt.system.traverse((object) => {
+        if (!target && object.userData?.isAsteroid && matches(object)) target = object;
+      });
+    }
     if (!target) return;
     // A beat, so the dossier's close animation is not fighting the flight.
     setTimeout(() => focusBody(target), 180);
@@ -8863,6 +8988,16 @@ composeSolarEventShot(
       },
     );
     if (kuiperBelt) updateKuiperBelt(kuiperBelt, frameMotionScale, camera);
+    // Two clocks, for the same reason the belt uses two: `frameMotionScale`
+    // already folds in delta time and drives orbital advance per frame, while
+    // self-rotation wants real seconds scaled only by the journey's motion.
+    // Passing the frame scale for both made every one of these bodies spin at
+    // a sixtieth of its intended rate.
+    if (smallBodies) updateSmallBodies(
+      smallBodies,
+      frameMotionScale,
+      deltaTime * celestialMotionScale,
+    );
     if (outerBoundaries) updateOuterBoundaries(outerBoundaries, frameMotionScale, camera);
     // One journey value coordinates renderer exposure and the zodiacal glow
     // for scroll, reverse travel, and body focus alike.
@@ -9043,11 +9178,25 @@ composeSolarEventShot(
         caption.classList.remove("is-live");
         setTimeout(() => caption.remove(), 1600);
         /*
-         * The handover. Read mode ends with the last line, and the tour opens
-         * once the card has actually faded rather than over the top of it.
+         * The handover, with no gap in it.
+         *
+         * This used to wait 1,500 ms so the tour would open onto a clear
+         * screen rather than over the caption fading out. That is the nicer
+         * cut and it was the wrong trade: for a second and a half the scene
+         * was live, unveiled and fully clickable, with nothing on screen
+         * asking to be clicked. A press landing in that window flew the viewer
+         * into a world and the walkthrough then opened on top of wherever they
+         * had ended up. Reported as exactly that -- "user can click in that
+         * delay".
+         *
+         * So the tour opens on the same tick the last line ends. The caption
+         * is already fading by then and the tour's own veil comes up
+         * underneath it, which turns out to read as one movement rather than
+         * two -- the overlap the delay existed to avoid is barely visible, and
+         * a dead clickable window is not a cosmetic problem.
          */
         isArrivalCaptionPlaying = false;
-        setTimeout(() => guidedTour?.start(), 1500);
+        guidedTour?.start();
         return;
       }
       arrivalBody.style.opacity = "0";

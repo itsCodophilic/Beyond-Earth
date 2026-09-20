@@ -29,6 +29,24 @@ BODIES = {
     "makemake": dict(cx=482.2, cy=183.3, A=167.0, B=167.0, ang=0.0,  sub=0.0),
     "orcus":    dict(cx=281.5, cy=234.1, A=204.0, B=204.0, ang=0.0,  sub=0.0),
     "quaoar":   dict(cx=874.8, cy=730.6, A=147.1, B=147.1, ang=0.0,  sub=0.0),
+
+    # Four more, added when references for them were supplied. Disc geometry
+    # measured the same way as the rest -- maximise the radial luminance step
+    # across the limb, then draw the fitted circle back over the photograph and
+    # look at it, because a fit can score well on an albedo boundary inside the
+    # body and be badly wrong.
+    "ixion":    dict(cx=376.0, cy=368.0, A=343.0, B=343.0, ang=0.0, sub=0.0),
+    "salacia":  dict(cx=472.5, cy=532.0, A=176.0, B=176.0, ang=0.0, sub=0.0),
+    # Varda is lit hard from the right with a deep shadow crescent down its
+    # left limb, so the shadow band is raised to throw that crescent away
+    # rather than let it be read as albedo.
+    "varda":    dict(cx=313.0, cy=345.0, A=264.0, B=264.0, ang=0.0, sub=0.0,
+                     lit=(0.24, 0.54), dark=(0.07, 0.17)),
+    # The Varuna reference is a close crop: the disc runs off the left and the
+    # bottom of the frame, and its centre is only just inside it. Most of this
+    # map is therefore grown rather than recovered -- which is honest for a
+    # body that has never been resolved at all.
+    "varuna":   dict(cx=246.7, cy=437.5, A=324.0, B=324.0, ang=0.0, sub=0.0),
     # Haumea gets its own route.  It is not a sphere -- it is a rugby ball
     # spinning every four hours -- and the reference shows it obliquely, from
     # behind its own ring, with two moons crossing the frame.  Inverting that
