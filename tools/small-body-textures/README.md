@@ -210,3 +210,51 @@ Lower contrast is also half the cure for the reported flicker on Apophis and
 Itokawa — the two smallest and most elongated bodies, which is the exact case
 where high-frequency texture aliases as a body turns. The other half is
 `anisotropy: 16` in `smallBodies.js`.
+
+## Rank 3: four Centaurs, and what the picker learned from them
+
+Four more maps — Chariklo, Chiron, Pholus, Echeclus — at full 1024 × 512
+rather than the 512 the Rank 2 worlds get, because these are destinations
+rather than background and two of them can be zoomed past their own rings
+down to the ground. About 700 kB on top of the set's 2.3 MB.
+
+The borrowing is by *kind of body* rather than by spectral class, because
+none of these four has ever been resolved: Chariklo takes Mathilde's settings
+(and therefore Bennu's pixels, since Mathilde has no photograph here either),
+Chiron takes Arrokoth's, Echeclus takes 67P's, and Pholus takes the one new
+reference of this round.
+
+**`python build-small-body-textures.py chariklo chiron` builds only those
+two.** Adding four bodies used to mean rebuilding thirty-two. `SBT_OUT=<dir>`
+points the output somewhere other than `public/`, which is worth using: a bad
+patch pick is only obvious in the finished map.
+
+### The Phobos frame, and two new knobs
+
+Pholus's reference was supplied as `Pholus.jpg` and is a photograph of
+**Phobos** — the Mars Express HRSC frame, scale bar and all. That is not a
+problem in itself, since Pholus has never been resolved and was always going
+to need a loan, but it broke `pick_patch` twice and both fixes are general.
+
+Run plain, the picker took the highest-variance window it could find, which
+was a fresh crater with a **bright ray system**, and the map came out as
+bright fibrous streaks. Told to avoid that, it moved onto Phobos's
+**grooves** — which are Mars's doing and cannot exist on a free-flying
+Centaur. Either one, stamped six hundred times across a world, is a lie.
+
+So a source can now ask for two things:
+
+- `representative=True` — score windows on how ordinary they are as well as
+  how detailed. Skewness of the high-frequency field prices out bright ray
+  systems (the ray crater measured 1.42 against a median window's 0.42);
+  coherence from its structure tensor prices out lineations.
+- `window=N` — override the patch size. No 220-pixel window of Phobos is
+  groove-free, because most of Phobos is grooved. At 96 the chosen patch
+  comes back at coherence 0.06: even, cratered ground.
+
+Both default off, so nothing already built and checked is silently re-picked.
+
+The frame itself was prepared before use: cropped to the body, median-filtered
+to undo JPEG ringing, and unsharpened at sub-pixel radius. Measured at matched
+spatial scale that raised its high-frequency energy 5–13%, and it took the
+usable fraction of the frame from 23% to 61%.

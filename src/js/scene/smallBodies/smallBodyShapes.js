@@ -65,12 +65,20 @@ function unitVector(seed) {
   return new THREE.Vector3(radial * Math.cos(angle), z, radial * Math.sin(angle));
 }
 
-/** Fractal Brownian motion on the unit sphere. Four octaves is plenty here. */
-function fbm(x, y, z, seed, octaves = 4) {
+/**
+ * Fractal Brownian motion on the unit sphere.
+ *
+ * `basisOctaves` is the octave count the amplitude is normalised against, and
+ * it exists so that dropping an octave the mesh cannot carry actually removes
+ * that octave's energy. Normalising by the octaves *used* would hand its
+ * share to the survivors instead, which makes the surface louder at the
+ * frequencies that were already the loudest -- the opposite of the intent.
+ * Callers that keep every octave can leave it alone.
+ */
+function fbm(x, y, z, seed, octaves = 4, basisOctaves = octaves) {
   let amplitude = 0.5;
   let frequency = 1;
   let sum = 0;
-  let total = 0;
   const ox = (seed * 0.754877666) % 91;
   const oy = (seed * 0.569840291) % 83;
   const oz = (seed * 0.438289121) % 71;
@@ -80,10 +88,11 @@ function fbm(x, y, z, seed, octaves = 4) {
       y * frequency + oy,
       z * frequency + oz,
     );
-    total += amplitude;
     amplitude *= 0.5;
     frequency *= 2.07;
   }
+  // Closed form of 0.5 + 0.25 + ... over `basisOctaves` terms.
+  const total = 1 - Math.pow(0.5, Math.max(1, basisOctaves));
   return sum / total;
 }
 
@@ -217,6 +226,36 @@ function applyFacet(direction, radius, facet) {
  * the catalogue should be read as "craters this mesh can show", not as a
  * crater count -- the real ones run down to centimetres.
  */
+/*
+ * How many vertices one cycle of surface detail needs before it shades.
+ *
+ * Two is the Nyquist limit: below it the octave is not even representable.
+ * Two is also useless here, because what a viewer sees is not the
+ * displacement but its *slope*, and a sine sampled twice per cycle has a
+ * slope that reverses at every vertex. The angle between adjacent shading
+ * normals goes as amplitude x frequency squared, so the top octave of a band
+ * dominates the faceting even though it is the quietest.
+ *
+ * Eight samples per cycle is where that turn falls under about five degrees
+ * for the loudest band in this catalogue. Measured over the set, mean angle
+ * between adjacent shading normals on a 96 x 64 mesh:
+ *
+ *            before   after
+ *   Itokawa   7.56     6.46
+ *   67P       7.37     6.60
+ *   Apophis   7.02     5.98
+ *   Eros      4.08     3.85
+ *
+ * Re-measure with scripts/normal-roughness.mjs, which also prints the worst
+ * single pair and the fraction of pairs over 25 degrees.
+ */
+const SAMPLES_PER_CYCLE = 8;
+
+/* The octave counts the two noise bands were authored with. They are the
+ * normalisation basis, not the count actually evaluated -- see `fbm`. */
+const BROAD_OCTAVES = 4;
+const FINE_OCTAVES = 3;
+
 const RESOLVABLE_CRATER_RADIANS = 0.055;
 
 /*
@@ -274,22 +313,56 @@ function buildCraterField(shape) {
   return craters;
 }
 
-function buildBoulderField(shape) {
+/*
+ * The same truncation the crater field gets, and for a worse reason.
+ *
+ * A crater narrower than one quad lands between vertices and is averaged away
+ * -- wasted work, but nothing is drawn. A *boulder* narrower than one quad is
+ * not harmless: it pushes a single vertex outward with no neighbour to share
+ * the slope with, so the mesh grows a one-vertex spike whose normal points
+ * somewhere no real surface points. There is one such normal per sub-quad
+ * boulder, and as the body turns each of them sweeps through the light on its
+ * own. That is not roughness, it is sparkle, and it is why the two bodies with
+ * the finest authored boulder fields were the two that would not sit still.
+ *
+ * Measured on a 96 x 64 mesh, before this: the mean angle between adjacent
+ * shading normals was 7.56 degrees on Itokawa and 7.02 on Apophis, against
+ * 4.1 to 5.8 for every body that was reported as steady. Itokawa draws 34
+ * boulders at `boulderSize` 0.090 and Apophis 16 at 0.055; one quad is 0.0654
+ * radians, so most of Apophis's field and half of Itokawa's was below the
+ * floor.
+ *
+ * So a boulder the mesh cannot carry is not drawn. The detail is not lost --
+ * the surface map carries that band at 1024 pixels around, which is twenty
+ * times the resolution the geometry has. The floor is the quad width, which
+ * makes the cap two vertices across: the minimum that survives normal
+ * averaging, exactly as `RESOLVABLE_CRATER_RADIANS` argues for bowls.
+ */
+function resolvableBoulderRadians(widthSegments) {
+  return (2 * Math.PI) / Math.max(8, widthSegments);
+}
+
+function buildBoulderField(shape, minimumRadius = 0) {
   const boulders = [];
   const count = shape.boulders ?? 0;
   const size = shape.boulderSize ?? 0.05;
   for (let i = 0; i < count; i += 1) {
     const seed = shape.seed * 13 + i * 277 + 4.1;
+    const radius = size * (0.45 + hash(seed + 0.19) * 0.95);
+    if (radius < minimumRadius) continue;
     boulders.push({
       direction: unitVector(seed),
-      radius: size * (0.45 + hash(seed + 0.19) * 0.95),
+      radius,
       height: size * (0.22 + hash(seed + 0.41) * 0.42),
     });
   }
+  /* An authored boulder is a named feature someone measured, so it is drawn
+   * whatever the mesh makes of it -- but its cap is widened to the floor so
+   * it is a bump rather than a spike. */
   (shape.bigBoulders ?? []).forEach((boulder) => {
     boulders.push({
       direction: new THREE.Vector3(...boulder.dir).normalize(),
-      radius: boulder.radius,
+      radius: Math.max(minimumRadius, boulder.radius),
       height: boulder.height,
     });
   });
@@ -354,6 +427,61 @@ function weldSphereNormals(geometry, widthSegments, heightSegments) {
 }
 
 /**
+ * Moves the sculpted body so the origin is its centre of volume.
+ *
+ * The lobes are authored as an offset ellipsoid each, positioned so the
+ * *bounding box* matches the published tri-axial dimensions -- which is the
+ * right way to author them and the wrong place to put the origin. Itokawa's
+ * big lobe is three times the volume of its small one, so the finished body's
+ * centre of volume sits 15.7% of its own half-length away from the origin it
+ * was being spun about. A rigid body does not do that: it rotates about its
+ * centre of mass. Drawn the other way, the whole rock swings around a point
+ * outside itself once per rotation -- a wobble the size of a sixth of the
+ * body, which at the distance a focused small body is framed from is several
+ * per cent of the screen.
+ *
+ * Measured over the set, with the offset as a percentage of the body's own
+ * maximum radius: Itokawa 15.7, Ida 9.1, Arrokoth 7.6, Eros 6.2, 67P 5.1,
+ * Apophis 4.5, and under 2 for every single-lobe body (they are symmetric
+ * about their own centre already, so this pass costs them nothing and moves
+ * them nowhere).
+ *
+ * The centroid is the exact one -- the signed-tetrahedron integral over the
+ * closed mesh, not the average of the vertices, which a sphere's crowded poles
+ * would bias toward the axis. It runs once per body at build time.
+ */
+function recentreOnVolume(geometry) {
+  const positions = geometry.attributes.position;
+  const index = geometry.index;
+  if (!index) return;
+  let volume = 0;
+  let cx = 0;
+  let cy = 0;
+  let cz = 0;
+  const a = _dir;
+  const b = _tmp;
+  const c = new THREE.Vector3();
+  const cross = new THREE.Vector3();
+  for (let i = 0; i < index.count; i += 3) {
+    a.fromBufferAttribute(positions, index.getX(i));
+    b.fromBufferAttribute(positions, index.getX(i + 1));
+    c.fromBufferAttribute(positions, index.getX(i + 2));
+    // Six times the signed volume of the tetrahedron (origin, a, b, c).
+    const six = a.dot(cross.crossVectors(b, c));
+    volume += six;
+    // The tetrahedron's own centroid is the mean of its four corners, and the
+    // origin contributes nothing to the sum.
+    cx += six * (a.x + b.x + c.x);
+    cy += six * (a.y + b.y + c.y);
+    cz += six * (a.z + b.z + c.z);
+  }
+  if (!(Math.abs(volume) > 1e-12)) return;
+  // The 1/6 and the 1/4 cancel out of the ratio; only the 1/4 survives.
+  const scale = 1 / (4 * volume);
+  geometry.translate(-cx * scale, -cy * scale, -cz * scale);
+}
+
+/**
  * Builds one small body: geometry in kilometres, with its colour baked in.
  *
  * `baseValue` is the linear reflectance derived from the measured geometric
@@ -404,8 +532,42 @@ export function createSmallBodyGeometry(shape, {
   }
   const sharpness = (shape.neck ?? 4) / Math.max(1e-6, halfLength);
 
+  /*
+   * How much detail this mesh can actually shade.
+   *
+   * A displacement of n cycles around the body needs more than 2n vertices to
+   * be represented at all, and about 4n before its normals settle down enough
+   * to shade smoothly rather than facet. Below that the octave is not detail,
+   * it is noise: each vertex gets a displacement uncorrelated with its
+   * neighbours, every face catches the light on its own, and the whole surface
+   * sparkles as the body turns.
+   *
+   * The fine noise band ran at 11.5 cycles with three octaves at a 2.07 ratio
+   * -- 11.5, 23.8 and 49.3 cycles -- against a 96-segment sphere whose Nyquist
+   * limit is 48 and whose shadeable limit is 24. The top octave was pure
+   * aliasing on every body in the set, and it was loudest where `grain` is
+   * loudest: 0.034 on Apophis and 0.030 on Itokawa, against a median of 0.016.
+   *
+   * So the octave count is derived from the mesh instead of being authored:
+   * add octaves while they stay inside what the mesh can shade, and stop. At
+   * 96 x 64 the broad band keeps all four of its octaves and the fine band
+   * keeps two; a 40 x 28 moon keeps two and one. `fbm` normalises by its own
+   * amplitude sum, so dropping an octave changes the roughness of the surface
+   * and not its height.
+   */
+  const shadeableCycles = Math.min(widthSegments, heightSegments * 2) / SAMPLES_PER_CYCLE;
+  const octavesWithin = (base) => {
+    let octaves = 1;
+    while (base * Math.pow(2.07, octaves) <= shadeableCycles) octaves += 1;
+    return octaves;
+  };
+  const broadFrequency = Math.min(2.6, shadeableCycles);
+  const fineFrequency = Math.min(11.5, shadeableCycles);
+  const broadOctaves = octavesWithin(broadFrequency);
+  const fineOctaves = octavesWithin(fineFrequency);
+
   const craters = buildCraterField(shape);
-  const boulders = buildBoulderField(shape);
+  const boulders = buildBoulderField(shape, resolvableBoulderRadians(widthSegments));
   const dents = shape.dents ?? [];
   const facets = shape.facets ?? [];
   const patches = shape.patches ?? [];
@@ -436,9 +598,16 @@ export function createSmallBodyGeometry(shape, {
     }
 
     /* Two octave sets: the broad one gives the body its lumps, the fine one
-     * gives grazing light something to catch at close range. */
-    const broad = fbm(_dir.x * 2.6, _dir.y * 2.6, _dir.z * 2.6, seed, 4) ;
-    const fine = fbm(_dir.x * 11.5, _dir.y * 11.5, _dir.z * 11.5, seed + 37, 3);
+     * gives grazing light something to catch at close range. Both are cut off
+     * at what this mesh can shade -- see `shadeableCycles` above. */
+    const broad = fbm(
+      _dir.x * broadFrequency, _dir.y * broadFrequency, _dir.z * broadFrequency,
+      seed, broadOctaves, BROAD_OCTAVES,
+    );
+    const fine = fbm(
+      _dir.x * fineFrequency, _dir.y * fineFrequency, _dir.z * fineFrequency,
+      seed + 37, fineOctaves, FINE_OCTAVES,
+    );
     radius *= 1 + broad * relief + fine * grain;
 
     let craterShade = 0;
@@ -520,6 +689,8 @@ export function createSmallBodyGeometry(shape, {
     colors[index * 3 + 1] = value * chroma[1];
     colors[index * 3 + 2] = value * chroma[2];
   }
+
+  recentreOnVolume(geometry);
 
   positions.needsUpdate = true;
   geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));

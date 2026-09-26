@@ -702,54 +702,241 @@ export function createCelestialDetailsPanel() {
    * closes the dossier and flies there -- which is the answer to "can I visit
    * the members of each belt part".
    */
+  /*
+   * The asteroid roster's search box and filters. Built once, the first time
+   * an asteroid dossier opens, and hidden for the region rosters that share
+   * this list -- a belt region's five members do not need a search box.
+   */
+  let rosterTools = null;
+  let rosterSearch = null;
+  let rosterSummary = null;
+  let rosterEmpty = null;
+  let rosterFilter = "all";
+
+  function applyRosterFilter() {
+    if (!memberRoster) return;
+    const terms = String(rosterSearch?.value ?? "").trim().toLowerCase().split(/\s+/).filter(Boolean);
+    let shown = 0;
+    let header = null;
+    let headerCount = 0;
+    const closeGroup = () => {
+      if (header) header.hidden = headerCount === 0;
+    };
+    Array.from(memberRoster.children).forEach((item) => {
+      if (item.dataset.rosterGroup !== undefined) {
+        closeGroup();
+        header = item;
+        headerCount = 0;
+        return;
+      }
+      if (item.dataset.rosterSearch === undefined) return;
+      const text = item.dataset.rosterSearch;
+      const tags = item.dataset.rosterTags ? item.dataset.rosterTags.split(" ") : [];
+      const match = terms.every((term) => text.includes(term))
+        && (rosterFilter === "all" || tags.includes(rosterFilter));
+      item.hidden = !match;
+      if (match) {
+        shown += 1;
+        headerCount += 1;
+      }
+    });
+    closeGroup();
+    if (rosterEmpty) rosterEmpty.hidden = shown > 0;
+  }
+
+  function ensureRosterTools(filters) {
+    if (rosterTools || !memberRoster) return rosterTools;
+    rosterTools = document.createElement("div");
+    rosterTools.className = "planet-details__roster-tools";
+
+    const label = document.createElement("label");
+    label.className = "planet-details__roster-search";
+    const caption = document.createElement("span");
+    caption.className = "planet-details__roster-search-label";
+    caption.textContent = "Search";
+    rosterSearch = document.createElement("input");
+    rosterSearch.type = "search";
+    rosterSearch.placeholder = "Name, class letter, “moon”, “rings”…";
+    rosterSearch.autocomplete = "off";
+    rosterSearch.spellcheck = false;
+    rosterSearch.setAttribute("aria-label", "Search the asteroids, moons and comets you can travel to");
+    rosterSearch.addEventListener("input", applyRosterFilter);
+    /*
+     * Typing must stay in the box. The scene listens on window for Space,
+     * the arrows and Shift+P; without this, a space in "Didymos I" would
+     * scroll the journey and a capital P would toggle the performance HUD.
+     * Escape with text in the box clears it; Escape on an empty box falls
+     * through and closes the dossier as it does everywhere else. Tab falls
+     * through so the dossier's focus trap still works.
+     */
+    rosterSearch.addEventListener("keydown", (event) => {
+      if (event.key === "Tab") return;
+      if (event.key === "Escape") {
+        if (!rosterSearch.value) return;
+        event.preventDefault();
+        event.stopPropagation();
+        rosterSearch.value = "";
+        applyRosterFilter();
+        return;
+      }
+      event.stopPropagation();
+    });
+    label.append(caption, rosterSearch);
+
+    const bar = document.createElement("div");
+    bar.className = "planet-details__roster-filters";
+    bar.setAttribute("role", "group");
+    bar.setAttribute("aria-label", "Show only");
+    filters.forEach(({ key, label: text }) => {
+      const chip = document.createElement("button");
+      chip.type = "button";
+      chip.className = "planet-details__roster-filter";
+      chip.dataset.rosterFilter = key;
+      chip.textContent = text;
+      chip.setAttribute("aria-pressed", String(key === rosterFilter));
+      bar.append(chip);
+    });
+    bar.addEventListener("click", (event) => {
+      const chip = event.target.closest("[data-roster-filter]");
+      if (!chip) return;
+      rosterFilter = chip.dataset.rosterFilter;
+      bar.querySelectorAll("[data-roster-filter]").forEach((node) => {
+        node.setAttribute("aria-pressed", String(node === chip));
+      });
+      applyRosterFilter();
+    });
+
+    rosterSummary = document.createElement("p");
+    rosterSummary.className = "planet-details__roster-summary";
+
+    rosterTools.append(label, bar, rosterSummary);
+    memberRoster.before(rosterTools);
+    return rosterTools;
+  }
+
+  function writeRosterRow(member) {
+    const entry = document.createElement("li");
+    entry.className = "planet-details__ring planet-details__member";
+    if (member.isMoon) entry.classList.add("is-moon");
+    if (member.current) entry.classList.add("is-current", "is-selected");
+    if (member.search !== undefined) entry.dataset.rosterSearch = member.search;
+    if (member.tags) entry.dataset.rosterTags = member.tags.join(" ");
+
+    // The body you are already at is marked, not offered: a button that
+    // flies you to where you are standing is a dead end.
+    const button = document.createElement(member.current ? "div" : "button");
+    button.className = "planet-details__member-button";
+    if (member.current) {
+      button.setAttribute("aria-current", "true");
+    } else {
+      button.type = "button";
+      button.dataset.travelTo = member.body;
+      button.setAttribute("aria-label", `Travel to ${member.body}`);
+    }
+
+    /* Only the name gets the per-letter hover effect. Every glyph becomes a
+     * span, and across sixty cards of prose that is fifteen thousand nodes
+     * built each time the dossier opens -- which would be lag. */
+    const append = (className, text, tag = "span", cosmic = false) => {
+      if (!text) return;
+      const node = document.createElement(tag);
+      node.className = className;
+      if (cosmic) node.setAttribute("data-cosmic-text", "");
+      node.textContent = text;
+      button.append(node);
+    };
+
+    append("planet-details__ring-order", member.order);
+    append("planet-details__ring-name", member.body, "strong", true);
+    if (member.badges?.length) {
+      const badges = document.createElement("span");
+      badges.className = "planet-details__roster-badges";
+      member.badges.forEach((badge) => {
+        const chip = document.createElement("span");
+        chip.className = `planet-details__roster-badge planet-details__roster-badge--${badge.key}`;
+        chip.textContent = badge.text;
+        badges.append(chip);
+      });
+      button.append(badges);
+    }
+    append("planet-details__ring-character", member.character);
+    append("planet-details__ring-range", member.range);
+    append("planet-details__ring-description", member.note, "p");
+    append("planet-details__ring-motion", member.motion);
+
+    if (!member.current) {
+      const go = document.createElement("span");
+      go.className = "planet-details__member-go";
+      go.textContent = "Travel there →";
+      button.append(go);
+    }
+
+    entry.append(button);
+    memberRoster.append(entry);
+  }
+
+  function writeGroupedRoster(roster) {
+    ensureRosterTools(roster.filters ?? []);
+    rosterTools.hidden = false;
+    // Every dossier opens on the whole list, not on the last one's search.
+    rosterSearch.value = "";
+    rosterFilter = "all";
+    rosterTools.querySelectorAll("[data-roster-filter]").forEach((node) => {
+      node.setAttribute("aria-pressed", String(node.dataset.rosterFilter === "all"));
+    });
+    rosterSummary.textContent = roster.summary ?? "";
+
+    roster.groups.forEach((group) => {
+      if (!group.rows?.length) return;
+      const header = document.createElement("li");
+      header.className = "planet-details__roster-group";
+      header.dataset.rosterGroup = group.key;
+      const title = document.createElement("span");
+      title.className = "planet-details__roster-group-title";
+      title.setAttribute("data-cosmic-text", "");
+      title.textContent = group.title;
+      header.append(title);
+      if (group.blurb) {
+        const blurb = document.createElement("p");
+        blurb.className = "planet-details__roster-group-blurb";
+        blurb.textContent = group.blurb;
+        header.append(blurb);
+      }
+      memberRoster.append(header);
+      group.rows.forEach(writeRosterRow);
+    });
+
+    rosterEmpty = document.createElement("li");
+    rosterEmpty.className = "planet-details__roster-empty";
+    rosterEmpty.textContent = "Nothing matches. Try a name, a class letter such as “C”, or “moon”.";
+    rosterEmpty.hidden = true;
+    memberRoster.append(rosterEmpty);
+  }
+
   function writeMemberRoster(members, label = null) {
     if (!memberRoster) return;
     memberRoster.textContent = "";
+    rosterEmpty = null;
     const row = layer.querySelector('[data-planet-field="members"]');
-    // The same roster serves two purposes now -- the worlds inside a region,
-    // and the asteroid classes -- so the heading moves with the content.
+    // The same roster serves two purposes -- the worlds inside a region, and
+    // every rock you can travel to -- so the heading moves with the content.
     const heading = row?.querySelector("span[data-cosmic-text]");
     if (heading) heading.textContent = label ?? "Worlds you can visit here";
-    const available = Array.isArray(members) && members.length > 0;
+    const grouped = members?.kind === "asteroid-roster";
+    const available = grouped
+      ? members.groups.some((group) => group.rows?.length)
+      : Array.isArray(members) && members.length > 0;
     memberRoster.hidden = !available;
     if (row) row.hidden = !available;
+    memberRoster.classList.toggle("is-grouped", grouped);
+    if (rosterTools) rosterTools.hidden = !grouped || !available;
     if (!available) return;
 
-    members.forEach((member) => {
-      const entry = document.createElement("li");
-      entry.className = "planet-details__ring planet-details__member";
-
-      const button = document.createElement("button");
-      button.type = "button";
-      button.className = "planet-details__member-button";
-      button.dataset.travelTo = member.body;
-      button.setAttribute("aria-label", `Travel to ${member.body}`);
-
-      const append = (className, text, tag = "span") => {
-        if (!text) return;
-        const node = document.createElement(tag);
-        node.className = className;
-        node.setAttribute("data-cosmic-text", "");
-        node.textContent = text;
-        button.append(node);
-      };
-
-      append("planet-details__ring-order", member.order);
-      append("planet-details__ring-name", member.body, "strong");
-      append("planet-details__ring-character", member.character);
-      append("planet-details__ring-range", member.range);
-      append("planet-details__ring-description", member.note, "p");
-      append("planet-details__ring-motion", member.motion);
-
-      const go = document.createElement("span");
-      go.className = "planet-details__member-go";
-      go.setAttribute("data-cosmic-text", "");
-      go.textContent = "Travel there →";
-      button.append(go);
-
-      entry.append(button);
-      memberRoster.append(entry);
-    });
+    if (grouped) {
+      writeGroupedRoster(members);
+      return;
+    }
+    members.forEach(writeRosterRow);
   }
 
   function writeAdvancedField(key, value) {

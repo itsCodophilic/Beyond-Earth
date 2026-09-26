@@ -47,7 +47,43 @@ the published orbit solutions available here disagree by more than the
 separation itself, and a moon in the wrong place is worse than no moon. Its
 card says so.
 
-**Rank 3 onward is untouched.**
+## Rank 3 is built
+
+**All four Centaurs are now drawn**, in
+`src/js/scene/smallBodies/centaurCatalogue.js` — Chariklo, Chiron, Pholus and
+Echeclus — and with them the first ring systems in this scene that do not
+belong to a planet or a dwarf planet.
+
+These are a third kind of evidence again. Rank 1 had photographs and Rank 2
+had resolved discs; **not one of these four has ever been resolved by
+anything**. Everything drawn about their sizes and shapes comes from stellar
+occultations — timing how long a star stays hidden behind them from several
+telescopes at once — which measures a chord to within a kilometre or two and
+gives a limb from enough chords. It is also how the rings were found.
+
+- **Chariklo** carries its two rings, Oiapoque and Chuí, at the occultation
+  radii, on its **measured pole**. Its pole is known to half a degree because
+  the rings were edge-on in 2008 and open to 34° by 2013, and that change is
+  what solved it. The rings are drawn at 7% albedo against the body's 3.6%,
+  which is the measurement, and is why Chariklo looked too bright for years.
+- **Chiron** carries three narrow rings and a diffuse disc, and its card says
+  what makes it different from Chariklo's: the material is **not the same
+  from one epoch to the next**. It also carries a coma, because it is comet
+  95P as well as asteroid 2060.
+- **Pholus** is the reddest object measured anywhere, drawn at its measured
+  a/b of 1.9 from the 0.60 mag lightcurve. Its colour and Chiron's are the
+  two ends of the Centaur bimodality, and nothing else in the scene spans it.
+- **Echeclus** has a coma and, unusually, a **measured absence**: its
+  occultation looked for rings and found none, to a limit that would have
+  caught anything as substantial as Chariklo's.
+
+Two things were built along the way and are reusable. `icyRings.js` now
+serves small bodies as well as planets, so any future ringed body is a
+catalogue entry rather than a renderer. And `pick_patch` in the texture
+pipeline learned to ask for a *representative* window rather than the most
+detailed one — see the note there about Phobos's grooves.
+
+**Rank 4 onward is untouched.**
 
 ## Corrections to this list
 
@@ -116,16 +152,22 @@ visually arresting asteroid there is) · **52 Europa** · **511 Davida** ·
 
 ## Rank 3 — Centaurs, and the ringed ones especially
 
-Rings are a theme in this scene and not one centaur is in it.
+Rings are a theme in this scene and not one centaur was in it. All four rows
+below are now built; the sizes have been corrected to the occultation
+measurements as part of that.
 
-- **10199 Chariklo** (250 km) — **the first non-planet ever found to have
-  rings** (2013). Two narrow rings, Oiapoque and Chuí, 14 km apart. Point of
-  light: the rings are known only from occultations
-- **2060 Chiron** (~210 km) — has both an asteroid and a comet designation, and
-  a ring system reported to be *in formation*
-- **5145 Pholus** (~99 km) — one of the reddest objects in the Solar System
-- **60558 Echeclus** (~59 km) — violently outbursts, once ejecting a fragment
-  brighter than the nucleus
+- **10199 Chariklo** (249 km volume-equivalent) — *built* — **the first
+  non-planet ever found to have rings** (2013). Two narrow rings, Oiapoque and
+  Chuí, 14 km apart. Point of light: the rings are known only from
+  occultations
+- **2060 Chiron** (196 ± 34 km) — *built* — has both an asteroid and a comet
+  designation, and a ring system reported to be *in formation*
+- **5145 Pholus** (99 +15/−14 km) — *built* — the reddest object in the Solar
+  System. The ~99 km here is Herschel-PACS; JPL still lists an IRAS-era 190 km
+  with a 0.044 albedo, and the two disagree by a factor of two in size and
+  three in albedo
+- **60558 Echeclus** (60.0 ± 1.0 km) — *built* — violently outbursts, once
+  ejecting a fragment brighter than the nucleus
 
 ## Rank 4 — more dwarf-planet candidates
 

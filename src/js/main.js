@@ -2334,6 +2334,31 @@ composeSolarEventShot(
   let isPlanetDetailsOpen = false;
   const cameraFocusPoint = new THREE.Vector3();
   const targetFocusPoint = new THREE.Vector3();
+  /*
+   * Where the focus target was last frame, and whose it was.
+   *
+   * The camera's look-at point eases toward the focused body, which is the
+   * right behaviour for the hand-over and the wrong one once the body is
+   * framed: a first-order filter chasing a *moving* target never catches it.
+   * It settles at a standing error of one time constant's worth of the
+   * target's motion, so the body you asked to look at is drawn permanently
+   * off to one side -- measured on an 800 pixel viewport, Bennu sat 211
+   * pixels right of centre, Ryugu 151, Itokawa 85 left -- and every wobble in
+   * frame pacing moves that error, which is a body that will not sit still.
+   *
+   * Carrying the target's own step into the eased point before easing fixes
+   * both. The filter then only has the *residual* to work on, which does
+   * converge to zero, so the approach still eases in exactly as before and
+   * the settled body is centred and rigid. Two vector operations per frame.
+   */
+  const previousFocusTargetPoint = new THREE.Vector3();
+  let previousFocusTargetBody = null;
+  // Where the focused body was when the camera was aimed this frame, and
+  // where it is after the late updates have moved it. See the re-anchor
+  // after updateSmallBodies in animate().
+  const focusAnchorBefore = new THREE.Vector3();
+  const focusAnchorAfter = new THREE.Vector3();
+  let focusAnchorBody = null;
 
   // AmbientLight keeps broad journey silhouettes readable. Its intensity eases
   // lower during satellite inspection so sunlight can form a clear terminator.
@@ -3929,11 +3954,19 @@ composeSolarEventShot(
       Math.log10(0.35),
       Math.log10(12),
     );
-    // focusZoomCurrent falls from 1 toward 0.58 as the user zooms in. Turning
-    // that range into a 0–1 value lets the solar exposure grow continuously
-    // with the camera move rather than jumping at the end of the gesture.
+    // focusZoomCurrent falls from 1 toward the body's own floor as the user
+    // zooms in. Turning that range into a 0–1 value lets the solar exposure
+    // grow continuously with the camera move rather than jumping at the end
+    // of the gesture. The floor is per-body now rather than a flat 0.58, so
+    // this reads it rather than repeating the number -- otherwise, on a body
+    // that can be zoomed far closer than the old limit, the blend would
+    // saturate a long way before the gesture ran out.
     const focusedZoomInBlend = isPlanetaryInspection
-      ? 1 - THREE.MathUtils.smoothstep(focusZoomCurrent, 0.58, 1)
+      ? 1 - THREE.MathUtils.smoothstep(
+        focusZoomCurrent,
+        Math.min(0.92, getFocusedMinimumZoom()),
+        1,
+      )
       : 0;
 
     // The ordinary white solar halo remains present from every viewpoint.
@@ -5030,7 +5063,34 @@ composeSolarEventShot(
      */
     if (orbitTargets.some((orbit) => orbit.userData?.planet === focusedBody)) return focusedBody;
     const parentName = focusedBody.userData?.parentPlanet;
-    return parentName ? planets.find((planet) => planet.name === parentName) ?? null : null;
+    if (!parentName) return null;
+    const parentPlanet = planets.find((planet) => planet.name === parentName);
+    if (parentPlanet) return parentPlanet;
+    /*
+     * A moon whose parent is not a planet.
+     *
+     * `planets` holds the planets and the dwarf worlds. Dactyl's parent is
+     * Ida, Dimorphos's is Didymos, Linus's is Kalliope -- none of those are
+     * in that array, so this returned null, and null means *no* guide is
+     * selected, which drops every path in the scene to its dim baseline
+     * including the one the viewer is standing on. Measured: Ida's own guide
+     * ran at 0.79 opacity with Ida focused and 0.027 with Dactyl focused,
+     * which on screen is gone. Reported as "when asteroid's moons are being
+     * clicked, their parent asteroid orbital paths disappear", and it
+     * affected all eight satellites in the small-body catalogues.
+     *
+     * The parent's heliocentric guide is the right answer for a moon, and
+     * for the strongest reason: Dactyl does not have an orbit around the Sun
+     * of its own, it has Ida's. So the registry is asked by name, which is
+     * the same question the planet lookup was asking and the only one that
+     * works for a body the planet array has never heard of.
+     */
+    const parentGuide = orbitTargets.find((orbit) => {
+      const target = orbit.userData?.planet;
+      if (!target) return false;
+      return (target.userData?.name ?? target.name) === parentName;
+    });
+    return parentGuide?.userData?.planet ?? null;
   }
 
   function updatePlanetOrbitVisuals(deltaTime) {
@@ -7130,6 +7190,61 @@ composeSolarEventShot(
     return Math.max(2.45, MAX_CINEMATIC_CAMERA_DISTANCE / baseDistance);
   }
 
+  /*
+   * ==== HOW CLOSE YOU MAY GET. These are the two numbers to tweak. ========
+   *
+   * The zoom used to bottom out at 0.58 of a body's *framing* distance, one
+   * flat number for everything, and that is the wrong quantity. Framing
+   * distance means completely different things for different bodies: Earth
+   * is framed at 1.35 units and Dactyl is framed at 6.9, because Dactyl is
+   * framed on the *pair* -- the whole point of Dactyl is that it is a speck
+   * beside Ida. Fifty-eight per cent of 6.9 is 4.0, and at 4.0 units Dactyl
+   * is one and a half per cent of the frame height. The viewer could select
+   * it and never see it. Reported as exactly that: some asteroid moons are
+   * too small to zoom into.
+   *
+   * What a viewer actually means by "as close as it goes" is *just off the
+   * surface*, and that is a property of the body, not of how it happens to
+   * be framed. So the floor is the surface clearance, and the zoom range
+   * runs down to it for every body in the scene.
+   *
+   *   FOCUS_SURFACE_CLEARANCE  how close in body radii. 1.0 would touch the
+   *                            surface; 1.38 leaves a little air.
+   *   FOCUS_NEAR_CLEARANCE     and never closer than this in scene units,
+   *                            because the camera's near plane bottoms out
+   *                            at 0.02 and a surface nearer than that gets
+   *                            sliced open. On a body the size of Dactyl
+   *                            this is the term that binds, not the radius.
+   *
+   * With these, Dactyl comes in at 0.066 units and fills about 89% of the
+   * frame height, against 1.5% before.
+   */
+  const FOCUS_SURFACE_CLEARANCE = 1.38;
+  const STAR_SURFACE_CLEARANCE = 1.72;
+  const FOCUS_NEAR_CLEARANCE = 0.05;
+
+  /** The closest the camera may come to a body, in scene units. */
+  function getFocusedMinimumDistance(body = focusedBody) {
+    const radius = Number(
+      body?.userData?.focusVisualRadius ?? body?.userData?.visualRadius ?? 1,
+    );
+    const clearance = body?.userData?.info?.type === "Star"
+      ? STAR_SURFACE_CLEARANCE
+      : FOCUS_SURFACE_CLEARANCE;
+    return Math.max(radius * clearance, radius + FOCUS_NEAR_CLEARANCE);
+  }
+
+  /*
+   * ...expressed as a zoom multiplier, which is what the gesture handlers
+   * clamp. Capped below 0.95 so a body whose framing distance is already
+   * inside its own clearance -- which nothing in the scene should be, but a
+   * future one might -- still has somewhere to go.
+   */
+  function getFocusedMinimumZoom(body = focusedBody) {
+    const baseDistance = Math.max(0.001, getFocusedBaseDistance(body));
+    return Math.min(0.95, getFocusedMinimumDistance(body) / baseDistance);
+  }
+
   function isFocusedWideView() {
     if (!focusedBody) return false;
     const focusedDistance = getFocusedBaseDistance(focusedBody) * focusZoomCurrent;
@@ -7168,7 +7283,7 @@ composeSolarEventShot(
       : 0.00125;
     focusZoomTarget = THREE.MathUtils.clamp(
       focusZoomTarget * Math.exp(delta * zoomSensitivity),
-      0.58,
+      getFocusedMinimumZoom(),
       getFocusedMaximumZoom(),
     );
   }
@@ -7900,7 +8015,7 @@ composeSolarEventShot(
 
     focusZoomTarget = THREE.MathUtils.clamp(
       focusZoomTarget * (focusPinchDistance / nextDistance),
-      0.58,
+      getFocusedMinimumZoom(),
       getFocusedMaximumZoom(),
     );
     focusPinchDistance = nextDistance;
@@ -8744,6 +8859,8 @@ composeSolarEventShot(
     freeExploreFocusOffsetCurrent.lerp(freeExploreFocusOffsetTarget, exploreRigEase);
 
     getFocusPoint(distance, targetFocusPoint);
+    focusAnchorBody = focusedBody ?? null;
+    focusAnchorBody?.getWorldPosition(focusAnchorBefore);
     exploreBaseFocus.copy(targetFocusPoint);
     if (!focusedBody) targetFocusPoint.add(freeExploreFocusOffsetCurrent);
     if (!hasCameraFocusPoint) {
@@ -8762,11 +8879,48 @@ composeSolarEventShot(
     } else {
       const focusEase = focusedBody?.userData?.focusEase
         ?? (focusedBody ? 0.055 : 0.075);
+      /*
+       * Only for the same body two frames running, and only for a step that
+       * looks like orbital motion.
+       *
+       * On the frame the focus changes there is no shared motion to carry,
+       * and carrying the jump between two different bodies would teleport the
+       * camera instead of letting it fly. The size test covers the other way
+       * that point can move discontinuously -- a restored snapshot, a solar
+       * event handing the camera back -- where the last frame's target belongs
+       * to a camera that no longer exists. A body never travels its own
+       * framing distance in one frame -- Apophis, the fastest here, manages
+       * about a seven-hundredth of it -- so anything larger is not motion and
+       * is not carried. The framing distance rather than the body's own radius,
+       * because a satellite's world position carries its parent's orbital step
+       * as well as its own.
+       */
+      if (focusedBody && focusedBody === previousFocusTargetBody) {
+        /*
+         * Forty framing distances, and never under two scene units. The
+         * bare framing distance was tight enough that one long frame -- a
+         * tab regaining focus, a texture upload, a time-scale change --
+         * could push a small fast body's step past it, and that frame the
+         * camera fell a step behind and then eased back, which reads as a
+         * jolt. The discontinuities this test exists for (a restored
+         * snapshot, an event handing the camera back) are hundreds of units,
+         * so forty times still separates the two cases by a wide margin.
+         */
+        const carryLimit = Math.max(2, 40 * (focusedBody.userData?.focusDistance
+          ?? focusedBody.userData?.visualRadius
+          ?? 1));
+        if (targetFocusPoint.distanceToSquared(previousFocusTargetPoint)
+          < carryLimit * carryLimit) {
+          cameraFocusPoint.add(targetFocusPoint).sub(previousFocusTargetPoint);
+        }
+      }
       cameraFocusPoint.lerp(
         targetFocusPoint,
         frameAdjustedEase(focusEase, deltaTime),
       );
     }
+    previousFocusTargetPoint.copy(targetFocusPoint);
+    previousFocusTargetBody = focusedBody ?? null;
 
     const focusScale = focusedBody?.userData?.focusScale ?? 1;
     const minimumFocusDistance = focusedBody?.userData?.minFocusDistance ?? 4.5;
@@ -8784,10 +8938,10 @@ composeSolarEventShot(
       const focusVisualRadius = focusedBody.userData?.focusVisualRadius
         ?? focusedBody.userData?.visualRadius
         ?? 1;
-      const safeMinimum = Math.max(
-        baseFocusDistance * 0.58,
-        focusVisualRadius * (focusedBody.userData?.info?.type === "Star" ? 1.72 : 1.38),
-      );
+      /* The clearance alone. The old `baseFocusDistance * 0.58` term that
+       * used to sit beside it is what stopped a small moon being examined --
+       * see the note on FOCUS_SURFACE_CLEARANCE. */
+      const safeMinimum = getFocusedMinimumDistance(focusedBody);
       cameraDistance = THREE.MathUtils.clamp(
         baseFocusDistance * focusZoomCurrent,
         safeMinimum,
@@ -8997,8 +9151,46 @@ composeSolarEventShot(
       smallBodies,
       frameMotionScale,
       deltaTime * celestialMotionScale,
+      // The camera, so the two ringed Centaurs can drop their rings when it
+      // is far enough away that a one-unit ring system is a shimmering speck.
+      camera,
     );
     if (outerBoundaries) updateOuterBoundaries(outerBoundaries, frameMotionScale, camera);
+    /*
+     * The flicker on Bennu, and on every small body, measured.
+     *
+     * The camera is aimed at the focused body's position *before* this
+     * frame's orbital step, and the small bodies, the belt and the Kuiper
+     * Belt all take that step afterwards, just above. So the body was always
+     * drawn one step ahead of where the camera was pointing. For a slow body
+     * that is nothing. For Bennu framed at 0.29 units and moving about 0.005
+     * units a frame it is about 20 px on an 800 px screen -- and because the
+     * step scales with the frame's delta time, every uneven frame doubled
+     * it: sampled over 150 frames the body sat at +19.6 px and jumped to
+     * +39 px roughly one frame in ten. That jump is the flicker.
+     *
+     * The planets and their moons are moved before the camera is aimed, so
+     * for them this shift is zero. For everything moved late, the whole rig
+     * is translated by exactly the late step -- a rigid move, so the view
+     * does not change, only where it is -- and the carry reference goes with
+     * it so next frame's carry does not add the same step a second time.
+     */
+    if (focusAnchorBody && focusAnchorBody === focusedBody) {
+      focusAnchorBody.getWorldPosition(focusAnchorAfter);
+      focusAnchorAfter.sub(focusAnchorBefore);
+      const lateStep = focusAnchorAfter.lengthSq();
+      // Same guard as the carry: a jump is not motion.
+      const lateLimit = Math.max(2, 40 * (focusedBody.userData?.focusDistance
+        ?? focusedBody.userData?.visualRadius
+        ?? 1));
+      if (lateStep > 0 && lateStep < lateLimit * lateLimit) {
+        camera.position.add(focusAnchorAfter);
+        cameraFocusPoint.add(focusAnchorAfter);
+        targetFocusPoint.add(focusAnchorAfter);
+        previousFocusTargetPoint.add(focusAnchorAfter);
+        camera.updateMatrixWorld();
+      }
+    }
     // One journey value coordinates renderer exposure and the zodiacal glow
     // for scroll, reverse travel, and body focus alike.
     // Events run on real seconds, not on the journey's motion scale: "every

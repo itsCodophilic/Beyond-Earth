@@ -8,18 +8,32 @@ import {
 import { markPointerProxy } from "../pointerProxies.js";
 import { SMALL_BODIES, albedoToLinearValue } from "./smallBodyCatalogue.js";
 import { MAIN_BELT_WORLDS } from "./mainBeltCatalogue.js";
+import { CENTAURS } from "./centaurCatalogue.js";
+import { createCentaurComa, updateCentaurComa } from "./centaurComa.js";
+import { createIcyRingSystem, hasIcyRingSystem } from "../../planets/icyRings.js";
+import { applyRingProximityVisibility } from "../../planets/ringProximity.js";
 
 /*
  * Two catalogues, one builder.
  *
  * Rank 1 is the bodies a spacecraft has photographed; Rank 2 is the eleven
  * largest main-belt worlds nobody has been to, which have measured shapes
- * and borrowed surfaces. They are kept in separate files because the
- * evidence behind them is different and a reader should not have to check
- * which kind a record is -- but they are the same *kind of object* to this
- * module, so they go through one loop rather than two.
+ * and borrowed surfaces; Rank 3 is the four Centaurs, which have never been
+ * resolved at all and are known entirely from watching them pass in front of
+ * stars. They are kept in separate files because the evidence behind them is
+ * different and a reader should not have to check which kind a record is --
+ * but they are the same *kind of object* to this module, so they go through
+ * one loop rather than three.
+ *
+ * Two things only the Centaurs have: a measured pole, and rings. Both are
+ * handled by the general builder rather than by a branch, because both are
+ * optional fields on a record and neither is likely to stay unique for long.
  */
-const ALL_SMALL_BODIES = Object.freeze([...SMALL_BODIES, ...MAIN_BELT_WORLDS]);
+const ALL_SMALL_BODIES = Object.freeze([
+  ...SMALL_BODIES,
+  ...MAIN_BELT_WORLDS,
+  ...CENTAURS,
+]);
 import { createSmallBodyGeometry, maxHalfExtent } from "./smallBodyShapes.js";
 
 /**
@@ -410,6 +424,13 @@ const SMALL_BODY_TEXTURES = Object.freeze({
   Alexhelios: { file: "alexhelios", meanLinear: 0.2303 },
   Cleoselene: { file: "cleoselene", meanLinear: 0.2301 },
   "S/2019 (31) 1": { file: "euphrosyne-moon", meanLinear: 0.2316 },
+  /* Rank 3, the four Centaurs. Full size rather than the 512 the Rank 2
+   * worlds get: these are destinations, the tour lands on them, and two of
+   * them can be zoomed past their own rings down to the ground. */
+  Chariklo: { file: "chariklo", meanLinear: 0.2274 },
+  Chiron: { file: "chiron", meanLinear: 0.2222 },
+  Pholus: { file: "pholus", meanLinear: 0.2314 },
+  Echeclus: { file: "echeclus", meanLinear: 0.2313 },
 });
 
 const smallBodyTextureCache = new Map();
@@ -695,6 +716,8 @@ function attachMetadata(group, record, {
   parentName = null,
   pairSeparation = 0,
   elements = null,
+  ringOuterRadius = 0,
+  comaRadius = 0,
 }) {
   const sizeComparison = getSizeComparisonText({
     diameterKm: record.diameterKm,
@@ -759,8 +782,40 @@ function attachMetadata(group, record, {
      * available down to `minFocusDistance`.
      */
     focusScale: 7.5,
-    focusDistance: Math.max(0.26, reach * 11, pairSeparation / PAIR_FRAMING),
+    /*
+     * A ringed body is framed on its rings, not on itself.
+     *
+     * The 11 above is derived for the body's longest axis. Chariklo's rings
+     * reach 3.3 times further out than that, so the same multiplier would
+     * frame the rock perfectly and cut both ansae off the sides -- which is
+     * the one thing about Chariklo anybody wants to see. The ring multiplier
+     * is smaller because it is applied to a much larger radius: at 7x the
+     * outer ring, the system spans about 70% of the half-width on the 0.69
+     * aspect the browser pane runs at, so nothing is clipped in portrait and
+     * there is margin in landscape.
+     *
+     * `minFocusDistance` is left alone deliberately. Zooming in past the
+     * rings to look at the body is worth having, and the rings fade out of
+     * their own accord when the camera gets that close to the ground.
+     */
+    focusDistance: Math.max(
+      0.26,
+      reach * 11,
+      ringOuterRadius * 7,
+      /* A coma has no edge, so it is not framed the way a ring is -- the
+       * multiplier is deliberately low and the halo is expected to run off
+       * the sides. Three puts Echeclus's nucleus at about a quarter of the
+       * half-height inside a cloud that fills the frame, which is what a
+       * body in outburst looks like. Without this term Echeclus would be
+       * framed on a 156-unit rock inside a 780-unit cloud and the viewer
+       * would be looking at fog. */
+      comaRadius * 3,
+      pairSeparation / PAIR_FRAMING,
+    ),
     minFocusDistance: Math.max(0.20, reach * 3.2),
+    /* What the camera's own safety clamp must clear. Without the rings in
+     * it, a close zoom would put the near ansa behind the near plane. */
+    focusVisualRadius: Math.max(reach, ringOuterRadius * 1.35),
     focusEase: 0.14,
     info: {
       type: record.classification,
@@ -777,6 +832,54 @@ function attachMetadata(group, record, {
    * anything that wants the un-elongated figure. */
   group.userData.renderedMeanRadius = visualRadius;
   return group;
+}
+
+/*
+ * Which way up a body is, and the difference between guessing and knowing.
+ *
+ * Almost every record here gets a pseudo-random tilt derived from its seed.
+ * That is not laziness: for a body whose pole nobody has measured, any
+ * specific orientation would be an invention, and a scene where twenty-odd
+ * rocks all stand perfectly upright is a scene that is quietly claiming they
+ * do. A spread drawn from the seed is stable between reloads, says nothing,
+ * and looks like a real population.
+ *
+ * Two of them are different. Chariklo's pole is known to half a degree --
+ * its rings were edge-on and invisible in 2008 and open to 34 degrees by
+ * 2013, and solving that geometry is how the pole was found -- and Chiron's
+ * is known to a few degrees from the plane its own ring material sits in.
+ * For those, `poleEclipticDeg` carries the measured direction and the body
+ * is put on it.
+ *
+ * The scene's frame is the ecliptic with +y as the north pole, so an
+ * ecliptic longitude and latitude become a unit vector directly, and the
+ * tilt is the rotation that takes the body's local +y -- its spin axis -- to
+ * that vector. Anything parented to the tilt group, rings included, inherits
+ * it, which is the whole point: Chariklo's rings sit in its equator because
+ * the occultations say they do to within their uncertainty, and the only way
+ * to draw that is to have one orientation that both share.
+ */
+const _poleAxis = new THREE.Vector3();
+const _poleUp = new THREE.Vector3(0, 1, 0);
+
+function applyObliquity(tilt, record) {
+  const pole = record.poleEclipticDeg;
+  if (pole) {
+    const lambda = pole.lambda * DEG;
+    const beta = pole.beta * DEG;
+    _poleAxis.set(
+      Math.cos(beta) * Math.cos(lambda),
+      Math.sin(beta),
+      Math.cos(beta) * Math.sin(lambda),
+    ).normalize();
+    tilt.quaternion.setFromUnitVectors(_poleUp, _poleAxis);
+    return;
+  }
+  tilt.rotation.set(
+    (record.shape.seed % 47) / 47 * 0.9 - 0.45,
+    0,
+    (record.shape.seed % 31) / 31 * 0.8 - 0.4,
+  );
 }
 
 function buildBody(record, {
@@ -873,11 +976,7 @@ function buildBody(record, {
 
   const tilt = new THREE.Group();
   tilt.name = `${record.name} tilt`;
-  tilt.rotation.set(
-    (record.shape.seed % 47) / 47 * 0.9 - 0.45,
-    0,
-    (record.shape.seed % 31) / 31 * 0.8 - 0.4,
-  );
+  applyObliquity(tilt, record);
   tilt.add(spinner);
 
   /* A parent's own cap is derived from where its moon will sit, which is
@@ -892,7 +991,7 @@ function buildBody(record, {
   group.add(tilt);
   group.add(buildInteractionProxy(record.name, reach, selfCap));
 
-  return { group, spinner, mesh, reach, renderedMeanRadius };
+  return { group, tilt, spinner, mesh, reach, renderedMeanRadius };
 }
 
 /**
@@ -954,12 +1053,68 @@ export async function createSmallBodies({
 
     positionFromOrbit(built.group.position, orbit, orbit.meanAnomaly);
 
+    /*
+     * Rings, for the two bodies that have them.
+     *
+     * Reusing `planets/icyRings.js` rather than writing a second ring
+     * renderer. Haumea's and Quaoar's are the same problem exactly -- a
+     * handful of narrow bands a few kilometres wide around a body a few
+     * hundred kilometres across, known only from occultations -- and that
+     * module already solves the parts that are easy to get wrong: the rings
+     * are independent particles rather than a translucent annulus, so they
+     * foreshorten properly and the body passes in front of the near arc and
+     * behind the far one; there is an invisible annulus per ring for the
+     * pointer, because raycasting a sparse point cloud does not work; and
+     * each band carries a card of its own.
+     *
+     * Hung off the tilt group, which for these two carries the *measured*
+     * pole. That is what puts the rings in the body's equator where the
+     * occultations found them, and it is why the tilt is not random here.
+     */
+    let rings = null;
+    if (hasIcyRingSystem(record.name)) {
+      rings = createIcyRingSystem({
+        /* Hung on the tilt so they inherit the measured pole... */
+        planet: built.tilt,
+        /* ...but owned by the body, which is what a click on a ring has to
+         * resolve to: its name opens the dossier and its userData frames the
+         * camera. See the note on `owner` in icyRings.js. */
+        owner: built.group,
+        config: { name: record.name },
+        radius: built.renderedMeanRadius,
+        hoverTargets,
+        pixelRatio: Math.min(
+          typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1,
+          2,
+        ),
+      });
+    }
+
+    /*
+     * And cometary activity, for the two that are comets as well as
+     * asteroids: a halo, an anti-sunward dust fan, vents on the sunlit limb,
+     * and for Echeclus a pair of jets and the fragment its 2005 outburst
+     * threw off.
+     *
+     * Two parents. The halo, the fan and the fragment ignore the body's
+     * rotation and hang off the outer group; the vents and jets are attached
+     * to the surface and hang off the spinner, because a vent that does not
+     * turn with the body is a decal rather than a geyser.
+     */
+    const coma = createCentaurComa(record, built.reach);
+    if (coma) {
+      built.group.add(coma.group);
+      built.spinner.add(coma.spinning);
+    }
+
     attachMetadata(built.group, record, {
       visualRadius: built.renderedMeanRadius,
       reach: built.reach,
       heliocentricAU: currentAU,
       pairSeparation: moonSeparation(record, built.renderedMeanRadius),
       elements: orbit,
+      ringOuterRadius: rings?.outerRadius ?? 0,
+      comaRadius: coma ? built.reach * (record.coma?.radii ?? 0) : 0,
     });
     built.group.userData.orbit = orbit;
 
@@ -980,6 +1135,10 @@ export async function createSmallBodies({
        * reads it has to change; `moons` is the list everything new uses. */
       moon: null,
       moons: [],
+      rings,
+      /* In body radii, which is the unit `ringProximity` works in. */
+      ringBodyRadius: built.renderedMeanRadius,
+      coma,
     };
 
     satellitesOf(record).forEach((moon, moonIndex) => {
@@ -1148,6 +1307,11 @@ export async function createSmallBodies({
  */
 const ORBIT_GUIDE_COLOURS = Object.freeze([
   [/near-earth/i, 0x74d6c0],
+  /* Before the comet rule, because two of the four Centaurs carry comet
+   * designations as well -- 95P Chiron and 174P Echeclus -- and a population
+   * whose members are half one colour and half another says nothing. Pale
+   * ice-green for the bodies between the giant planets. */
+  [/centaur/i, 0x9fe3c7],
   [/jupiter-family|halley-type|comet/i, 0x8fb0ff],
   [/cold classical|kuiper/i, 0xc49ada],
   [/main asteroid belt/i, 0xd0aa79],
@@ -1336,7 +1500,12 @@ const _position = new THREE.Vector3();
  * few for that to be worth the branch. The belt's equivalent pass handles
  * three hundred and throttles; this one is a rounding error beside it.
  */
-export function updateSmallBodies(smallBodies, motionScale = 1, spinSeconds = 1 / 60) {
+export function updateSmallBodies(
+  smallBodies,
+  motionScale = 1,
+  spinSeconds = 1 / 60,
+  camera = null,
+) {
   if (!smallBodies) return;
   /*
    * Two clocks, deliberately. `motionScale` is the caller's per-frame orbital
@@ -1368,6 +1537,69 @@ export function updateSmallBodies(smallBodies, motionScale = 1, spinSeconds = 1 
       moon.pivot.rotation.y = (moon.phase ?? 0) + moon.rate * elapsed;
       moon.spinner.rotation.y = moon.spinRate * elapsed;
     }
+
+    if (entry.rings) updateRingSystem(entry, spinSeconds, camera);
+    if (entry.coma) updateCentaurComa(entry.coma, entry.group, camera);
+  }
+}
+
+const _ringDistance = new THREE.Vector3();
+/* `ringBodyRadius` is kept on the entry for anything that wants the body's
+ * own scale; the fade below deliberately does not use it. */
+
+/**
+ * Turns a Centaur's rings a little, and switches them off when nobody can
+ * see them.
+ *
+ * The same rule the giant planets' faint rings follow, from
+ * `planets/ringProximity.js`, and for the same measured reason: a ring is a
+ * large thin sheet, and folding the whole of it into a handful of pixels
+ * makes every one of those pixels accumulate the sheet's full alpha, so from
+ * far enough away the ring glows brighter than the body it belongs to. Below
+ * 14 body radii the rings are drawn as authored, between 14 and 70 they fade,
+ * and past 70 the system's `visible` goes false -- which also takes the
+ * pointer annuli out, because three's raycaster does not check `visible` and
+ * a ring nobody can see should not answer a hover.
+ *
+ * These are much smaller than the planets' rings in scene units, which makes
+ * the rule matter more rather than less: Chariklo's outer ring is about one
+ * unit across and the body sits 145 units from the Sun, so from the system
+ * view the whole system is sub-pixel and would otherwise be a shimmering
+ * speck. With no camera -- the headless harness -- the rings are left as
+ * authored, because there is nothing to be far away from.
+ */
+function updateRingSystem(entry, spinSeconds, camera) {
+  entry.rings.update(spinSeconds);
+  if (!camera) return;
+  /*
+   * Measured in ring radii, not body radii, and the difference is the whole
+   * reason this is not a straight call to the planet rule.
+   *
+   * `ringProximity` counts in *planet* radii and its thresholds -- full
+   * below 14, gone above 70 -- were measured against planets whose rings
+   * stop at about 2.4 radii and which the camera focuses at 4.2. Chariklo's
+   * rings reach 3.3 body radii and Chiron's confined ones 4.5, so framing
+   * them puts the camera at 23 to 32 *body* radii, which is already most of
+   * the way through the planet fade. Fed the body radius, both systems
+   * arrived at roughly three-quarters opacity in the one view they exist
+   * for, and Chiron's switched off entirely.
+   *
+   * Normalising by the ring system's own outer radius asks the question the
+   * rule is actually about -- how big is the ring on screen -- and makes the
+   * two numbers transferable: framed is 7 ring radii, so full below 10 has
+   * margin, and 55 is where the system has shrunk to about a twenty-eighth
+   * of the area it covers when framed, which is the few pixels the planet
+   * rule's 70 was chosen to catch.
+   */
+  const ringRadii = _ringDistance
+    .copy(camera.position)
+    .sub(entry.group.position)
+    .length() / Math.max(1e-6, entry.rings.outerRadius);
+  const fade = 1 - THREE.MathUtils.smoothstep(ringRadii, 10, 55);
+  if (!applyRingProximityVisibility(entry.rings.group, fade)) return;
+  for (let i = 0; i < entry.rings.fields.length; i += 1) {
+    const field = entry.rings.fields[i];
+    field.material.uniforms.uOpacity.value = field.ring.opacity * fade;
   }
 }
 

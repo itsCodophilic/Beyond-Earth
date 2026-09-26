@@ -13,6 +13,7 @@ what is real in each map and what is not.
 
 import json
 import os
+import sys
 
 import numpy as np
 from PIL import Image, ImageFilter
@@ -21,7 +22,10 @@ from scipy import ndimage
 _NOISE = {}
 
 REF = "reference"
-OUT = "../../public/assets/textures/smallbodies"
+# Where the maps land. `SBT_OUT` exists so a build can be inspected in a
+# scratch directory before anything in public/ is overwritten -- which is
+# worth doing, because a bad patch pick is only obvious in the finished map.
+OUT = os.environ.get("SBT_OUT", "../../public/assets/textures/smallbodies")
 
 # Two sizes, and the reason is evidence rather than screen space.
 #
@@ -261,6 +265,109 @@ BODIES = {
     # data supports: an S-type surface looks like an S-type surface.
     #
     # `size` halves the map for all of them. See the note at the top.
+    # ---- Rank 3: the four Centaurs -------------------------------------
+    #
+    # A harder case than Rank 2, and the maps say so. Those eleven at least
+    # had a resolved disc; these four have never been anything but a point of
+    # light, and everything known about their sizes and shapes comes from
+    # timing how long a star stayed hidden behind them. So the borrowing here
+    # is by *kind of body* rather than by spectral class -- a dark
+    # carbonaceous 250 km world, a cold ice-rich one, a heavily cratered
+    # primitive fragment, a comet nucleus -- and the colour, which for all
+    # four is measured to a few hundredths of a magnitude, is carried by the
+    # catalogue's vertex chroma and not by these maps.
+    #
+    # Full size, unlike Rank 2. These are destinations rather than background:
+    # the tour lands on them, the camera frames them, and two of them can be
+    # zoomed past their own rings to the ground. Four maps at 1024 x 512 is
+    # about 700 kB on top of the set's 2.3 MB.
+    "chariklo": dict(
+        analogue="mathilde",
+        contrastCap=0.22,
+        credit="Never resolved by anything. Borrows Mathilde's settings, which "
+               "means the pixels are Bennu's: Mathilde has no photograph in "
+               "this build either, so the chain is Chariklo -> Mathilde -> "
+               "Bennu, re-contrasted at each step. That is the right loan "
+               "anyway -- Bennu, Mathilde and Chariklo are all carbonaceous "
+               "and all imaged, or measured, as uniformly dark with no "
+               "detected colour variation, at albedos of 0.044, 0.0436 and "
+               "0.036. Shape from stellar occultations, Morgado et al. 2021, "
+               "A&A 652, A141. The rings are geometry, not texture; they are "
+               "in icyRings.js.",
+        detail=1.10, stamps=560, seed=201, grain=1.00,
+        # Mathilde's defining feature is craters nearly as wide as the body,
+        # and at 250 km Chariklo is in the same regime: big, old, and with
+        # nothing to erase them.
+        craters=(92, (1.5, 11.0), 0.13), boulders=(0, (0.2, 1.0), 0.0),
+        features=[],
+    ),
+    "chiron": dict(
+        analogue="arrokoth",
+        # Raised from 0.19. At 0.19 this was the smoothest map in the set by
+        # a wide margin and Chiron rendered as a flat pale ball -- reported
+        # as the glowing-ness not looking real, and the map was half of why:
+        # a body with no surface contrast has nothing for the eye to read as
+        # rock, so every photon on it looks like glow. Its surface reflects
+        # seven per cent of the light that reaches it, which is asphalt, and
+        # asphalt is not smooth. 0.27 is still below the set median and it
+        # keeps the mantled look that an outgassing body should have.
+        contrastCap=0.27,
+        credit="Never resolved. Relief borrowed from Arrokoth, the only cold "
+               "ice-rich outer Solar System surface any spacecraft has "
+               "photographed. Deliberately the most subdued map in the set: "
+               "Chiron outgasses, and a body that periodically coats itself "
+               "in its own fallback does not keep sharp craters. Shape from "
+               "Braga-Ribas et al. 2023, A&A 676, A72.",
+        detail=1.22, stamps=520, seed=202, grain=0.95,
+        craters=(84, (1.5, 11.0), 0.125), boulders=(0, (0.2, 1.0), 0.0),
+        features=[],
+    ),
+    "pholus": dict(
+        # The one new photograph this round, and it is not of Pholus.
+        #
+        # Supplied as "Pholus.jpg"; it is Phobos, the Mars Express HRSC frame
+        # with the 5 km scale bar on it. No harm done, because Pholus has
+        # never been resolved by anything and was always going to need a
+        # borrowed surface -- and a dark, primitive, crater-saturated body is
+        # a fair loan for a Centaur. The card says Phobos.
+        #
+        # Two things on Phobos must not come across, and both of them did on
+        # the first two attempts. Its grooves are Mars's doing and a
+        # free-flying Centaur cannot have them; its fresh bright-rayed
+        # craters are features rather than material. `representative` prices
+        # both out -- see `pick_patch` -- and `window` is small because no
+        # 220-pixel window of Phobos is groove-free. At 96 the chosen patch
+        # comes back at coherence 0.06: even cratered ground, no lineation.
+        source="phobos-mars-express-hrsc.jpg",
+        representative=True,
+        window=96,
+        contrastCap=0.24,
+        credit="NASA/ESA/DLR/FU Berlin -- Mars Express HRSC, of PHOBOS, not "
+               "of Pholus. Pholus has never been resolved; relief is borrowed "
+               "from the nearest imaged dark primitive body. Cropped to the "
+               "body, median-filtered to undo JPEG ringing and unsharpened at "
+               "sub-pixel radius, which raised its high-frequency energy 5-13% "
+               "at matched scale and its usable area from 23% of the frame to "
+               "61%. Pholus's own size is Herschel-PACS (Duffard et al. 2014) "
+               "and its shape is the 0.60 mag lightcurve (Tegler et al. 2005).",
+        detail=1.20, stamps=640, seed=203, grain=1.05,
+        craters=(126, (1.0, 9.0), 0.15), boulders=(0, (0.2, 1.0), 0.0),
+        features=[],
+    ),
+    "echeclus": dict(
+        analogue="comet67p",
+        contrastCap=0.25,
+        credit="Never resolved. Relief borrowed from 67P/Churyumov-"
+               "Gerasimenko, which for once is the right loan rather than the "
+               "nearest one: Echeclus carries a comet designation of its own, "
+               "174P, outbursts repeatedly, and 67P is the only cometary "
+               "nucleus anyone has mapped. Shape and albedo from stellar "
+               "occultations, Pereira et al. 2024, MNRAS 527, 3624.",
+        detail=1.15, stamps=600, seed=204, grain=1.10,
+        craters=(48, (2.0, 12.0), 0.14), boulders=(320, (0.3, 2.0), 0.24),
+        features=[],
+    ),
+
     "interamnia": dict(analogue="mathilde", size=(512, 256), grain=1.18, detail=1.00, stamps=420, seed=704,
         credit="B-type, never visited. Relief from Mathilde, the nearest imaged carbonaceous body. Shape from VLT/SPHERE (Hanus et al. 2020)",
         craters=(120, (1.0, 9.0), 0.11), boulders=(0, (0.2, 1.0), 0.0), features=[]),
@@ -366,7 +473,7 @@ def angular_distance(lat0, lon0):
 # Choosing the patch, by measurement rather than by eye.
 # --------------------------------------------------------------------------
 
-def pick_patch(lum, mask, size):
+def pick_patch(lum, mask, size, representative=False):
     """
     The squarest, best-lit, most detailed piece of real surface in the frame.
 
@@ -386,6 +493,43 @@ def pick_patch(lum, mask, size):
     The margin is eroded from the mask rather than taken from the bounding
     box, so it follows the real silhouette of a peanut or a duck instead of
     assuming a disc.
+
+    ## `representative`, and the two ways "most detailed wins" goes wrong
+
+    Pholus found both of them. It has never been photographed, so its relief
+    is borrowed from the Mars Express frame of Phobos -- a fair loan for a
+    dark, crater-saturated primitive body. Run plain, the picker chose a
+    window centred on a fresh crater with a **bright ray system**, and the
+    first Pholus map came out as bright fibrous streaks. Told to avoid that,
+    it moved onto Phobos's **grooves** instead: parallel lineations a
+    kilometre wide, almost certainly Mars's doing through tidal stress or its
+    own secondary ejecta, which a free-flying Centaur with no planet to be
+    worked by cannot have. Either one, stamped six hundred times across a
+    whole world, is a lie about the surface.
+
+    Both are the same mistake: the most detailed window in a photograph is
+    usually a *feature*, and what the harvest wants is *material*. So a
+    source can ask for a representative window instead, and two measurements
+    price the features out:
+
+      * **skewness** of the high-frequency field. Regolith is close to
+        symmetric about its own mean; a bright ray system is strongly
+        positively skewed. Measured over this frame the median window is at
+        0.42 and the ray crater the picker first chose was at 1.42.
+      * **coherence**, from the structure tensor of the same field. Zero
+        where detail runs equally in all directions, one where it all runs
+        one way. A crater field is near zero; a groove field is not.
+
+    Even with both, no 220-pixel window of Phobos is groove-free, because
+    most of Phobos is grooved. That is what `window` is for: a smaller patch
+    can fit between them. At 96 pixels the best window comes back at skew
+    0.43 and coherence 0.06 -- even, cratered ground with no lineation in it
+    at all.
+
+    Both are opt-in rather than always on, because turning them on by default
+    would silently re-pick the window for all twenty-eight maps already built
+    and checked. Any future source with lineations or a bright ray system the
+    borrower cannot have -- Eros's ridges, Vesta's troughs -- should set them.
     """
     h, w = lum.shape
     inner = ndimage.binary_erosion(mask, iterations=max(3, size // 8))
@@ -400,7 +544,20 @@ def pick_patch(lum, mask, size):
     detail = ndimage.uniform_filter(high * high, size=size)
 
     exposure = smoothstep(0.10, 0.28, mean) * (1 - smoothstep(0.72, 0.92, mean))
-    score = np.where(cover > 0.995, detail * exposure, -1.0)
+    weight = detail * exposure
+    if representative:
+        third = ndimage.uniform_filter(high ** 3, size=size)
+        skew = third / np.maximum(detail, 1e-12) ** 1.5
+        gy, gx = np.gradient(high)
+        jxx = ndimage.uniform_filter(gx * gx, size=size)
+        jyy = ndimage.uniform_filter(gy * gy, size=size)
+        jxy = ndimage.uniform_filter(gx * gy, size=size)
+        trace = np.maximum(jxx + jyy, 1e-12)
+        coherence = np.sqrt((jxx - jyy) ** 2 + 4 * jxy * jxy) / trace
+        weight = (weight
+                  * np.exp(-((skew / 0.55) ** 2))
+                  * np.power(np.clip(1.0 - coherence, 0.0, 1.0), 3.0))
+    score = np.where(cover > 0.995, weight, -1.0)
     # Never let the window run off the frame.
     half = size // 2
     score[:half + 1, :] = -1
@@ -418,7 +575,7 @@ def pick_patch(lum, mask, size):
     return y0, x0, float(var[cy, cx])
 
 
-def relief_from(source, detail):
+def relief_from(source, detail, representative=False, window=None):
     """
     The material, with the lamp divided out.
 
@@ -436,8 +593,8 @@ def relief_from(source, detail):
     mask = ndimage.binary_opening(mask, iterations=2)
     mask = ndimage.binary_fill_holes(mask)
 
-    size = int(np.clip(min(lum.shape) // 4, 48, 220))
-    y0, x0, _ = pick_patch(lum, mask, size)
+    size = int(window) if window else int(np.clip(min(lum.shape) // 4, 48, 220))
+    y0, x0, _ = pick_patch(lum, mask, size, representative=representative)
     patch = lum[y0:y0 + size, x0:x0 + size]
 
     base = np.maximum(ndimage.gaussian_filter(patch, size / 9.0), 1e-3)
@@ -750,7 +907,12 @@ def build(name, spec, cache):
     src_name = photographed_root(name)
     if src_name not in cache:
         source = BODIES[src_name]["source"]
-        cache[src_name] = relief_from(source, BODIES[src_name].get("detail", 1.2))
+        cache[src_name] = relief_from(
+            source,
+            BODIES[src_name].get("detail", 1.2),
+            representative=BODIES[src_name].get("representative", False),
+            window=BODIES[src_name].get("window"),
+        )
     patch, where = cache[src_name]
     if spec.get("detail") and spec.get("analogue"):
         # A borrowed patch is re-contrasted for the borrower: Dimorphos is all
@@ -862,6 +1024,18 @@ def build(name, spec, cache):
 
 
 def main():
+    """Build every map, or only the ones named on the command line.
+
+    Adding four bodies used to mean rebuilding thirty-two, which is about
+    four minutes of stamping to produce twenty-eight files byte-identical to
+    the ones already on disk. `python build-small-body-textures.py chariklo
+    chiron` builds those two. The printed mean-linear block then covers only
+    what was built, which is what you want to paste.
+    """
+    wanted = set(sys.argv[1:])
+    unknown = wanted - set(BODIES)
+    if unknown:
+        raise SystemExit("unknown body: " + ", ".join(sorted(unknown)))
     means = {}
     # Grouped by output size: the patch cache holds arrays that are only
     # valid for one map geometry, and re-deriving a patch is cheap anyway.
@@ -871,6 +1045,8 @@ def main():
         cache = {}
         for name, spec in BODIES.items():
             if spec.get("size", (1024, 512)) != size:
+                continue
+            if wanted and name not in wanted:
                 continue
             means[name] = round(build(name, spec, cache), 4)
     print("\nPaste into smallBodies.js:")
