@@ -177,6 +177,22 @@ const STEPS = [
     done: "Back one view. Press it again to keep going back.",
   },
   {
+    id: "board",
+    title: "Everything out here, on one board",
+    body: "Every world, asteroid and moon this experience can take you to, laid out outward from the Sun, one region at a time. Search it by name, or narrow it to the planets, the dwarf worlds, the asteroids. Press a planet's moon count to see its moons on the orbits they keep. Flying to one waits until the tour is done — the button will be there when you are.",
+    hint: "Click it and have a look.",
+    gesture: "click",
+    target: "#celestial-board-trigger",
+    clicks: "none",
+    unlocks: "board",
+    veil: "soft",
+    anchor: "#celestial-board-trigger",
+    // The board is something to look through, not glance at: this step does
+    // not move on by itself while it is open (see `onBoardState`).
+    stayOpen: true,
+    done: "Look around as long as you like. Next, or closing the board, carries on.",
+  },
+  {
     id: "events",
     title: "Things out here that really happen",
     body: "Impacts, eruptions, dust storms, a sungrazing comet, a supernova lighting the sky. Open this to read what each one is, how often it occurs and why. Watching one takes you to the world it happens on, so that waits until the tour is done — the button will be there when you are.",
@@ -368,7 +384,7 @@ function beginGuidedTour() {
     const step = STEPS[index];
     if (!step.gesture) return;
     satisfied = true;
-    if (index < STEPS.length - 1) {
+    if (index < STEPS.length - 1 && !step.stayOpen) {
       cancelAutoAdvance();
       autoAdvanceTimer = setTimeout(() => {
         autoAdvanceTimer = null;
@@ -491,6 +507,26 @@ function beginGuidedTour() {
   addEventListener("pointerdown", onControlClick, { capture: true, passive: true });
   // Also on `click`, so keyboard activation of the same control counts.
   addEventListener("click", onControlClick, { capture: true, passive: true });
+
+  /*
+   * A step that opens something to look through waits for it to close.
+   *
+   * Every other satisfied step carries on after 2.3 s, which is long enough to
+   * read one line and far too short to read a board of 68 worlds -- the first
+   * build of this step closed the board before its opening animation had
+   * finished. So the board step holds until the viewer closes the board, or
+   * presses Next, and then carries on as the others do.
+   */
+  const onBoardState = (event) => {
+    const step = STEPS[index];
+    if (finished || !step?.stayOpen || !satisfied || event.detail?.open) return;
+    cancelAutoAdvance();
+    autoAdvanceTimer = setTimeout(() => {
+      autoAdvanceTimer = null;
+      if (!finished && STEPS[index] === step) advance();
+    }, 500);
+  };
+  addEventListener("beyond-earth:board-state", onBoardState);
   addEventListener("pointerdown", onEscapeGesture, { capture: true, passive: true });
   addEventListener("keydown", onEscapeGesture, { capture: true, passive: true });
 
@@ -734,6 +770,7 @@ function beginGuidedTour() {
     removeEventListener("beyond-earth:tour-target-reached", onTargetReached);
     removeEventListener("pointerdown", onControlClick, { capture: true });
     removeEventListener("click", onControlClick, { capture: true });
+    removeEventListener("beyond-earth:board-state", onBoardState);
     removeEventListener("pointerdown", onEscapeGesture, { capture: true });
     removeEventListener("keydown", onEscapeGesture, { capture: true });
     subject?.classList.remove("is-tour-subject");
@@ -797,6 +834,13 @@ function beginGuidedTour() {
      * have made the lesson impossible to follow.
      */
     if (STEPS[index]?.gesture === "escape") return;
+    /*
+     * Nor while the celestial board is open. There Escape belongs to the
+     * board -- it clears a search, backs out of a moon board, closes the
+     * board -- and closing the board is how its step carries on. Measured:
+     * the first Escape on a moon board ended the whole tour.
+     */
+    if (document.body.classList.contains("is-board-open")) return;
     event.stopPropagation();
     finish();
   }, { capture: true });

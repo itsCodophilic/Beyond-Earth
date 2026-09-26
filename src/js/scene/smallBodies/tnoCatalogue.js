@@ -515,6 +515,12 @@ export const TRANS_NEPTUNIAN_WORLDS = Object.freeze([
          * alone; drawn at B-R 1.95, the red end of the TNO range, just short of
          * Pholus's 2.05. */
         chroma: chromaFromBR(1.95),
+        /* ...and drawn with its own rust-red colour map (gohu-red.jpg: the
+         * grey Arrokoth-borrowed relief tinted sRGB 0.78/0.30/0.17), because
+         * a grey map times that chroma still read as grey on screen. The
+         * tint is chosen to read as "one of the reddest objects in the Solar
+         * System", not measured -- no colour index is published for it. */
+        colourMap: true,
         shape: { ...ICY_RELIEF, lobes: ellipsoid(114, 111, 108), craterCount: 24, seed: 2297621 },
         info: {
           diameter: "About 144 km if it reflects as well as its primary; an upper limit of 159 km has been published",

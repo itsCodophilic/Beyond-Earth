@@ -466,7 +466,11 @@ const SMALL_BODY_TEXTURES = Object.freeze({
   "Chiminigagua I": { file: "chiminigagua-moon", meanLinear: 0.2239 },
   "Achlys I": { file: "achlys-moon", meanLinear: 0.2239 },
   Tinia: { file: "tinia", meanLinear: 0.2237 },
-  "Gǃòʼé ǃHú": { file: "gohu", meanLinear: 0.2241 },
+  /* A colour map, not the grey one: the literal B-R 1.95 conversion on a grey
+   * map read as grey-white-black on screen (reported twice) -- ACES pulls a
+   * moderate chroma back towards grey. Its own rust-red map carries the
+   * colour instead; the albedo still sets the brightness. */
+  "Gǃòʼé ǃHú": { file: "gohu-red", meanLinear: 0.1805 },
   "Huya I": { file: "huya-moon", meanLinear: 0.0967 },
 });
 

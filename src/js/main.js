@@ -2227,7 +2227,13 @@ composeSolarEventShot(
    * anything lives. They can see all five the whole way through.
    */
   const TOUR_CONTROL_LOCKS = Object.freeze({
+    // The celestial board: locked like the events catalogue, and handed over
+    // by its own step just before it, left to right along the controls.
+    board: "#celestial-board-trigger",
     events: "#space-events-trigger",
+    // The wordmark opens the About panel over everything. The closing step
+    // points at it; it opens once "Start exploring" is pressed.
+    about: "#about-experience-trigger",
     spacemode: "#space-mode-toggle",
     systemreturn: "#system-return-button",
     /*
@@ -2281,9 +2287,20 @@ composeSolarEventShot(
     applyTourControlLocks();
   }
 
+  /*
+   * A control is live during the step that explains it, and only then.
+   *
+   * It used to stay unlocked from its step onward, so by the closing card
+   * five controls were live and any of them could open something over the
+   * tour's last words -- reported: "until the user clicks Start exploring,
+   * everything must be disabled". Each step now hands over its own control
+   * (or none) and takes the previous one back; the tour's end, by "Start
+   * exploring" or by Skip, hands over all of them at once
+   * (`setTourControlsLocked(false)`).
+   */
   function unlockTourControl(key) {
-    if (!key) return;
-    tourUnlockedControls.add(key);
+    tourUnlockedControls.clear();
+    if (key) tourUnlockedControls.add(key);
     applyTourControlLocks();
   }
 
@@ -3015,8 +3032,52 @@ composeSolarEventShot(
    * smooth. Choosing a body closes it and goes through the same
    * travel-to-body event the dossier used.
    */
+  /*
+   * The surface map the scene already has for a body, for the moon board's
+   * globe -- borrowed, not fetched again: it is on the body's material,
+   * downloaded and decoded. Looked for on the body itself and the meshes
+   * under it, stopping at anything that is another named body (a planet's
+   * moons hang beneath it). A planet's shader keeps its map in a uniform
+   * rather than in `map`, so both are read.
+   */
+  function surfaceImageFor(name) {
+    const matches = (candidate) => (candidate?.userData?.name ?? candidate?.name) === name;
+    let body = planets.find(matches) ?? (smallBodies?.allTargets ?? []).find(matches) ?? null;
+    if (!body) {
+      scene.traverse((object) => {
+        if (!body && object.userData?.name === name) body = object;
+      });
+    }
+    if (!body) return null;
+    const drawable = (image) => Boolean(image)
+      && ((typeof HTMLImageElement !== "undefined" && image instanceof HTMLImageElement && image.naturalWidth > 0)
+        || (typeof ImageBitmap !== "undefined" && image instanceof ImageBitmap)
+        || (typeof HTMLCanvasElement !== "undefined" && image instanceof HTMLCanvasElement));
+    let found = null;
+    const visit = (object, depth) => {
+      if (found) return;
+      if (depth > 0 && object.userData?.name && object.userData.name !== name) return;
+      if (object.isMesh) {
+        [].concat(object.material ?? []).some((material) => {
+          const candidates = [material?.map, material?.uniforms?.uMap?.value, material?.uniforms?.map?.value];
+          const texture = candidates.find((t) => t?.isTexture && drawable(t.image));
+          if (texture) {
+            // An ImageBitmap decoded upside-down for the GPU is marked by the
+            // texture not asking for a flip.
+            found = { image: texture.image, flipY: texture.image instanceof ImageBitmap && texture.flipY === false };
+          }
+          return Boolean(found);
+        });
+      }
+      object.children.forEach((child) => visit(child, depth + 1));
+    };
+    visit(body, 0);
+    return found;
+  }
+
   const celestialBoard = createCelestialBoard({
     trigger: document.querySelector("#celestial-board-trigger"),
+    surfaceFor: surfaceImageFor,
   });
   addEventListener("beyond-earth:board-state", (event) => {
     isCelestialBoardOpen = Boolean(event.detail?.open);
@@ -7970,6 +8031,7 @@ composeSolarEventShot(
      */
     const step = event.detail?.step;
     if (step !== "events") spaceEventsDashboard?.close();
+    if (step !== "board") celestialBoard?.close();
     if (step !== "spacemode" && spaceModeActive) setSpaceMode(false);
     if (step !== "distance") closeDistanceInfoPopover();
     tourSuppressesHover = (event.detail?.veil ?? "full") !== "clear";

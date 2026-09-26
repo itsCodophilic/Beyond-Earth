@@ -17,7 +17,7 @@
      sit at up to z 60 and showed through at 70. */
   z-index: 200;
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-rows: auto minmax(0, 1fr);
   grid-template-columns: minmax(0, 1fr);
   color: var(--cb-ink);
   font-family: inherit;
@@ -29,7 +29,7 @@
   position: absolute;
   inset: 0;
   background:
-    radial-gradient(120% 90% at 0% 58%, rgba(255, 190, 110, 0.10), transparent 45%),
+    radial-gradient(90% 80% at 0% 60%, rgba(236, 242, 255, 0.07), transparent 50%),
     rgb(3, 4, 9);
   animation: cboard-fade 420ms ease both;
 }
@@ -37,19 +37,19 @@
 /* ---------------------------------------------------------------- the Sun */
 
 .cboard__flare {
-  grid-row: 2;
-  grid-column: 1;
-  align-self: center;
-  justify-self: start;
-  position: relative;
-  margin-left: -40px;
-  width: 80px;
-  height: 80px;
+  position: absolute;
+  left: -46px;
+  top: 50%;
+  width: 92px;
+  height: 92px;
+  margin-top: -46px;
   border-radius: 50%;
-  background: radial-gradient(circle, #fff6e2 0%, #ffd38a 24%, rgba(255, 170, 70, 0.35) 48%, transparent 72%);
+  /* White, as the Sun is: its light peaks in the green and sums to white.
+     The yellow Sun is an effect of looking at it through air. */
+  background: radial-gradient(circle, #ffffff 0%, #f6f9ff 22%, rgba(214, 228, 255, 0.42) 46%, rgba(190, 210, 255, 0.10) 62%, transparent 74%);
   pointer-events: none;
-  opacity: 0.55;
-  z-index: 1;
+  opacity: 0.8;
+  z-index: 0;
 }
 
 .cboard.is-opening .cboard__flare {
@@ -59,7 +59,7 @@
 @keyframes cboard-flare {
   0%   { transform: scale(0.1); opacity: 0; }
   30%  { transform: scale(2.4); opacity: 1; }
-  100% { transform: scale(1); opacity: 0.55; }
+  100% { transform: scale(1); opacity: 0.8; }
 }
 
 @keyframes cboard-fade {
@@ -139,6 +139,12 @@
 
 .cboard__search:focus-within { border-color: var(--cb-amber); }
 
+/* One way of narrowing at a time: the half not in use is visibly off. */
+.cboard__search.is-locked,
+.cboard__filters.is-locked { opacity: 0.35; }
+.cboard__search.is-locked input { cursor: not-allowed; }
+.cboard__filter:disabled { cursor: not-allowed; }
+
 .cboard__search-label {
   font-family: var(--cb-mono);
   font-size: 0.52rem;
@@ -191,20 +197,68 @@
 
 .cboard__close {
   align-self: start;
-  display: grid;
-  place-items: center;
-  width: 46px;
-  height: 46px;
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  background: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 12px 6px 6px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.02);
   color: var(--cb-ink);
   cursor: pointer;
-  transition: border-color 0.18s;
+  transition: border-color 0.2s, background 0.2s;
 }
 
-.cboard__close span { font-size: 1.3rem; line-height: 1; }
-.cboard__close small { font-family: var(--cb-mono); font-size: 0.44rem; letter-spacing: 0.2em; color: var(--cb-faint); }
-.cboard__close:hover, .cboard__close:focus-visible { border-color: var(--cb-amber); outline: none; }
+.cboard__close-ring {
+  position: relative;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  transition: transform 0.35s cubic-bezier(0.2, 0.7, 0.2, 1), border-color 0.2s, background 0.2s;
+}
+
+/* The cross is two hairlines, not a font's multiplication sign. */
+.cboard__close-x::before,
+.cboard__close-x::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 12px;
+  height: 1px;
+  margin: -0.5px 0 0 -6px;
+  background: currentColor;
+  transform: rotate(45deg);
+}
+
+.cboard__close-x::after { transform: rotate(-45deg); }
+
+.cboard__close-key {
+  padding: 2px 6px 3px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  font-family: var(--cb-mono);
+  font-size: 0.5rem;
+  letter-spacing: 0.14em;
+  color: var(--cb-soft);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.cboard__close:hover,
+.cboard__close:focus-visible {
+  border-color: rgba(255, 196, 130, 0.5);
+  background: rgba(255, 196, 130, 0.06);
+  outline: none;
+}
+
+.cboard__close:hover .cboard__close-ring,
+.cboard__close:focus-visible .cboard__close-ring {
+  transform: rotate(90deg);
+  border-color: var(--cb-amber);
+  background: rgba(255, 196, 130, 0.12);
+}
 
 .cboard__results {
   position: absolute;
@@ -272,7 +326,7 @@
   z-index: 1;
   width: 100%;
   height: 1px;
-  background: linear-gradient(90deg, rgba(255, 214, 150, 0.9), rgba(255, 196, 130, 0.25) 40%, rgba(255, 196, 130, 0.06));
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.95), rgba(222, 232, 255, 0.28) 35%, rgba(200, 214, 255, 0.05));
   transform-origin: left center;
   pointer-events: none;
   opacity: 0.35;
@@ -301,7 +355,18 @@
   border-right: 1px solid var(--cb-line);
   scroll-snap-align: start;
   --delay: calc(var(--i) * 150ms + 240ms);
+  /* Sunlight thinning outward: each column a step dimmer than the last, and
+     fading across its own width towards the next, so the bands read as one
+     falling light. Alphas are per column, from REGION_LIGHT in the JS. */
+  background:
+    linear-gradient(90deg,
+      rgba(236, 242, 255, var(--light-a, 0.02)),
+      rgba(236, 242, 255, var(--light-b, 0.01)));
+  transition: filter 0.3s, opacity 0.3s;
 }
+
+.cboard__region.is-quiet .cboard__region-head,
+.cboard__region.is-quiet .cboard__foot { opacity: 0.32; }
 
 .cboard__region[data-region="sun"] { flex-basis: clamp(190px, 16vw, 230px); }
 
@@ -322,7 +387,6 @@
 
 .cboard.is-closing .cboard__veil,
 .cboard.is-closing .cboard__head,
-.cboard.is-closing .cboard__ruler,
 .cboard.is-closing .cboard__flare {
   animation: cboard-out 320ms ease both;
 }
@@ -407,7 +471,11 @@
   to   { opacity: 1; transform: none; }
 }
 
-.cboard__item.is-dim { opacity: 0.16; }
+.cboard__item.is-off {
+  opacity: 0.1;
+  filter: grayscale(1);
+  pointer-events: none;
+}
 
 .cboard__body {
   flex: 1;
@@ -516,128 +584,6 @@
   color: var(--cb-faint);
 }
 
-/* ---------------------------------------------------------------- the ruler */
-
-.cboard__ruler {
-  grid-row: 3;
-  grid-column: 1;
-  position: relative;
-  z-index: 3;
-  display: flex;
-  gap: 2px;
-  padding: 10px 28px 16px;
-  border-top: 1px solid var(--cb-line);
-  animation: cboard-drop 520ms 900ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
-}
-
-.cboard__ruler-seg {
-  position: relative;
-  flex: 1 1 0;
-  min-width: 0;
-  display: flex;
-  justify-content: space-between;
-  gap: 6px;
-  padding: 8px 6px 4px;
-  border: 0;
-  border-top: 2px solid rgba(255, 255, 255, 0.12);
-  background: none;
-  color: var(--cb-faint);
-  font-family: var(--cb-mono);
-  font-size: 0.46rem;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  cursor: pointer;
-  transition: color 0.18s, border-color 0.18s;
-}
-
-.cboard__ruler-label { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-.cboard__ruler-seg:hover, .cboard__ruler-seg:focus-visible { color: var(--cb-ink); outline: none; }
-.cboard__ruler-seg.is-current { color: var(--cb-amber); border-top-color: var(--cb-amber); }
-
-/* ---------------------------------------------------------------- moon drawer */
-
-.cboard__drawer {
-  position: absolute;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 8;
-  display: flex;
-  flex-direction: column;
-  width: min(380px, 92vw);
-  border-left: 1px solid rgba(255, 196, 130, 0.3);
-  background: rgba(5, 7, 12, 0.98);
-  transform: translateX(100%);
-  transition: transform 260ms cubic-bezier(0.2, 0.7, 0.2, 1);
-}
-
-.cboard__drawer[hidden] { display: none; }
-.cboard__drawer.is-open { transform: none; }
-
-.cboard__drawer-head {
-  position: relative;
-  padding: 24px 22px 14px;
-  border-bottom: 1px solid var(--cb-line);
-}
-
-.cboard__drawer-title { margin: 6px 0 0; font-size: 1.1rem; font-weight: 300; }
-
-.cboard__drawer-close {
-  position: absolute;
-  top: 18px;
-  right: 16px;
-  width: 36px;
-  height: 36px;
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  background: none;
-  color: var(--cb-ink);
-  font-size: 1.1rem;
-  cursor: pointer;
-}
-
-.cboard__drawer-search {
-  margin: 12px 18px 4px;
-  padding: 9px 12px;
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  background: rgba(255, 255, 255, 0.03);
-  color: var(--cb-ink);
-  font: inherit;
-  font-size: 0.82rem;
-  outline: none;
-}
-
-.cboard__drawer-search:focus { border-color: var(--cb-amber); }
-
-.cboard__drawer-list {
-  flex: 1;
-  overflow-y: auto;
-  margin: 0;
-  padding: 8px 10px 20px;
-  list-style: none;
-}
-
-.cboard__drawer-list li { animation: cboard-rise 360ms calc(var(--j) * 18ms) cubic-bezier(0.2, 0.7, 0.2, 1) both; }
-.cboard__drawer-list li[hidden] { display: none; }
-
-.cboard__moon {
-  display: grid;
-  grid-template-columns: 22px 1fr auto;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  padding: 7px 10px;
-  border: 0;
-  background: none;
-  color: var(--cb-ink);
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-
-.cboard__moon:hover, .cboard__moon:focus-visible { background: rgba(255, 196, 130, 0.07); outline: none; }
-.cboard__moon-name { font-size: 0.84rem; font-weight: 300; }
-.cboard__moon-size { font-family: var(--cb-mono); font-size: 0.5rem; letter-spacing: 0.1em; color: var(--cb-faint); }
-
 /* ---------------------------------------------------------------- HUD trigger */
 
 .board-trigger__glyph {
@@ -663,15 +609,35 @@
 
 /* ---------------------------------------------------------------- small screens */
 
+/*
+ * Narrower than the search and seven filters side by side need, the tools
+ * take a row of their own under the title. Measured at 800 px wide: sharing
+ * the row, they left the title a 90 px column and "All celestial bodies"
+ * broke over three lines.
+ */
+@media (max-width: 1180px) {
+  .cboard__head { grid-template-columns: minmax(0, 1fr) auto; }
+  /* The main board's own close button -- the moon board's header has its own grid. */
+  .cboard__head > .cboard__close { grid-column: 2; grid-row: 1; }
+  .cboard__tools {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+  }
+  /* Under the search box, which is now at the left. */
+  .cboard__results { right: auto; left: 28px; }
+}
+
 @media (max-width: 760px) {
   .cboard__head { grid-template-columns: 1fr auto; padding: 16px 16px 12px; }
-  .cboard__tools { grid-column: 1 / -1; align-items: stretch; }
+  .cboard__tools { grid-column: 1 / -1; flex-direction: column; align-items: stretch; }
   .cboard__search { width: 100%; }
   .cboard__filters { justify-content: flex-start; }
   .cboard__region { flex-basis: 82vw; }
-  .cboard__ruler { padding: 8px 16px 12px; }
-  .cboard__ruler-label { display: none; }
-  .cboard__results { right: 16px; }
+  .cboard__results { left: 16px; right: 16px; width: auto; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -679,3 +645,737 @@
   .cboard *::before,
   .cboard *::after { animation: none !important; transition: none !important; }
 }
+
+/* ---------------------------------------------------------------- column feet */
+
+/* Each column carries its own tab, so the strip along the bottom is the
+   columns' own feet: it lines up because it is the same element, and it
+   scrolls because the columns do. */
+.cboard__foot {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+  margin: 0;
+  padding: 10px 16px 14px;
+  border: 0;
+  border-top: 2px solid rgba(255, 255, 255, 0.12);
+  background: rgba(3, 4, 9, 0.6);
+  color: var(--cb-soft);
+  font-family: var(--cb-mono);
+  font-size: 0.5rem;
+  letter-spacing: 0.14em;
+  text-align: left;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: color 0.18s, border-color 0.18s;
+}
+
+.cboard__foot:hover,
+.cboard__foot:focus-visible { color: var(--cb-amber); border-top-color: var(--cb-amber); outline: none; }
+.cboard__foot-name { white-space: normal; line-height: 1.5; }
+.cboard__foot-count { color: var(--cb-faint); font-variant-numeric: tabular-nums; }
+
+.cboard__nothing {
+  position: absolute;
+  left: 50%;
+  top: 58%;
+  z-index: 6;
+  width: min(420px, 86vw);
+  margin: 0;
+  padding: 16px 20px;
+  border: 1px solid rgba(255, 196, 130, 0.45);
+  background: rgba(6, 8, 14, 0.97);
+  transform: translate(-50%, -50%);
+  font-size: 0.86rem;
+  font-weight: 300;
+  line-height: 1.55;
+  color: var(--cb-ink);
+  text-align: center;
+}
+
+.cboard__nothing[hidden] { display: none; }
+
+/* ---------------------------------------------------------------- the moon board */
+
+/*
+ * The planet at the centre of the map and its moons on their orbits, one ring
+ * per family, with a readout and the families listed at the side. The rings
+ * are turned by the script (a rotate() on each ring, and the opposite on the
+ * few names showing, so they stay upright); nothing here animates layout.
+ */
+.cmoons {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
+  background:
+    radial-gradient(55% 70% at 38% 58%, rgba(236, 242, 255, 0.055), transparent 62%),
+    rgb(4, 5, 11);
+}
+
+.cmoons.is-opening { animation: cboard-fade 360ms ease both; }
+.cmoons.is-closing { animation: cboard-out 300ms ease both; }
+
+.cmoons__head {
+  grid-row: 1;
+  grid-column: 1;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: end;
+  gap: 16px 24px;
+  padding: 22px 28px 14px;
+  border-bottom: 1px solid var(--cb-line);
+  position: relative;
+  z-index: 3;
+}
+
+.cmoons__back {
+  align-self: start;
+  padding: 8px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 999px;
+  background: none;
+  color: var(--cb-soft);
+  font-family: var(--cb-mono);
+  font-size: 0.52rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: border-color 0.18s, color 0.18s;
+}
+
+.cmoons__back:hover, .cmoons__back:focus-visible { border-color: var(--cb-amber); color: var(--cb-amber); outline: none; }
+
+.cmoons__head .cboard__search { width: min(300px, 30vw); }
+
+.cmoons__stage {
+  grid-row: 2;
+  grid-column: 1;
+  position: relative;
+  z-index: 2;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) clamp(280px, 26vw, 370px);
+  min-height: 0;
+}
+
+/* ------------------------------------------------ the map */
+
+.cmoons__sky {
+  position: relative;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  justify-items: center;
+  align-items: center;
+  min-width: 0;
+  min-height: 0;
+  padding: 8px 8px 10px;
+  overflow: hidden;
+}
+
+.cmoons__map {
+  position: relative;
+  --half: 250px;
+}
+
+.cmoons__orbits {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.cmoons__orbit {
+  transform-box: fill-box;
+  transform-origin: center;
+  transition: opacity 0.25s;
+}
+
+.cmoons.is-opening .cmoons__orbit {
+  animation: cmoons-orbit-in 760ms calc(120ms + var(--i) * 85ms) cubic-bezier(0.2, 0.75, 0.25, 1) both;
+}
+
+@keyframes cmoons-orbit-in {
+  from { transform: scale(0.55); opacity: 0; }
+  to   { transform: none; opacity: 1; }
+}
+
+.cmoons__orbit-line {
+  fill: none;
+  stroke: var(--fam, rgb(222, 232, 255));
+  stroke-opacity: 0.26;
+  stroke-width: 1px;
+  vector-effect: non-scaling-stroke;
+  transition: stroke-opacity 0.2s, stroke-width 0.2s;
+}
+
+/* Families that go round backwards are drawn dashed. */
+.cmoons__orbit-line.is-retro { stroke-dasharray: 5 9; }
+
+.cmoons__orbit-hit {
+  fill: none;
+  stroke: transparent;
+  stroke-width: 14px;
+  vector-effect: non-scaling-stroke;
+  pointer-events: stroke;
+  cursor: pointer;
+}
+
+.cmoons__orbit-name {
+  fill: var(--fam, rgb(226, 216, 204));
+  fill-opacity: 0.62;
+  font-family: var(--cb-mono);
+  letter-spacing: 0.16em;
+  dominant-baseline: central;
+  /* A halo in the background colour cuts the ring line behind the name. */
+  paint-order: stroke;
+  stroke: rgb(4, 5, 11);
+  stroke-width: 0.5em;
+  stroke-linejoin: round;
+  transition: fill-opacity 0.2s;
+}
+
+/* A ring lit by the pointer -- on the ring itself or on its row in the list. */
+.cmoons__orbit.is-hot .cmoons__orbit-line { stroke-opacity: 0.6; }
+.cmoons__orbit.is-hot .cmoons__orbit-name { fill-opacity: 1; }
+.cmoons__orbit.is-sel .cmoons__orbit-line { stroke-opacity: 0.9; stroke-width: 1.6px; }
+.cmoons__orbit.is-sel .cmoons__orbit-name { fill-opacity: 1; }
+.cmoons__map.has-fam .cmoons__orbit:not(.is-sel) { opacity: 0.28; }
+
+/* The planet */
+.cmoons__planet {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: calc(var(--half) * var(--g) * 2);
+  height: calc(var(--half) * var(--g) * 2);
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  overflow: hidden;
+  transform: translate(-50%, -50%);
+  background:
+    radial-gradient(circle at 32% 30%, rgba(255, 255, 255, 0.5), transparent 46%),
+    radial-gradient(circle at 70% 72%, rgba(0, 0, 0, 0.6), transparent 62%),
+    var(--swatch, #bbb);
+  box-shadow:
+    0 0 calc(var(--half) * 0.05) rgba(222, 232, 255, 0.12),
+    0 0 calc(var(--half) * 0.22) rgba(222, 232, 255, 0.07);
+  cursor: pointer;
+  z-index: 1;
+}
+
+.cmoons__planet.has-surface { background: #0b0c12; }
+
+/* The map, twice over, sliding under the round window: 90 s a turn. */
+.cmoons__surface {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 400%;
+  height: 100%;
+  animation: cmoons-turn 90s linear infinite;
+  will-change: transform;
+}
+
+.cmoons__surface.is-retro { animation-direction: reverse; }
+
+@keyframes cmoons-turn {
+  from { transform: translateX(-50%); }
+  to   { transform: translateX(0); }
+}
+
+/* Light from the upper left, a darkened limb, the night side to the right. */
+.cmoons__shade {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 34% 30%, rgba(255, 255, 255, 0.2), transparent 42%),
+    radial-gradient(circle at 50% 50%, transparent 52%, rgba(0, 0, 0, 0.5) 100%),
+    linear-gradient(105deg, transparent 52%, rgba(0, 0, 0, 0.62) 88%);
+  pointer-events: none;
+}
+
+.cmoons__planet:focus-visible { outline: 1px solid var(--cb-amber); outline-offset: 6px; }
+
+.cmoons.is-opening .cmoons__planet {
+  animation: cmoons-planet-in 900ms cubic-bezier(0.2, 0.75, 0.25, 1) both;
+}
+
+@keyframes cmoons-planet-in {
+  from { transform: translate(-50%, -50%) scale(0.3); opacity: 0; }
+  to   { transform: translate(-50%, -50%); opacity: 1; }
+}
+
+/* Rings in two halves: the far half behind the globe, the near half over it. */
+.cmoons__planet-ring {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: calc(var(--half) * var(--g) * 4.4);
+  height: calc(var(--half) * var(--g) * 1.1);
+  border-radius: 50%;
+  border: 1.5px solid rgba(230, 214, 180, 0.22);
+  box-shadow: 0 0 0 3px rgba(230, 214, 180, 0.05);
+  transform: translate(-50%, -50%) rotate(-14deg);
+  pointer-events: none;
+}
+
+.cmoons__planet-ring.is-bright {
+  border-width: 3px;
+  border-color: rgba(232, 214, 176, 0.6);
+  box-shadow: 0 0 0 5px rgba(232, 214, 176, 0.12), inset 0 0 0 4px rgba(232, 214, 176, 0.14);
+}
+
+.cmoons__planet-ring.is-back { z-index: 0; }
+.cmoons__planet-ring.is-front { z-index: 2; clip-path: inset(50% 0 0 0); }
+
+.cmoons.is-opening .cmoons__planet-ring {
+  animation: cboard-fade 900ms 300ms ease both;
+}
+
+.cmoons__planet-name {
+  position: absolute;
+  left: 50%;
+  top: calc(50% + var(--half) * var(--g) + 10px);
+  transform: translateX(-50%);
+  font-size: 0.82rem;
+  font-weight: 300;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+  pointer-events: none;
+  text-shadow: 0 0 6px rgb(4, 5, 11), 0 0 3px rgb(4, 5, 11);
+}
+
+/* A family's moons: a layer the size of the map, turned about its centre. */
+.cmoons__ring {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  transition: opacity 0.25s;
+  z-index: 2;
+}
+
+.cmoons.is-opening .cmoons__ring {
+  animation: cboard-fade 600ms calc(360ms + var(--i) * 85ms) ease both;
+}
+
+.cmoons__map.has-fam .cmoons__ring:not(.is-sel) { opacity: 0.2; }
+
+.cmoons__moon {
+  --hit: calc(var(--size) + 10px);
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: var(--hit);
+  height: var(--hit);
+  margin: calc(var(--hit) / -2) 0 0 calc(var(--hit) / -2);
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  pointer-events: auto;
+  /* At angle --a on a ring of radius --r, and upright. */
+  transform: rotate(var(--a)) translateX(calc(var(--r) * var(--half))) rotate(calc(-1 * var(--a)));
+}
+
+.cmoons__upright {
+  position: absolute;
+  inset: 0;
+}
+
+.cmoons__dot {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: var(--size);
+  height: var(--size);
+  margin: calc(var(--size) / -2) 0 0 calc(var(--size) / -2);
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 34% 30%, rgba(255, 255, 255, 0.75), transparent 58%),
+    var(--fam, #cfc8be);
+  box-shadow: 0 0 6px rgba(230, 236, 255, 0.18);
+  transition: transform 0.16s, box-shadow 0.16s;
+}
+
+.cmoons__label {
+  position: absolute;
+  left: calc(50% + var(--size) / 2 + 5px);
+  top: 50%;
+  display: none;
+  transform: translateY(-50%);
+  font-size: 0.66rem;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  color: rgba(255, 246, 232, 0.86);
+  text-shadow: 0 0 5px rgb(4, 5, 11), 0 0 2px rgb(4, 5, 11);
+  pointer-events: none;
+}
+
+.cmoons__moon.is-labelled .cmoons__label { display: block; }
+.cmoons__moon.is-labelled { z-index: 1; }
+
+.cmoons__moon.is-hot .cmoons__dot,
+.cmoons__moon:focus-visible .cmoons__dot {
+  transform: scale(1.6);
+  box-shadow: 0 0 0 1px var(--cb-amber), 0 0 10px rgba(255, 196, 130, 0.5);
+}
+
+.cmoons__moon.is-hot { z-index: 4; }
+.cmoons__moon.is-hot .cmoons__label { color: var(--cb-amber); }
+.cmoons__moon:focus-visible { outline: none; }
+
+.cmoons__moon.is-picked { z-index: 3; }
+.cmoons__moon.is-picked .cmoons__dot {
+  transform: scale(1.5);
+  background:
+    radial-gradient(circle at 34% 30%, rgba(255, 255, 255, 0.8), transparent 55%),
+    #ffd7a6;
+  box-shadow: 0 0 0 2px rgb(4, 5, 11), 0 0 0 3px var(--cb-amber), 0 0 16px rgba(255, 196, 130, 0.6);
+}
+.cmoons__moon.is-picked .cmoons__label { color: var(--cb-amber); font-weight: 500; }
+
+.cmoons__moon.is-off { opacity: 0.08; pointer-events: none; }
+
+.cmoons__note {
+  margin: 0;
+  font-family: var(--cb-mono);
+  font-size: 0.5rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  text-align: center;
+  color: var(--cb-faint);
+}
+
+/* ------------------------------------------------ the side */
+
+.cmoons__side {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  min-height: 0;
+  border-left: 1px solid var(--cb-line);
+  background: rgba(255, 255, 255, 0.014);
+}
+
+.cmoons__card {
+  /* One height for the planet and for every moon: a card that changed height
+     moved the list under the pointer, which was half of the flicker. */
+  height: 318px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  padding: 20px 24px 16px;
+  border-bottom: 1px solid var(--cb-line);
+}
+
+.cmoons__card-family { display: flex; align-items: center; gap: 8px; }
+
+.cmoons__card-swatch {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--fam, var(--cb-amber));
+  box-shadow: 0 0 8px var(--fam, var(--cb-amber));
+}
+
+.cmoons__card-name {
+  margin: 6px 0 2px;
+  font-size: 1.5rem;
+  font-weight: 200;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cmoons__card-sub {
+  margin: 0 0 12px;
+  font-size: 0.7rem;
+  color: var(--cb-soft);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cmoons__facts {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px 16px;
+  margin: 0 0 12px;
+}
+
+.cmoons__facts div { min-width: 0; }
+
+.cmoons__facts dt {
+  font-family: var(--cb-mono);
+  font-size: 0.5rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--cb-faint);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cmoons__facts dd {
+  margin: 3px 0 0;
+  font-size: 0.8rem;
+  color: var(--cb-ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cmoons__ruler-title {
+  margin: 0;
+  font-family: var(--cb-mono);
+  font-size: 0.46rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--cb-faint);
+}
+
+.cmoons__ruler {
+  display: block;
+  width: 100%;
+  height: auto;
+  margin: 4px 0 auto;
+  overflow: visible;
+}
+
+.cmoons__ruler-axis { stroke: rgba(255, 255, 255, 0.12); stroke-width: 1; }
+.cmoons__ruler-ticks line { stroke-width: 1; stroke-opacity: 0.55; }
+.cmoons__ruler-mark { stroke: var(--cb-amber); stroke-width: 1.5; fill: var(--cb-amber); }
+.cmoons__ruler-end {
+  fill: var(--cb-faint);
+  font-family: var(--cb-mono);
+  font-size: 7.5px;
+  letter-spacing: 0.06em;
+}
+
+.cmoons__actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 10px;
+}
+
+.cmoons__card-hint {
+  margin: 0;
+  font-size: 0.66rem;
+  line-height: 1.5;
+  color: var(--cb-soft);
+}
+
+.cmoons__fly {
+  flex: none;
+  padding: 8px 14px;
+  border: 1px solid rgba(255, 196, 130, 0.45);
+  background: none;
+  color: var(--cb-amber);
+  font-family: var(--cb-mono);
+  font-size: 0.52rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background 0.18s;
+}
+
+.cmoons__fly:hover, .cmoons__fly:focus-visible { background: rgba(255, 196, 130, 0.1); outline: none; }
+
+.cmoons__side-title {
+  margin: 0;
+  padding: 14px 24px 8px;
+  font-family: var(--cb-mono);
+  font-size: 0.5rem;
+  font-weight: 400;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--cb-faint);
+}
+
+.cmoons__families {
+  margin: 0;
+  padding: 0 0 18px;
+  list-style: none;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  min-height: 0;
+}
+
+.cmoons__fam { border-top: 1px solid rgba(255, 255, 255, 0.04); }
+.cmoons__fam.is-off { opacity: 0.25; }
+
+.cmoons__fam-btn {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 10px 24px;
+  border: 0;
+  border-left: 2px solid transparent;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.18s, border-color 0.18s;
+}
+
+.cmoons__fam-btn:hover,
+.cmoons__fam-btn:focus-visible { background: rgba(255, 196, 130, 0.06); outline: none; }
+.cmoons__fam.is-sel .cmoons__fam-btn { border-left-color: var(--fam, var(--cb-amber)); background: rgba(255, 255, 255, 0.05); }
+
+/* A little ring: solid for prograde, dashed for retrograde. */
+.cmoons__fam-mark {
+  position: relative;
+  width: 18px;
+  height: 18px;
+  border: 1px solid var(--fam, rgba(222, 232, 255, 0.45));
+  border-radius: 50%;
+  opacity: 0.8;
+}
+/* A moon on the little ring, in the family's colour. */
+.cmoons__fam-mark::after {
+  content: "";
+  position: absolute;
+  right: -3px;
+  top: 2px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--fam, #cfc8be);
+}
+.cmoons__fam-mark.is-retro { border-style: dashed; }
+.cmoons__fam.is-sel .cmoons__fam-mark,
+.cmoons__fam.is-hot .cmoons__fam-mark { opacity: 1; box-shadow: 0 0 10px var(--fam); }
+.cmoons__fam.is-hot .cmoons__fam-btn { background: rgba(255, 255, 255, 0.035); }
+
+.cmoons__fam-text { display: grid; gap: 3px; min-width: 0; }
+.cmoons__fam-name { font-size: 0.84rem; }
+.cmoons__fam-meta {
+  font-family: var(--cb-mono);
+  font-size: 0.52rem;
+  letter-spacing: 0.08em;
+  color: var(--cb-soft);
+}
+
+.cmoons__names {
+  margin: 0;
+  padding: 2px 0 10px;
+  list-style: none;
+}
+
+.cmoons__names[hidden] { display: none; }
+.cmoons__names li.is-off { display: none; }
+
+.cmoons__name {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  padding: 5px 24px 5px 58px;
+  border: 0;
+  background: none;
+  color: var(--cb-ink);
+  font: inherit;
+  font-size: 0.74rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.cmoons__name:hover, .cmoons__name:focus-visible { background: rgba(255, 255, 255, 0.05); outline: none; }
+.cmoons__name.is-picked { color: var(--cb-amber); }
+
+.cmoons__name-meta {
+  flex: none;
+  font-family: var(--cb-mono);
+  font-size: 0.52rem;
+  letter-spacing: 0.06em;
+  color: var(--cb-soft);
+}
+
+@media (max-width: 760px) {
+  .cmoons__head { grid-template-columns: 1fr auto; padding: 14px 16px 12px; }
+  .cmoons__head .cboard__search { grid-column: 1 / -1; width: 100%; }
+  .cmoons__stage {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: min(100vw, 64vh) auto;
+    overflow-y: auto;
+  }
+  .cmoons__side { border-left: 0; border-top: 1px solid var(--cb-line); }
+  .cmoons__families { overflow: visible; }
+}
+
+/* ---------------------------------------------------------------- toast */
+
+.cboard__toast {
+  position: absolute;
+  left: 50%;
+  bottom: 28px;
+  z-index: 30;
+  max-width: min(560px, calc(100vw - 32px));
+  margin: 0;
+  padding: 10px 16px;
+  border: 1px solid rgba(255, 196, 130, 0.35);
+  background: rgba(10, 11, 18, 0.94);
+  color: var(--cb-ink);
+  font-size: 0.74rem;
+  text-align: center;
+  opacity: 0;
+  transform: translate(-50%, 8px);
+  pointer-events: none;
+  transition: opacity 0.22s, transform 0.22s;
+}
+
+.cboard__toast.is-showing { opacity: 1; transform: translate(-50%, 0); }
+
+/* ---------------------------------------------------------------- the tour */
+
+/*
+ * The tour's step for this board opens it, so its card has to be readable on
+ * top of it. The board sits above every HUD surface (z 200); the tour's own
+ * layer (z 60) is lifted over it only while the board is open.
+ */
+body.is-board-open .tour { z-index: 210; }
+
+/*
+ * ...and gets out of the way of what it opened. While the board is up the
+ * card docks in a corner, drops the paragraph the viewer read before opening
+ * it, and the veil and spotlight go: the board is the subject now. Bottom
+ * right on the main board; bottom left on a moon board, whose right-hand
+ * side is its readout. `!important` because the tour writes its position
+ * inline, every step.
+ */
+body.is-board-open .tour__veil,
+body.is-board-open .tour__spotlight { opacity: 0 !important; }
+
+body.is-board-open .tour__card {
+  top: auto !important;
+  left: auto !important;
+  right: 24px !important;
+  bottom: 24px !important;
+  transform: none !important;
+  width: min(360px, calc(100vw - 32px)) !important;
+}
+
+body.is-board-open:has(.cmoons) .tour__card {
+  right: auto !important;
+  left: 24px !important;
+}
+
+body.is-board-open .tour__body { display: none; }
+
+/* Flying waits until the tour is over -- the buttons say so by looking it. */
+body.is-tour-open .cmoons__fly,
+body.is-tour-open .cboard__result { opacity: 0.45; }

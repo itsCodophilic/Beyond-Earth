@@ -131,17 +131,38 @@ function satellitesOf(record) {
   return list.filter(Boolean);
 }
 
+/*
+ * A moon as the moon board needs it: how big, how far from its planet, how
+ * long its year is, which way it goes round, and which family it belongs to.
+ * All straight from each catalogue's profile. `family` is the catalogue's own
+ * grouping (Galilean, Himalia family, Norse irregular...), which is how
+ * planetary scientists group them too.
+ */
 function moonList(profiles) {
   return (profiles ?? [])
     .filter((p) => p?.name)
-    .map((p) => ({ name: p.name, diameterKm: Number(p.diameterKm) || null }));
+    .map((p) => ({
+      name: p.name,
+      diameterKm: Number(p.diameterKm) || null,
+      distanceKm: Number(p.semiMajorAxisKm) || null,
+      periodDays: Number(p.periodDays) || null,
+      retrograde: Boolean(p.retrograde),
+      family: p.family ?? "Moons",
+    }));
 }
 
 const PLANET_MOONS = Object.freeze({
-  Earth: [{ name: "Moon", diameterKm: 3474.8 }],
+  /* The Moon: 384,399 km mean distance, 27.3217-day sidereal month (NASA
+   * Moon fact sheet). */
+  Earth: [{ name: "Moon", diameterKm: 3474.8, distanceKm: 384399, periodDays: 27.3217, retrograde: false, family: "Natural satellite" }],
   /* Phobos 22.5 km and Deimos 12.4 km mean diameters (Thomas 1989), as their
-   * own modules quote; listed here so this file stays Node-safe. */
-  Mars: [{ name: "Phobos", diameterKm: 22.5 }, { name: "Deimos", diameterKm: 12.4 }],
+   * own modules quote; semi-major axes 9,376 and 23,463 km and periods 0.31891
+   * and 1.26244 days from the NASA Mars fact sheet. Listed here so this file
+   * stays Node-safe -- their modules import three.js factories. */
+  Mars: [
+    { name: "Phobos", diameterKm: 22.5, distanceKm: 9376, periodDays: 0.31891, retrograde: false, family: "Captured-asteroid moons" },
+    { name: "Deimos", diameterKm: 12.4, distanceKm: 23463, periodDays: 1.26244, retrograde: false, family: "Captured-asteroid moons" },
+  ],
   Jupiter: moonList(JUPITER_MOON_PROFILES),
   Saturn: moonList(SATURN_MOON_PROFILES),
   Uranus: moonList(URANUS_MOON_PROFILES),
@@ -235,7 +256,14 @@ export function buildCelestialBoard() {
       diameterKm: Number(record.diameterKm) || null,
       swatch: swatchFromChroma(record.chroma),
       rings: hasIcyRingSystem(record.name),
-      moons: satellitesOf(record).map((m) => ({ name: m.name, diameterKm: Number(m.diameterKm) || null })),
+      moons: satellitesOf(record).map((m) => ({
+        name: m.name,
+        diameterKm: Number(m.diameterKm) || null,
+        distanceKm: Number(m.separationKm) || null,
+        periodDays: Number(m.periodHours) ? Number(m.periodHours) / 24 : null,
+        retrograde: false,
+        family: "Moons",
+      })),
       detail: String(record.detail ?? "").split("|")[0]?.trim() || record.classification,
     });
   });

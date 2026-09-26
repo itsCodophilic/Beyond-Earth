@@ -3676,6 +3676,13 @@ body.is-tour-open .is-tour-subject {
   transition: opacity 520ms ease, filter 520ms ease;
 }
 
+/* The wordmark on the closing step is the thing the card points at, so it is
+   shown at full strength -- but it does not open until the tour is over. */
+.brand.is-tour-locked.is-tour-subject {
+  opacity: 1 !important;
+  filter: none;
+}
+
 /* The readout keeps reading while it is locked -- the approach step depends on
    the number being live. Only its controls stop answering. */
 .progress.distance-readout.is-tour-locked {
