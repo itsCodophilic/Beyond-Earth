@@ -346,4 +346,6 @@ export function buildAsteroidRoster(ownName = "", ownClass = null) {
   });
 }
 
-export const ASTEROID_ROSTER_LABEL = "Every named rock you can travel to";
+/* Two plain words, because it is a question the viewer is already asking
+ * with the card open, not a catalogue title. */
+export const ASTEROID_ROSTER_LABEL = "Where to next";

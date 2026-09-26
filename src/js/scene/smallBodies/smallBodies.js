@@ -1103,6 +1103,11 @@ export async function createSmallBodies({
      */
     const coma = createCentaurComa(record, built.reach);
     if (coma) {
+      /* The cloud is scenery: a 5-radius envelope that answered the ray would
+       * give the nucleus a hit area five times its size, and the same
+       * parent-steals-the-pointer failure the moon paths had. */
+      coma.group.traverse((object) => { object.raycast = () => {}; });
+      coma.spinning.traverse((object) => { object.raycast = () => {}; });
       built.group.add(coma.group);
       built.spinner.add(coma.spinning);
     }
@@ -1414,6 +1419,23 @@ function createMoonOrbitRing(radius, moon) {
   // happily throw away when the camera is inside it, which is most of the
   // time you would want to see it.
   line.frustumCulled = false;
+  /*
+   * Drawn, never picked.
+   *
+   * The line hangs off the parent's group, so a raycast that grazes it walks
+   * up the hierarchy and resolves to the *parent*. The moon sits on its own
+   * path, and the hover raycast runs with a line threshold of 0.10-0.28
+   * scene units -- two to six times the width of Remus -- so every ray aimed
+   * at a moon hit its path first, a few hundredths of a unit nearer the lens
+   * than the moon's own surface. Measured with a headless probe: focused on
+   * Romulus and aimed at Remus, the first body along the ray was Sylvia; the
+   * same for Alexhelios and Cleoselene around Kleopatra. The hover then
+   * locked onto the parent, failed its "is the pointer still on it" test a
+   * frame later and cleared -- no green target at all. Focusing the parent
+   * hid it, because the focused body is excluded from hover; one-moon
+   * systems hid it, because the only other body is the parent.
+   */
+  line.raycast = () => {};
   return line;
 }
 

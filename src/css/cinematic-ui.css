@@ -4018,3 +4018,15 @@ body.is-tour-open .distance-cinematic-panel {
   font-weight: 300;
   color: var(--cin-ink-faint);
 }
+
+/* "Where to next" sits directly under the scientific details and uses the
+   same collapsible frame; the amber title is the only thing that says it is
+   a way out of this body rather than more about it. */
+.planet-details__travel summary strong {
+  color: var(--cin-amber);
+  -webkit-text-fill-color: currentColor;
+}
+
+.planet-details__travel .planet-details__advanced-item--rings {
+  padding-top: 4px;
+}

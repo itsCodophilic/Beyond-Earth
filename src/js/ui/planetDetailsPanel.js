@@ -522,13 +522,30 @@ export function createCelestialDetailsPanel() {
               <span data-cosmic-text>How this region works</span>
               <div id="planet-details-region-sections"></div>
             </div>
-            <div class="planet-details__advanced-item planet-details__advanced-item--rings" data-planet-field="members" hidden>
-              <span data-cosmic-text>Worlds you can visit here</span>
-              <ol class="planet-details__ring-roster" id="planet-details-member-roster" hidden></ol>
-            </div>
             <div class="planet-details__advanced-item planet-details__advanced-item--lore" data-planet-field="lore">
               <span data-cosmic-text>Celestial story</span>
               <p id="planet-details-lore" data-cosmic-text></p>
+            </div>
+          </div>
+        </details>
+
+        <!--
+          Where to next: its own section, not a row inside the scientific
+          details. It is a different kind of thing -- not a fact about this
+          body but a way out of it -- and inside that block it was buried
+          under atmosphere, gravity and rotation where nobody looked for it.
+        -->
+        <details class="planet-details__advanced planet-details__travel" data-planet-section="members" hidden>
+          <summary>
+            <span>
+              <strong id="planet-details-travel-title" data-cosmic-text>Where to next</strong>
+              <small id="planet-details-travel-note" data-cosmic-text>Worlds you can fly to from here</small>
+            </span>
+            <span class="planet-details__summary-icon" aria-hidden="true"></span>
+          </summary>
+          <div class="planet-details__advanced-grid">
+            <div class="planet-details__advanced-item planet-details__advanced-item--rings" data-planet-field="members" hidden>
+              <ol class="planet-details__ring-roster" id="planet-details-member-roster" hidden></ol>
             </div>
           </div>
         </details>
@@ -884,7 +901,10 @@ export function createCelestialDetailsPanel() {
     rosterTools.querySelectorAll("[data-roster-filter]").forEach((node) => {
       node.setAttribute("aria-pressed", String(node.dataset.rosterFilter === "all"));
     });
-    rosterSummary.textContent = roster.summary ?? "";
+    // The counts now head the section itself, in its summary line; printing
+    // them a second time under the search box was the same line twice.
+    rosterSummary.textContent = "";
+    rosterSummary.hidden = true;
 
     roster.groups.forEach((group) => {
       if (!group.rows?.length) return;
@@ -918,16 +938,24 @@ export function createCelestialDetailsPanel() {
     memberRoster.textContent = "";
     rosterEmpty = null;
     const row = layer.querySelector('[data-planet-field="members"]');
-    // The same roster serves two purposes -- the worlds inside a region, and
-    // every rock you can travel to -- so the heading moves with the content.
-    const heading = row?.querySelector("span[data-cosmic-text]");
-    if (heading) heading.textContent = label ?? "Worlds you can visit here";
+    const section = layer.querySelector('[data-planet-section="members"]');
+    // The same section serves two purposes -- the worlds inside a region, and
+    // every rock you can travel to -- so its title and line move with it.
     const grouped = members?.kind === "asteroid-roster";
+    const title = layer.querySelector("#planet-details-travel-title");
+    const note = layer.querySelector("#planet-details-travel-note");
+    if (title) title.textContent = grouped ? (label ?? "Where to next") : "Worlds you can visit here";
+    if (note) {
+      note.textContent = grouped
+        ? `${members.summary} — search, filter and fly to any of them`
+        : "The modelled worlds in this region — press one to fly there";
+    }
     const available = grouped
       ? members.groups.some((group) => group.rows?.length)
       : Array.isArray(members) && members.length > 0;
     memberRoster.hidden = !available;
     if (row) row.hidden = !available;
+    if (section) section.hidden = !available;
     memberRoster.classList.toggle("is-grouped", grouped);
     if (rosterTools) rosterTools.hidden = !grouped || !available;
     if (!available) return;
@@ -1084,7 +1112,12 @@ export function createCelestialDetailsPanel() {
     if (!sectionKey) return;
     const row = layer.querySelector(`[data-planet-field="${sectionKey}"]`);
     if (!(row instanceof HTMLElement) || row.hidden) return;
-    if (options.openAdvanced !== false) advanced.open = true;
+    // The row may live in the scientific block or in its own section (the
+    // travel roster does), so open whichever one actually holds it.
+    if (options.openAdvanced !== false) {
+      const host = row.closest("details");
+      if (host) host.open = true;
+    }
 
     // Wait until the expanded Advanced details layout has been painted, then
     // centre the selected row inside the dossier's own scroll container. Using
@@ -1146,6 +1179,10 @@ export function createCelestialDetailsPanel() {
      * block, so it opens with it already shown.
      */
     advanced.open = Boolean(details.isRegion);
+    // For a region the members are the answer, so they open with it; for an
+    // asteroid the roster is forty cards and waits to be asked for.
+    const travelSection = layer.querySelector('[data-planet-section="members"]');
+    if (travelSection) travelSection.open = Boolean(details.isRegion);
 
     resetCosmicText();
     activeCosmicTarget = null;
