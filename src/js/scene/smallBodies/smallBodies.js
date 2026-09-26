@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { attachDecimatedPickPath } from "../orbitGuideHover.js";
 import {
   SOLAR_ORBIT_SCALE,
+  compressedPlanetRadius,
   getAsteroidVisualRadius,
   getSizeComparisonText,
 } from "../../config/celestialScale.js";
@@ -9,6 +10,7 @@ import { markPointerProxy } from "../pointerProxies.js";
 import { SMALL_BODIES, albedoToLinearValue } from "./smallBodyCatalogue.js";
 import { MAIN_BELT_WORLDS } from "./mainBeltCatalogue.js";
 import { CENTAURS } from "./centaurCatalogue.js";
+import { TRANS_NEPTUNIAN_WORLDS } from "./tnoCatalogue.js";
 import { createCentaurComa, updateCentaurComa } from "./centaurComa.js";
 import { createIcyRingSystem, hasIcyRingSystem } from "../../planets/icyRings.js";
 import { applyRingProximityVisibility } from "../../planets/ringProximity.js";
@@ -33,6 +35,8 @@ const ALL_SMALL_BODIES = Object.freeze([
   ...SMALL_BODIES,
   ...MAIN_BELT_WORLDS,
   ...CENTAURS,
+  /* Rank 4, batch A: fourteen trans-Neptunian worlds and five moons. */
+  ...TRANS_NEPTUNIAN_WORLDS,
 ]);
 import { createSmallBodyGeometry, maxHalfExtent } from "./smallBodyShapes.js";
 
@@ -108,6 +112,11 @@ const AU_ANCHORS = Object.freeze([
   [0.10, 10.8], [0.3871, 14], [0.7233, 21], [1.0, 29], [1.5237, 40],
   [2.2, 44], [3.2, 52], [5.2029, 75], [9.5367, 108], [19.1892, 145],
   [30.0699, 178], [39.482, 191], [45.571, 220], [67.934, 244], [506.44, 268],
+  /* Past Sedna, the same run `celestialScale.js`'s AU_SCENE_ANCHORS uses to
+   * 100,000 AU. Nothing reached beyond 506 AU until Leleākūhonua, whose far
+   * point is about 2,600 AU; without this every point of its orbit past
+   * Sedna's distance clamped onto one radius and the guide grew a flat arc. */
+  [100_000, 601],
 ]);
 
 export function smallBodyAuToScene(au) {
@@ -431,6 +440,34 @@ const SMALL_BODY_TEXTURES = Object.freeze({
   Chiron: { file: "chiron", meanLinear: 0.2222 },
   Pholus: { file: "pholus", meanLinear: 0.2314 },
   Echeclus: { file: "echeclus", meanLinear: 0.2313 },
+  /* Rank 4, batch A: fourteen worlds past Neptune and five moons.
+   * Ten of them -- Aya, Chaos, Chiminigagua, DeeDee, Gǃkúnǁʼhòmdímà,
+   * Goibniu, Huya, Leleākūhonua, Ritona, Xewioso -- and Huya I carry
+   * *colour* maps, unwrapped from the reference images supplied for them by
+   * `tools/dwarf-textures/build-dwarf-textures.py` (1024 x 512, polar rows
+   * levelled), and their records are flagged `colourMap`. The rest keep the
+   * grey Arrokoth-borrowed maps and the measured chroma. meanLinear is the
+   * luminance mean of each saved JPEG, so the measured albedo still sets the
+   * brightness either way. */
+  "Máni": { file: "mani", meanLinear: 0.2212 },
+  Chiminigagua: { file: "chiminigagua", meanLinear: 0.1006 },
+  Achlys: { file: "achlys", meanLinear: 0.2213 },
+  Aya: { file: "aya", meanLinear: 0.2050 },
+  Uni: { file: "uni", meanLinear: 0.2212 },
+  "Gǃkúnǁʼhòmdímà": { file: "gkunhomdima", meanLinear: 0.1419 },
+  Huya: { file: "huya", meanLinear: 0.0969 },
+  Goibniu: { file: "goibniu", meanLinear: 0.0660 },
+  Ritona: { file: "ritona", meanLinear: 0.0633 },
+  Xewioso: { file: "xewioso", meanLinear: 0.0863 },
+  Rumina: { file: "rumina", meanLinear: 0.2212 },
+  DeeDee: { file: "deedee", meanLinear: 0.1725 },
+  Chaos: { file: "chaos", meanLinear: 0.0905 },
+  "Leleākūhonua": { file: "leleakuhonua", meanLinear: 0.2616 },
+  "Chiminigagua I": { file: "chiminigagua-moon", meanLinear: 0.2239 },
+  "Achlys I": { file: "achlys-moon", meanLinear: 0.2239 },
+  Tinia: { file: "tinia", meanLinear: 0.2237 },
+  "Gǃòʼé ǃHú": { file: "gohu", meanLinear: 0.2241 },
+  "Huya I": { file: "huya-moon", meanLinear: 0.0967 },
 });
 
 const smallBodyTextureCache = new Map();
@@ -890,7 +927,11 @@ function buildBody(record, {
   sceneRadius = SUN_REFERENCE_RADIUS,
   textured = true,
 } = {}) {
-  const chroma = record.chroma ?? [1, 1, 1];
+  /* A `colourMap` body carries its colour in its surface map (built from a
+   * supplied reference image), so the vertex colours carry albedo only --
+   * otherwise the map's red would be multiplied by the measured red and the
+   * body drawn twice as saturated as either source says. */
+  const chroma = record.colourMap ? [1, 1, 1] : (record.chroma ?? [1, 1, 1]);
   const baseValue = albedoToLinearValue(record.albedo) * solarCompensation(sceneRadius);
 
   /*
@@ -944,9 +985,14 @@ function buildBody(record, {
    * the real one side by side.
    */
   const realMeanRadiusKm = record.diameterKm / 2;
+  /* `sizeCurve: "dwarf"` is the Rank 4 trans-Neptunian worlds: sized on
+   * the planet builder's curve, so Máni at 796 km is not drawn ten times
+   * larger than Varuna at 668 a few degrees away. */
   const renderedMeanRadius = parentVisualRadius
     ? parentVisualRadius * Math.pow(record.diameterKm / record.parentDiameterKm, MOON_SIZE_EXPONENT)
-    : getAsteroidVisualRadius(record.diameterKm, { minimum: 0.022, maximum: 0.92 });
+    : record.sizeCurve === "dwarf"
+      ? compressedPlanetRadius(record.diameterKm / 12_756)
+      : getAsteroidVisualRadius(record.diameterKm, { minimum: 0.022, maximum: 0.92 });
   const kmToScene = renderedMeanRadius / realMeanRadiusKm;
 
   /* The material's emissive is this same linear triple -- see the material
@@ -1116,7 +1162,11 @@ export async function createSmallBodies({
       visualRadius: built.renderedMeanRadius,
       reach: built.reach,
       heliocentricAU: currentAU,
-      pairSeparation: moonSeparation(record, built.renderedMeanRadius),
+      /* `framePair: false` -- see tnoCatalogue.js. A moon twenty radii out
+       * cannot share the frame with a readable primary. */
+      pairSeparation: record.framePair === false
+        ? 0
+        : moonSeparation(record, built.renderedMeanRadius),
       elements: orbit,
       ringOuterRadius: rings?.outerRadius ?? 0,
       comaRadius: coma ? built.reach * (record.coma?.radii ?? 0) : 0,
@@ -1186,7 +1236,7 @@ export async function createSmallBodies({
          * against Ida is the 1.4 km / 31.4 km ratio that made it worth
          * finding. Same number as the parent uses, so focusing either half
          * of a pair gives the same composition from the other side. */
-        pairSeparation: separation,
+        pairSeparation: record.framePair === false ? 0 : separation,
         /* A moon takes its parent's heliocentric element set, for the reason
          * the instrument's own satellite branch gives: Dactyl's 90 km orbit
          * around Ida is nothing beside Ida's 2.86 AU orbit around the Sun. */
@@ -1279,7 +1329,11 @@ export async function createSmallBodies({
   bodies
     .filter((entry) => !entry.isMoon && entry.orbit)
     .forEach((entry) => {
-      const guide = createSmallBodyOrbitGuide(entry.orbit, entry.record);
+      const guide = createSmallBodyOrbitGuide(
+        entry.orbit,
+        entry.record,
+        entry.group?.userData?.visualRadius ?? 0.02,
+      );
       guide.userData.bodyName = entry.record.name;
       guide.userData.body = entry.group;
       // Read by the hover card that main.js puts on an acquired guide. The
@@ -1318,6 +1372,11 @@ const ORBIT_GUIDE_COLOURS = Object.freeze([
    * ice-green for the bodies between the giant planets. */
   [/centaur/i, 0x9fe3c7],
   [/jupiter-family|halley-type|comet/i, 0x8fb0ff],
+  /* The Rank 4 worlds, in the grey-blue the planet builder already gives
+   * Varuna, Ixion, Salacia and Varda (orbitColor 0x8fa3ad), so one family of
+   * bodies has one colour of path. Before the Kuiper rule, which would
+   * otherwise paint them Arrokoth's violet. */
+  [/trans-neptunian|sednoid/i, 0x8fa3ad],
   [/cold classical|kuiper/i, 0xc49ada],
   [/main asteroid belt/i, 0xd0aa79],
 ]);
@@ -1439,7 +1498,7 @@ function createMoonOrbitRing(radius, moon) {
   return line;
 }
 
-function createSmallBodyOrbitGuide(orbit, record) {
+function createSmallBodyOrbitGuide(orbit, record, bodyRadius = 0.02) {
   /*
    * One extra vertex, repeating the first, and a `Line` rather than a
    * `LineLoop`.
@@ -1475,16 +1534,50 @@ function createSmallBodyOrbitGuide(orbit, record) {
    * equation converts the other way for free (M = E - e·sin E), so this costs
    * nothing but a line.
    */
-  const vertexCount = ORBIT_GUIDE_SEGMENTS + 1;
-  const vertices = new Float32Array(vertexCount * 3);
+  /*
+   * And then refined wherever a chord still misses the curve by more than a
+   * fraction of the body.
+   *
+   * Even stepping in E is not enough for Leleākūhonua. At e = 0.95 the true
+   * anomaly runs sqrt((1+e)/(1-e)) = 6.3 times faster than E at perihelion,
+   * so one of 2,048 steps there is 1.1 degrees of arc; at 2,560 scene units
+   * out the chord's sagitta is 0.12 units against a drawn radius of 0.024.
+   * The line sat five body-radii off the body and only touched it when the
+   * body passed a vertex -- reported as the orbit line "floating and hitting
+   * sometimes". Each segment is now tested at its midpoint and halved until
+   * the chord is within a fifth of the body's drawn radius, to six levels.
+   * It only ever adds vertices, and only where the curve needs them: every
+   * other guide gains a handful near perihelion or none at all.
+   */
+  const tolerance = Math.max(1e-4, bodyRadius * 0.2);
+  const positions = [];
   const point = new THREE.Vector3();
-  for (let i = 0; i < vertexCount; i += 1) {
-    const E = ((i % ORBIT_GUIDE_SEGMENTS) / ORBIT_GUIDE_SEGMENTS) * Math.PI * 2;
-    positionFromOrbit(point, orbit, E - orbit.e * Math.sin(E));
-    vertices[i * 3] = point.x;
-    vertices[i * 3 + 1] = point.y;
-    vertices[i * 3 + 2] = point.z;
+  const chordMid = new THREE.Vector3();
+  const at = (E, target) => positionFromOrbit(target, orbit, E - orbit.e * Math.sin(E));
+  const refine = (E0, p0, E1, p1, depth) => {
+    const Em = (E0 + E1) * 0.5;
+    const pm = new THREE.Vector3();
+    at(Em, pm);
+    chordMid.copy(p0).add(p1).multiplyScalar(0.5);
+    if (depth < 6 && pm.distanceTo(chordMid) > tolerance) {
+      refine(E0, p0, Em, pm, depth + 1);
+      refine(Em, pm, E1, p1, depth + 1);
+      return;
+    }
+    positions.push(p1.x, p1.y, p1.z);
+  };
+  at(0, point);
+  let previous = point.clone();
+  positions.push(previous.x, previous.y, previous.z);
+  for (let i = 1; i <= ORBIT_GUIDE_SEGMENTS; i += 1) {
+    const E0 = ((i - 1) / ORBIT_GUIDE_SEGMENTS) * Math.PI * 2;
+    const E1 = (i / ORBIT_GUIDE_SEGMENTS) * Math.PI * 2;
+    const next = new THREE.Vector3();
+    at(i === ORBIT_GUIDE_SEGMENTS ? 0 : E1, next);
+    refine(E0, previous, E1, next, 0);
+    previous = next;
   }
+  const vertices = new Float32Array(positions);
 
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute("position", new THREE.BufferAttribute(vertices, 3));

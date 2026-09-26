@@ -427,6 +427,44 @@ BODIES = {
     "euphrosyne-moon": dict(analogue="mathilde", contrastCap=0.2, size=(256, 128), grain=1.25, detail=1.25, stamps=260, seed=3101,
         credit="Euphrosyne's four-kilometre companion, provisional designation only. Never resolved; relief from Mathilde via its parent",
         craters=(28, (3.0, 16.0), 0.16), boulders=(0, (0.2, 1.0), 0.0), features=[]),
+
+    # Rank 4, batch A. Only the bodies with no reference image are built
+    # here -- Mani, Achlys, Uni, Rumina and four moons. The other ten and Huya
+    # I have colour maps from ../dwarf-textures (build-dwarf-textures.py, then
+    # to-small-body.py); building them here would overwrite those with grey.
+    # Relief
+    # borrowed from Arrokoth, the only cold outer Solar System surface any
+    # spacecraft has photographed -- the same loan Chiron takes, for the
+    # same reason. Half-size maps, like Rank 2: these draw at a few pixels
+    # to a few hundred, and a finer map of a body nobody has resolved is
+    # only more invented detail. contrastCap 0.20-0.22, lower than the
+    # rocky bodies, because a 700 km icy world has relaxed most of its
+    # relief away; the one measured exception, Mani, carries its crater
+    # in the mesh.
+    "mani": dict(analogue="arrokoth", contrastCap=0.2, size=(512, 256), grain=1.0, detail=1.10, stamps=420, seed=307,
+        credit="Máni. Never resolved; outline from nine occultations (Rommel et al. 2023). The 322 km crater and the rise are geometry, not texture. Relief borrowed from Arrokoth",
+        craters=(70, (1.0, 8.0), 0.10), boulders=(0, (0.2, 1.0), 0.0), features=[]),
+    "achlys": dict(analogue="arrokoth", contrastCap=0.2, size=(512, 256), grain=0.92, detail=1.10, stamps=420, seed=208,
+        credit="Achlys. Never resolved; shape from four occultations (Dias-Oliveira et al. 2017). Relief borrowed from Arrokoth",
+        craters=(70, (1.0, 8.0), 0.10), boulders=(0, (0.2, 1.0), 0.0), features=[]),
+    "uni": dict(analogue="arrokoth", contrastCap=0.21, size=(512, 256), grain=0.98, detail=1.10, stamps=420, seed=556,
+        credit="Uni. Never resolved; size from Spitzer and Herschel, mass from Tinia (Brown 2013). Relief borrowed from Arrokoth",
+        craters=(70, (1.0, 8.0), 0.10), boulders=(0, (0.2, 1.0), 0.0), features=[]),
+    "rumina": dict(analogue="arrokoth", contrastCap=0.2, size=(512, 256), grain=0.9, detail=1.10, stamps=420, seed=1454,
+        credit="Rumina. Never resolved; size from Herschel (Farkas-Takacs et al. 2020). Strong water ice. Relief borrowed from Arrokoth",
+        craters=(70, (1.0, 8.0), 0.10), boulders=(0, (0.2, 1.0), 0.0), features=[]),
+    "chiminigagua-moon": dict(analogue="arrokoth", contrastCap=0.2, size=(256, 128), grain=1.1, detail=1.20, stamps=260, seed=5321,
+        credit="Chiminigagua's unnamed moon. A dot in one Hubble frame; relief from Arrokoth via its parent",
+        craters=(35, (2.0, 12.0), 0.12), boulders=(0, (0.2, 1.0), 0.0), features=[]),
+    "achlys-moon": dict(analogue="arrokoth", contrastCap=0.2, size=(256, 128), grain=1.1, detail=1.20, stamps=260, seed=2081,
+        credit="Achlys's unnamed moon. Never resolved; relief from Arrokoth via its parent",
+        craters=(35, (2.0, 12.0), 0.12), boulders=(0, (0.2, 1.0), 0.0), features=[]),
+    "tinia": dict(analogue="arrokoth", contrastCap=0.2, size=(256, 128), grain=1.1, detail=1.20, stamps=260, seed=5561,
+        credit="Tinia, Uni's moon. Never resolved; relief from Arrokoth via its parent",
+        craters=(35, (2.0, 12.0), 0.12), boulders=(0, (0.2, 1.0), 0.0), features=[]),
+    "gohu": dict(analogue="arrokoth", contrastCap=0.2, size=(256, 128), grain=1.1, detail=1.20, stamps=260, seed=2291,
+        credit="Go!o'e =Hu, moon of G!kun||'homdima. Never resolved; relief from Arrokoth via its parent",
+        craters=(35, (2.0, 12.0), 0.12), boulders=(0, (0.2, 1.0), 0.0), features=[]),
 }
 
 

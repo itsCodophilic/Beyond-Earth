@@ -623,7 +623,9 @@ export function createSmallBodyGeometry(shape, {
       const rim = THREE.MathUtils.smoothstep(angle, crater.radius * 0.7, crater.radius * 0.88)
         * (1 - THREE.MathUtils.smoothstep(angle, crater.radius * 0.88, crater.radius * 1.15));
       radius *= 1 - bowl * crater.depth + rim * crater.rim;
-      if (bowl > craterShade) craterShade = bowl;
+      // A negative depth is a rise, not a bowl (Máni's 25 km peak), and must
+      // not be shaded like a crater floor.
+      if (crater.depth > 0 && bowl > craterShade) craterShade = bowl;
       if (rim > rimLight) rimLight = rim;
     }
 

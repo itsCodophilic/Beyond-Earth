@@ -11,3 +11,6 @@
 @import url("./brand.css");
 /* Loaded last so it can restate the interface in the language of the intro. */
 @import url("./cinematic-ui.css");
+/* The celestial board (All bodies). After the cinematic restatement, which
+   it inherits its tokens from. */
+@import url("./celestial-board.css");

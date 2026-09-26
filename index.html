@@ -70,6 +70,23 @@
         -->
         <div class="hud-controls">
           <!--
+            The celestial board: every body the scene can fly to, arranged
+            outward from the Sun. It replaced the "Where to next" lists that
+            used to sit inside the asteroid dossiers -- see
+            src/js/ui/celestialBoard.js.
+          -->
+          <button
+            class="hud-control board-trigger"
+            id="celestial-board-trigger"
+            type="button"
+            aria-haspopup="dialog"
+            aria-expanded="false"
+            aria-controls="celestial-board"
+          >
+            <span class="hud-control__glyph board-trigger__glyph" aria-hidden="true"></span>
+            <span class="hud-control__label">All bodies</span>
+          </button>
+          <!--
             The way in to the space-events catalogue.
 
             A permanent control rather than something that appears when an

@@ -366,7 +366,7 @@ function resolveDetails(bodyOrName, context = {}) {
      * them, they are built inside `asteroidBelt.js` which is frozen, and the
      * roster is identical for every one -- only the "this one" mark moves.
      */
-    relatedBodies: isAsteroidRecord(body, info) ? asteroidClassRoster(body) : null,
+    relatedBodies: null,
     relatedBodiesLabel: ASTEROID_ROSTER_LABEL,
   };
 
@@ -1164,7 +1164,15 @@ export function createCelestialDetailsPanel() {
     // even when the body carries no descriptive paragraph.
     writeRingRoster(details.ringRoster, details.highlightRingName, details.name);
     writeRegionSections(details.region?.sections);
-    writeMemberRoster(details.region?.members ?? details.relatedBodies, details.relatedBodiesLabel);
+    /*
+     * No travel list in the dossier any more -- neither the asteroid roster
+     * ("Where to next") nor a region's member list. Both moved to the
+     * celestial board (All bodies, in the HUD), which answers "what else is
+     * out there" once, from anywhere, instead of under the facts of whatever
+     * body is open. Reported as "very very clumsy", and it was. The dossier is
+     * the scientific details and nothing else.
+     */
+    writeMemberRoster(null, null);
     Object.keys(advancedFields).forEach((key) => writeAdvancedField(key, details[key]));
 
     sources.hidden = !details.scienceUrl;

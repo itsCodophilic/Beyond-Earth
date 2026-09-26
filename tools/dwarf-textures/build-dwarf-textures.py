@@ -47,6 +47,24 @@ BODIES = {
     # map is therefore grown rather than recovered -- which is honest for a
     # body that has never been resolved at all.
     "varuna":   dict(cx=246.7, cy=437.5, A=324.0, B=324.0, ang=0.0, sub=0.0),
+
+    # Rank 4 worlds drawn through the small-body builder, from references
+    # supplied on 26 September 2026 (images/). Every one is an artist's
+    # impression -- none of these bodies has been resolved -- and the maps
+    # carry the image's colour, as the worlds above do. Disc geometry fitted
+    # by least squares to the limb, outliers from terminators dropped, then
+    # drawn back over the image and checked; Chiminigagua and Ritona were
+    # corrected by hand after that check.
+    "deedee": dict(cx=699.4, cy=388.2, A=365.2, B=365.2, ang=0.0, sub=0.0),
+    "aya": dict(cx=128.7, cy=121.9, A=111.7, B=111.7, ang=0.0, sub=0.0),
+    "chaos": dict(cx=131.6, cy=95.5, A=75.8, B=75.8, ang=0.0, sub=0.0),
+    "chiminigagua": dict(cx=121.0, cy=89.0, A=78.0, B=78.0, ang=0.0, sub=0.0),
+    "goibniu": dict(cx=679.9, cy=404.4, A=247.7, B=247.7, ang=0.0, sub=0.0),
+    "gkunhomdima": dict(cx=584.7, cy=480.4, A=446.1, B=446.1, ang=0.0, sub=0.0),
+    "huya": dict(cx=220.7, cy=205.4, A=207.7, B=207.7, ang=0.0, sub=0.0),
+    "leleakuhonua": dict(cx=629.1, cy=708.6, A=502.7, B=502.7, ang=0.0, sub=0.0, lit=(0.24, 0.54), dark=(0.07, 0.17)),
+    "ritona": dict(cx=124.0, cy=100.0, A=88.0, B=88.0, ang=0.0, sub=0.0),
+    "xewioso": dict(cx=126.9, cy=124.9, A=113.1, B=113.1, ang=0.0, sub=0.0),
     # Haumea gets its own route.  It is not a sphere -- it is a rugby ball
     # spinning every four hours -- and the reference shows it obliquely, from
     # behind its own ring, with two moons crossing the frame.  Inverting that
@@ -393,5 +411,11 @@ def finish(name, p, out, wsum):
           f"thin={(wsum < 0.05).mean():.3f}")
 
 
-for k, v in BODIES.items():
-    build(k, v)
+if __name__ == "__main__":
+    import sys
+    # Named bodies only, when names are given: rebuilding one map should not
+    # regenerate eleven others that nobody asked to change.
+    wanted = set(sys.argv[1:])
+    for k, v in BODIES.items():
+        if not wanted or k in wanted:
+            build(k, v)

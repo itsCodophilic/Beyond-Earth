@@ -83,7 +83,41 @@ catalogue entry rather than a renderer. And `pick_patch` in the texture
 pipeline learned to ask for a *representative* window rather than the most
 detailed one — see the note there about Phobos's grooves.
 
-**Rank 4 onward is untouched.**
+## Rank 4, batch A is built
+
+Fourteen trans-Neptunian worlds and five moons, in
+`src/js/scene/smallBodies/tnoCatalogue.js`, through the small-body builder:
+Máni, Chiminigagua, Achlys, Aya, Uni, Gǃkúnǁʼhòmdímà, Huya, Goibniu, Ritona,
+Xewioso, Rumina, 2014 UZ224, Chaos and Leleākūhonua, with Tinia, Gǃòʼé ǃHú,
+Huya I and the unnamed moons of Chiminigagua and Achlys.
+
+- Orbits are JPL SBDB at full precision, epoch JD 2461200.5, queried
+  26 September 2026 (the `sbdb.api` endpoint takes `full-prec=1`; without it
+  every element comes back rounded to three figures).
+- Sizes come from occultations where they exist (Máni, Achlys,
+  Gǃkúnǁʼhòmdímà, Huya, Leleākūhonua) and from thermal data otherwise.
+- They are drawn on the **planet builder's size curve** (`sizeCurve:
+  "dwarf"`), not the asteroid curve. On the asteroid curve Máni would have
+  come out ten times Varuna's size.
+- Máni's 322 km crater and its 25 km rise are geometry.
+- Surfaces are borrowed from Arrokoth. Colour and albedo are measured, except
+  for Xewioso and Leleākūhonua, whose colours have never been measured; they
+  are drawn neutral and their cards say so.
+- Four wide systems are framed on the primary, not the pair (`framePair:
+  false`). Framed on the pair, the primary was a 5–10 px dot.
+- "Where to next" gains a **Kuiper Belt and beyond** group. It also lists the
+  twelve worlds the planet builder draws, so Pluto is in the list too.
+- The Kuiper Belt region cards list the new members.
+
+Two inconsistencies found along the way were left alone because they
+predate this batch:
+
+- Ceres and the Centaurs are drawn on the asteroid curve. The trans-Neptunian
+  worlds are on the planet curve.
+- Chaos's two-lobed occultation outline is not yet refereed, so it is drawn as
+  one body.
+
+**Rank 4 batch B (the near-equal binaries) and Rank 5 onward are untouched.**
 
 ## Corrections to this list
 

@@ -1,6 +1,9 @@
 import { SMALL_BODIES } from "../scene/smallBodies/smallBodyCatalogue.js";
 import { MAIN_BELT_WORLDS } from "../scene/smallBodies/mainBeltCatalogue.js";
 import { CENTAURS } from "../scene/smallBodies/centaurCatalogue.js";
+import { TRANS_NEPTUNIAN_WORLDS } from "../scene/smallBodies/tnoCatalogue.js";
+import { PLANET_CONFIGS, TRANS_NEPTUNIAN_NAMES } from "../planets/index.js";
+import { TRANS_NEPTUNIAN_MOON_COUNTS } from "../planets/satellites/transNeptunianMoonCatalog.js";
 import { BELT_MAJOR_ROCKS } from "../scene/beltMajorOrbitGuides.js";
 import { hasIcyRingSystem } from "../planets/icyRings.js";
 
@@ -97,6 +100,21 @@ const CHARACTER_LINES = Object.freeze({
   Chiron: "Carries an asteroid number and a comet designation both, and appears to be growing rings while we watch — the material around it is not the same from one occultation to the next.",
   Pholus: "The reddest object anyone has measured. Billions of years of cosmic rays on organic ice, never resurfaced, never warmed.",
   Echeclus: "Outbursts hard enough to throw a piece of itself away — one fragment outgassed brighter than the nucleus it left. Its occultation looked for rings and found none.",
+  // Rank 4, batch A. One line each; the dossier has the rest.
+  "Máni": "A crater 322 km wide and 45 km deep on a world 796 km across, caught on its limb by sixty-one occultation chords in 2020.",
+  Chiminigagua: "The ninth-brightest world past Neptune, on a scattered orbit tilted 33 degrees, with a moon found by Hubble in 2018.",
+  Achlys: "A plutino spun into a flattened, stretched shape by a 6.8-hour day — and a dip in its outline that may be a chasm.",
+  Aya: "768 km across and no moon at all — a useful control case for how the others got theirs.",
+  Uni: "Less dense than water at 692 km across, which the usual story of how big worlds form cannot explain.",
+  "Gǃkúnǁʼhòmdímà": "Occultation-measured, weighed by its moon, and the hardest name in the Solar System to say correctly.",
+  Huya: "A plutino whose moon is more than half its width — very nearly a double world.",
+  Goibniu: "Dark, and spinning once every 5.9 hours on one of the roundest orbits out here.",
+  Ritona: "Carbon dioxide ice seen by JWST, on the most nearly circular orbit of the fourteen.",
+  Xewioso: "The darkest of the set, reflecting under four per cent of its light. Almost nothing else is known.",
+  Rumina: "Grey rather than red, covered in fresh water ice, on an orbit reaching out to 149 AU.",
+  DeeDee: "Formally 2014 UZ224. Still unnamed, and its orbit reaches 181 AU — the scattered disc's true size.",
+  Chaos: "Found in 1998, and possibly two bodies resting against each other, seen from the pole.",
+  "Leleākūhonua": "The third Sedna-like world ever found: it never comes closer than 65 AU and swings out to about 2,000.",
   // DART, 26 September 2022: the orbit shortened by about 33 minutes
   // (Thomas et al. 2023, Nature 616, 448).
   Dimorphos: "The moon DART flew into on 26 September 2022. The impact shortened its orbit around Didymos by about 33 minutes -- the first measured change to a natural body's motion made by people.",
@@ -141,9 +159,14 @@ const GROUP_DEFS = Object.freeze([
     blurb: "Icy bodies orbiting between Jupiter and Neptune, half asteroid and half comet, on paths that stay stable for only a few million years. Two of these four have rings.",
   },
   {
+    key: "tno",
+    title: "Kuiper Belt and beyond",
+    blurb: "Past Neptune, from 30 AU out to the inner Oort Cloud: ice worlds hundreds of kilometres across. Outside the Pluto system and Arrokoth, not one of them has ever been seen as more than a point of light.",
+  },
+  {
     key: "other",
-    title: "Comets and the Kuiper Belt",
-    blurb: "Not asteroids -- ice more than rock -- but out here, and you can go there.",
+    title: "Comets",
+    blurb: "Not asteroids -- ice more than rock, and the ones that grow a tail when they come in close.",
   },
 ]);
 
@@ -157,7 +180,8 @@ export const ASTEROID_ROSTER_FILTERS = Object.freeze([
 
 const CENTAUR = /centaur/i;
 const NEAR_EARTH = /near-earth/i;
-const NOT_AN_ASTEROID = /comet|kuiper/i;
+const BEYOND_NEPTUNE = /trans-neptunian|sednoid|kuiper/i;
+const NOT_AN_ASTEROID = /comet/i;
 const ACTIVE = /comet|coma|outburst/i;
 
 /*
@@ -169,7 +193,11 @@ const ACTIVE = /comet|coma|outburst/i;
 function groupFor(record) {
   const text = `${record?.classification ?? ""} ${record?.info?.population ?? ""}`;
   if (CENTAUR.test(text)) return "centaur";
+  // Comets before the Kuiper rule: 67P's card says where it came from, and
+  // "Kuiper Belt" in its population line would otherwise file a comet
+  // nucleus at 1.2 AU among the worlds past Neptune.
   if (NOT_AN_ASTEROID.test(text)) return "other";
+  if (BEYOND_NEPTUNE.test(text)) return "tno";
   if (NEAR_EARTH.test(text)) return "nearEarth";
   return "belt";
 }
@@ -290,9 +318,48 @@ function buildGroups() {
 
   /* Largest first within each group, with each parent's moons kept
    * directly beneath it rather than sorted in among the others. */
-  const families = { belt: [], nearEarth: [], centaur: [], other: [] };
-  [...SMALL_BODIES, ...MAIN_BELT_WORLDS, ...CENTAURS].forEach((record) => {
+  const families = { belt: [], nearEarth: [], centaur: [], tno: [], other: [] };
+  [...SMALL_BODIES, ...MAIN_BELT_WORLDS, ...CENTAURS, ...TRANS_NEPTUNIAN_WORLDS].forEach((record) => {
     families[groupFor(record)].push(rowFor(record, groupFor(record)));
+  });
+  /*
+   * And the twelve worlds the planet builder draws out there -- Pluto,
+   * Eris, Haumea and the rest. They are not in any small-body catalogue, but
+   * a list of what is past Neptune without Pluto in it is not a list of what
+   * is past Neptune. Their moons are drawn by the satellite system and are
+   * reached from their parent, so they are counted rather than listed; Pluto
+   * has its own catalogue, and its five are stated here.
+   */
+  const configs = new Map(PLANET_CONFIGS.map((config) => [config.name, config]));
+  TRANS_NEPTUNIAN_NAMES.forEach((name) => {
+    const config = configs.get(name);
+    if (!config) return;
+    const moonCount = name === "Pluto" ? 5 : (TRANS_NEPTUNIAN_MOON_COUNTS[name] ?? 0);
+    const rings = hasIcyRingSystem(name);
+    const badges = [];
+    const tags = [];
+    if (rings) { badges.push({ key: "rings", text: "Rings" }); tags.push("rings"); }
+    if (moonCount) {
+      badges.push({ key: "moons", text: moonCount === 1 ? "1 moon" : `${moonCount} moons` });
+      tags.push("moons");
+    }
+    const type = config.info?.type ?? "Dwarf planet";
+    const character = String(config.detail ?? "").split("|")[1]?.trim() || null;
+    const diameter = Number(config.physicalDiameterKm);
+    const row = {
+      body: name,
+      order: type,
+      character,
+      note: null,
+      motion: sizeText(diameter),
+      badges,
+      tags,
+      isMoon: false,
+      parent: null,
+      size: Number.isFinite(diameter) ? diameter : 0,
+    };
+    row.search = searchText(name, type, character, badges.map((b) => b.text), "dwarf planet");
+    families.tno.push([row]);
   });
   Object.entries(families).forEach(([key, list]) => {
     list.sort((a, b) => b[0].size - a[0].size);

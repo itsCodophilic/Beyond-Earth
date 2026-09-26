@@ -77,7 +77,10 @@ export const BODY_SIZE_DATA = Object.freeze({
   Sedna: { diameterKm: 906.0, diameterEarths: 0.0710, volumeEarths: 0.000358 },
 });
 
-function compressedPlanetRadius(diameterEarths) {
+/* Exported so the small-body builder can size the Rank 4 trans-Neptunian
+ * worlds on the same curve as the twelve already drawn by the planet
+ * builder -- see `scene/smallBodies/tnoCatalogue.js`. */
+export function compressedPlanetRadius(diameterEarths) {
   // Preserve a much stronger visible hierarchy than the earlier compressed
   // curve. The scale remains cinematic rather than literal, but Jupiter now
   // reads as roughly eight rendered Earth radii and the ice giants as roughly

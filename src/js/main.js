@@ -24,7 +24,7 @@ import { createSaturnVisualSystem, updateSaturnVisualSystem } from './planets/sa
 import { createUranusVisualSystem, updateUranusVisualSystem } from './planets/uranus/uranusVisuals.js';
 import { createBeltMajorOrbitGuides } from './scene/beltMajorOrbitGuides.js';
 import { registerOrbitGuideHover } from './scene/orbitGuideHover.js';
-import { PLANET_CONFIGS } from './planets/index.js';
+import { PLANET_CONFIGS, TRANS_NEPTUNIAN_NAMES } from './planets/index.js';
 import {
   createMajorSatelliteSystems,
   findNearestDenseSatelliteAtPointer,
@@ -77,6 +77,7 @@ import { createDistanceCinematicPanel } from './ui/distanceCinematicPanel.js';
 import { createCelestialDetailsPanel } from './ui/planetDetailsPanel.js';
 import { createPerformanceHud } from './ui/performanceHud.js';
 import { createSpaceEventsDashboard } from './ui/spaceEventsDashboard.js';
+import { createCelestialBoard } from './ui/celestialBoard.js';
 import { createGuidedTour, replayGuidedTour } from './ui/guidedTour.js';
 
 /**
@@ -2332,6 +2333,7 @@ composeSolarEventShot(
   let tourSuppressesHover = false;
 
   let isPlanetDetailsOpen = false;
+  let isCelestialBoardOpen = false;
   const cameraFocusPoint = new THREE.Vector3();
   const targetFocusPoint = new THREE.Vector3();
   /*
@@ -3006,6 +3008,22 @@ composeSolarEventShot(
     onView: presentSolarEvent,
   });
 
+  /*
+   * The celestial board -- every body the scene can fly to, by region. It
+   * freezes the universe like the dossier does: it is something you read and
+   * choose from, and a paused renderer is what keeps its opening animation
+   * smooth. Choosing a body closes it and goes through the same
+   * travel-to-body event the dossier used.
+   */
+  const celestialBoard = createCelestialBoard({
+    trigger: document.querySelector("#celestial-board-trigger"),
+  });
+  addEventListener("beyond-earth:board-state", (event) => {
+    isCelestialBoardOpen = Boolean(event.detail?.open);
+    pauseUniverseForInformationOverlay();
+    if (!isInformationOverlayOpen()) timer.reset();
+  });
+
   if (new URLSearchParams(location.search).get("bodyDebug") === "1") {
     /*
      * Events fire every few minutes by design, which is right for a viewer and
@@ -3027,6 +3045,7 @@ composeSolarEventShot(
      */
     window.__presentEvent = presentSolarEvent;
     window.__eventsPanel = spaceEventsDashboard;
+    window.__board = celestialBoard;
     window.__tour = guidedTour;
     window.__replayTour = replayGuidedTour;
   }
@@ -3128,7 +3147,7 @@ composeSolarEventShot(
 
 
   function isInformationOverlayOpen() {
-    return isAboutExperienceOpen || isPlanetDetailsOpen;
+    return isAboutExperienceOpen || isPlanetDetailsOpen || isCelestialBoardOpen;
   }
 
   function pauseUniverseForInformationOverlay() {
@@ -7068,6 +7087,35 @@ composeSolarEventShot(
         if (!target && object.userData?.isAsteroid && matches(object)) target = object;
       });
     }
+    /*
+     * Planetary moons, which the celestial board now lists -- all 475 of them.
+     * A resolved moon may not have been built yet: they hydrate one at a time
+     * in idle slots, Jupiter's and Saturn's over several seconds. Asking for
+     * one that is still queued moves it to the front and builds it now,
+     * rather than doing nothing because it happened to be late in the queue.
+     */
+    if (!target) {
+      for (const system of majorSatelliteSystems) {
+        target = system.moons.find(({ moon }) => matches(moon))?.moon
+          ?? (system.denseFields ?? []).flatMap((field) => field.records)
+            .find(({ target: candidate }) => matches(candidate))?.target
+          ?? null;
+        if (target) break;
+        const pending = system.pendingDirectSatellites ?? [];
+        const index = pending.findIndex(({ profile }) => profile?.name === name);
+        if (index >= 0) {
+          pending.unshift(...pending.splice(index, 1));
+          target = hydrateNextMajorSatellite(system)?.satellite?.moon ?? null;
+          if (target) break;
+        }
+      }
+    }
+    // The Sun and Earth's Moon live outside every list above.
+    if (!target && (name === "Sun" || name === "Moon")) {
+      scene.traverse((object) => {
+        if (!target && object.userData?.name === name && object.userData?.info) target = object;
+      });
+    }
     if (!target) return;
     // A beat, so the dossier's close animation is not fighting the flight.
     setTimeout(() => focusBody(target), 180);
@@ -9004,8 +9052,28 @@ composeSolarEventShot(
     );
     asteroidInspectionLight.visible = isAsteroidFocused;
 
+    /*
+     * Moons past Neptune and moons of small bodies are lit exactly as their
+     * parents are, whichever of the two is focused.
+     *
+     * The satellite inspection path below dims the whole scene's ambient and
+     * fill light (0.16 -> 0.075, 0.32 -> 0.11) and puts a private key light
+     * on the moon. That is right for Jupiter's moons, whose parent is a
+     * self-lit giant filling half the frame. For a pair like Uni and Tinia,
+     * or Salacia and Actaea, the parent sits in the same shot, so focusing
+     * the moon re-lit the parent: reported as "the dwarf planet changes to a
+     * different colour" every time its moon was clicked, and the moon a
+     * different colour again once the parent was clicked back. These systems
+     * now keep one lighting state.
+     */
+    const focusedParentName = focusedBody?.userData?.parentPlanet;
+    const isLightingNeutralSatellite = Boolean(
+      focusedBody?.userData?.isSmallBody
+      || (focusedParentName && TRANS_NEPTUNIAN_NAMES.includes(focusedParentName)),
+    );
     const isNaturalSatelliteFocused = Boolean(
       focusedBody
+      && !isLightingNeutralSatellite
       && (
         focusedBody.userData?.isSatellite
         || getInteractiveType(focusedBody) === "natural satellite"
