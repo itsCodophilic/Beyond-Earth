@@ -132,6 +132,10 @@ const orbitFrom = (solution, el) => ({
   meanMotionDegPerDay: meanMotion(el.aAU),
 });
 
+/* Shared with `binaryCatalogue.js` (Rank 4, batch B), which draws the same
+ * population and must convert its colours and shapes the same way. */
+export { meanMotion, ellipsoid, chromaFromBR, brFromVR, orbitLine, ICY_RELIEF };
+
 export const TRANS_NEPTUNIAN_WORLDS = Object.freeze([
   {
     id: "mani",

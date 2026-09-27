@@ -465,6 +465,48 @@ BODIES = {
     "gohu": dict(analogue="arrokoth", contrastCap=0.2, size=(256, 128), grain=1.1, detail=1.20, stamps=260, seed=2291,
         credit="Go!o'e =Hu, moon of G!kun||'homdima. Never resolved; relief from Arrokoth via its parent",
         craters=(35, (2.0, 12.0), 0.12), boulders=(0, (0.2, 1.0), 0.0), features=[]),
+
+    # Rank 4, batch B: the near-equal binaries. Every component is a point of
+    # light -- none has been resolved, and the pairs are only split by Hubble
+    # -- so all eleven take Arrokoth's relief, which is the one surface any
+    # spacecraft has photographed in exactly this population: Sila-Nunam,
+    # Teharonhiawako, Altjira and Manwe are cold classicals like Arrokoth.
+    # Half size for the near-equal partners, quarter size for the three that
+    # are distinctly smaller (Paha, Sawiskera, Thorondor), as for the batch A
+    # moons.
+    "lempo": dict(analogue="arrokoth", contrastCap=0.22, size=(512, 256), grain=1.0, detail=1.10, stamps=420, seed=4717,
+        credit="Lempo. Never resolved; split from Hiisi and Paha by Hubble (Benecchi et al. 2010). Relief borrowed from Arrokoth",
+        craters=(70, (1.0, 8.0), 0.10), boulders=(0, (0.2, 1.0), 0.0), features=[]),
+    "hiisi": dict(analogue="arrokoth", contrastCap=0.22, size=(512, 256), grain=0.95, detail=1.10, stamps=420, seed=4718,
+        credit="Hiisi, Lempo's inner partner. Never resolved. Relief borrowed from Arrokoth",
+        craters=(70, (1.0, 8.0), 0.10), boulders=(0, (0.2, 1.0), 0.0), features=[]),
+    "paha": dict(analogue="arrokoth", contrastCap=0.22, size=(256, 128), grain=1.1, detail=1.20, stamps=260, seed=4719,
+        credit="Paha, the outer companion of Lempo and Hiisi. Never resolved. Relief borrowed from Arrokoth",
+        craters=(35, (2.0, 12.0), 0.12), boulders=(0, (0.2, 1.0), 0.0), features=[]),
+    "sila": dict(analogue="arrokoth", contrastCap=0.22, size=(512, 256), grain=1.0, detail=1.10, stamps=420, seed=7936,
+        credit="Sila. Never resolved; mutual eclipses with Nunam 2009-2017 (Grundy et al. 2012). Relief borrowed from Arrokoth",
+        craters=(70, (1.0, 8.0), 0.10), boulders=(0, (0.2, 1.0), 0.0), features=[]),
+    "nunam": dict(analogue="arrokoth", contrastCap=0.22, size=(512, 256), grain=0.95, detail=1.10, stamps=420, seed=7937,
+        credit="Nunam, Sila's partner. Never resolved. Relief borrowed from Arrokoth",
+        craters=(70, (1.0, 8.0), 0.10), boulders=(0, (0.2, 1.0), 0.0), features=[]),
+    "teharonhiawako": dict(analogue="arrokoth", contrastCap=0.22, size=(512, 256), grain=1.0, detail=1.10, stamps=420, seed=8861,
+        credit="Teharonhiawako. Never resolved; split from Sawiskera from the ground (Osip et al. 2003). Relief borrowed from Arrokoth",
+        craters=(70, (1.0, 8.0), 0.10), boulders=(0, (0.2, 1.0), 0.0), features=[]),
+    "sawiskera": dict(analogue="arrokoth", contrastCap=0.22, size=(256, 128), grain=1.1, detail=1.20, stamps=260, seed=8862,
+        credit="Sawiskera, Teharonhiawako's partner. Never resolved. Relief borrowed from Arrokoth",
+        craters=(35, (2.0, 12.0), 0.12), boulders=(0, (0.2, 1.0), 0.0), features=[]),
+    "altjira": dict(analogue="arrokoth", contrastCap=0.22, size=(512, 256), grain=1.0, detail=1.10, stamps=420, seed=1487,
+        credit="Altjira. Never resolved; split from its partner by Hubble (Grundy et al. 2011). Relief borrowed from Arrokoth",
+        craters=(70, (1.0, 8.0), 0.10), boulders=(0, (0.2, 1.0), 0.0), features=[]),
+    "altjira-moon": dict(analogue="arrokoth", contrastCap=0.22, size=(512, 256), grain=0.95, detail=1.10, stamps=420, seed=1488,
+        credit="Altjira's unnamed partner. Never resolved. Relief borrowed from Arrokoth",
+        craters=(70, (1.0, 8.0), 0.10), boulders=(0, (0.2, 1.0), 0.0), features=[]),
+    "manwe": dict(analogue="arrokoth", contrastCap=0.22, size=(512, 256), grain=1.0, detail=1.10, stamps=420, seed=3854,
+        credit="Manwe. Never resolved; a two-lobed contact binary from its lightcurve (Rabinowitz et al. 2019). Relief borrowed from Arrokoth, also a contact binary",
+        craters=(70, (1.0, 8.0), 0.10), boulders=(0, (0.2, 1.0), 0.0), features=[]),
+    "thorondor": dict(analogue="arrokoth", contrastCap=0.22, size=(256, 128), grain=1.1, detail=1.20, stamps=260, seed=3855,
+        credit="Thorondor, Manwe's partner. Never resolved. Relief borrowed from Arrokoth",
+        craters=(35, (2.0, 12.0), 0.12), boulders=(0, (0.2, 1.0), 0.0), features=[]),
 }
 
 

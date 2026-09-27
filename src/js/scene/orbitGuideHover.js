@@ -147,8 +147,10 @@ export function registerOrbitGuideHover({
     line.userData.baseOpacity = Number(line.material.opacity ?? 0.22);
     line.userData.hover = {
       eyebrow,
-      title: `${name} orbit`,
-      action: `Click this orbit to travel directly to ${name}`,
+      /* A line may name itself: a binary's one guide carries every body on
+       * it ("Lempo, Hiisi & Paha orbit"), set by smallBodies.js. */
+      title: line.userData?.hoverTitle ?? `${name} orbit`,
+      action: line.userData?.hoverAction ?? `Click this orbit to travel directly to ${name}`,
       secondary: line.userData?.hoverSecondary ?? null,
     };
 

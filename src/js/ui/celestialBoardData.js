@@ -7,6 +7,7 @@ import { SMALL_BODIES } from "../scene/smallBodies/smallBodyCatalogue.js";
 import { MAIN_BELT_WORLDS } from "../scene/smallBodies/mainBeltCatalogue.js";
 import { CENTAURS } from "../scene/smallBodies/centaurCatalogue.js";
 import { TRANS_NEPTUNIAN_WORLDS } from "../scene/smallBodies/tnoCatalogue.js";
+import { KUIPER_BINARIES } from "../scene/smallBodies/binaryCatalogue.js";
 import { BELT_MAJOR_ROCKS } from "../scene/beltMajorOrbitGuides.js";
 import { hasIcyRingSystem } from "../planets/icyRings.js";
 import { JUPITER_MOON_PROFILES } from "../planets/jupiter/satellites/jovianMoonCatalog.js";
@@ -194,6 +195,35 @@ export const BODY_KINDS = Object.freeze({
 
 let cached = null;
 
+/*
+ * Which systems are binaries, for the board's "Binaries & triples" filter.
+ *
+ * Two tests, either enough. The catalogue calls it one -- Didymos, Huya,
+ * the Rank 4 batch B systems, anything whose partner is a "binary
+ * companion" or "binary partner". Or the centre of mass lies outside the
+ * primary: a q / (1 + q) > R1, with q = (d2 / d1)^3 at equal density, which
+ * is the usual line between a planet with a moon and a double body -- it is
+ * what makes Pluto and Charon a binary and Earth and the Moon not. Planets
+ * are never counted. Worked through, the second test adds Pluto (2,300 km
+ * outside a 1,188 km radius) and turns down Eris,
+ * Haumea and Quaoar, whose moons are too small. (Orcus and Varda also pass
+ * the first test, their partners being catalogued as binary companions.)
+ */
+function isBinarySystem(body) {
+  if (body.kind === "planet" || body.kind === "sun" || !body.moons.length) return false;
+  const text = `${body.classification ?? ""} ${body.detail ?? ""} ${body.moons.map((m) => m.family).join(" ")}`;
+  if (/binary|triple/i.test(text)) return true;
+  const r1 = Number(body.diameterKm) / 2;
+  if (!Number.isFinite(r1) || r1 <= 0) return false;
+  return body.moons.some((moon) => {
+    const a = Number(moon.distanceKm);
+    const d2 = Number(moon.diameterKm);
+    if (!Number.isFinite(a) || !Number.isFinite(d2) || d2 <= 0) return false;
+    const q = (d2 / (r1 * 2)) ** 3;
+    return (a * q) / (1 + q) > r1;
+  });
+}
+
 /**
  * @returns {{ regions, bodies, moonCount, bodyCount }}
  *   bodies: [{ name, kind, aAU, region, diameterKm, swatch, rings, moons }]
@@ -244,7 +274,7 @@ export function buildCelestialBoard() {
     });
   });
 
-  [...SMALL_BODIES, ...MAIN_BELT_WORLDS, ...CENTAURS, ...TRANS_NEPTUNIAN_WORLDS].forEach((record) => {
+  [...SMALL_BODIES, ...MAIN_BELT_WORLDS, ...CENTAURS, ...TRANS_NEPTUNIAN_WORLDS, ...KUIPER_BINARIES].forEach((record) => {
     const aAU = Number(record.orbit?.aAU);
     if (!Number.isFinite(aAU)) return;
     const kind = kindForSmallBody(record);
@@ -261,13 +291,39 @@ export function buildCelestialBoard() {
         diameterKm: Number(m.diameterKm) || null,
         distanceKm: Number(m.separationKm) || null,
         periodDays: Number(m.periodHours) ? Number(m.periodHours) / 24 : null,
-        retrograde: false,
-        family: "Moons",
+        /* A mutual orbit tilted past 90 degrees goes round backwards --
+         * Sawiskera, Altjira's partner, Nunam. Ordinary moons here have no
+         * published tilt and stay prograde. */
+        retrograde: Number(m.inclinationDeg) > 90,
+        family: m.family ?? (m.barycentric ? "Binary partner" : "Moons"),
+        partner: Boolean(m.barycentric),
+        /* What the binary system view draws: the published mutual orbit
+         * (eccentricity, mass ratio, which centre it goes round) and the
+         * body's own spin and shape. Straight from binaryCatalogue.js. */
+        eccentricity: Number(m.eccentricity) || 0,
+        massRatio: Number.isFinite(Number(m.massRatio)) ? Number(m.massRatio) : null,
+        around: m.around ?? null,
+        inclinationDeg: Number.isFinite(Number(m.inclinationDeg)) ? Number(m.inclinationDeg) : null,
+        locked: Boolean(m.tidallyLocked),
+        rotationHours: Number(m.rotationHours) || null,
+        lobed: (m.shape?.lobes?.length ?? 0) >= 2,
+        classification: m.classification ?? "",
       })),
       detail: String(record.detail ?? "").split("|")[0]?.trim() || record.classification,
+      classification: record.classification ?? "",
+      rotationHours: Number(record.rotationHours) || null,
+      locked: Boolean(record.tidallyLocked),
+      lobed: (record.shape?.lobes?.length ?? 0) >= 2,
     });
   });
 
+  bodies.forEach((body) => {
+    body.binary = isBinarySystem(body);
+    /* Every companion a partner going round a shared centre: the five Rank 4
+     * batch B systems. These open the binary system view, not a moon board,
+     * and are listed under all their names together. */
+    body.partnerSystem = body.moons.length > 0 && body.moons.every((m) => m.partner);
+  });
   bodies.sort((a, b) => a.aAU - b.aAU);
   const moonCount = bodies.reduce((sum, b) => sum + b.moons.length, 0);
   cached = Object.freeze({

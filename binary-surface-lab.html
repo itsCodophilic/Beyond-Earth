@@ -1,0 +1,724 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Binary surface lab</title>
+<!--
+  A bench for choosing the surfaces of the five Kuiper Belt binaries.
+
+  Twice their maps were painted and twice they read wrong in the scene --
+  first as one surface on eight bodies, then as drawings of terrain rather
+  than terrain. So this time nothing ships until it has been chosen here.
+
+  For each system: three candidate designs (A, B, C), each borrowed from a
+  real surface that has been photographed close up -- Callisto, Bennu and
+  Ryugu, Arrokoth, Mathilde, Lutetia and Phobos -- plus what ships today,
+  side by side on the real shapes, under one light, turning together.
+  Beside them, if you want, the real references themselves.
+
+  Everything is generated here, live, by tools/binary-surface-lab/
+  surfaceGenerator.js -- the same code that will write the scene's maps once
+  a design is picked, so what is approved here is what ships. The relief is
+  a normal map, lit by the light you move, not painted into the colour.
+
+  Open with the dev server running: /Beyond-Earth/binary-surface-lab.html
+-->
+<style>
+  :root {
+    --ink: #e8eef6;
+    --dim: #8a97a8;
+    --line: rgba(140, 170, 200, 0.16);
+    --panel: rgba(10, 14, 20, 0.9);
+    --accent: #77efff;
+    --amber: #ffc482;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: #05070b; color: var(--ink);
+    font: 13px/1.5 ui-monospace, "SF Mono", Menlo, monospace; overflow: hidden; }
+  #stage { position: fixed; inset: 0 0 0 340px; }
+  canvas.gl { display: block; }
+  #ui {
+    position: fixed; top: 0; left: 0; bottom: 0; width: 340px; padding: 14px 16px 24px; z-index: 10;
+    background: var(--panel); border-right: 1px solid var(--line); overflow: auto;
+  }
+  h1 { font-size: 13px; letter-spacing: .14em; text-transform: uppercase; margin: 0 0 2px; color: var(--accent); font-weight: 600; }
+  .sub { color: var(--dim); margin: 0 0 12px; font-size: 11px; }
+  fieldset { border: 1px solid var(--line); border-radius: 6px; margin: 0 0 10px; padding: 8px 10px 10px; }
+  legend { color: var(--dim); font-size: 10px; letter-spacing: .12em; text-transform: uppercase; padding: 0 4px; }
+  label { display: flex; align-items: center; gap: 8px; margin: 4px 0; cursor: pointer; }
+  label.slider { display: grid; grid-template-columns: 96px 1fr 38px; }
+  label.slider output { color: var(--dim); font-size: 11px; text-align: right; }
+  input[type=range] { width: 100%; accent-color: var(--accent); }
+  input[type=checkbox] { accent-color: var(--accent); }
+  button { font: inherit; color: var(--ink); background: rgba(120,220,255,.08);
+    border: 1px solid var(--line); border-radius: 5px; padding: 5px 9px; cursor: pointer; }
+  button:hover { background: rgba(120,220,255,.16); }
+  button.on { background: rgba(120,220,255,.24); border-color: var(--accent); }
+  .row { display: flex; gap: 6px; flex-wrap: wrap; }
+  .systems button { flex: 1 1 45%; text-align: left; font-size: 11px; }
+  .brief { color: var(--dim); font-size: 11px; margin: 8px 0 0; }
+  .variant { display: block; width: 100%; text-align: left; margin: 0 0 6px; padding: 8px 10px; }
+  .variant b { display: block; color: var(--ink); letter-spacing: .04em; }
+  .variant .why { display: block; color: var(--dim); font-size: 11px; margin-top: 2px; }
+  .variant .terr { display: block; color: var(--accent); font-size: 10.5px; margin-top: 4px; opacity: .8; }
+  .variant.on b { color: var(--amber); }
+  .variant .picked { float: right; color: var(--amber); font-size: 10px; letter-spacing: .1em; }
+  #status { color: var(--amber); font-size: 11px; min-height: 16px; margin: 4px 0 8px; }
+  #picks { font-size: 11px; color: var(--dim); white-space: pre-wrap; margin: 6px 0; }
+  #picks b { color: var(--ink); }
+  .hint { color: var(--dim); font-size: 11px; margin-top: 10px; }
+  #labels { position: fixed; inset: 0 0 0 340px; pointer-events: none; z-index: 5; }
+  .tag { position: absolute; transform: translate(-50%, 0); text-align: center; font-size: 11px;
+    letter-spacing: .06em; color: var(--ink); white-space: nowrap; text-shadow: 0 1px 3px #000; }
+  .tag small { display: block; color: var(--dim); font-size: 10px; }
+  .tag.ref { color: var(--dim); }
+  .tag.ref small { white-space: normal; max-width: 12ch; margin: 0 auto; line-height: 1.3; font-size: 9.5px; }
+  #flat { position: fixed; inset: 0 0 0 340px; z-index: 6; overflow: auto; padding: 18px; display: none;
+    background: rgba(5,7,11,.96); }
+  #flat.on { display: block; }
+  #flat figure { margin: 0 0 16px; }
+  #flat figcaption { color: var(--dim); font-size: 11px; margin-bottom: 4px; }
+  #flat .maps { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  #flat canvas { width: 100%; height: auto; image-rendering: auto; border: 1px solid var(--line); }
+</style>
+</head>
+<body>
+<div id="ui">
+  <h1>Binary surface lab</h1>
+  <p class="sub">Pick one design per system. Nothing in the scene changes until you say so.</p>
+
+  <fieldset>
+    <legend>System</legend>
+    <div class="row systems" id="systems"></div>
+    <p class="brief" id="brief"></p>
+  </fieldset>
+
+  <fieldset>
+    <legend>Design</legend>
+    <div id="variants"></div>
+    <div id="status"></div>
+    <div class="row">
+      <button id="pick">Pick this design for the system</button>
+    </div>
+  </fieldset>
+
+  <fieldset>
+    <legend>Tune this design</legend>
+    <div id="tweaks"></div>
+    <div class="row" style="margin-top:6px"><button id="reset">Reset tuning</button></div>
+  </fieldset>
+
+  <fieldset>
+    <legend>View</legend>
+    <label><input type="checkbox" id="normals" checked> Relief (normal map)</label>
+    <label class="slider">Relief depth <input type="range" id="relief" min="0" max="300" value="100"><output>1.00</output></label>
+    <label><input type="checkbox" id="fill" checked> Scene's fill light (emissive)</label>
+    <label><input type="checkbox" id="refs"> Real references beside them</label>
+    <label><input type="checkbox" id="trueSize"> True relative sizes</label>
+    <label><input type="checkbox" id="flatMaps"> Show the flat maps</label>
+    <label class="slider">Map size
+      <select id="res" style="grid-column: span 2; font: inherit; background: #0b1017; color: var(--ink); border: 1px solid var(--line)">
+        <option value="512">512 × 256 (fast)</option>
+        <option value="1024" selected>1024 × 512 (as shipped)</option>
+        <option value="2048">2048 × 1024 (close-ups)</option>
+      </select>
+    </label>
+  </fieldset>
+
+  <fieldset>
+    <legend>Light and motion</legend>
+    <label class="slider">Light angle <input type="range" id="lightA" min="-180" max="180" value="-50"><output></output></label>
+    <label class="slider">Light height <input type="range" id="lightB" min="-80" max="80" value="22"><output></output></label>
+    <label class="slider">Strength <input type="range" id="lightI" min="0" max="400" value="180"><output></output></label>
+    <label><input type="checkbox" id="spin" checked> Spin</label>
+    <label class="slider">Spin speed <input type="range" id="spinS" min="0" max="200" value="35"><output></output></label>
+  </fieldset>
+
+  <fieldset>
+    <legend>Your picks</legend>
+    <div id="picks">None yet.</div>
+    <div class="row"><button id="copy">Copy picks</button></div>
+    <p class="hint">Send me the copied text when all five look right and I will build the scene's maps from exactly these settings.</p>
+  </fieldset>
+
+  <p class="hint">Drag to turn · scroll to zoom · click a body to look at it alone, click empty space to go back.</p>
+</div>
+
+<div id="stage"></div>
+<div id="labels"></div>
+<div id="flat"></div>
+
+<script type="module">
+import * as THREE from "three";
+import { KUIPER_BINARIES } from "/src/js/scene/smallBodies/binaryCatalogue.js";
+import { SMALL_BODIES, albedoToLinearValue } from "/src/js/scene/smallBodies/smallBodyCatalogue.js";
+import { MAIN_BELT_WORLDS } from "/src/js/scene/smallBodies/mainBeltCatalogue.js";
+import { createSmallBodyGeometry } from "/src/js/scene/smallBodies/smallBodyShapes.js";
+import { SYSTEMS, TERRAINS, specFor } from "/tools/binary-surface-lab/surfaceDesigns.js";
+
+const ASSETS = "/Beyond-Earth/assets/textures";
+const SHIPPED_FILE = {
+  Lempo: "lempo", Hiisi: "hiisi", Paha: "paha", Sila: "sila", Nunam: "nunam",
+  Teharonhiawako: "teharonhiawako", Sawiskera: "sawiskera", Altjira: "altjira",
+  "Altjira I": "altjira-moon", "Manwë": "manwe", Thorondor: "thorondor",
+};
+const REFERENCES = [
+  { name: "Arrokoth", file: "arrokoth", note: "cold classical · New Horizons" },
+  { name: "Mathilde", file: "mathilde", note: "C-type rubble pile · NEAR" },
+  { name: "Bennu", file: "bennu", note: "C-type rubble · OSIRIS-REx" },
+  { name: "Ryugu", file: "ryugu", note: "C-type rubble · Hayabusa2" },
+  { name: "Lutetia", file: "lutetia", note: "M-type (?) · Rosetta" },
+  { name: "Kleopatra", file: "kleopatra", note: "M-type · radar" },
+  { name: "Callisto", file: null, note: "saturated craters · Galileo" },
+];
+
+/* ---------------------------------------------------------------- records */
+
+const bySystem = new Map();
+for (const record of KUIPER_BINARIES) {
+  const moons = Array.isArray(record.moons) ? record.moons : (record.moon ? [record.moon] : []);
+  bySystem.set(record.name, [record, ...moons.map((m) => ({ ...m, albedo: m.albedo ?? record.albedo }))]);
+}
+const SYSTEM_PRIMARY = { lempo: "Lempo", sila: "Sila", teharonhiawako: "Teharonhiawako", altjira: "Altjira", manwe: "Manwë" };
+
+/* ---------------------------------------------------------------- renderer */
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.domElement.className = "gl";
+const stage = document.getElementById("stage");
+stage.append(renderer.domElement);
+const W = () => stage.clientWidth;
+const H = () => stage.clientHeight;
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x05070b);
+const camera = new THREE.PerspectiveCamera(34, 1, 0.01, 400);
+const key = new THREE.DirectionalLight(0xfff6ec, 1.8);
+scene.add(key);
+scene.add(new THREE.AmbientLight(0x3a4a60, 0.08));
+const maxAniso = renderer.capabilities.getMaxAnisotropy();
+
+/* ---------------------------------------------------------------- workers */
+
+const POOL = Math.max(1, Math.min(4, (navigator.hardwareConcurrency || 2) - 1));
+const workers = Array.from({ length: POOL }, () => new Worker(`${import.meta.env?.BASE_URL ?? "/Beyond-Earth/"}tools/binary-surface-lab/surfaceWorker.js`, { type: "module" }));
+let jobId = 0;
+const pending = new Map();
+workers.forEach((w) => {
+  w.onmessage = (e) => {
+    const job = pending.get(e.data.id);
+    if (!job) return;
+    pending.delete(e.data.id);
+    if (e.data.error) job.reject(new Error(e.data.error));
+    else job.resolve(e.data);
+  };
+});
+let rr = 0;
+function generate(spec) {
+  const id = ++jobId;
+  return new Promise((resolve, reject) => {
+    pending.set(id, { resolve, reject });
+    workers[rr++ % workers.length].postMessage({ id, spec });
+  });
+}
+
+function canvasFrom(rgba, width, height) {
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  canvas.getContext("2d").putImageData(new ImageData(new Uint8ClampedArray(rgba.buffer), width, height), 0, 0);
+  return canvas;
+}
+
+function textureFrom(canvas, srgb) {
+  const t = new THREE.CanvasTexture(canvas);
+  t.colorSpace = srgb ? THREE.SRGBColorSpace : THREE.NoColorSpace;
+  t.wrapS = THREE.RepeatWrapping;
+  t.anisotropy = maxAniso;
+  return t;
+}
+
+/* The scene divides every map by its own mean linear luminance so the
+ * measured albedo sets the brightness; the lab does the same. */
+function meanLinearOf(image) {
+  const c = document.createElement("canvas");
+  c.width = 128;
+  c.height = 64;
+  const g = c.getContext("2d");
+  g.drawImage(image, 0, 0, 128, 64);
+  const d = g.getImageData(0, 0, 128, 64).data;
+  const lin = (v) => { v /= 255; return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; };
+  let s = 0;
+  for (let i = 0; i < d.length; i += 4) s += 0.2126 * lin(d[i]) + 0.7152 * lin(d[i + 1]) + 0.0722 * lin(d[i + 2]);
+  return s / (d.length / 4);
+}
+
+const imageCache = new Map();
+function loadImage(url) {
+  if (imageCache.has(url)) return imageCache.get(url);
+  const p = new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = reject;
+    img.src = url;
+  });
+  imageCache.set(url, p);
+  return p;
+}
+
+/* ---------------------------------------------------------------- bodies */
+
+function makeBody(record, { reference = false } = {}) {
+  const baseValue = albedoToLinearValue(record.albedo ?? 0.1) * 5.6;
+  const geometry = record.shape
+    // A reference keeps its measured colour (its map is grey relief, as in
+    // the scene); a binary's colour is in the map being judged.
+    ? createSmallBodyGeometry(record.shape, { widthSegments: 192, heightSegments: 128, chroma: reference ? (record.chroma ?? [1, 1, 1]) : [1, 1, 1], baseValue })
+    : new THREE.SphereGeometry(1, 128, 96);
+  if (!record.shape) {
+    const colors = new Float32Array(geometry.attributes.position.count * 3).fill(baseValue);
+    geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+  }
+  geometry.computeBoundingSphere();
+  const base = new THREE.Color().setRGB(baseValue, baseValue, baseValue, THREE.LinearSRGBColorSpace);
+  const material = new THREE.MeshStandardMaterial({
+    vertexColors: true, color: 0xffffff, roughness: 0.96, metalness: 0,
+    emissive: base, emissiveIntensity: 0.28, envMapIntensity: 0.04, dithering: true,
+  });
+  const mesh = new THREE.Mesh(geometry, material);
+  const holder = new THREE.Group();
+  holder.add(mesh);
+  scene.add(holder);
+  return {
+    record, reference, holder, mesh, material, base,
+    unit: 1 / geometry.boundingSphere.radius,
+    lobed: (record.shape?.lobes?.length ?? 0) >= 2,
+    mean: 1,
+    maps: null,
+  };
+}
+
+function applyMaps(body, maps) {
+  body.maps = maps;
+  const m = body.material;
+  m.map = maps?.albedo ?? null;
+  m.emissiveMap = maps?.albedo ?? null;
+  m.normalMap = ui.normals.checked ? (maps?.normal ?? null) : null;
+  m.bumpMap = ui.normals.checked ? (maps?.bump ?? null) : null;
+  body.mean = maps?.mean ?? 1;
+  applyMaterial(body);
+}
+
+function applyMaterial(body) {
+  const m = body.material;
+  const relief = +ui.relief.value / 100;
+  m.color.setScalar(body.maps ? 1 / body.mean : 1);
+  m.emissiveIntensity = (ui.fill.checked ? 0.28 : 0) / (body.maps ? body.mean : 1);
+  m.normalMap = ui.normals.checked ? (body.maps?.normal ?? null) : null;
+  m.bumpMap = ui.normals.checked ? (body.maps?.bump ?? null) : null;
+  m.normalScale.set(relief, relief);
+  m.bumpScale = 3 * relief;
+  m.needsUpdate = true;
+}
+
+/* ---------------------------------------------------------------- state */
+
+let systemKey = "lempo";
+let variantKey = "A";
+let shown = [];
+let references = [];
+let isolated = null;
+const view = { yaw: 0.5, pitch: 0.15, zoom: 1, spinT: 0 };
+const TWEAKS = [
+  { key: "craters", label: "Craters", min: 0, max: 250, value: 100, fmt: (v) => `×${(v / 100).toFixed(2)}` },
+  { key: "craterSize", label: "Crater size", min: 50, max: 200, value: 100, fmt: (v) => `×${(v / 100).toFixed(2)}` },
+  { key: "fresh", label: "Fresh craters", min: 0, max: 300, value: 100, fmt: (v) => `×${(v / 100).toFixed(2)}` },
+  { key: "boulders", label: "Boulders", min: 30, max: 250, value: 100, fmt: (v) => `×${(v / 100).toFixed(2)}` },
+  { key: "relief", label: "Terrain height", min: 20, max: 300, value: 100, fmt: (v) => `×${(v / 100).toFixed(2)}` },
+  { key: "contrast", label: "Contrast", min: 0, max: 250, value: 100, fmt: (v) => `×${(v / 100).toFixed(2)}` },
+  { key: "redness", label: "Redness", min: 40, max: 180, value: 100, fmt: (v) => `×${(v / 100).toFixed(2)}` },
+  { key: "hue", label: "Crimson ↔ orange", min: -100, max: 100, value: 0, fmt: (v) => (v / 100).toFixed(2) },
+];
+const tweakState = {};
+function tweaksFor(sys) {
+  if (!tweakState[sys]) tweakState[sys] = Object.fromEntries(TWEAKS.map((t) => [t.key, t.value]));
+  return tweakState[sys];
+}
+function tweakValues(sys) {
+  const t = tweaksFor(sys);
+  return {
+    craters: t.craters / 100, craterSize: t.craterSize / 100, fresh: t.fresh / 100,
+    boulders: t.boulders / 100, relief: t.relief / 100, contrast: t.contrast / 100,
+    redness: t.redness / 100, hue: t.hue / 100,
+  };
+}
+
+let picks = {};
+try { picks = JSON.parse(localStorage.getItem("binary-surface-lab:picks") || "{}"); } catch { picks = {}; }
+
+/* ---------------------------------------------------------------- UI */
+
+const $ = (id) => document.getElementById(id);
+const ui = {
+  normals: $("normals"), relief: $("relief"), fill: $("fill"), refs: $("refs"),
+  trueSize: $("trueSize"), flatMaps: $("flatMaps"), res: $("res"),
+  lightA: $("lightA"), lightB: $("lightB"), lightI: $("lightI"), spin: $("spin"), spinS: $("spinS"),
+};
+
+function renderSystems() {
+  const box = $("systems");
+  box.textContent = "";
+  SYSTEMS.forEach((s) => {
+    const b = document.createElement("button");
+    b.textContent = s.name + (picks[s.key] ? ` ✓${picks[s.key].variant}` : "");
+    b.classList.toggle("on", s.key === systemKey);
+    b.onclick = () => { systemKey = s.key; variantKey = picks[s.key]?.variant ?? "A"; if (picks[s.key]?.tweaks) Object.assign(tweaksFor(s.key), picks[s.key].tweaks); refresh(); };
+    box.append(b);
+  });
+  $("brief").textContent = SYSTEMS.find((s) => s.key === systemKey).brief;
+}
+
+function renderVariants() {
+  const sys = SYSTEMS.find((s) => s.key === systemKey);
+  const box = $("variants");
+  box.textContent = "";
+  const entries = [...Object.entries(sys.variants), ["now", { title: "What ships now", why: "The maps the scene loads, with their relief maps: since the picks, the chosen designs.", terrains: null }]];
+  for (const [k, v] of entries) {
+    const b = document.createElement("button");
+    b.className = "variant" + (k === variantKey ? " on" : "");
+    const picked = picks[systemKey]?.variant === k ? '<span class="picked">PICKED</span>' : "";
+    const terr = v.terrains
+      ? Object.entries(v.terrains).map(([body, t]) => `${body}: ${TERRAINS[t].label}`).join(" · ")
+      : "";
+    b.innerHTML = `${picked}<b>${k === "now" ? "" : k + " · "}${v.title}</b><span class="why">${v.why}</span>${terr ? `<span class="terr">${terr}</span>` : ""}`;
+    b.onclick = () => { variantKey = k; refresh(); };
+    box.append(b);
+  }
+}
+
+function renderTweaks() {
+  const box = $("tweaks");
+  box.textContent = "";
+  const state = tweaksFor(systemKey);
+  TWEAKS.forEach((t) => {
+    const label = document.createElement("label");
+    label.className = "slider";
+    const input = document.createElement("input");
+    input.type = "range";
+    input.min = t.min;
+    input.max = t.max;
+    input.value = state[t.key];
+    const out = document.createElement("output");
+    out.textContent = t.fmt(+input.value);
+    input.oninput = () => { out.textContent = t.fmt(+input.value); };
+    input.onchange = () => { state[t.key] = +input.value; build(); };
+    label.append(t.label, input, out);
+    box.append(label);
+  });
+}
+
+function renderPicks() {
+  const lines = SYSTEMS.map((s) => {
+    const p = picks[s.key];
+    if (!p) return `${s.name}: —`;
+    const v = p.variant === "now" ? "keep what ships" : `${p.variant} · ${s.variants[p.variant].title}`;
+    const changed = TWEAKS.filter((t) => p.tweaks && p.tweaks[t.key] !== t.value).map((t) => `${t.label.toLowerCase()} ${t.fmt(p.tweaks[t.key])}`);
+    return `${s.name}: ${v}${changed.length ? ` (${changed.join(", ")})` : ""}`;
+  });
+  $("picks").textContent = lines.join("\n");
+}
+
+$("pick").onclick = () => {
+  picks[systemKey] = { variant: variantKey, tweaks: { ...tweaksFor(systemKey) } };
+  try { localStorage.setItem("binary-surface-lab:picks", JSON.stringify(picks)); } catch { /* per-viewer convenience only */ }
+  renderSystems();
+  renderVariants();
+  renderPicks();
+};
+$("reset").onclick = () => { delete tweakState[systemKey]; renderTweaks(); build(); };
+$("copy").onclick = async () => {
+  const text = `Binary surface picks\n${$("picks").textContent}\nmap size ${ui.res.value}`;
+  try { await navigator.clipboard.writeText(text); $("copy").textContent = "Copied"; }
+  catch { $("copy").textContent = "Select the text above"; }
+  setTimeout(() => { $("copy").textContent = "Copy picks"; }, 1600);
+};
+
+/* ---------------------------------------------------------------- build */
+
+let buildToken = 0;
+async function build() {
+  const token = ++buildToken;
+  const sys = SYSTEMS.find((s) => s.key === systemKey);
+  const list = bySystem.get(SYSTEM_PRIMARY[systemKey]) ?? [];
+  // Bodies: reuse if the system has not changed.
+  if (!shown.length || shown[0].record.name !== list[0]?.name) {
+    shown.forEach((b) => scene.remove(b.holder));
+    shown = list.map((record) => makeBody(record));
+  }
+  isolated = null;
+  layout();
+  drawTags();
+  const status = $("status");
+  if (variantKey === "now") {
+    status.textContent = "Loading the shipped maps…";
+    await Promise.all(shown.map(async (b) => {
+      const file = SHIPPED_FILE[b.record.name];
+      const img = await loadImage(`${ASSETS}/smallbodies/${file}.jpg`);
+      // The shipped relief map, where there is one (since the picks).
+      const nimg = await loadImage(`${ASSETS}/smallbodies/${file}-normal.png`).catch(() => null);
+      if (token !== buildToken) return;
+      const tex = new THREE.Texture(img);
+      tex.colorSpace = THREE.SRGBColorSpace;
+      tex.wrapS = THREE.RepeatWrapping;
+      tex.anisotropy = maxAniso;
+      tex.needsUpdate = true;
+      let normal = null;
+      if (nimg) {
+        normal = new THREE.Texture(nimg);
+        normal.colorSpace = THREE.NoColorSpace;
+        normal.wrapS = THREE.RepeatWrapping;
+        normal.needsUpdate = true;
+      }
+      applyMaps(b, { albedo: tex, normal, mean: meanLinearOf(img), flat: nimg ? [img, nimg] : [img] });
+    }));
+    if (token === buildToken) { status.textContent = ""; drawFlat(); }
+    return;
+  }
+  const size = +ui.res.value;
+  const tweaks = tweakValues(systemKey);
+  let done = 0;
+  status.textContent = `Building ${shown.length} surfaces…`;
+  const started = performance.now();
+  await Promise.all(shown.map(async (b) => {
+    const spec = specFor(sys, variantKey, b.record.name, { width: size, height: size / 2, lobed: b.lobed, tweaks });
+    const out = await generate(spec);
+    if (token !== buildToken) return;
+    const albedoCanvas = canvasFrom(out.albedo, size, size / 2);
+    const normalCanvas = canvasFrom(out.normal, size, size / 2);
+    b.maps?.albedo?.dispose?.();
+    b.maps?.normal?.dispose?.();
+    applyMaps(b, {
+      albedo: textureFrom(albedoCanvas, true),
+      normal: textureFrom(normalCanvas, false),
+      mean: out.meanLinear,
+      flat: [albedoCanvas, normalCanvas],
+      terrain: spec.terrain,
+    });
+    done += 1;
+    status.textContent = `Building… ${done}/${shown.length}`;
+  }));
+  if (token === buildToken) {
+    status.textContent = `Built in ${((performance.now() - started) / 1000).toFixed(1)} s`;
+    drawTags();
+    drawFlat();
+  }
+}
+
+async function buildReferences() {
+  if (references.length) return;
+  const all = [...SMALL_BODIES, ...MAIN_BELT_WORLDS];
+  for (const ref of REFERENCES) {
+    const record = ref.file ? all.find((r) => r.name === ref.name) : { name: "Callisto", albedo: 0.22 };
+    if (!record) continue;
+    const body = makeBody(record, { reference: true });
+    body.note = ref.note;
+    references.push(body);
+    if (ref.file) {
+      loadImage(`${ASSETS}/smallbodies/${ref.file}.jpg`).then((img) => {
+        const tex = new THREE.Texture(img);
+        tex.colorSpace = THREE.SRGBColorSpace;
+        tex.wrapS = THREE.RepeatWrapping;
+        tex.needsUpdate = true;
+        applyMaps(body, { albedo: tex, normal: null, mean: meanLinearOf(img) });
+      });
+    } else {
+      Promise.all([
+        loadImage(`${ASSETS}/jovian/callisto-reference-albedo.jpg`),
+        loadImage(`${ASSETS}/jovian/callisto-reference-height.jpg`),
+      ]).then(([img, height]) => {
+        const tex = new THREE.Texture(img);
+        tex.colorSpace = THREE.SRGBColorSpace;
+        tex.needsUpdate = true;
+        const bump = new THREE.Texture(height);
+        bump.needsUpdate = true;
+        applyMaps(body, { albedo: tex, normal: null, bump, mean: meanLinearOf(img) });
+      });
+    }
+  }
+}
+
+/* ---------------------------------------------------------------- layout */
+
+function layout() {
+  const list = isolated ? [isolated] : shown;
+  const refs = ui.refs.checked && !isolated ? references : [];
+  references.forEach((b) => { b.holder.visible = refs.includes(b); });
+  shown.forEach((b) => { b.holder.visible = list.includes(b); });
+  const trueMax = Math.max(...list.map((b) => b.record.diameterKm || 1));
+  const n = list.length;
+  const spacing = 2.6;
+  list.forEach((b, i) => {
+    b.holder.position.set((i - (n - 1) / 2) * spacing, refs.length ? 0.9 : 0, 0);
+    const s = ui.trueSize.checked ? Math.max(0.2, (b.record.diameterKm || 1) / trueMax) : 1;
+    b.mesh.scale.setScalar(b.unit * s);
+  });
+  refs.forEach((b, i) => {
+    b.holder.position.set((i - (refs.length - 1) / 2) * 1.25, -1.55, 0);
+    b.mesh.scale.setScalar(b.unit * 0.5);
+  });
+  const width = Math.max(n * spacing, refs.length * 1.25);
+  const span = Math.max((width * 1.12) / (W() / H()), refs.length ? 4.6 : 2.8);
+  camera.position.set(0, 0, (span * 1.55) / view.zoom);
+  camera.lookAt(0, 0, 0);
+}
+
+/* ---------------------------------------------------------------- tags */
+
+const labels = $("labels");
+const tags = new Map();
+function drawTags() {
+  labels.textContent = "";
+  tags.clear();
+  for (const b of [...shown, ...references]) {
+    const el = document.createElement("div");
+    el.className = "tag" + (b.reference ? " ref" : "");
+    const terrain = b.maps?.terrain ? TERRAINS[b.maps.terrain].label : (variantKey === "now" && !b.reference ? "shipped map" : b.note ?? "");
+    el.innerHTML = `${b.record.name}<small>${terrain}</small>`;
+    labels.append(el);
+    tags.set(b, el);
+  }
+}
+const scratch = new THREE.Vector3();
+function placeTags() {
+  for (const [b, el] of tags) {
+    el.style.display = b.holder.visible ? "" : "none";
+    if (!b.holder.visible) continue;
+    scratch.copy(b.holder.position);
+    scratch.y -= b.reference ? 0.62 : 1.18;
+    scratch.project(camera);
+    el.style.left = `${(scratch.x * 0.5 + 0.5) * W()}px`;
+    el.style.top = `${(-scratch.y * 0.5 + 0.5) * H()}px`;
+  }
+}
+
+/* ---------------------------------------------------------------- flat maps */
+
+function drawFlat() {
+  const box = $("flat");
+  box.classList.toggle("on", ui.flatMaps.checked);
+  if (!ui.flatMaps.checked) return;
+  box.textContent = "";
+  for (const b of shown) {
+    const fig = document.createElement("figure");
+    fig.innerHTML = `<figcaption>${b.record.name} · colour map${b.maps?.flat?.[1] ? " · relief (normal) map" : ""}</figcaption>`;
+    const maps = document.createElement("div");
+    maps.className = "maps";
+    (b.maps?.flat ?? []).forEach((src) => {
+      const c = document.createElement("canvas");
+      c.width = src.width || src.naturalWidth;
+      c.height = src.height || src.naturalHeight;
+      c.getContext("2d").drawImage(src, 0, 0);
+      maps.append(c);
+    });
+    fig.append(maps);
+    box.append(fig);
+  }
+}
+
+/* ---------------------------------------------------------------- inputs */
+
+function outputs() {
+  for (const k of ["lightA", "lightB", "lightI", "spinS", "relief"]) {
+    const o = ui[k].parentElement.querySelector("output");
+    if (o) o.textContent = k === "relief" ? (+ui[k].value / 100).toFixed(2) : ui[k].value;
+  }
+}
+function applyLight() {
+  const a = THREE.MathUtils.degToRad(+ui.lightA.value);
+  const b = THREE.MathUtils.degToRad(+ui.lightB.value);
+  key.position.set(Math.sin(a) * Math.cos(b), Math.sin(b), Math.cos(a) * Math.cos(b)).multiplyScalar(10);
+  key.intensity = +ui.lightI.value / 100;
+  outputs();
+}
+["lightA", "lightB", "lightI", "spinS"].forEach((k) => ui[k].addEventListener("input", applyLight));
+ui.relief.addEventListener("input", () => { outputs(); [...shown, ...references].forEach(applyMaterial); });
+ui.normals.addEventListener("change", () => [...shown, ...references].forEach(applyMaterial));
+ui.fill.addEventListener("change", () => [...shown, ...references].forEach(applyMaterial));
+ui.trueSize.addEventListener("change", layout);
+ui.refs.addEventListener("change", async () => { if (ui.refs.checked) await buildReferences(); layout(); drawTags(); });
+ui.flatMaps.addEventListener("change", drawFlat);
+ui.res.addEventListener("change", build);
+
+let dragging = false;
+let moved = 0;
+let last = { x: 0, y: 0 };
+stage.addEventListener("pointerdown", (e) => { dragging = true; moved = 0; last = { x: e.clientX, y: e.clientY }; });
+addEventListener("pointermove", (e) => {
+  if (!dragging) return;
+  const dx = e.clientX - last.x;
+  const dy = e.clientY - last.y;
+  moved += Math.abs(dx) + Math.abs(dy);
+  view.yaw += dx * 0.006;
+  view.pitch = THREE.MathUtils.clamp(view.pitch + dy * 0.005, -1.4, 1.4);
+  last = { x: e.clientX, y: e.clientY };
+});
+addEventListener("pointerup", (e) => {
+  const wasDrag = moved > 6;
+  dragging = false;
+  if (wasDrag || !e.target.closest?.("#stage")) return;
+  const box = stage.getBoundingClientRect();
+  const ray = new THREE.Raycaster();
+  ray.setFromCamera(new THREE.Vector2(((e.clientX - box.left) / box.width) * 2 - 1, -((e.clientY - box.top) / box.height) * 2 + 1), camera);
+  const hit = ray.intersectObjects(shown.filter((b) => b.holder.visible).map((b) => b.mesh), false)[0];
+  const body = hit ? shown.find((b) => b.mesh === hit.object) : null;
+  isolated = body && isolated !== body ? body : null;
+  view.zoom = 1;
+  layout();
+});
+stage.addEventListener("wheel", (e) => {
+  view.zoom = THREE.MathUtils.clamp(view.zoom * (e.deltaY > 0 ? 0.9 : 1.1), 0.4, 18);
+  layout();
+}, { passive: true });
+
+function resize() {
+  renderer.setSize(W(), H(), false);
+  renderer.domElement.style.width = "100%";
+  renderer.domElement.style.height = "100%";
+  camera.aspect = W() / H();
+  camera.updateProjectionMatrix();
+  layout();
+}
+addEventListener("resize", resize);
+
+function refresh() {
+  renderSystems();
+  renderVariants();
+  renderTweaks();
+  renderPicks();
+  build();
+}
+
+resize();
+applyLight();
+refresh();
+
+let prev = performance.now();
+function frame(now) {
+  const dt = Math.min(0.05, (now - prev) / 1000);
+  prev = now;
+  if (ui.spin.checked) view.spinT += dt * (+ui.spinS.value / 100);
+  for (const b of [...shown, ...references]) b.holder.rotation.set(view.pitch, view.yaw + view.spinT, 0);
+  placeTags();
+  renderer.render(scene, camera);
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+// For checking from the console.
+window.__lab = { get shown() { return shown; }, get state() { return { systemKey, variantKey, picks }; } };
+</script>
+</body>
+</html>

@@ -117,7 +117,68 @@ predate this batch:
 - Chaos's two-lobed occultation outline is not yet refereed, so it is drawn as
   one body.
 
-**Rank 4 batch B (the near-equal binaries) and Rank 5 onward are untouched.**
+## Rank 4, batch B is built
+
+The five near-equal binaries, eleven bodies, in
+`src/js/scene/smallBodies/binaryCatalogue.js`: **Lempo** with Hiisi and Paha
+(a hierarchical triple), **Sila–Nunam**, **Teharonhiawako–Sawiskera**,
+**Altjira** and its unnamed partner, and **Manwë–Thorondor**.
+
+- They are drawn **about their barycentres**, which is new. Everywhere else a
+  moon circles a parent that stays put; here both bodies go round the centre
+  of mass, each at its share of the separation, on the published mutual
+  eccentricity (`updateBinarySystem` in `smallBodies.js`). Lempo is
+  hierarchical: Lempo and Hiisi round their own centre every 1.9 days, that
+  centre and Paha round the system's every 50. Each pair gets both paths,
+  shown only while one of the system's bodies is focused, with a ring and a
+  name on every body (the centre-of-mass crosses were removed: from outside
+  they read as mistaken lines). Focusing any member frames the whole system,
+  and its heliocentric guide is labelled with every name ("Lempo, Hiisi &
+  Paha orbit").
+- Sila and Nunam are **doubly synchronous** and turn to keep their long axes
+  on each other.
+- **Manwë is a contact binary** — two lobes, width/length 0.30, from its
+  lightcurve (Rabinowitz et al. 2019) — built with the same two-lobe shape
+  code as Arrokoth.
+- Mass ratios: measured for Lempo (Nelsen et al. 2024, where Hiisi turns out
+  heavier than Lempo); equal density on the published sizes elsewhere.
+- Mutual orbits from Hubble (Benecchi et al. 2010, Grundy et al. 2011, 2012,
+  2014, Rabinowitz et al. 2014, Nelsen et al. 2024). The mutual orbits'
+  nodes are not in the ecliptic frame in the sources, so the tilt is drawn
+  and the heading is not.
+- **Surfaces, fourth pass: chosen in a lab.** Designed in
+  `binary-surface-lab.html` against real surfaces (Callisto, Bennu, Ryugu,
+  Mathilde, Lutetia, Arrokoth), picked and tuned by the project owner
+  (`tools/binary-surface-lab/picks.json`), and written by
+  `tools/binary-surface-lab/build-binary-maps.mjs` from the same generator:
+  a colour map and a **normal map** per body, so craters, grooves and
+  boulders are lit by the Sun. Lempo, Hiisi, Paha cratered to saturation;
+  Sila lightly cratered, Nunam a dirty snowball; Teharonhiawako and
+  Sawiskera grooved; Altjira and its partner boulder rubble; Manwë a
+  snowball (frosted, cracked at the neck), Thorondor rubble.
+- **Altjira is probably a triple.** Nelsen et al. 2025 (PSJ, "Beyond Point
+  Masses IV", arXiv 2403.12786) find Altjira itself is most likely two
+  near-equal bodies about 124 km apart, going round each other every ~5.5 h,
+  with the known partner outside them. It is drawn as a two-lobed body with
+  that spin; the outer orbit keeps Grundy et al. 2011.
+- The celestial board gains a **Binaries & triples** filter (13 systems:
+  catalogued as binary/triple, or with the centre of mass outside the
+  primary). The five systems whose companions are all partners are listed
+  under every name ("Lempo · Hiisi · Paha", with dots that go round each
+  other) and open a **binary system view** (`src/js/ui/binarySystemView.js`)
+  instead of a moon board: the shared centre in the middle, every body moving
+  round it on its real share and eccentricity, a moving comparison with a
+  planet and its moon, and a true-scale strip.
+- **Space Decoded** (`src/js/ui/boardGlossary.js`): 33 plain-language words in
+  six bunches (distance and light, the neighbourhood, small worlds, pairs and
+  rings, how things move, why surfaces look that way), each with an animated
+  diagram, centred over the board, searchable, with the dossier's letter-wave
+  hover. A "?" on each region title opens its word, and the tour has a step
+  for it.
+- Space mode and the events hide the binaries' paths and rings, and every
+  small-body moon's "orbit path" ring.
+
+**Rank 5 onward are untouched.**
 
 ## Corrections to this list
 

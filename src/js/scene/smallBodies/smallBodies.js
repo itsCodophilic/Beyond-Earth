@@ -11,6 +11,7 @@ import { SMALL_BODIES, albedoToLinearValue } from "./smallBodyCatalogue.js";
 import { MAIN_BELT_WORLDS } from "./mainBeltCatalogue.js";
 import { CENTAURS } from "./centaurCatalogue.js";
 import { TRANS_NEPTUNIAN_WORLDS } from "./tnoCatalogue.js";
+import { KUIPER_BINARIES } from "./binaryCatalogue.js";
 import { createCentaurComa, updateCentaurComa } from "./centaurComa.js";
 import { createIcyRingSystem, hasIcyRingSystem } from "../../planets/icyRings.js";
 import { applyRingProximityVisibility } from "../../planets/ringProximity.js";
@@ -37,6 +38,9 @@ const ALL_SMALL_BODIES = Object.freeze([
   ...CENTAURS,
   /* Rank 4, batch A: fourteen trans-Neptunian worlds and five moons. */
   ...TRANS_NEPTUNIAN_WORLDS,
+  /* Rank 4, batch B: five near-equal binaries, one a triple, drawn about
+   * their barycentres -- see `updateBinarySystem`. */
+  ...KUIPER_BINARIES,
 ]);
 import { createSmallBodyGeometry, maxHalfExtent } from "./smallBodyShapes.js";
 
@@ -472,7 +476,36 @@ const SMALL_BODY_TEXTURES = Object.freeze({
    * colour instead; the albedo still sets the brightness. */
   "Gǃòʼé ǃHú": { file: "gohu-red", meanLinear: 0.1805 },
   "Huya I": { file: "huya-moon", meanLinear: 0.0967 },
+  /* Rank 4, batch B: the five binaries, eleven bodies. Designed in
+   * binary-surface-lab.html and picked there by the project owner, then
+   * written by tools/binary-surface-lab/build-binary-maps.mjs from the same
+   * generator, seeds and tuning (tools/binary-surface-lab/picks.json):
+   * Lempo, Hiisi and Paha cratered to saturation like Callisto; Sila
+   * lightly cratered and Nunam a dirty snowball; Teharonhiawako and
+   * Sawiskera grooved like Lutetia; Altjira and its partner boulder rubble
+   * like Bennu; Manwë a snowball and Thorondor rubble. Each carries a
+   * normal map (`normal`) as well: the craters, grooves and boulders are
+   * relief that the Sun lights, not paint. meanLinear is measured on each
+   * saved JPEG. */
+  Lempo: { file: "lempo", meanLinear: 0.0773, normal: "lempo-normal" },
+  Hiisi: { file: "hiisi", meanLinear: 0.1102, normal: "hiisi-normal" },
+  Paha: { file: "paha", meanLinear: 0.0684, normal: "paha-normal" },
+  Sila: { file: "sila", meanLinear: 0.1133, normal: "sila-normal" },
+  Nunam: { file: "nunam", meanLinear: 0.1332, normal: "nunam-normal" },
+  Teharonhiawako: { file: "teharonhiawako", meanLinear: 0.0519, normal: "teharonhiawako-normal" },
+  Sawiskera: { file: "sawiskera", meanLinear: 0.0369, normal: "sawiskera-normal" },
+  Altjira: { file: "altjira", meanLinear: 0.0281, normal: "altjira-normal" },
+  "Altjira I": { file: "altjira-moon", meanLinear: 0.0458, normal: "altjira-moon-normal" },
+  "Manwë": { file: "manwe", meanLinear: 0.0824, normal: "manwe-normal" },
+  Thorondor: { file: "thorondor", meanLinear: 0.0941, normal: "thorondor-normal" },
 });
+
+/* The map's URL for a body, for the board's binary view, which draws the
+ * globes before the scene has necessarily fetched them. */
+export function smallBodyTextureUrl(name) {
+  const entry = SMALL_BODY_TEXTURES[name];
+  return entry ? `${PUBLIC_ASSET_ROOT}/textures/smallbodies/${entry.file}.jpg` : null;
+}
 
 const smallBodyTextureCache = new Map();
 
@@ -514,11 +547,29 @@ function applySmallBodyTexture(material, record) {
   };
 
   const cached = smallBodyTextureCache.get(url);
-  if (cached) {
-    attach(cached);
-    return;
+  if (cached) attach(cached);
+  else queueSmallBodyTexture(url, attach);
+
+  /*
+   * A normal map, for the bodies that have one (the batch B binaries).
+   *
+   * Not the displacement or bump map ruled out above: it moves no vertex
+   * and changes no silhouette, it only tilts the shading normal, so the
+   * craters and grooves designed in binary-surface-lab.html are lit by the
+   * scene's Sun instead of being painted on. PNG, and linear -- it is data,
+   * not colour. Scale 1, the relief as it was approved in the lab.
+   */
+  if (entry.normal) {
+    const normalUrl = `${PUBLIC_ASSET_ROOT}/textures/smallbodies/${entry.normal}.png`;
+    const attachNormal = (normalMap) => {
+      material.normalMap = normalMap;
+      material.normalScale.set(1, 1);
+      material.needsUpdate = true;
+    };
+    const cachedNormal = smallBodyTextureCache.get(normalUrl);
+    if (cachedNormal) attachNormal(cachedNormal);
+    else queueSmallBodyTexture(normalUrl, attachNormal, { linear: true });
   }
-  queueSmallBodyTexture(url, attach);
 }
 
 /*
@@ -550,8 +601,8 @@ function applySmallBodyTexture(material, record) {
 const smallBodyTextureQueue = [];
 let smallBodyTextureBusy = false;
 
-function queueSmallBodyTexture(url, attach) {
-  smallBodyTextureQueue.push({ url, attach });
+function queueSmallBodyTexture(url, attach, { linear = false } = {}) {
+  smallBodyTextureQueue.push({ url, attach, linear });
   pumpSmallBodyTextures();
 }
 
@@ -571,13 +622,17 @@ function pumpSmallBodyTextures() {
 
   fetch(next.url)
     .then((response) => (response.ok ? response.blob() : Promise.reject(response.status)))
-    .then((blob) => createImageBitmap(blob, { imageOrientation: "flipY" }))
+    // A data map (a normal map) must reach the GPU exactly as stored: no
+    // colour-profile conversion on decode.
+    .then((blob) => createImageBitmap(blob, next.linear
+      ? { imageOrientation: "flipY", colorSpaceConversion: "none", premultiplyAlpha: "none" }
+      : { imageOrientation: "flipY" }))
     .then((bitmap) => {
       const map = new THREE.Texture(bitmap);
       // The bitmap arrives already flipped by the option above, so three.js
       // must not flip it again or the map lands upside down.
       map.flipY = false;
-      map.colorSpace = THREE.SRGBColorSpace;
+      map.colorSpace = next.linear ? THREE.NoColorSpace : THREE.SRGBColorSpace;
       // Longitude wraps and latitude does not, which is what an
       // equirectangular map is. Clamping longitude would put a seam down the
       // body.
@@ -713,6 +768,22 @@ function moonSeparation(record, renderedMeanRadius, moon = null) {
   const target = moon ?? satellitesOf(record)[0];
   if (!target) return 0;
   return renderedMeanRadius * (target.separationKm / (record.diameterKm / 2));
+}
+
+/*
+ * How far apart a binary's bodies can get: the sum of each mutual orbit's
+ * apocentre separation, a(1 + e). For a pair that is the widest the two
+ * ever are; for Lempo's hierarchy (Hiisi inside, Paha round the pair) it is
+ * an upper bound on the distance from any one body to any other. Framing on
+ * it keeps all of them on screen from whichever body is focused, for the
+ * whole of their orbits.
+ */
+function binarySystemSpan(record, renderedMeanRadius) {
+  return satellitesOf(record)
+    .filter((moon) => moon.barycentric)
+    .reduce((sum, moon) => sum
+      + moonSeparation(record, renderedMeanRadius, moon)
+        * (1 + THREE.MathUtils.clamp(Number(moon.eccentricity) || 0, 0, 0.95)), 0);
 }
 
 /**
@@ -1101,7 +1172,36 @@ export async function createSmallBodies({
     const sceneRadius = smallBodyAuToScene(currentAU);
     const built = buildBody(record, { detailScale, sceneRadius, textured });
 
-    positionFromOrbit(built.group.position, orbit, orbit.meanAnomaly);
+    /*
+     * A binary is placed by its centre of mass, not by its primary.
+     *
+     * `frame` rides the heliocentric orbit; `inner` is the centre of mass of
+     * the primary and its inner partner, which for a plain pair sits on
+     * `frame` and for Lempo circles it with Paha. The primary hangs off
+     * `inner` and is moved about it every frame by `updateBinarySystem`, so
+     * everything that reads the primary's world position -- the camera, the
+     * pointer, the distance instrument -- sees it where it really is.
+     */
+    const binary = satellitesOf(record).some((moon) => moon.barycentric)
+      ? { frame: new THREE.Group(), inner: new THREE.Group(), orbits: [] }
+      : null;
+    if (binary) {
+      binary.frame.name = `${record.name} system barycentre`;
+      binary.inner.name = `${record.name} inner barycentre`;
+      binary.frame.add(binary.inner);
+      binary.inner.add(built.group);
+      /* A locked body keeps its long axis on its partner, so its own
+       * obliquity has to be zero: the orientation comes from the orbit. */
+      if (record.tidallyLocked) built.tilt.rotation.set(0, 0, 0);
+      binary.paths = [];
+      /* The named body's label above its ring, its partners' below: Lempo
+       * and Hiisi are nine pixels apart on arrival and their names would
+       * otherwise print over each other. */
+      binary.markers = [createBinaryMarker(record.name, built.group, built.renderedMeanRadius, true)];
+      binary.active = false;
+    }
+
+    positionFromOrbit((binary ? binary.frame : built.group).position, orbit, orbit.meanAnomaly);
 
     /*
      * Rings, for the two bodies that have them.
@@ -1168,22 +1268,32 @@ export async function createSmallBodies({
       heliocentricAU: currentAU,
       /* `framePair: false` -- see tnoCatalogue.js. A moon twenty radii out
        * cannot share the frame with a readable primary. */
-      pairSeparation: record.framePair === false
-        ? 0
-        : moonSeparation(record, built.renderedMeanRadius),
+      /* A binary is framed on the whole system, `framePair` or not: the
+       * subject is the bodies going round each other, and a frame holding
+       * one of them is the planet-and-moon picture this is not. */
+      pairSeparation: binary
+        ? binarySystemSpan(record, built.renderedMeanRadius)
+        : record.framePair === false
+          ? 0
+          : moonSeparation(record, built.renderedMeanRadius),
       elements: orbit,
       ringOuterRadius: rings?.outerRadius ?? 0,
       comaRadius: coma ? built.reach * (record.coma?.radii ?? 0) : 0,
     });
     built.group.userData.orbit = orbit;
+    /* How far the system reaches from this body, for main.js to keep the
+     * selection card clear of the partners. */
+    if (binary) built.group.userData.selectionClearance = binarySystemSpan(record, built.renderedMeanRadius);
 
     const entry = {
       record,
       orbit,
       group: built.group,
       spinner: built.spinner,
-      spinRate: (Math.PI * 2) / visualPeriodSeconds(record.rotationHours)
-        * ((record.shape.seed % 2) ? 1 : -1),
+      spinRate: record.tidallyLocked
+        ? 0
+        : (Math.PI * 2) / visualPeriodSeconds(record.rotationHours)
+          * ((record.shape.seed % 2) ? 1 : -1),
       /* A tumbler gets a second, slower rotation about a perpendicular axis.
        * Apophis and Halley are the two here that genuinely do this; drawing
        * them as clean spinners would drop a measured fact. */
@@ -1195,6 +1305,7 @@ export async function createSmallBodies({
       moon: null,
       moons: [],
       rings,
+      binary,
       /* In body radii, which is the unit `ringProximity` works in. */
       ringBodyRadius: built.renderedMeanRadius,
       coma,
@@ -1204,10 +1315,12 @@ export async function createSmallBodies({
       const moonRecord = {
         ...moon,
         id: `${record.id}-moon-${moonIndex + 1}`,
-        detail: `Natural satellite | ${record.name} system`,
+        detail: `${moon.barycentric ? "Binary partner" : "Natural satellite"} | ${record.name} system`,
         chroma: moon.chroma ?? record.chroma,
         metalness: record.metalness ?? 0,
-        rotationHours: moon.periodHours,
+        /* A binary partner has a spin of its own, measured or not; an
+         * ordinary moon here is drawn turning once per orbit. */
+        rotationHours: moon.rotationHours ?? moon.periodHours,
         rotationState: "principal-axis",
         parentDiameterKm: record.diameterKm,
         orbit: null,
@@ -1240,16 +1353,84 @@ export async function createSmallBodies({
          * against Ida is the 1.4 km / 31.4 km ratio that made it worth
          * finding. Same number as the parent uses, so focusing either half
          * of a pair gives the same composition from the other side. */
-        pairSeparation: record.framePair === false ? 0 : separation,
+        pairSeparation: binary && moon.barycentric
+          ? binarySystemSpan(record, built.renderedMeanRadius)
+          : record.framePair === false ? 0 : separation,
         /* A moon takes its parent's heliocentric element set, for the reason
          * the instrument's own satellite branch gives: Dactyl's 90 km orbit
          * around Ida is nothing beside Ida's 2.86 AU orbit around the Sun. */
         elements: orbit,
       });
+      if (binary && moon.barycentric) {
+        builtMoon.group.userData.selectionClearance = binarySystemSpan(record, built.renderedMeanRadius);
+      }
       builtMoon.group.userData.info.distanceFromEarth =
         `Orbits ${record.name} at ${moon.separationKm < 10
           ? `${(moon.separationKm * 1000).toFixed(0)} m`
           : `${moon.separationKm} km`}; distance from Earth continuously varies`;
+
+      if (binary && moon.barycentric) {
+        if (moon.tidallyLocked) builtMoon.tilt.rotation.set(0, 0, 0);
+        const around = moon.around === "pair" ? "pair" : "primary";
+        const holder = around === "pair" ? binary.frame : binary.inner;
+        holder.add(builtMoon.group);
+        const q = Math.max(0, Number(moon.massRatio) || 0);
+        const e = THREE.MathUtils.clamp(Number(moon.eccentricity) || 0, 0, 0.95);
+        const orientation = new THREE.Quaternion().setFromEuler(
+          new THREE.Euler((moon.inclinationDeg ?? 0) * DEG, 0, 0),
+        );
+        const binaryOrbit = {
+          group: builtMoon.group,
+          around,
+          separation,
+          q,
+          e,
+          orientation,
+          rate: (Math.PI * 2) / visualPeriodSeconds(moon.periodHours),
+          /* Two partners of one system start on opposite sides. */
+          phase: (moonIndex / Math.max(1, satellitesOf(record).length)) * Math.PI * 2,
+          locked: Boolean(moon.tidallyLocked && record.tidallyLocked),
+        };
+        binary.orbits.push(binaryOrbit);
+        /*
+         * Two paths per pair, both about the centre of mass: the partner's,
+         * scaled 1/(1+q) of the separation, and the primary's (or, for
+         * Paha, the inner pair's centre's), scaled q/(1+q) and on the
+         * opposite side. With the published eccentricity, so Thorondor's
+         * 0.56 is visibly a stretched path and not a circle.
+         */
+        /* Hidden until one of the system's bodies is focused, then lit
+         * together by `updateBinaryHighlights`: from the heliocentric view
+         * they were a knot of crossing ellipses beside one guide, read as
+         * mistaken lines (reported). The centre-of-mass cross is gone for
+         * the same reason. */
+        const partnerPath = createBinaryPath(separation, e, 1 / (1 + q), orientation, `${moon.name} path`, 0.34);
+        const counterPath = createBinaryPath(separation, e, -q / (1 + q), orientation,
+          `${around === "pair" ? `${record.name}–${satellitesOf(record)[0]?.name} centre` : record.name} path`, 0.24);
+        [partnerPath, counterPath].forEach((path) => {
+          path.visible = false;
+          holder.add(path);
+          binary.paths.push(path);
+        });
+        binary.markers.push(createBinaryMarker(moon.name, builtMoon.group, builtMoon.renderedMeanRadius));
+
+        const moonEntry = {
+          pivot: null,
+          binaryOrbit,
+          group: builtMoon.group,
+          spinner: builtMoon.spinner,
+          rate: binaryOrbit.rate,
+          spinRate: binaryOrbit.locked
+            ? 0
+            : (Math.PI * 2) / visualPeriodSeconds(moonRecord.rotationHours) * 0.6,
+          phase: binaryOrbit.phase,
+        };
+        entry.moons.push(moonEntry);
+        if (!entry.moon) entry.moon = moonEntry;
+        hoverTargets.push(builtMoon.group);
+        bodies.push({ ...moonEntry, record: moonRecord, isMoon: true, group: builtMoon.group });
+        return;
+      }
 
       const pivot = new THREE.Group();
       pivot.name = `${moon.name} orbit`;
@@ -1301,7 +1482,13 @@ export async function createSmallBodies({
       bodies.push({ ...moonEntry, record: moonRecord, isMoon: true, group: builtMoon.group });
     });
 
-    system.add(built.group);
+    if (binary) {
+      /* First placement, so frame one is not every body at its centre. */
+      updateBinarySystem(entry, 0);
+      system.add(binary.frame);
+    } else {
+      system.add(built.group);
+    }
     hoverTargets.push(built.group);
     bodies.push(entry);
 
@@ -1345,6 +1532,18 @@ export async function createSmallBodies({
       // should say what the thing at the end of the line *is*, and the module
       // that drew the line is the only one that knows.
       guide.userData.hoverSecondary = orbitGuideSummary(entry.record);
+      if (entry.binary) {
+        /* One guide carries the whole system -- it is the centre of mass's
+         * path round the Sun -- so its card names every body on it. */
+        const names = [entry.record.name, ...satellitesOf(entry.record)
+          .filter((moon) => moon.barycentric).map((moon) => moon.name)];
+        const joined = names.length > 2
+          ? `${names.slice(0, -1).join(", ")} & ${names[names.length - 1]}`
+          : names.join(" & ");
+        guide.userData.hoverTitle = `${joined} orbit`;
+        guide.userData.hoverAction = `Click this orbit to travel to the ${entry.record.name} system`;
+        guide.userData.hoverSecondary = `${names.length > 2 ? "A triple: three" : "A binary: two"} bodies share this path round the Sun, circling each other as they go`;
+      }
       orbitGuides.add(guide);
     });
   system.add(orbitGuides);
@@ -1645,7 +1844,12 @@ export function updateSmallBodies(
     orbit.meanAnomaly += orbit.visualRate * motionScale;
     if (orbit.meanAnomaly > Math.PI * 2) orbit.meanAnomaly -= Math.PI * 2;
     positionFromOrbit(_position, orbit, orbit.meanAnomaly);
-    entry.group.position.copy(_position);
+    if (entry.binary) {
+      entry.binary.frame.position.copy(_position);
+      updateBinarySystem(entry, elapsed);
+    } else {
+      entry.group.position.copy(_position);
+    }
 
     entry.spinner.rotation.y = entry.spinRate * elapsed;
     if (entry.tumbleRate) entry.spinner.rotation.z = entry.tumbleRate * elapsed;
@@ -1653,12 +1857,205 @@ export function updateSmallBodies(
     const moons = entry.moons ?? (entry.moon ? [entry.moon] : []);
     for (let m = 0; m < moons.length; m += 1) {
       const moon = moons[m];
-      moon.pivot.rotation.y = (moon.phase ?? 0) + moon.rate * elapsed;
+      if (moon.pivot) moon.pivot.rotation.y = (moon.phase ?? 0) + moon.rate * elapsed;
       moon.spinner.rotation.y = moon.spinRate * elapsed;
     }
 
     if (entry.rings) updateRingSystem(entry, spinSeconds, camera);
     if (entry.coma) updateCentaurComa(entry.coma, entry.group, camera);
+  }
+}
+
+/*
+ * Moves a binary's bodies about their centre of mass.
+ *
+ * For each mutual orbit: the mean anomaly on the module's moon clock, the
+ * eccentric anomaly from Kepler's equation, the relative position of the
+ * partner in the orbit plane, and then each body at its share of it -- the
+ * partner at 1/(1+q) on one side, the primary (or the inner pair's centre)
+ * at q/(1+q) on the other. The relative vector is exact; only the clock is
+ * compressed. A few dozen multiplies per system per frame.
+ *
+ * A doubly synchronous pair also turns so that each keeps its long axis on
+ * the other: its group takes the orbit-plane orientation and the pair's
+ * current angle, and its spin is zero.
+ */
+const _binaryRel = new THREE.Vector3();
+const _binaryTurn = new THREE.Quaternion();
+const _binaryUp = new THREE.Vector3(0, 1, 0);
+function updateBinarySystem(entry, elapsed) {
+  const { binary } = entry;
+  for (let i = 0; i < binary.orbits.length; i += 1) {
+    const o = binary.orbits[i];
+    let meanAnomaly = (o.phase + o.rate * elapsed) % (Math.PI * 2);
+    if (meanAnomaly < 0) meanAnomaly += Math.PI * 2;
+    const E = eccentricAnomaly(meanAnomaly, o.e);
+    const x = o.separation * (Math.cos(E) - o.e);
+    const z = -o.separation * Math.sqrt(1 - o.e * o.e) * Math.sin(E);
+    _binaryRel.set(x, 0, z).applyQuaternion(o.orientation);
+    o.group.position.copy(_binaryRel).multiplyScalar(1 / (1 + o.q));
+    const counterweight = o.around === "pair" ? binary.inner : entry.group;
+    counterweight.position.copy(_binaryRel).multiplyScalar(-o.q / (1 + o.q));
+    if (o.locked) {
+      _binaryTurn.setFromAxisAngle(_binaryUp, Math.atan2(-z, x));
+      entry.group.quaternion.copy(o.orientation).multiply(_binaryTurn);
+      o.group.quaternion.copy(entry.group.quaternion);
+    }
+  }
+}
+
+/* A partner's path about the centre of mass: the relative ellipse, scaled
+ * (negative for the body on the far side), with the centre of mass at a
+ * focus. Drawn, never picked -- see createMoonOrbitRing for why. */
+function createBinaryPath(separation, e, scale, orientation, name, opacity) {
+  const segments = 256;
+  const vertices = new Float32Array((segments + 1) * 3);
+  const minor = Math.sqrt(1 - e * e);
+  for (let i = 0; i <= segments; i += 1) {
+    const E = ((i % segments) / segments) * Math.PI * 2;
+    vertices[i * 3] = separation * (Math.cos(E) - e) * scale;
+    vertices[i * 3 + 1] = 0;
+    vertices[i * 3 + 2] = -separation * minor * Math.sin(E) * scale;
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.BufferAttribute(vertices, 3));
+  const line = new THREE.Line(geometry, new THREE.LineBasicMaterial({
+    color: 0x86d8c4,
+    transparent: true,
+    opacity,
+    depthWrite: false,
+    toneMapped: false,
+  }));
+  line.name = name;
+  line.quaternion.copy(orientation);
+  line.renderOrder = -6;
+  line.frustumCulled = false;
+  line.raycast = () => {};
+  return line;
+}
+
+/*
+ * A ring and a name on each body of a focused binary.
+ *
+ * Framed on the whole system, most of these bodies are a pixel or two
+ * across: Teharonhiawako and Sawiskera are 311 Teharonhiawako radii apart
+ * (27,670 km against 89 km), and a frame that holds both cannot also show
+ * either as more than a dot. That is the true picture and the point of it,
+ * so it is kept -- but each dot gets a ring and its name, so the viewer can
+ * see what is going round what. Screen-sized (`sizeAttenuation: false`),
+ * never picked, drawn only while the system is focused, and faded out once
+ * the body itself grows to fill the ring.
+ *
+ * BINARY_MARKER_SCALE is the sprite's height at unit distance, which with
+ * attenuation off is its on-screen height as a fraction of 2 tan(fov/2):
+ * at the app's 34-degree field that is 0.079 / 0.611 = 13 % of the viewport
+ * height, so the 30-of-256-pixel ring below is about 13 px in radius on an
+ * 850 px tall window and the 34 px name about 15 px -- the size of the
+ * hover card's own text.
+ */
+const BINARY_MARKER_SCALE = 0.079;
+const BINARY_MARKER_RING = 30 / 256;
+function createBinaryMarker(name, group, radius, above = false) {
+  /* Built on first use: a system nobody focuses never makes its canvases,
+   * and the headless harness (no `document`) never makes any. */
+  return { name, group, radius, above, sprite: null };
+}
+
+function buildBinaryMarkerSprite(marker) {
+  if (marker.sprite || typeof document === "undefined") return marker.sprite;
+  const { name, group, above } = marker;
+  const canvas = document.createElement("canvas");
+  canvas.width = 512;
+  canvas.height = 256;
+  const context = canvas.getContext("2d");
+  if (context) {
+    context.strokeStyle = "rgba(159, 240, 220, 0.95)";
+    context.lineWidth = 3;
+    context.beginPath();
+    context.arc(256, 128, 30, 0, Math.PI * 2);
+    context.stroke();
+    let size = 34;
+    context.textAlign = "center";
+    context.textBaseline = "alphabetic";
+    do {
+      context.font = `600 ${size}px system-ui, -apple-system, "Segoe UI", sans-serif`;
+      size -= 2;
+    } while (context.measureText(name).width > 490 && size > 18);
+    context.lineWidth = 6;
+    context.strokeStyle = "rgba(3, 10, 14, 0.85)";
+    // Baselines: 206 puts the name under the ring, 76 over it.
+    const baseline = above ? 76 : 206;
+    context.strokeText(name, 256, baseline);
+    context.fillStyle = "rgba(214, 248, 238, 0.98)";
+    context.fillText(name, 256, baseline);
+  }
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: texture,
+    transparent: true,
+    depthTest: false,
+    depthWrite: false,
+    toneMapped: false,
+    sizeAttenuation: false,
+  }));
+  sprite.name = `${name} marker`;
+  sprite.scale.set(BINARY_MARKER_SCALE * 2, BINARY_MARKER_SCALE, 1);
+  sprite.renderOrder = 30;
+  sprite.frustumCulled = false;
+  sprite.visible = false;
+  sprite.raycast = () => {};
+  group.add(sprite);
+  marker.sprite = sprite;
+  return sprite;
+}
+
+/**
+ * Lights a binary's mutual paths and markers while one of its bodies is
+ * focused, and only then.
+ *
+ * The switch runs once per change, not per frame; the per-frame part is one
+ * distance per marker of the focused system (two or three), to fade a ring
+ * out as its body grows into it.
+ */
+const _markerWorld = new THREE.Vector3();
+const _markerCamera = new THREE.Vector3();
+export function updateBinaryHighlights(smallBodies, focusedBody = null, camera = null) {
+  if (!smallBodies?.bodies) return;
+  for (let i = 0; i < smallBodies.bodies.length; i += 1) {
+    const entry = smallBodies.bodies[i];
+    const binary = entry.binary;
+    if (!binary?.markers) continue;
+    const active = Boolean(focusedBody) && (focusedBody === entry.group
+      || binary.orbits.some((orbit) => orbit.group === focusedBody));
+    if (active !== binary.active) {
+      binary.active = active;
+      binary.paths.forEach((path) => {
+        path.visible = active;
+        /* Lit rather than merely shown: well over twice the old resting
+         * opacity, the same step a hovered heliocentric guide takes. */
+        const base = path.userData.baseOpacity ?? path.material.opacity;
+        path.userData.baseOpacity = base;
+        path.material.opacity = Math.min(0.9, base * 2.3);
+      });
+      binary.markers.forEach((marker) => {
+        if (active) buildBinaryMarkerSprite(marker);
+        if (marker.sprite) marker.sprite.visible = active;
+      });
+    }
+    if (!active || !camera) continue;
+    _markerCamera.setFromMatrixPosition(camera.matrixWorld);
+    for (let m = 0; m < binary.markers.length; m += 1) {
+      const marker = binary.markers[m];
+      if (!marker.sprite) continue;
+      marker.group.getWorldPosition(_markerWorld);
+      const angular = marker.radius / Math.max(1e-6, _markerWorld.distanceTo(_markerCamera));
+      /* Gone by the time the body's disc is 80 % of the ring's radius. */
+      const fill = angular / (BINARY_MARKER_SCALE * BINARY_MARKER_RING);
+      const opacity = 1 - THREE.MathUtils.smoothstep(fill, 0.35, 0.8);
+      marker.sprite.material.opacity = opacity;
+      marker.sprite.visible = opacity > 0.01;
+    }
   }
 }
 

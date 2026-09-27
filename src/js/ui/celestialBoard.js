@@ -3,6 +3,8 @@ import {
   buildCelestialBoard,
   lightTime,
 } from "./celestialBoardData.js";
+import { buildBinarySystemView, systemNames } from "./binarySystemView.js";
+import { createBoardGlossary, REGION_WORD } from "./boardGlossary.js";
 
 /**
  * The celestial board: every body the scene can fly to, laid out by where it
@@ -78,6 +80,8 @@ const FILTERS = Object.freeze([
   { key: "asteroid", label: "Asteroids" },
   { key: "icy", label: "Centaurs & comets" },
   { key: "moons", label: "Planets having moons" },
+  /* Double bodies, by the rule in celestialBoardData.js `isBinarySystem`. */
+  { key: "binary", label: "Binaries & triples" },
   { key: "rings", label: "Have rings" },
 ]);
 
@@ -99,6 +103,7 @@ function matchesFilter(body, filter) {
     // have moons -- Ida, Didymos, Sylvia and the rest -- are under Asteroids.
     case "moons": return body.moons.length > 0 && ["planet", "dwarf", "tno"].includes(body.kind);
     case "rings": return body.rings;
+    case "binary": return Boolean(body.binary);
     default: return true;
   }
 }
@@ -129,6 +134,19 @@ function formatPeriod(days) {
   if (days < 1) return `${(days * 24).toFixed(1)} h`;
   if (days < 365) return `${days < 10 ? days.toFixed(2) : Math.round(days)} days`;
   return `${(days / 365.25).toFixed(1)} years`;
+}
+
+/*
+ * A binary's other bodies are partners, not moons: Nunam is nearly Sila's
+ * size and the two go round a point between them. The count on the chip and
+ * the moon board's wording say so when every companion is one.
+ */
+function partnerWord(moons, { withCount = true } = {}) {
+  const partners = moons.length > 0 && moons.every((m) => m.partner);
+  const noun = partners
+    ? (moons.length === 1 ? "partner" : "partners")
+    : (moons.length === 1 ? "moon" : "moons");
+  return withCount ? `${moons.length} ${noun}` : noun;
 }
 
 function el(tag, className, text) {
@@ -202,6 +220,7 @@ export function createCelestialBoard({ trigger = null, surfaceFor = null } = {})
   let filtersBar = null;
   let emptyNote = null;
   let moonBoard = null;
+  let glossary = null;
   const chips = [];
   const columns = [];
   let filter = "all";
@@ -285,19 +304,61 @@ export function createCelestialBoard({ trigger = null, surfaceFor = null } = {})
     button.type = "button";
     button.dataset.travel = body.name;
     button.dataset.kind = body.kind;
-    button.setAttribute("aria-label", `Fly to ${body.name}`);
+    button.setAttribute("aria-label", body.partnerSystem
+      ? `Fly to the ${body.name} system: ${systemNames(body).join(", ")}`
+      : `Fly to ${body.name}`);
 
     const dot = el("span", "cboard__dot");
     dot.style.setProperty("--size", `${dotSize(body.diameterKm)}px`);
     dot.style.setProperty("--swatch", body.swatch);
     if (body.rings) dot.classList.add("has-rings");
+    if (body.partnerSystem) {
+      /*
+       * Two or three dots going round a point between them, sized by
+       * diameter against the largest and each on its share of the
+       * separation (the lighter one farther out) -- a binary is recognisable
+       * before it is opened. An outer partner sits on a wider circle.
+       */
+      dot.classList.add("is-system");
+      const minis = el("span", "cboard__minis");
+      const inner = [...body.moons].sort((a, b) => (a.distanceKm ?? 0) - (b.distanceKm ?? 0));
+      const largest = Math.max(body.diameterKm || 1, ...inner.map((m) => m.diameterKm || 1));
+      const size = (d) => `${(3 + 5 * ((d || 1) / largest)).toFixed(1)}px`;
+      const first = inner[0];
+      const q = first?.massRatio ?? (((first?.diameterKm || 1) / (body.diameterKm || 1)) ** 3);
+      const span = inner.some((m) => m.around === "pair") ? 7 : 11;
+      const parts = [
+        { d: body.diameterKm, r: (span * q) / (1 + q), a: 180 },
+        { d: first?.diameterKm, r: span / (1 + q), a: 0 },
+        ...inner.slice(1).map((m) => ({ d: m.diameterKm, r: 11.5, a: 90 })),
+      ];
+      parts.forEach((part) => {
+        const mini = el("span", "cboard__mini");
+        mini.style.setProperty("--m", size(part.d));
+        mini.style.setProperty("--r", `${part.r.toFixed(1)}px`);
+        mini.style.setProperty("--a", `${part.a}deg`);
+        minis.append(mini);
+      });
+      minis.append(el("span", "cboard__mini-centre"));
+      dot.append(minis);
+    }
     button.append(dot);
 
     const text = el("span", "cboard__text");
-    text.append(el("span", "cboard__name", body.name));
+    if (body.partnerSystem) {
+      // Every name, together: the system is the destination.
+      const [lead, ...rest] = systemNames(body);
+      const name = el("span", "cboard__name is-system", lead);
+      name.append(el("span", "cboard__name-rest", ` · ${rest.join(" · ")}`));
+      text.append(name);
+    } else {
+      text.append(el("span", "cboard__name", body.name));
+    }
     const meta = [formatAU(body.aAU), formatKm(body.diameterKm)].filter(Boolean).join(" · ");
     text.append(el("span", "cboard__meta", meta));
-    text.append(el("span", "cboard__kind", BODY_KINDS[body.kind] ?? ""));
+    text.append(el("span", "cboard__kind", body.partnerSystem
+      ? `${BODY_KINDS[body.kind] ?? ""} · ${body.moons.length > 1 ? "triple" : "binary"}`
+      : (BODY_KINDS[body.kind] ?? "")));
     button.append(text);
     item.append(button);
 
@@ -308,10 +369,12 @@ export function createCelestialBoard({ trigger = null, surfaceFor = null } = {})
       const extras = el("div", "cboard__extras");
       if (body.moons.length) {
         pill = el("button", "cboard__moons",
-          body.moons.length === 1 ? "1 moon" : `${body.moons.length} moons`);
+          body.partnerSystem ? "See how they orbit" : partnerWord(body.moons));
         pill.type = "button";
         pill.dataset.moonsOf = body.name;
-        pill.setAttribute("aria-label", `Open the moons of ${body.name}`);
+        pill.setAttribute("aria-label", body.partnerSystem
+          ? `See how the ${body.name} system moves`
+          : `Open the moons of ${body.name}`);
         extras.append(pill);
       }
       if (body.rings) extras.append(el("span", "cboard__ring-badge", "rings"));
@@ -349,6 +412,17 @@ export function createCelestialBoard({ trigger = null, surfaceFor = null } = {})
     clock = el("b", "cboard__clock", "0 s");
     count.append(clock);
     title.append(count);
+    // Space Dictionary: every word on the board, in plain language, centred
+    // over it (boardGlossary.js). It was "Words, explained", then "Space
+    // Decoded"; Space Dictionary on request.
+    const decodedButton = el("button", "cgloss__ask cgloss__launch");
+    decodedButton.type = "button";
+    decodedButton.dataset.glossSheet = "1";
+    decodedButton.setAttribute("aria-label", "Space Dictionary: every word on this board, in plain language");
+    const decodedIcon = el("span", "cgloss__launch-icon");
+    decodedIcon.setAttribute("aria-hidden", "true");
+    decodedButton.append(decodedIcon, document.createTextNode("Space Dictionary"));
+    title.append(decodedButton);
     head.append(title);
 
     const tools = el("div", "cboard__tools");
@@ -412,7 +486,17 @@ export function createCelestialBoard({ trigger = null, surfaceFor = null } = {})
 
       const header = el("header", "cboard__region-head");
       header.append(el("span", "cboard__region-index", String(index + 1).padStart(2, "0")));
-      header.append(el("h3", "cboard__region-title", region.title));
+      const regionTitle = el("h3", "cboard__region-title", region.title);
+      const word = REGION_WORD[region.key];
+      if (word) {
+        const ask = el("button", "cgloss__q", "?");
+        ask.type = "button";
+        ask.dataset.gloss = word;
+        ask.setAttribute("aria-expanded", "false");
+        ask.setAttribute("aria-label", `What does “${region.title}” mean?`);
+        regionTitle.append(ask);
+      }
+      header.append(regionTitle);
       const range = region.key === "sun"
         ? "The centre"
         : `${formatAU(region.from)} – ${formatAU(region.to)}`;
@@ -451,6 +535,7 @@ export function createCelestialBoard({ trigger = null, surfaceFor = null } = {})
     emptyNote.setAttribute("role", "status");
     root.append(emptyNote);
 
+    glossary = createBoardGlossary(root);
     wire();
     document.body.append(root);
   }
@@ -526,7 +611,7 @@ export function createCelestialBoard({ trigger = null, surfaceFor = null } = {})
       }
       body.moons.forEach((moon) => {
         if (matcher(moon.name)) {
-          found.push({ name: moon.name, note: `Moon of ${body.name}`, swatch: "#c9c2b8" });
+          found.push({ name: moon.name, note: `${moon.partner ? "Partner" : "Moon"} of ${body.name}`, swatch: "#c9c2b8" });
         }
       });
     });
@@ -621,7 +706,8 @@ export function createCelestialBoard({ trigger = null, surfaceFor = null } = {})
     const serial = moonBoardSerial;
     const board = el("section", "cmoons");
     board.setAttribute("role", "dialog");
-    board.setAttribute("aria-label", `Moons of ${body.name}`);
+    const isSystem = body.moons.every((m) => m.partner);
+    board.setAttribute("aria-label", isSystem ? `The ${body.name} system` : `Moons of ${body.name}`);
 
     const moons = [...body.moons].sort((a, b) => (a.distanceKm ?? 0) - (b.distanceKm ?? 0));
     const families = new Map();
@@ -662,10 +748,12 @@ export function createCelestialBoard({ trigger = null, surfaceFor = null } = {})
     head.append(back);
 
     const title = el("div", "cmoons__title");
-    title.append(el("span", "cboard__eyebrow", "Every moon on the orbit it keeps"));
-    title.append(el("h2", "cboard__h", `Moons of ${body.name}`));
+    title.append(el("span", "cboard__eyebrow", isSystem
+      ? "Bodies going round a shared centre"
+      : "Every moon on the orbit it keeps"));
+    title.append(el("h2", "cboard__h", isSystem ? `The ${body.name} system` : `Moons of ${body.name}`));
     const summary = [
-      `${moons.length} ${moons.length === 1 ? "moon" : "moons"}`,
+      partnerWord(moons),
       groups.length > 1 ? `${groups.length} families` : null,
       nearest && farthest && nearest !== farthest ? `${formatKm(nearest)} to ${formatKm(farthest)} out` : (nearest ? `${formatKm(nearest)} out` : null),
       retro ? `${retro} going round backwards` : null,
@@ -754,7 +842,7 @@ export function createCelestialBoard({ trigger = null, surfaceFor = null } = {})
       planet.classList.add("has-surface");
       planet.append(surfaceCanvas);
     }
-    planet.append(el("span", "cmoons__shade"));
+    planet.append(el("span", "cmoons__tint"), el("span", "cmoons__shade"));
     if (body.name === "Saturn") [ringBack, ringFront].forEach((node) => node?.classList.add("is-bright"));
     if (ringBack) map.append(ringBack);
     map.append(planet);
@@ -781,6 +869,32 @@ export function createCelestialBoard({ trigger = null, surfaceFor = null } = {})
           }
           ctx.drawImage(surface.image, copy * (w / 2), 0, w / 2, h);
           ctx.restore();
+        }
+        /*
+         * A grey map needs the body's colour laid over it.
+         *
+         * The small bodies' maps are relief only -- the measured colour is in
+         * their vertex colours, which a canvas copy of the map does not
+         * carry -- so Lempo and Máni came out as grey globes. If the copy
+         * has next to no saturation, the swatch is multiplied over it, which
+         * is the same product the scene's material makes. A colour map
+         * (Jupiter, Earth, Pluto) is left alone.
+         */
+        try {
+          const probe = ctx.getImageData(0, 0, w / 2, h).data;
+          let saturation = 0;
+          let samples = 0;
+          for (let i = 0; i < probe.length; i += 4 * 97) {
+            const hi = Math.max(probe[i], probe[i + 1], probe[i + 2]);
+            const lo = Math.min(probe[i], probe[i + 1], probe[i + 2]);
+            if (hi > 8) {
+              saturation += (hi - lo) / hi;
+              samples += 1;
+            }
+          }
+          planet.classList.toggle("is-grey", samples > 0 && saturation / samples < 0.06);
+        } catch {
+          // A map from another origin can be drawn but not read; assume colour.
         }
       } catch {
         // An image the canvas cannot read: fall back to the plain globe.
@@ -821,7 +935,7 @@ export function createCelestialBoard({ trigger = null, surfaceFor = null } = {})
       famButton.append(mark);
       const famText = el("span", "cmoons__fam-text");
       famText.append(el("span", "cmoons__fam-name", group.name));
-      const count = `${group.list.length} ${group.list.length === 1 ? "moon" : "moons"}`;
+      const count = partnerWord(group.list);
       const backwards = group.backwards
         ? ` · ${group.backwards === group.list.length ? "all" : group.backwards} ↺`
         : "";
@@ -910,7 +1024,7 @@ export function createCelestialBoard({ trigger = null, surfaceFor = null } = {})
       hintText.textContent = "";
       // Two short lines, so it fits the corner the round map leaves empty.
       const first = el("span", "cmoons__hint-line");
-      first.append("Double-click ", el("b", null, name ?? "any moon"));
+      first.append("Double-click ", el("b", null, name ?? (isSystem ? "a partner" : "any moon")));
       hintText.append(first, el("span", "cmoons__hint-line", "to fly there"));
       hint.classList.toggle("is-named", Boolean(name));
     }
@@ -1020,12 +1134,12 @@ export function createCelestialBoard({ trigger = null, surfaceFor = null } = {})
           retro ? `${retro} of ${moons.length} retrograde` : "all prograde",
         ].filter(Boolean).join(" · ")));
         card.append(facts([
-          ["Moons", String(moons.length)],
+          [isSystem ? (moons.length === 1 ? "Partner" : "Partners") : "Moons", String(moons.length)],
           ["Families", String(groups.length)],
           ["Nearest", nearest ? formatKm(nearest) : null],
           ["Farthest", farthest && farthest !== nearest ? formatKm(farthest) : null],
         ]));
-        card.append(el("p", "cmoons__ruler-title", "Every moon by distance · log scale"));
+        card.append(el("p", "cmoons__ruler-title", `Every ${partnerWord(moons, { withCount: false }).replace(/s$/, "")} by distance · log scale`));
         card.append(ruler(null));
         const actions = el("div", "cmoons__actions");
         actions.append(flyButton(body.name));
@@ -1040,7 +1154,7 @@ export function createCelestialBoard({ trigger = null, surfaceFor = null } = {})
       card.append(eyebrow);
       card.append(el("h3", "cmoons__card-name", moon.name));
       card.append(el("p", "cmoons__card-sub", [
-        `Moon of ${body.name}`,
+        `${moon.partner ? "Partner" : "Moon"} of ${body.name}`,
         moon.retrograde ? "↺ retrograde" : "prograde",
       ].join(" · ")));
       card.append(facts([
@@ -1335,7 +1449,10 @@ export function createCelestialBoard({ trigger = null, surfaceFor = null } = {})
     const body = bodiesByName.get(name);
     if (!body || !body.moons.length) return;
     closeMoons(true);
-    const built = buildMoonBoard(body);
+    glossary?.closeAll();
+    const built = body.partnerSystem
+      ? buildBinarySystemView(body, { surfaceFor, closeButton, travel })
+      : buildMoonBoard(body);
     moonBoard = built;
     root.append(built.board);
     built.fit();
@@ -1362,7 +1479,10 @@ export function createCelestialBoard({ trigger = null, surfaceFor = null } = {})
       const name = from?.dataset?.travel;
       const dot = (name && [...board.querySelectorAll(".cmoons__moon")]
         .find((node) => node.querySelector(".cmoons__label")?.textContent === name))
-        || (from?.closest?.(".cmoons__moon, .cmoons__planet") ?? null)
+        || (name && [...board.querySelectorAll(".csys__body")]
+          .find((node) => node.dataset.sysName === name)?.querySelector(".csys__globe"))
+        || (from?.closest?.(".cmoons__moon, .cmoons__planet, .csys__body")?.querySelector?.(".csys__globe")
+          ?? from?.closest?.(".cmoons__moon, .cmoons__planet") ?? null)
         || board.querySelector(".cmoons__planet");
       const box = board.getBoundingClientRect();
       const at = dot?.getBoundingClientRect();
@@ -1440,6 +1560,9 @@ export function createCelestialBoard({ trigger = null, surfaceFor = null } = {})
     });
 
     root.addEventListener("click", (event) => {
+      // The plain-words popovers and sheet first; a click elsewhere closes
+      // an open popover and then does what it would have done anyway.
+      if (glossary?.handleClick(event)) return;
       const travelTo = event.target.closest("[data-travel]");
       if (travelTo && !travelTo.disabled) {
         travel(travelTo.dataset.travel, travelTo);
@@ -1470,6 +1593,9 @@ export function createCelestialBoard({ trigger = null, surfaceFor = null } = {})
       }
     });
     searchInput.addEventListener("input", apply);
+    // A popover is placed against its "?"; once the columns move it would
+    // point at the wrong one.
+    track.addEventListener("scroll", () => glossary?.closePopover(), { passive: true });
 
     /*
      * Keys stay on the board. The scene listens on window for Space, the
@@ -1482,6 +1608,7 @@ export function createCelestialBoard({ trigger = null, surfaceFor = null } = {})
       event.stopPropagation();
       if (event.key === "Escape") {
         event.preventDefault();
+        if (glossary?.closeTop()) return;
         const active = document.activeElement;
         if (active?.tagName === "INPUT" && active.value) {
           active.value = "";
@@ -1500,19 +1627,26 @@ export function createCelestialBoard({ trigger = null, surfaceFor = null } = {})
     });
 
     /*
-     * A vertical wheel moves along the Solar System, unless the column under
-     * the pointer still has room to scroll in that direction -- the belt has
-     * twenty-one bodies and must be able to scroll its own list.
+     * A vertical wheel moves along the Solar System, unless the pointer is
+     * over a column list long enough to scroll -- the belt has twenty-one
+     * bodies and must be able to scroll its own list. Such a list keeps the
+     * wheel even at its ends: handing the leftover over to the glide turned
+     * the last flick of a scroll (and a trackpad's whole momentum tail) into
+     * a sideways slide of the board (reported). A column too short to scroll
+     * still glides.
      */
     root.addEventListener("wheel", (event) => {
       event.stopPropagation();
       const lane = event.target.closest(".cboard__track");
       if (!lane || Math.abs(event.deltaX) > Math.abs(event.deltaY)) return;
       const list = event.target.closest(".cboard__bodies");
-      if (list) {
+      if (list && list.scrollHeight > list.clientHeight + 1) {
         const canDown = list.scrollTop + list.clientHeight < list.scrollHeight - 1;
         const canUp = list.scrollTop > 0;
         if ((event.deltaY > 0 && canDown) || (event.deltaY < 0 && canUp)) return;
+        // At the end: swallow it, so neither the board nor the page moves.
+        event.preventDefault();
+        return;
       }
       event.preventDefault();
       // Lines and pages, where a wheel reports them, in pixels.
@@ -1600,6 +1734,7 @@ export function createCelestialBoard({ trigger = null, surfaceFor = null } = {})
     cancelAnimationFrame(clockFrame);
     stopGlide();
     const hadMoons = Boolean(moonBoard);
+    glossary?.closeAll();
     closeMoons(!departing, { departing, from });
     root.classList.remove("is-opening", "is-open");
     root.classList.add("is-closing");

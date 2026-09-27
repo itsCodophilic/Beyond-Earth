@@ -57,7 +57,7 @@ import { createOuterBoundaries, updateOuterBoundaries, applyOuterBoundaryQuality
  * them is scattered through the shared registries. Fifteen meshes, fifteen
  * draw calls, no textures.
  */
-import { createSmallBodies, updateSmallBodies } from './scene/smallBodies/smallBodies.js';
+import { createSmallBodies, updateSmallBodies, updateBinaryHighlights } from './scene/smallBodies/smallBodies.js';
 import {
   ASTRONOMICAL_UNIT_KM,
   createEarthDistanceTracker,
@@ -1177,7 +1177,10 @@ import { POINTER_PROXY_LAYER } from "./scene/pointerProxies.js";
    * which is why they read as prose. Matching on "orbit" and "guide" together
    * is deliberately narrow: it must not catch the bodies themselves.
    */
-  const SOLAR_EVENT_GUIDE_NAMES = /orbit (guide|guides)|satellite atlas orbit/i;
+  /* "orbit path" is the ring each small body's moon keeps (Dactyl, Linus,
+   * Huya I...): found still drawn in space mode while checking the binaries'
+   * lines, which main.js switches off by focus (see updateBinaryHighlights). */
+  const SOLAR_EVENT_GUIDE_NAMES = /orbit (guide|guides|path)|satellite atlas orbit/i;
 
   /*
    * Two things now want the guides gone, and they do not coordinate.
@@ -5442,11 +5445,21 @@ composeSolarEventShot(
     const screenX = (planetSystemProjectedPosition.x * 0.5 + 0.5) * innerWidth;
     const screenY = (-planetSystemProjectedPosition.y * 0.5 + 0.5) * innerHeight;
     const radiusPixels = projectedBodyRadiusPixels(body);
+    /* A binary's card clears the whole system, not just the body: framed on
+     * arrival, Paha is 50 px from Lempo and its path 120 px out, and a card
+     * placed off Lempo's own radius sat on top of it. Capped at a third of
+     * the width, so a close zoom does not throw the card across the screen. */
+    const systemReach = Number(body.userData?.selectionClearance) || 0;
+    const clearancePixels = systemReach > 0
+      ? Math.max(radiusPixels, Math.min(innerWidth / 3, systemReach
+        / Math.max(0.0001, camera.position.distanceTo(planetSystemWorldPosition))
+        * (innerHeight * 0.5 / Math.max(0.0001, Math.tan(THREE.MathUtils.degToRad(camera.fov * 0.5))))))
+      : radiusPixels;
     const cardWidth = innerWidth <= 560 ? 232 : 268;
     const placeRight = screenX < innerWidth * 0.62;
     const preferredLeft = placeRight
-      ? screenX + Math.max(18, radiusPixels + 12)
-      : screenX - cardWidth - Math.max(18, radiusPixels + 12);
+      ? screenX + Math.max(18, clearancePixels + 12)
+      : screenX - cardWidth - Math.max(18, clearancePixels + 12);
     const desiredLeft = THREE.MathUtils.clamp(preferredLeft, 12, innerWidth - cardWidth - 12);
     const desiredTop = THREE.MathUtils.clamp(screenY - 46, 18, innerHeight - 126);
     if (!celestialSelectionCardPosition.initialized || celestialSelectionCardPosition.body !== body) {
@@ -8031,7 +8044,9 @@ composeSolarEventShot(
      */
     const step = event.detail?.step;
     if (step !== "events") spaceEventsDashboard?.close();
-    if (step !== "board") celestialBoard?.close();
+    // The board stays up for its own step and for Space Dictionary's, which
+    // lives on it.
+    if (step !== "board" && step !== "decoded") celestialBoard?.close();
     if (step !== "spacemode" && spaceModeActive) setSpaceMode(false);
     if (step !== "distance") closeDistanceInfoPopover();
     tourSuppressesHover = (event.detail?.veil ?? "full") !== "clear";
@@ -8053,6 +8068,10 @@ composeSolarEventShot(
      * viewer at Earth outright rather than asking them to travel there again,
      * and the lesson is the press.
      */
+    if (action === "open-board") {
+      if (!celestialBoard?.isOpen()) celestialBoard?.show();
+      return;
+    }
     if (action === "focus-earth") {
       const target = planets.find((planet) => planet.name === "Earth") ?? earth;
       if (target && focusedBody !== target) {
@@ -9283,6 +9302,17 @@ composeSolarEventShot(
       deltaTime * celestialMotionScale,
       // The camera, so the two ringed Centaurs can drop their rings when it
       // is far enough away that a one-unit ring system is a shimmering speck.
+      camera,
+    );
+    // A binary's mutual paths and name rings, lit only while one of its
+    // bodies is focused. Switches once per change; see smallBodies.js.
+    // Space mode and the events take every guide away, and these with them:
+    // they are not named like the orbit guides the suppression collects, so
+    // they are switched off here by handing over no focus (reported: the
+    // Lempo lines stayed on in space mode).
+    if (smallBodies) updateBinaryHighlights(
+      smallBodies,
+      guideSuppressionReasons.size ? null : focusedBody,
       camera,
     );
     if (outerBoundaries) updateOuterBoundaries(outerBoundaries, frameMotionScale, camera);

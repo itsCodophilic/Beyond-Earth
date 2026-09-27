@@ -1,0 +1,11 @@
+{
+  "note": "Picked in binary-surface-lab.html by the project owner (Prompts.md, 'Texture Decided'). Slider values in per cent, as the lab stores them.",
+  "mapSize": 1024,
+  "systems": {
+    "lempo": { "variant": "A", "tweaks": { "craters": 158, "craterSize": 107, "fresh": 136, "boulders": 161, "relief": 209, "contrast": 250, "hue": -50 } },
+    "sila": { "variant": "B", "tweaks": { "craters": 154, "craterSize": 145, "boulders": 181, "relief": 155 } },
+    "teharonhiawako": { "variant": "B", "tweaks": { "craters": 143, "craterSize": 193, "fresh": 188, "relief": 279 } },
+    "altjira": { "variant": "A", "tweaks": {} },
+    "manwe": { "variant": "C", "tweaks": {} }
+  }
+}

@@ -112,6 +112,18 @@
   color: var(--cb-soft);
 }
 
+/*
+ * "73 bodies · 481 moons · sunlight has travelled 12 days to the Oort Cloud"
+ * on one line (reported wrapping). The title column is never narrower than
+ * that line; the tools beside it wrap their filters instead. 516 px measured,
+ * so from 1180 px up the search (380) and the close button still fit beside
+ * it, and below 1180 the tools already take their own row.
+ */
+.cboard__title .cboard__count { white-space: nowrap; }
+@media (min-width: 1181px) {
+  .cboard__head { grid-template-columns: minmax(max-content, 1fr) auto auto; }
+}
+
 .cboard__clock {
   font-weight: 400;
   color: #ffd38a;
@@ -443,6 +455,9 @@
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  /* A scroll that reaches the end of a column stays in the column, rather
+   * than chaining to the board's horizontal track (see the wheel handler). */
+  overscroll-behavior: contain;
   margin: 0;
   padding: 10px 12px 18px;
   list-style: none;
@@ -634,6 +649,8 @@
 
 @media (max-width: 760px) {
   .cboard__head { grid-template-columns: 1fr auto; padding: 16px 16px 12px; }
+  /* A phone cannot hold it: let it wrap rather than run off the edge. */
+  .cboard__title .cboard__count { white-space: normal; }
   .cboard__tools { grid-column: 1 / -1; flex-direction: column; align-items: stretch; }
   .cboard__search { width: 100%; }
   .cboard__filters { justify-content: flex-start; }
@@ -921,6 +938,20 @@
   from { transform: translateX(-50%); }
   to   { transform: translateX(0); }
 }
+
+/* The body's measured colour over a grey relief map (see paintSurface). */
+.cmoons__tint {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: var(--swatch, transparent);
+  mix-blend-mode: multiply;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.cmoons__planet.has-surface.is-grey .cmoons__tint { opacity: 0.9; }
+.cmoons__planet.has-surface.is-grey .cmoons__surface { filter: brightness(1.35); }
 
 /* Light from the upper left, a darkened limb, the night side to the right. */
 .cmoons__shade {
@@ -1479,6 +1510,13 @@ body.is-board-open:has(.cmoons) .tour__card {
 }
 
 body.is-board-open .tour__body { display: none; }
+
+/* Except on Space Dictionary's step, whose paragraph is the point: the viewer
+   has not read it before the board opened, because the board was open. */
+body.is-board-open .tour[data-step="decoded"] .tour__body { display: block; }
+/* ...until Space Dictionary itself is open: by then it has been read, and the
+   card should cover as little of the decoder as it can. */
+body.is-board-open:has(.cdec) .tour[data-step="decoded"] .tour__body { display: none; }
 
 /* Flying waits until the tour is over -- the buttons say so by looking it. */
 body.is-tour-open .cmoons__fly,

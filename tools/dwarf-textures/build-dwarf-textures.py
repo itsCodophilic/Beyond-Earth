@@ -65,6 +65,12 @@ BODIES = {
     "leleakuhonua": dict(cx=629.1, cy=708.6, A=502.7, B=502.7, ang=0.0, sub=0.0, lit=(0.24, 0.54), dark=(0.07, 0.17)),
     "ritona": dict(cx=124.0, cy=100.0, A=88.0, B=88.0, ang=0.0, sub=0.0),
     "xewioso": dict(cx=126.9, cy=124.9, A=113.1, B=113.1, ang=0.0, sub=0.0),
+    # Lempo (Rank 4 batch B). The supplied reference is an artist's impression
+    # cropped to the northern half of the disc (the frame ends 66 px below the
+    # centre), fitted from its alpha edge: centre (192.5, 192.4), radius 167.9.
+    # The flipped readings fill the south from the north, which is all a
+    # half-disc can give; Hiisi and Paha take this map turned and mirrored.
+    "lempo": dict(cx=192.5, cy=192.4, A=167.9, B=167.9, ang=0.0, sub=0.0, cap_s=30.0),
     # Haumea gets its own route.  It is not a sphere -- it is a rugby ball
     # spinning every four hours -- and the reference shows it obliquely, from
     # behind its own ring, with two moons crossing the frame.  Inverting that

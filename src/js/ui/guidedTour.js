@@ -190,7 +190,30 @@ const STEPS = [
     // The board is something to look through, not glance at: this step does
     // not move on by itself while it is open (see `onBoardState`).
     stayOpen: true,
-    done: "Look around as long as you like. Next, or closing the board, carries on.",
+    done: "Look around as long as you like. Next shows one more thing on it.",
+  },
+  {
+    /*
+     * Space Dictionary, the board's glossary. Its own step rather than a line
+     * in the board's, because it is the answer to the board's one real
+     * difficulty -- the names on it (Plutinos, Centaurs, AU) -- and the
+     * button is easy to miss among forty columns of worlds (asked for: the
+     * glossary "is also mentioned in the tour"). The board opens again if
+     * it was closed; the step holds while the viewer reads, like the board's.
+     */
+    id: "decoded",
+    title: "Space Dictionary: every word, in plain language",
+    body: "Plutino, Centaur, light-year, parsec, barycentre — the board uses the names astronomers use. Space Dictionary explains all of them in a sentence or two, each with a small moving picture, and you can search it. The \u201c?\u201d beside every region title opens just that one word.",
+    hint: "Press \u201cSpace Dictionary\u201d under the board's title.",
+    gesture: "click",
+    target: "[data-gloss-sheet]",
+    clicks: "none",
+    unlocks: "board",
+    action: "open-board",
+    veil: "soft",
+    anchor: ".cgloss__launch",
+    stayOpen: true,
+    done: "Read as much as you like. Next, or closing the board, carries on.",
   },
   {
     id: "events",
