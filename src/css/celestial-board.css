@@ -1046,6 +1046,76 @@
 
 .cmoons__moon.is-off { opacity: 0.08; pointer-events: none; }
 
+/* Pinned to the top right of the map's panel, clear of the round map. */
+.cmoons__hint {
+  position: absolute;
+  top: 14px;
+  right: 16px;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  max-width: 200px;
+  margin: 0;
+  padding: 8px 14px 8px 11px;
+  border: 1px solid rgba(255, 196, 130, 0.42);
+  border-radius: 12px;
+  background: rgba(255, 196, 130, 0.07);
+  box-shadow: 0 0 22px rgba(255, 196, 130, 0.1);
+  color: var(--cb-ink);
+  font-size: 0.74rem;
+  line-height: 1.35;
+  letter-spacing: 0.02em;
+  pointer-events: none;
+  z-index: 3;
+  transition: border-color 0.2s, background 0.2s;
+}
+
+.cmoons__hint b { font-weight: 500; color: var(--cb-amber); }
+.cmoons__hint-line { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cmoons__hint-text { min-width: 0; }
+.cmoons__hint.is-named { border-color: rgba(255, 196, 130, 0.75); background: rgba(255, 196, 130, 0.12); }
+
+/* A drawn mouse with its button pressed twice, not an emoji. */
+.cmoons__hint-icon {
+  position: relative;
+  flex: none;
+  width: 12px;
+  height: 18px;
+  border: 1.5px solid var(--cb-amber);
+  border-radius: 7px;
+}
+
+.cmoons__hint-icon::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 3px;
+  width: 2px;
+  height: 4px;
+  margin-left: -1px;
+  border-radius: 1px;
+  background: var(--cb-amber);
+  animation: cmoons-double-click 2.4s ease-in-out infinite;
+}
+
+@keyframes cmoons-double-click {
+  0%, 30%, 100% { opacity: 1; }
+  8%, 22% { opacity: 0.1; }
+}
+
+/* It arrives with the map and glows twice, so it is seen once. */
+.cmoons.is-opening .cmoons__hint {
+  animation: cmoons-hint-in 1400ms 500ms cubic-bezier(0.2, 0.75, 0.25, 1) both;
+}
+
+@keyframes cmoons-hint-in {
+  0%   { opacity: 0; transform: translateX(8px); box-shadow: 0 0 0 rgba(255, 196, 130, 0); }
+  35%  { opacity: 1; transform: none; box-shadow: 0 0 34px rgba(255, 196, 130, 0.45); }
+  60%  { box-shadow: 0 0 12px rgba(255, 196, 130, 0.12); }
+  80%  { box-shadow: 0 0 34px rgba(255, 196, 130, 0.4); }
+  100% { opacity: 1; transform: none; box-shadow: 0 0 22px rgba(255, 196, 130, 0.1); }
+}
+
 .cmoons__note {
   margin: 0;
   font-family: var(--cb-mono);
@@ -1306,6 +1376,7 @@
 }
 
 @media (max-width: 760px) {
+  .cmoons__hint { top: 8px; right: 10px; font-size: 0.68rem; padding: 6px 10px 6px 8px; }
   .cmoons__head { grid-template-columns: 1fr auto; padding: 14px 16px 12px; }
   .cmoons__head .cboard__search { grid-column: 1 / -1; width: 100%; }
   .cmoons__stage {

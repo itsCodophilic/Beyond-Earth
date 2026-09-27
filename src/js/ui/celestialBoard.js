@@ -851,7 +851,33 @@ export function createCelestialBoard({ trigger = null, surfaceFor = null } = {})
     });
 
     const note = el("p", "cmoons__note", "Rings in order outward, not to scale · dots sized by diameter · dashed rings go round backwards");
-    sky.append(map, note);
+    /*
+     * How to fly, said beside the map -- pinned to the top right of its
+     * panel, clear of the round map. In the corner of the card it was too
+     * easy to miss; centred over the map it was reported as clumsy. It names
+     * the moon under the pointer, so it reads as an answer to "what now?"
+     * the moment one is found.
+     */
+    const hint = el("p", "cmoons__hint");
+    hint.setAttribute("aria-live", "polite");
+    const hintIcon = el("span", "cmoons__hint-icon");
+    hintIcon.setAttribute("aria-hidden", "true");
+    const hintText = el("span", "cmoons__hint-text");
+    hint.append(hintIcon, hintText);
+    sky.append(hint, map, note);
+    let hintFor = undefined;
+    function writeHint() {
+      const index = state.hover ?? state.hot ?? state.pick;
+      const name = index != null ? entries[index]?.moon.name : null;
+      if (name === hintFor) return;
+      hintFor = name;
+      hintText.textContent = "";
+      // Two short lines, so it fits the corner the round map leaves empty.
+      const first = el("span", "cmoons__hint-line");
+      first.append("Double-click ", el("b", null, name ?? "any moon"));
+      hintText.append(first, el("span", "cmoons__hint-line", "to fly there"));
+      hint.classList.toggle("is-named", Boolean(name));
+    }
     stage.append(sky, side);
     board.append(stage);
 
@@ -941,7 +967,7 @@ export function createCelestialBoard({ trigger = null, surfaceFor = null } = {})
         card.append(el("p", "cmoons__ruler-title", "Every moon by distance · log scale"));
         card.append(ruler(null));
         const actions = el("div", "cmoons__actions");
-        actions.append(flyButton(body.name), el("span", "cmoons__card-hint", "Double-click any moon to fly there"));
+        actions.append(flyButton(body.name));
         card.append(actions);
         return;
       }
@@ -1027,6 +1053,7 @@ export function createCelestialBoard({ trigger = null, surfaceFor = null } = {})
         refreshLabel(index);
       });
       writeCard(state.hover ?? state.pick, state.hover == null ? state.missing : null);
+      writeHint();
       spin();
     }
 
@@ -1039,6 +1066,7 @@ export function createCelestialBoard({ trigger = null, surfaceFor = null } = {})
       refreshLabel(before);
       refreshLabel(index);
       writeCard(state.hover ?? state.pick, state.hover == null ? state.missing : null);
+      writeHint();
     }
 
     function setHot(index) {
@@ -1047,6 +1075,7 @@ export function createCelestialBoard({ trigger = null, surfaceFor = null } = {})
       state.hot = index;
       refreshLabel(before);
       refreshLabel(index);
+      writeHint();
       spin();
     }
 
@@ -1188,7 +1217,8 @@ export function createCelestialBoard({ trigger = null, surfaceFor = null } = {})
 
     // ---------------------------------------------------------- size
     function fit() {
-      const size = Math.max(220, Math.floor(Math.min(sky.clientWidth, sky.clientHeight - 30) - 16));
+      const room = sky.clientHeight - note.offsetHeight - 28;
+      const size = Math.max(220, Math.floor(Math.min(sky.clientWidth - 16, room)));
       map.style.width = `${size}px`;
       map.style.height = `${size}px`;
       map.style.setProperty("--half", `${size / 2}px`);
