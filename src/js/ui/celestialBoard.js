@@ -165,6 +165,24 @@ function nameMatches(nameWords, terms) {
   return terms.every((t) => nameWords.some((w) => w.startsWith(t)));
 }
 
+/*
+ * A query as a test of a name, or null for an empty query.
+ *
+ * Word starts, as above -- plus, when the query carries punctuation, the
+ * punctuation itself. "S/" was reported: split into words it is just "s",
+ * which begins Skathi, Siarnaq and Suttungr as readily as S/2004 S 7. The
+ * slash is the part that says "a provisional designation", so a query with
+ * one has to find it in the name, in that order.
+ */
+function queryMatcher(text) {
+  const terms = words(text);
+  const raw = normalise(text).trim().replace(/\s+/g, " ");
+  const literal = /[^a-z0-9 ]/.test(raw) ? raw : null;
+  if (!terms.length && !literal) return null;
+  return (name, nameWords = words(name)) => nameMatches(nameWords, terms)
+    && (!literal || normalise(name).replace(/\s+/g, " ").includes(literal));
+}
+
 /**
  * @param {object} options
  * @param {HTMLElement} [options.trigger]  the HUD button that opens it
@@ -220,13 +238,29 @@ export function createCelestialBoard({ trigger = null, surfaceFor = null } = {})
    * the viewer to Sedna would leave the walkthrough explaining a view they
    * are no longer in. Reading, searching and the moon boards all still work.
    */
-  function travel(name) {
+  /*
+   * Leaving for a body is one movement, not a cut.
+   *
+   * The boards used to vanish and the flight start on the same frame -- the
+   * moon board was simply removed. Now the moon board falls away towards the
+   * moon that was chosen (it scales up about that point and fades, as if the
+   * camera were already diving in), the main board folds into its ecliptic
+   * behind it, and the flight is asked for a beat into that, so the scene is
+   * already moving when the boards clear. Universe time resumes at the same
+   * moment, so the flight is not waiting on a paused clock.
+   *
+   * `from` is whatever was pressed: the point the moon board dives towards.
+   */
+  const DEPART_MS = 560;
+  function travel(name, from = null) {
     if (document.body.classList.contains("is-tour-open")) {
       say(`Flying to ${name} waits until the tour is done — the board will be here when you are.`);
       return;
     }
-    close({ restoreFocus: false });
-    window.dispatchEvent(new CustomEvent("beyond-earth:travel-to-body", { detail: { name } }));
+    close({ restoreFocus: false, departing: true, from });
+    setTimeout(() => {
+      window.dispatchEvent(new CustomEvent("beyond-earth:travel-to-body", { detail: { name } }));
+    }, 140);
   }
 
   function closeButton(label) {
@@ -290,6 +324,7 @@ export function createCelestialBoard({ trigger = null, surfaceFor = null } = {})
       buttons: [button, pill].filter(Boolean),
       words: words(body.name),
       moonWords: body.moons.map((m) => words(m.name)),
+      moonNames: body.moons.map((m) => m.name),
     });
     return item;
   }
@@ -438,12 +473,13 @@ export function createCelestialBoard({ trigger = null, surfaceFor = null } = {})
   }
 
   function apply() {
-    const terms = words(searchInput.value);
+    const matcher = queryMatcher(searchInput.value);
+    const searching = Boolean(matcher);
     let lit = 0;
     const litRegions = new Set();
-    chips.forEach(({ body, item, buttons, words: own, moonWords }) => {
-      const on = terms.length
-        ? nameMatches(own, terms) || moonWords.some((mw) => nameMatches(mw, terms))
+    chips.forEach(({ body, item, buttons, words: own, moonWords, moonNames }) => {
+      const on = searching
+        ? matcher(body.name, own) || moonNames.some((name, i) => matcher(name, moonWords[i]))
         : matchesFilter(body, filter);
       item.classList.toggle("is-off", !on);
       buttons.forEach((b) => { b.disabled = !on; });
@@ -452,18 +488,18 @@ export function createCelestialBoard({ trigger = null, surfaceFor = null } = {})
         litRegions.add(body.region);
       }
     });
-    const narrowing = terms.length > 0 || filter !== "all";
+    const narrowing = searching || filter !== "all";
     columns.forEach(({ key, column }) => {
       column.classList.toggle("is-quiet", narrowing && !litRegions.has(key));
     });
-    if (terms.length && !lit) {
+    if (searching && !lit) {
       emptyNote.textContent = `Nothing called “${searchInput.value.trim()}”. Clear the search to bring everything back.`;
       emptyNote.hidden = false;
     } else {
       emptyNote.hidden = true;
     }
     setLocks();
-    writeResults(terms);
+    writeResults(matcher);
     // Bring the first match into view.
     if (narrowing && lit) {
       const first = chips.find(({ item }) => !item.classList.contains("is-off"));
@@ -477,19 +513,19 @@ export function createCelestialBoard({ trigger = null, surfaceFor = null } = {})
     }
   }
 
-  function writeResults(terms) {
+  function writeResults(matcher) {
     results.textContent = "";
-    if (!terms.length) {
+    if (!matcher) {
       results.hidden = true;
       return;
     }
     const found = [];
     data.bodies.forEach((body) => {
-      if (nameMatches(words(body.name), terms)) {
+      if (matcher(body.name)) {
         found.push({ name: body.name, note: `${BODY_KINDS[body.kind]} · ${formatAU(body.aAU)}`, swatch: body.swatch });
       }
       body.moons.forEach((moon) => {
-        if (nameMatches(words(moon.name), terms)) {
+        if (matcher(moon.name)) {
           found.push({ name: moon.name, note: `Moon of ${body.name}`, swatch: "#c9c2b8" });
         }
       });
@@ -909,6 +945,13 @@ export function createCelestialBoard({ trigger = null, surfaceFor = null } = {})
         const x2 = xOf(focus.group.far);
         band = `<rect x="${(Math.min(x1, x2) - 3).toFixed(1)}" y="9" width="${(Math.abs(x2 - x1) + 6).toFixed(1)}" height="18" rx="3" fill="${focus.group.colour}" opacity="0.16" />`;
       }
+      if (focus?.found) {
+        marker = focus.found
+          .map((i) => entries[i].moon.distanceKm)
+          .filter(Boolean)
+          .map((km) => `<line class="cmoons__ruler-mark" x1="${xOf(km).toFixed(1)}" x2="${xOf(km).toFixed(1)}" y1="8" y2="28" />`)
+          .join("");
+      }
       if (focus?.moon?.distanceKm) {
         const x = xOf(focus.moon.distanceKm).toFixed(1);
         marker = `<line class="cmoons__ruler-mark" x1="${x}" x2="${x}" y1="5" y2="31" /><circle class="cmoons__ruler-mark" cx="${x}" cy="5" r="2.6" />`;
@@ -939,7 +982,9 @@ export function createCelestialBoard({ trigger = null, surfaceFor = null } = {})
 
     let shownKey = null;
     function writeCard(index, missing = null) {
-      const key = missing != null ? `missing:${missing}` : String(index);
+      const key = missing != null
+        ? `missing:${missing}`
+        : (index == null && state.found ? `found:${state.found.join(",")}` : String(index));
       if (key === shownKey) return;
       shownKey = key;
       card.textContent = "";
@@ -950,6 +995,22 @@ export function createCelestialBoard({ trigger = null, surfaceFor = null } = {})
         return;
       }
       const entry = entries[index];
+      if (!entry && state.found && state.found.length > 1) {
+        card.style.removeProperty("--fam");
+        const families = state.foundFamilies?.size ?? 0;
+        card.append(el("span", "cboard__eyebrow", "Search"));
+        card.append(el("h3", "cmoons__card-name", `${state.found.length} moons`));
+        card.append(el("p", "cmoons__card-sub",
+          `match “${filterBox.value.trim()}” across ${families} ${families === 1 ? "family" : "families"}`));
+        const byFamily = [...(state.foundFamilies ?? [])].map((gi) => [
+          groups[gi].name,
+          String(state.found.filter((i) => entries[i].gi === gi).length),
+        ]);
+        card.append(facts(byFamily.slice(0, 4)));
+        card.append(el("p", "cmoons__ruler-title", "Where they sit · log scale"));
+        card.append(ruler({ found: state.found }));
+        return;
+      }
       if (!entry) {
         card.style.removeProperty("--fam");
         card.append(el("span", "cboard__eyebrow", BODY_KINDS[body.kind] ?? "World"));
@@ -1009,12 +1070,17 @@ export function createCelestialBoard({ trigger = null, surfaceFor = null } = {})
      * the list never writes to it; hover changes touch only the moons that
      * changed.
      */
-    const state = { pick: null, fam: null, hover: null, hot: null, ringHot: null, missing: null, pointerIn: false };
+    const state = {
+      pick: null, fam: null, hover: null, hot: null, ringHot: null,
+      missing: null, found: null, foundFamilies: null, pointerIn: false,
+    };
     const reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
 
     function wantsLabel(entry, index) {
       if (index === state.pick || index === state.hover || index === state.hot) return true;
       if (entry.button.classList.contains("is-off")) return false;
+      // A search names its matches on the map while there are few enough to read.
+      if (state.found) return state.found.length <= 30;
       if (state.fam === entry.gi) return groups[entry.gi].list.length <= 24;
       return state.fam == null && entry.notable;
     }
@@ -1039,13 +1105,18 @@ export function createCelestialBoard({ trigger = null, surfaceFor = null } = {})
 
     function render() {
       map.classList.toggle("has-fam", state.fam != null);
-      orbitGroups.forEach((g, gi) => g.classList.toggle("is-sel", gi === state.fam));
+      orbitGroups.forEach((g, gi) => {
+        g.classList.toggle("is-sel", gi === state.fam);
+        g.classList.toggle("is-quiet", Boolean(state.foundFamilies) && !state.foundFamilies.has(gi));
+      });
       rings.forEach((ring, gi) => ring.node.classList.toggle("is-sel", gi === state.fam));
       famItems.forEach(({ li, button, names }, gi) => {
         const on = gi === state.fam;
+        // While searching, every family with a match shows its matches.
+        const open = on || Boolean(state.foundFamilies?.has(gi));
         li.classList.toggle("is-sel", on);
-        button.setAttribute("aria-expanded", String(on));
-        names.hidden = !on;
+        button.setAttribute("aria-expanded", String(open));
+        names.hidden = !open;
       });
       entries.forEach((entry, index) => {
         entry.button.classList.toggle("is-picked", index === state.pick);
@@ -1149,8 +1220,8 @@ export function createCelestialBoard({ trigger = null, surfaceFor = null } = {})
 
     board.addEventListener("dblclick", (event) => {
       const picked = event.target.closest(".cmoons__moon, .cmoons__name");
-      if (picked && !picked.disabled) travel(entries[Number(picked.dataset.pick)].moon.name);
-      else if (event.target.closest("[data-planet]")) travel(body.name);
+      if (picked && !picked.disabled) travel(entries[Number(picked.dataset.pick)].moon.name, entries[Number(picked.dataset.pick)].button);
+      else if (event.target.closest("[data-planet]")) travel(body.name, planet);
     });
 
     const pickIndex = (node) => (node && !node.disabled ? Number(node.dataset.pick) : null);
@@ -1181,36 +1252,43 @@ export function createCelestialBoard({ trigger = null, surfaceFor = null } = {})
     sky.addEventListener("pointerenter", () => { state.pointerIn = true; spin(); });
     sky.addEventListener("pointerleave", () => { state.pointerIn = false; spin(); });
 
+    /*
+     * Search lights every match on every ring at once.
+     *
+     * It used to pick the first match and select its family, which dimmed
+     * every other ring -- so "S/" showed S/2023 S 51's family and hid the
+     * provisional moons in the other five. Now nothing is picked unless the
+     * search narrows to a single moon: the matches stay lit wherever they
+     * are, everything else is switched off, each family with a match opens
+     * its list to show only those, and the card counts them.
+     */
     filterBox?.addEventListener("input", () => {
-      const terms = words(filterBox.value);
-      let first = null;
+      const matcher = queryMatcher(filterBox.value);
+      const found = [];
       const litFamilies = new Set();
       entries.forEach((entry, index) => {
-        const on = !terms.length || nameMatches(entry.words, terms);
+        const on = !matcher || matcher(entry.moon.name, entry.words);
         entry.button.classList.toggle("is-off", !on);
         entry.button.disabled = !on;
         entry.nameButton.closest("li").classList.toggle("is-off", !on);
         entry.nameButton.disabled = !on;
-        if (on) {
+        if (on && matcher) {
           litFamilies.add(entry.gi);
-          if (first == null) first = index;
+          found.push(index);
         }
       });
-      famItems.forEach(({ li }, gi) => li.classList.toggle("is-off", terms.length > 0 && !litFamilies.has(gi)));
+      famItems.forEach(({ li }, gi) => li.classList.toggle("is-off", Boolean(matcher) && !litFamilies.has(gi)));
       state.hover = null;
       state.hot = null;
-      if (!terms.length) {
-        state.missing = null;
-        state.pick = null;
-        state.fam = null;
-      } else if (first == null) {
-        state.missing = filterBox.value.trim();
-        state.pick = null;
-        state.fam = null;
-      } else {
-        state.missing = null;
-        state.pick = first;
-        state.fam = entries[first].gi;
+      state.fam = null;
+      state.pick = null;
+      state.missing = null;
+      state.found = matcher ? found : null;
+      state.foundFamilies = matcher ? litFamilies : null;
+      if (matcher && !found.length) state.missing = filterBox.value.trim();
+      else if (found.length === 1) {
+        state.pick = found[0];
+        state.fam = entries[found[0]].gi;
       }
       render();
     });
@@ -1268,7 +1346,7 @@ export function createCelestialBoard({ trigger = null, surfaceFor = null } = {})
     (built.filterBox ?? built.back).focus({ preventScroll: true });
   }
 
-  function closeMoons(immediate = false) {
+  function closeMoons(immediate = false, { departing = false, from = null } = {}) {
     if (!moonBoard) return false;
     const { board, destroy } = moonBoard;
     moonBoard = null;
@@ -1278,6 +1356,23 @@ export function createCelestialBoard({ trigger = null, surfaceFor = null } = {})
       return true;
     }
     board.classList.remove("is-opening");
+    if (departing) {
+      // Dive towards what was pressed; a card button stands in for the moon
+      // it names, so use that moon's dot when there is one.
+      const name = from?.dataset?.travel;
+      const dot = (name && [...board.querySelectorAll(".cmoons__moon")]
+        .find((node) => node.querySelector(".cmoons__label")?.textContent === name))
+        || (from?.closest?.(".cmoons__moon, .cmoons__planet") ?? null)
+        || board.querySelector(".cmoons__planet");
+      const box = board.getBoundingClientRect();
+      const at = dot?.getBoundingClientRect();
+      if (at) {
+        board.style.transformOrigin = `${at.left + at.width / 2 - box.left}px ${at.top + at.height / 2 - box.top}px`;
+      }
+      board.classList.add("is-departing");
+      setTimeout(() => board.remove(), DEPART_MS);
+      return true;
+    }
     board.classList.add("is-closing");
     setTimeout(() => board.remove(), 320);
     return true;
@@ -1288,7 +1383,53 @@ export function createCelestialBoard({ trigger = null, surfaceFor = null } = {})
   function jumpTo(key) {
     const column = track.querySelector(`[data-region="${key}"]`);
     if (!column) return;
+    stopGlide();
     track.scrollTo({ left: column.offsetLeft - 24, behavior: "smooth" });
+  }
+
+  /*
+   * A mouse wheel moves along the Solar System in a glide, not in steps.
+   *
+   * Each notch used to add its 100 px to `scrollLeft` at once, and the
+   * track's scroll-snap then pulled the result to the nearest column edge a
+   * moment later -- two movements per notch, the second one fighting the
+   * next notch, which read as a stutter. Snap is gone, and a notch now moves
+   * a target that the track eases towards, a fifth of the way each frame.
+   * Anything else that scrolls the track -- the scrollbar, a trackpad, a
+   * drag -- takes over the moment it moves it, and the glide lets go.
+   */
+  let glide = null;
+  function stopGlide() {
+    if (glide?.frame) cancelAnimationFrame(glide.frame);
+    glide = null;
+  }
+  function glideBy(lane, dx) {
+    const max = Math.max(0, lane.scrollWidth - lane.clientWidth);
+    if (!glide || glide.lane !== lane || Math.abs(lane.scrollLeft - glide.last) > 2) {
+      stopGlide();
+      glide = { lane, target: lane.scrollLeft, last: lane.scrollLeft, frame: 0 };
+    }
+    glide.target = Math.max(0, Math.min(max, glide.target + dx));
+    if (!glide.frame) glide.frame = requestAnimationFrame(stepGlide);
+  }
+  function stepGlide() {
+    const g = glide;
+    if (!g) return;
+    g.frame = 0;
+    // Someone else moved it: let go.
+    if (Math.abs(g.lane.scrollLeft - g.last) > 2) {
+      glide = null;
+      return;
+    }
+    const diff = g.target - g.lane.scrollLeft;
+    if (Math.abs(diff) < 0.6) {
+      g.lane.scrollLeft = g.target;
+      glide = null;
+      return;
+    }
+    g.lane.scrollLeft += diff * 0.2;
+    g.last = g.lane.scrollLeft;
+    g.frame = requestAnimationFrame(stepGlide);
   }
 
   function wire() {
@@ -1301,7 +1442,7 @@ export function createCelestialBoard({ trigger = null, surfaceFor = null } = {})
     root.addEventListener("click", (event) => {
       const travelTo = event.target.closest("[data-travel]");
       if (travelTo && !travelTo.disabled) {
-        travel(travelTo.dataset.travel);
+        travel(travelTo.dataset.travel, travelTo);
         return;
       }
       const moonsOf = event.target.closest("[data-moons-of]");
@@ -1354,7 +1495,7 @@ export function createCelestialBoard({ trigger = null, surfaceFor = null } = {})
       }
       if (event.key === "Enter" && document.activeElement === searchInput) {
         const first = results.querySelector("[data-travel]");
-        if (first) travel(first.dataset.travel);
+        if (first) travel(first.dataset.travel, first);
       }
     });
 
@@ -1374,7 +1515,9 @@ export function createCelestialBoard({ trigger = null, surfaceFor = null } = {})
         if ((event.deltaY > 0 && canDown) || (event.deltaY < 0 && canUp)) return;
       }
       event.preventDefault();
-      lane.scrollLeft += event.deltaY;
+      // Lines and pages, where a wheel reports them, in pixels.
+      const unit = event.deltaMode === 1 ? 40 : event.deltaMode === 2 ? lane.clientWidth : 1;
+      glideBy(lane, event.deltaY * unit);
     }, { passive: false });
 
     // Drag a track to pan.
@@ -1382,6 +1525,19 @@ export function createCelestialBoard({ trigger = null, surfaceFor = null } = {})
     root.addEventListener("pointerdown", (event) => {
       const lane = event.target.closest(".cboard__track");
       if (!lane || event.button !== 0 || event.target.closest("button, input")) return;
+      /*
+       * Not on the scrollbar. A press on the scrollbar's thumb is also a
+       * press on the track, and this drag used to start as well: the thumb
+       * dragged right moved the columns left, the drag moved them right, and
+       * the two fought every frame -- the flicker on the scrollbar. The bar
+       * sits below the track's client area -- or, where scrollbars overlay
+       * the content (macOS), over its bottom edge, and a press there lands on
+       * the track itself rather than on the column feet beneath it.
+       */
+      const box = lane.getBoundingClientRect();
+      if (event.clientY - box.top >= lane.clientHeight) return;
+      if (event.target === lane && event.clientY > box.bottom - 18) return;
+      stopGlide();
       drag = { lane, x: event.clientX, left: lane.scrollLeft, id: event.pointerId };
       lane.setPointerCapture(event.pointerId);
       lane.classList.add("is-dragging");
@@ -1438,18 +1594,23 @@ export function createCelestialBoard({ trigger = null, surfaceFor = null } = {})
     setTimeout(() => searchInput.focus({ preventScroll: true }), 60);
   }
 
-  function close({ restoreFocus = true } = {}) {
+  function close({ restoreFocus = true, departing = false, from = null } = {}) {
     if (!root || !open) return;
     open = false;
     cancelAnimationFrame(clockFrame);
-    closeMoons(true);
+    stopGlide();
+    const hadMoons = Boolean(moonBoard);
+    closeMoons(!departing, { departing, from });
     root.classList.remove("is-opening", "is-open");
     root.classList.add("is-closing");
+    // Over a moon board the main board is already hidden behind it, so it
+    // only needs to fade; on its own it folds, as it always has.
+    if (departing) root.classList.add(hadMoons ? "is-departing-moons" : "is-departing");
     announce(false);
     closingTimer = setTimeout(() => {
       root.hidden = true;
-      root.classList.remove("is-closing");
-    }, 380);
+      root.classList.remove("is-closing", "is-departing", "is-departing-moons");
+    }, departing ? DEPART_MS + 40 : 380);
     if (restoreFocus) trigger?.focus({ preventScroll: true });
   }
 

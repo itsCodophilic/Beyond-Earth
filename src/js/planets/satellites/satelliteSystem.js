@@ -1431,6 +1431,95 @@ export function findNearestDenseSatelliteAtPointer({
  * downgrade. The full catalogue progressively appears as the camera enters the
  * Jovian region, while hovered/focused moons always remain visible.
  */
+/*
+ * The focused moon's own orbit, when the close-up guides leave it out.
+ *
+ * Outside the complete-catalogue atlas, a system draws guides for its major
+ * moons only -- Saturn's eleven named ones, Neptune's eight -- and the other
+ * 274 of Saturn's moons have none. That was invisible while a small moon
+ * could only be reached from inside the atlas, where every orbit is drawn.
+ * The celestial board flies to any of them directly, and there Janus or
+ * Aegaeon sat on no line at all, beside other moons' orbits that looked like
+ * theirs but were not: reported as "orbits misaligned or disappeared".
+ *
+ * So a focused moon without a guide gets one line of its own, in the
+ * system's guide colour, built from exactly the radius, eccentricity,
+ * inclination and node that place the moon -- one LineLoop per system,
+ * rebuilt only when the focus changes, hidden in the atlas (which already
+ * draws it) and whenever the focus leaves the system. Moons that already
+ * have a guide are left exactly as they were.
+ */
+function updateFocusedSatelliteOrbit(system, focusedBody, overviewActive, orbitGuides) {
+  const wanted = !overviewActive && focusedBody?.userData?.parentPlanet === system.parentName
+    ? focusedBody
+    : null;
+  if (wanted !== system.focusOrbitBody) {
+    system.focusOrbitBody = wanted;
+    system.focusOrbitShown = false;
+    if (wanted) {
+      const direct = system.moons.find(({ moon }) => moon === wanted);
+      let profile = direct?.profile ?? null;
+      let semiMajor = direct?.semiMajorVisualRadius ?? null;
+      if (!profile) {
+        for (const field of system.denseFields ?? []) {
+          const record = field.records.find(({ target }) => target === wanted);
+          if (record) {
+            profile = record.profile;
+            semiMajor = record.semiMajorVisualRadius;
+            break;
+          }
+        }
+      }
+      if (profile && profile.showOrbitGuide === false) {
+        const parentRadius = Number(system.parent.userData?.visualRadius ?? 1);
+        const radius = Number.isFinite(semiMajor) ? semiMajor : parentRadius * Number(profile.orbitScale ?? 1);
+        const segments = system.quality === "low" ? 96 : system.quality === "medium" ? 128 : 160;
+        const positions = new Float32Array(segments * 3);
+        for (let index = 0; index < segments; index += 1) {
+          const angle = index / segments * Math.PI * 2;
+          const r = orbitRadiusAtAngle(radius, getVisualOrbitEccentricity(profile), angle);
+          orbitPoint.set(Math.cos(angle) * r, 0, -Math.sin(angle) * r);
+          orbitPoint.applyAxisAngle(orbitTiltAxis, Number(profile.inclination ?? 0));
+          orbitPoint.applyAxisAngle(THREE.Object3D.DEFAULT_UP, Number(profile.node ?? 0));
+          positions[index * 3] = orbitPoint.x;
+          positions[index * 3 + 1] = orbitPoint.y;
+          positions[index * 3 + 2] = orbitPoint.z;
+        }
+        const geometry = new THREE.BufferGeometry();
+        geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+        if (!system.focusOrbit) {
+          // The guides' own colour, a little stronger than their 0.10 so the
+          // one line that belongs to the focused moon reads as its own.
+          const guideMaterial = orbitGuides?.material;
+          system.focusOrbit = new THREE.LineLoop(
+            geometry,
+            new THREE.LineBasicMaterial({
+              color: guideMaterial?.color?.getHex?.() ?? 0x9bc6d9,
+              transparent: true,
+              opacity: Math.min(0.32, Math.max(0.16, Number(guideMaterial?.opacity ?? 0.1) * 2)),
+              depthWrite: false,
+            }),
+          );
+          system.focusOrbit.name = "Focused satellite orbit";
+          system.focusOrbit.renderOrder = 1;
+          // A line to look at, never something to pick.
+          system.focusOrbit.raycast = () => {};
+          system.focusOrbit.userData.ignoreInteraction = true;
+          system.root.add(system.focusOrbit);
+        } else {
+          system.focusOrbit.geometry.dispose();
+          system.focusOrbit.geometry = geometry;
+        }
+        system.focusOrbitShown = true;
+      }
+    }
+  }
+  if (system.focusOrbit) {
+    system.focusOrbit.visible = system.focusOrbitShown;
+    if (system.focusOrbitShown) system.focusOrbit.scale.setScalar(Number(system.orbitPresentationScale ?? 1));
+  }
+}
+
 export function updateMajorSatelliteVisibility({
   systems,
   camera,
@@ -1476,6 +1565,7 @@ export function updateMajorSatelliteVisibility({
     if (orbitGuides) {
       orbitGuides.visible = !overviewActive && (focusedInSystem || systemRadiusPixels >= 12);
     }
+    updateFocusedSatelliteOrbit(system, focusedBody, overviewActive, orbitGuides);
     if (system.atlasOrbitGuides) {
       system.atlasOrbitGuides.visible = overviewActive && focusedBody === system.parent;
     }
