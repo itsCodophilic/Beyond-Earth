@@ -2,6 +2,10 @@ import { SMALL_BODIES } from "../scene/smallBodies/smallBodyCatalogue.js";
 import { MAIN_BELT_WORLDS } from "../scene/smallBodies/mainBeltCatalogue.js";
 import { CENTAURS } from "../scene/smallBodies/centaurCatalogue.js";
 import { TRANS_NEPTUNIAN_WORLDS } from "../scene/smallBodies/tnoCatalogue.js";
+import { KUIPER_BINARIES } from "../scene/smallBodies/binaryCatalogue.js";
+import { COMETS } from "../scene/smallBodies/cometCatalogue.js";
+import { JUPITER_TROJANS } from "../scene/smallBodies/trojanCatalogue.js";
+import { NEAR_EARTH_ODDITIES } from "../scene/smallBodies/neoCatalogue.js";
 import { PLANET_CONFIGS, TRANS_NEPTUNIAN_NAMES } from "../planets/index.js";
 import { TRANS_NEPTUNIAN_MOON_COUNTS } from "../planets/satellites/transNeptunianMoonCatalog.js";
 import { BELT_MAJOR_ROCKS } from "../scene/beltMajorOrbitGuides.js";
@@ -149,6 +153,11 @@ const GROUP_DEFS = Object.freeze([
     blurb: "Between Mars and Jupiter, 2.1 to 3.3 AU from the Sun. These have measured shapes; the rest of the belt you see is a statistical population.",
   },
   {
+    key: "trojan",
+    title: "Jupiter's Trojans & Hildas",
+    blurb: "Sharing Jupiter's orbit 60° ahead of it and behind (more than 11,000 known), or locked to it three orbits for two. Lucy is visiting the Trojans from 2027.",
+  },
+  {
     key: "nearEarth",
     title: "Near-Earth asteroids",
     blurb: "Orbits that come within 1.3 AU of the Sun, so they cross or skirt Earth's path. The closest to reach -- and the ones spacecraft have brought samples home from.",
@@ -166,7 +175,7 @@ const GROUP_DEFS = Object.freeze([
   {
     key: "other",
     title: "Comets",
-    blurb: "Not asteroids -- ice more than rock, and the ones that grow a tail when they come in close.",
+    blurb: "Not asteroids -- ice more than rock, and the ones that grow a tail when they come in close. With them, the three objects known to have come from other stars.",
   },
 ]);
 
@@ -181,7 +190,8 @@ export const ASTEROID_ROSTER_FILTERS = Object.freeze([
 const CENTAUR = /centaur/i;
 const NEAR_EARTH = /near-earth/i;
 const BEYOND_NEPTUNE = /trans-neptunian|sednoid|kuiper/i;
-const NOT_AN_ASTEROID = /comet/i;
+const NOT_AN_ASTEROID = /comet|interstellar/i;
+const JUPITER_COMPANY = /jupiter trojan|hilda/i;
 const ACTIVE = /comet|coma|outburst/i;
 
 /*
@@ -198,6 +208,7 @@ function groupFor(record) {
   // nucleus at 1.2 AU among the worlds past Neptune.
   if (NOT_AN_ASTEROID.test(text)) return "other";
   if (BEYOND_NEPTUNE.test(text)) return "tno";
+  if (JUPITER_COMPANY.test(text)) return "trojan";
   if (NEAR_EARTH.test(text)) return "nearEarth";
   return "belt";
 }
@@ -318,8 +329,11 @@ function buildGroups() {
 
   /* Largest first within each group, with each parent's moons kept
    * directly beneath it rather than sorted in among the others. */
-  const families = { belt: [], nearEarth: [], centaur: [], tno: [], other: [] };
-  [...SMALL_BODIES, ...MAIN_BELT_WORLDS, ...CENTAURS, ...TRANS_NEPTUNIAN_WORLDS].forEach((record) => {
+  const families = { belt: [], trojan: [], nearEarth: [], centaur: [], tno: [], other: [] };
+  [
+    ...SMALL_BODIES, ...MAIN_BELT_WORLDS, ...CENTAURS, ...TRANS_NEPTUNIAN_WORLDS, ...KUIPER_BINARIES,
+    ...COMETS, ...JUPITER_TROJANS, ...NEAR_EARTH_ODDITIES,
+  ].forEach((record) => {
     families[groupFor(record)].push(rowFor(record, groupFor(record)));
   });
   /*

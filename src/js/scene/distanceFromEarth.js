@@ -180,10 +180,16 @@ function resolveOrbitalElements(body) {
    */
   const authored = body?.userData?.orbitalElements;
   if (authored && Number.isFinite(Number(authored.semiMajorAxisAU))) {
+    /* `currentAU` is the body's live distance from the Sun, kept by
+     * smallBodies.js; `unbound` marks an open orbit, which has no farthest
+     * point to quote. */
+    const currentAU = Number(authored.currentAU);
     return {
       semiMajorAxisAU: Number(authored.semiMajorAxisAU),
       eccentricity: THREE.MathUtils.clamp(Number(authored.eccentricity) || 0, 0, 0.99),
       source: authored.source ?? "jpl-small-body",
+      currentAU: Number.isFinite(currentAU) && currentAU > 0 ? currentAU : null,
+      unbound: Boolean(authored.unbound),
     };
   }
 
@@ -222,7 +228,7 @@ function resolveOrbitalElements(body) {
  * than as a live ephemeris.
  */
 function calculateApproximateEarthRange(elements) {
-  if (!elements) return null;
+  if (!elements || elements.unbound) return null;
 
   const earth = PLANET_ORBITAL_ELEMENTS.earth;
   const earthPerihelion = earth.semiMajorAxisAU * (1 - earth.eccentricity);
@@ -509,7 +515,9 @@ export function createEarthDistanceTracker({ earth, resolvePlanetByName = null }
     const orbitalElements = resolveOrbitalElements(body);
     if (orbitalElements) {
       const earthAU = PLANET_ORBITAL_ELEMENTS.earth.semiMajorAxisAU;
-      const bodyAU = orbitalElements.semiMajorAxisAU;
+      /* Where the body is now if it says so -- on an eccentric orbit that
+       * is a different number from a -- else a, as before. */
+      const bodyAU = orbitalElements.currentAU ?? orbitalElements.semiMajorAxisAU;
       heliocentricPosition(earth, earthAU, earthWorldDirection);
       earthHeliocentricPosition.copy(earthWorldDirection);
 

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Binary surface lab</title>
+<title>Small-body surface lab</title>
 <!--
   A bench for choosing the surfaces of the five Kuiper Belt binaries.
 
@@ -85,8 +85,8 @@
 </head>
 <body>
 <div id="ui">
-  <h1>Binary surface lab</h1>
-  <p class="sub">Pick one design per system. Nothing in the scene changes until you say so.</p>
+  <h1>Small-body surface lab</h1>
+  <p class="sub">The five binaries, and the Rank 7-10 groups: comets, interstellar visitors, Trojans, Lucy's flybys, near-Earth oddities. Pick one design per group; "What ships now" is what the scene loads.</p>
 
   <fieldset>
     <legend>System</legend>
@@ -139,7 +139,7 @@
     <legend>Your picks</legend>
     <div id="picks">None yet.</div>
     <div class="row"><button id="copy">Copy picks</button></div>
-    <p class="hint">Send me the copied text when all five look right and I will build the scene's maps from exactly these settings.</p>
+    <p class="hint">Send me the copied text and I will build the scene's maps from exactly these settings.</p>
   </fieldset>
 
   <p class="hint">Drag to turn · scroll to zoom · click a body to look at it alone, click empty space to go back.</p>
@@ -155,13 +155,15 @@ import { KUIPER_BINARIES } from "/src/js/scene/smallBodies/binaryCatalogue.js";
 import { SMALL_BODIES, albedoToLinearValue } from "/src/js/scene/smallBodies/smallBodyCatalogue.js";
 import { MAIN_BELT_WORLDS } from "/src/js/scene/smallBodies/mainBeltCatalogue.js";
 import { createSmallBodyGeometry } from "/src/js/scene/smallBodies/smallBodyShapes.js";
-import { SYSTEMS, TERRAINS, specFor } from "/tools/binary-surface-lab/surfaceDesigns.js";
+import { SYSTEMS, TERRAINS, specFor, RANK_RECORDS, RANK_FILES } from "/tools/binary-surface-lab/surfaceDesigns.js";
 
 const ASSETS = "/Beyond-Earth/assets/textures";
 const SHIPPED_FILE = {
   Lempo: "lempo", Hiisi: "hiisi", Paha: "paha", Sila: "sila", Nunam: "nunam",
   Teharonhiawako: "teharonhiawako", Sawiskera: "sawiskera", Altjira: "altjira",
   "Altjira I": "altjira-moon", "Manwë": "manwe", Thorondor: "thorondor",
+  /* Ranks 7-10: comets, interstellar, Trojans, Lucy's belt flybys, NEOs. */
+  ...RANK_FILES,
 };
 const REFERENCES = [
   { name: "Arrokoth", file: "arrokoth", note: "cold classical · New Horizons" },
@@ -452,7 +454,11 @@ let buildToken = 0;
 async function build() {
   const token = ++buildToken;
   const sys = SYSTEMS.find((s) => s.key === systemKey);
-  const list = bySystem.get(SYSTEM_PRIMARY[systemKey]) ?? [];
+  /* A Rank 7-10 group lists its members; a binary system is its record and
+   * its partners. */
+  const list = sys.members
+    ? sys.members.map((name) => RANK_RECORDS.get(name)).filter(Boolean)
+    : (bySystem.get(SYSTEM_PRIMARY[systemKey]) ?? []);
   // Bodies: reuse if the system has not changed.
   if (!shown.length || shown[0].record.name !== list[0]?.name) {
     shown.forEach((b) => scene.remove(b.holder));
@@ -586,7 +592,10 @@ function drawTags() {
     const el = document.createElement("div");
     el.className = "tag" + (b.reference ? " ref" : "");
     const terrain = b.maps?.terrain ? TERRAINS[b.maps.terrain].label : (variantKey === "now" && !b.reference ? "shipped map" : b.note ?? "");
-    el.innerHTML = `${b.record.name}<small>${terrain}</small>`;
+    // A group of seven or more is too tight for the terrain line under each
+    // name; it is in the design card, and on each body when isolated.
+    const crowded = !b.reference && shown.length > 6 && !isolated;
+    el.innerHTML = `${b.record.name}${crowded ? "" : `<small>${terrain}</small>`}`;
     labels.append(el);
     tags.set(b, el);
   }
@@ -677,6 +686,7 @@ addEventListener("pointerup", (e) => {
   isolated = body && isolated !== body ? body : null;
   view.zoom = 1;
   layout();
+  drawTags();
 });
 stage.addEventListener("wheel", (e) => {
   view.zoom = THREE.MathUtils.clamp(view.zoom * (e.deltaY > 0 ? 0.9 : 1.1), 0.4, 18);

@@ -12,7 +12,11 @@ import { MAIN_BELT_WORLDS } from "./mainBeltCatalogue.js";
 import { CENTAURS } from "./centaurCatalogue.js";
 import { TRANS_NEPTUNIAN_WORLDS } from "./tnoCatalogue.js";
 import { KUIPER_BINARIES } from "./binaryCatalogue.js";
-import { createCentaurComa, updateCentaurComa } from "./centaurComa.js";
+import { COMETS } from "./cometCatalogue.js";
+import { JUPITER_TROJANS } from "./trojanCatalogue.js";
+import { NEAR_EARTH_ODDITIES } from "./neoCatalogue.js";
+import { createCentaurComa, updateCentaurComa, setComaStrength } from "./centaurComa.js";
+import { createResonantSwarms, updateResonantSwarms } from "./resonantSwarms.js";
 import { createIcyRingSystem, hasIcyRingSystem } from "../../planets/icyRings.js";
 import { applyRingProximityVisibility } from "../../planets/ringProximity.js";
 
@@ -41,6 +45,18 @@ const ALL_SMALL_BODIES = Object.freeze([
   /* Rank 4, batch B: five near-equal binaries, one a triple, drawn about
    * their barycentres -- see `updateBinarySystem`. */
   ...KUIPER_BINARIES,
+  /* Rank 7: nine comets, each with a coma and tail that grow and fade with
+   * its distance from the Sun -- see `cometActivity`. */
+  ...COMETS,
+  /* Rank 8, the three interstellar visitors, are no longer drawn as bodies:
+   * they have left, and the owner moved them to the space events, where each
+   * pass is a dated replay (scene/events/interstellarPassages.js, round 5).
+   * `prepareHyperbolicOrbit` stays for any open orbit added later. */
+  /* Rank 9: Jupiter's Trojans and the Lucy targets, drawn in Jupiter's own
+   * frame -- see `CO_ORBITAL_PLANETS`. */
+  ...JUPITER_TROJANS,
+  /* Rank 10: near-Earth oddities; Cruithne and Kamoʻoalewa in Earth's frame. */
+  ...NEAR_EARTH_ODDITIES,
 ]);
 import { createSmallBodyGeometry, maxHalfExtent } from "./smallBodyShapes.js";
 
@@ -123,19 +139,70 @@ const AU_ANCHORS = Object.freeze([
   [100_000, 601],
 ]);
 
-export function smallBodyAuToScene(au) {
-  const x = Math.log10(Math.max(0.02, au));
-  for (let i = 0; i < AU_ANCHORS.length - 1; i += 1) {
-    const [a0, s0] = AU_ANCHORS[i];
-    const [a1, s1] = AU_ANCHORS[i + 1];
-    const l0 = Math.log10(a0);
-    const l1 = Math.log10(a1);
-    if (x <= l1 || i === AU_ANCHORS.length - 2) {
-      const t = THREE.MathUtils.clamp((x - l0) / (l1 - l0), 0, 1);
-      return (s0 + (s1 - s0) * t) * SOLAR_ORBIT_SCALE;
+/*
+ * Smooth through the anchors, not straight between them.
+ *
+ * Reported as a "major issue": the orbits of C/2014 UN271 and several others
+ * were not ellipses but bent with sudden sharp corners. They were. The curve
+ * used to be straight lines in log(AU) between the anchors, so its slope
+ * jumped at every anchor radius -- at Mars, the outer belt, Jupiter, the
+ * Kuiper cliff, Sedna -- and any orbit crossing one of those radii was drawn
+ * with a corner there: up to 37 degrees on Hale-Bopp's path at 506 AU, 30 on
+ * UN271's, 21 on Halley's at 3.2 AU, 19 on Encke's. Every eccentric small
+ * body had them; near-circular ones never cross an anchor and did not.
+ *
+ * Now a monotone cubic (Fritsch-Carlson) through the same anchors in
+ * log(AU): it passes through every anchor exactly, so each body that sat at
+ * an anchor distance still sits there and the order of everything is
+ * unchanged, but the slope is continuous, so no path can have a corner.
+ * Measured on every guide after the change: the largest turn beyond what
+ * its neighbours turn is under a degree.
+ */
+const AU_ANCHOR_LOG = AU_ANCHORS.map(([a]) => Math.log10(a));
+const AU_ANCHOR_SLOPES = (() => {
+  const n = AU_ANCHORS.length;
+  const d = [];
+  for (let i = 0; i < n - 1; i += 1) {
+    d.push((AU_ANCHORS[i + 1][1] - AU_ANCHORS[i][1]) / (AU_ANCHOR_LOG[i + 1] - AU_ANCHOR_LOG[i]));
+  }
+  const m = new Array(n);
+  m[0] = d[0];
+  m[n - 1] = d[n - 2];
+  for (let i = 1; i < n - 1; i += 1) {
+    if (d[i - 1] * d[i] <= 0) {
+      m[i] = 0;
+    } else {
+      // Weighted harmonic mean (Fritsch-Butland), which keeps it monotone.
+      const h0 = AU_ANCHOR_LOG[i] - AU_ANCHOR_LOG[i - 1];
+      const h1 = AU_ANCHOR_LOG[i + 1] - AU_ANCHOR_LOG[i];
+      const w1 = 2 * h1 + h0;
+      const w2 = h1 + 2 * h0;
+      m[i] = (w1 + w2) / (w1 / d[i - 1] + w2 / d[i]);
     }
   }
-  return AU_ANCHORS[0][1] * SOLAR_ORBIT_SCALE;
+  return m;
+})();
+
+export function smallBodyAuToScene(au) {
+  const x = Math.log10(Math.max(0.02, au));
+  const n = AU_ANCHORS.length;
+  if (x <= AU_ANCHOR_LOG[0]) {
+    return (AU_ANCHORS[0][1] + AU_ANCHOR_SLOPES[0] * (x - AU_ANCHOR_LOG[0])) * SOLAR_ORBIT_SCALE;
+  }
+  if (x >= AU_ANCHOR_LOG[n - 1]) {
+    return AU_ANCHORS[n - 1][1] * SOLAR_ORBIT_SCALE;
+  }
+  let i = 0;
+  while (i < n - 2 && x > AU_ANCHOR_LOG[i + 1]) i += 1;
+  const h = AU_ANCHOR_LOG[i + 1] - AU_ANCHOR_LOG[i];
+  const t = (x - AU_ANCHOR_LOG[i]) / h;
+  const t2 = t * t;
+  const t3 = t2 * t;
+  const y = (2 * t3 - 3 * t2 + 1) * AU_ANCHORS[i][1]
+    + (t3 - 2 * t2 + t) * h * AU_ANCHOR_SLOPES[i]
+    + (-2 * t3 + 3 * t2) * AU_ANCHORS[i + 1][1]
+    + (t3 - t2) * h * AU_ANCHOR_SLOPES[i + 1];
+  return y * SOLAR_ORBIT_SCALE;
 }
 
 /*
@@ -240,8 +307,13 @@ function visualMeanMotion(periodDays) {
 
 /** Newton-Raphson on Kepler's equation. Five passes is convergent to 1e-12 here. */
 function eccentricAnomaly(meanAnomaly, e) {
-  let E = e < 0.8 ? meanAnomaly : Math.PI;
-  for (let i = 0; i < 8; i += 1) {
+  /* Danby's starting value, E = M + 0.85 e sign(sin M), and up to 50 passes:
+   * the old start at pi with 8 passes did not converge for C/2014 UN271
+   * (e = 0.99926, M a few thousandths of a degree short of 360), which was
+   * drawn at 51.6 AU instead of 13.6. Everything else still converges in a
+   * handful of passes and breaks out at once. */
+  let E = meanAnomaly + 0.85 * e * Math.sign(Math.sin(meanAnomaly));
+  for (let i = 0; i < 50; i += 1) {
     const delta = (E - e * Math.sin(E) - meanAnomaly) / (1 - e * Math.cos(E));
     E -= delta;
     if (Math.abs(delta) < 1e-12) break;
@@ -261,15 +333,57 @@ function eccentricAnomaly(meanAnomaly, e) {
  * their true ones, so the angle between Apophis and Earth on screen is not a
  * sky you could go outside and check.
  */
+/*
+ * Kepler's equation for an open orbit: e sinh H - H = M.
+ *
+ * The three interstellar visitors are not bound to the Sun (e = 1.20, 3.36
+ * and 6.14), so the ellipse's eccentric anomaly has no meaning for them and
+ * the hyperbolic anomaly H takes its place. Newton from asinh(M / e), which
+ * is within a fraction of a radian of the root for every M used here; the
+ * derivative e cosh H - 1 is never below e - 1 > 0, so it cannot stall.
+ */
+function hyperbolicAnomaly(meanAnomaly, e) {
+  let H = Math.asinh(meanAnomaly / e);
+  for (let i = 0; i < 30; i += 1) {
+    const delta = (e * Math.sinh(H) - H - meanAnomaly) / (e * Math.cosh(H) - 1);
+    H -= delta;
+    if (Math.abs(delta) < 1e-12) break;
+  }
+  return H;
+}
+
+/* Heliocentric distance on the orbit at a mean anomaly, in AU, without
+ * placing anything: what the comets' activity reads every frame. */
+function radiusAtMeanAnomaly(orbit, meanAnomaly) {
+  if (orbit.hyperbolic) {
+    return orbit.aAU * (orbit.e * Math.cosh(hyperbolicAnomaly(meanAnomaly, orbit.e)) - 1);
+  }
+  return orbit.aAU * (1 - orbit.e * Math.cos(eccentricAnomaly(meanAnomaly, orbit.e)));
+}
+
 function positionFromOrbit(target, orbit, meanAnomaly) {
   const e = orbit.e;
-  const E = eccentricAnomaly(meanAnomaly, e);
-  const trueAnomaly = 2 * Math.atan2(
-    Math.sqrt(1 + e) * Math.sin(E / 2),
-    Math.sqrt(1 - e) * Math.cos(E / 2),
-  );
-  const radiusAU = orbit.aAU * (1 - e * Math.cos(E));
-  const radius = smallBodyAuToScene(radiusAU);
+  let trueAnomaly;
+  let radiusAU;
+  if (orbit.hyperbolic) {
+    /* aAU is stored positive for an open orbit (|a|), so r = |a|(e cosh H - 1)
+     * and tan(nu / 2) = sqrt((e + 1)/(e - 1)) tanh(H / 2). */
+    const H = hyperbolicAnomaly(meanAnomaly, e);
+    trueAnomaly = 2 * Math.atan(Math.sqrt((e + 1) / (e - 1)) * Math.tanh(H / 2));
+    radiusAU = orbit.aAU * (e * Math.cosh(H) - 1);
+  } else {
+    const E = eccentricAnomaly(meanAnomaly, e);
+    trueAnomaly = 2 * Math.atan2(
+      Math.sqrt(1 + e) * Math.sin(E / 2),
+      Math.sqrt(1 - e) * Math.cos(E / 2),
+    );
+    radiusAU = orbit.aAU * (1 - e * Math.cos(E));
+  }
+  /* The drawn conic where the orbit has one (`sceneConic`), else the radial
+   * mapping -- the co-orbital planet models, which only need an angle. */
+  const radius = orbit.sceneP !== undefined
+    ? orbit.sceneP / (1 + orbit.sceneE * Math.cos(trueAnomaly))
+    : smallBodyAuToScene(radiusAU);
 
   // Perifocal coordinates, then the three standard rotations. The scene's
   // ecliptic is the x-z plane with y up, so the usual z-up result is swapped.
@@ -289,6 +403,42 @@ function positionFromOrbit(target, orbit, meanAnomaly) {
   return { radiusAU };
 }
 
+/*
+ * Each path is drawn as a true conic -- an ellipse, or for a visitor a
+ * hyperbola-like arc -- not as the real one squeezed point by point.
+ *
+ * Reported twice: the eccentric orbits were not ellipses. The first time
+ * the cause was corners where the old straight-line distance curve changed
+ * slope; that was fixed, and the paths were still wrong, "curvy, with very
+ * sharp points at some ends". That is what any non-linear squeeze does to an
+ * eccentric orbit. The scene compresses distance roughly logarithmically
+ * (1 AU is 29 units, 30 AU is 178, 100,000 AU is 601), so a long ellipse
+ * squeezed point by point keeps its near end round and fattened while the
+ * whole far half -- where the real distance shoots up within a few degrees
+ * of aphelion -- collapses into a spike. Halley's path became a teardrop;
+ * UN271's, whose far point is ~29,500 AU, a near-circle with a horn.
+ *
+ * So the squeeze is applied only to the two ends. The nearest and farthest
+ * distances go through `smallBodyAuToScene` exactly as before -- so every
+ * perihelion and aphelion still lands where it did against the planets --
+ * and the path between them is the one ellipse with the Sun at its focus
+ * that has those two ends: scene semi-latus rectum p = 2 q' Q' / (q' + Q'),
+ * eccentricity (Q' - q') / (Q' + q'). The body is placed on it at its real
+ * true anomaly, so its direction from the Sun and its timing (fast at
+ * perihelion, slow far out) are the real ones; only its drawn distance
+ * between the two ends is the conic's. Distances on cards and in the HUD
+ * come from the real orbit (`currentAU`) and are unaffected.
+ *
+ * An open orbit gets the conic through its drawn perihelion and its two
+ * 60 AU loop ends at their real true anomalies -- see
+ * `prepareHyperbolicOrbit`.
+ */
+function sceneConic(qAU, QAU) {
+  const q = smallBodyAuToScene(qAU);
+  const Q = smallBodyAuToScene(QAU);
+  return { sceneP: (2 * q * Q) / (q + Q), sceneE: (Q - q) / (Q + q) };
+}
+
 /**
  * Turns the catalogue's orbit block into the working form, and propagates the
  * published mean anomaly forward from its own epoch to now.
@@ -302,11 +452,120 @@ function positionFromOrbit(target, orbit, meanAnomaly) {
  * fitted. Over fifteen years that is small. Over Halley's fifty-eight it is
  * a few tenths of an AU, and its card says so rather than pretending.
  */
+/*
+ * How far out an open orbit is drawn, and where its pass loops.
+ *
+ * A hyperbolic body comes in once and leaves for ever; drawn literally, the
+ * three visitors would be at 12, 49 and 55 AU today and receding, and would
+ * never be seen near the Sun again on the scene's clock. So each pass is
+ * drawn between the two points where the path crosses 60 AU -- far enough
+ * that all three of today's positions are on it (1I is the farthest, at
+ * 54.6 AU on 27 September 2026, JPL Horizons) -- and when the body reaches
+ * the outbound end it starts again at the inbound one. The line is open at
+ * both ends, and the card says the loop is the scene's, not the object's.
+ */
+const HYPERBOLIC_LOOP_AU = 60;
+
+function prepareHyperbolicOrbit(orbit, nowJD) {
+  const aAU = Math.abs(orbit.aAU);
+  const e = orbit.e;
+  /* Mean anomaly is unbounded on an open orbit -- 3I's is 818 degrees at its
+   * epoch -- so it is propagated and never wrapped. */
+  const meanAnomalyNow = (orbit.meanAnomalyDeg
+    + orbit.meanMotionDegPerDay * (nowJD - orbit.epochJD)) * DEG;
+  const Hloop = Math.acosh((HYPERBOLIC_LOOP_AU / aAU + 1) / e);
+  const loopM = e * Math.sinh(Hloop) - Hloop;
+  const nRad = orbit.meanMotionDegPerDay * DEG;
+  /* The pass, 60 AU in to 60 AU out, in real days; the scene's clock is the
+   * one every body uses, applied to that span as if it were a period, and
+   * scaled to the pass's own span in mean anomaly. */
+  const passDays = (2 * loopM) / nRad;
+  /* The drawn conic (see `sceneConic`): through the drawn perihelion, and
+   * through the drawn 60 AU point at the loop end's real true anomaly. */
+  const qAU = aAU * (e - 1);
+  const nuEnd = 2 * Math.atan(Math.sqrt((e + 1) / (e - 1)) * Math.tanh(Hloop / 2));
+  const qScene = smallBodyAuToScene(qAU);
+  const endScene = smallBodyAuToScene(HYPERBOLIC_LOOP_AU);
+  const sceneE = (endScene - qScene) / (qScene - endScene * Math.cos(nuEnd));
+  return {
+    sceneP: qScene * (1 + sceneE),
+    sceneE,
+    hyperbolic: true,
+    aAU,
+    e,
+    qAU: aAU * (e - 1),
+    incRad: orbit.iDeg * DEG,
+    nodeRad: orbit.nodeDeg * DEG,
+    argPeriRad: orbit.argPeriDeg * DEG,
+    meanAnomaly: THREE.MathUtils.clamp(meanAnomalyNow, -loopM, loopM),
+    /* Where the real object is today -- the guide marks it, because the
+     * body itself is replaying the pass and is usually somewhere else. */
+    todayM: THREE.MathUtils.clamp(meanAnomalyNow, -loopM, loopM),
+    loopM,
+    loopH: Hloop,
+    periodDays: passDays,
+    visualRate: visualMeanMotion(passDays) * (2 * loopM) / (Math.PI * 2),
+    solution: orbit.solution,
+  };
+}
+
+/*
+ * The planets a few bodies are drawn relative to.
+ *
+ * This scene's planets move on authored clocks from authored longitudes, so
+ * a body placed on its real elements is at its real angle from the Sun but
+ * not at its real angle from Jupiter or Earth. For most bodies nothing is
+ * lost. For a Trojan it is everything -- the one fact about Hektor is that
+ * it sits 60 degrees ahead of Jupiter -- and the same is true of Hilda's 3:2
+ * resonance and of Cruithne and Kamoʻoalewa, which are only interesting
+ * relative to Earth.
+ *
+ * So a record with `coOrbital: { planet: "Jupiter", ratio }` is drawn in a frame that turns
+ * with the drawn planet: its position is computed on its real elements, a
+ * model of the real planet is computed the same way on the same clock, and
+ * the frame is turned about the Sun by whatever angle separates the drawn
+ * planet from the modelled one. The body keeps its real longitude *relative
+ * to the planet*, which is what makes L4, L5 and the quasi-satellite loop
+ * appear where they belong.
+ *
+ * Elements: JPL "Keplerian Elements for Approximate Positions of the Major
+ * Planets" (Standish), Table 1, J2000 ecliptic, valid 1800-2050 -- a, e, I,
+ * L0 (mean longitude at J2000), longitude of perihelion, node. Earth's row
+ * is the Earth-Moon barycentre's.
+ */
+const J2000_JD = 2451545.0;
+const CO_ORBITAL_PLANETS = Object.freeze({
+  Jupiter: { aAU: 5.20288700, e: 0.04838624, iDeg: 1.30439695, L0: 34.39644051, Ldot: 3034.74612775, varpi: 14.72847983, node: 100.47390909 },
+  Earth: { aAU: 1.00000261, e: 0.01671123, iDeg: -0.00001531, L0: 100.46457166, Ldot: 35999.37244981, varpi: 102.93768193, node: 0 },
+});
+
+function coOrbitalModel(name, nowJD) {
+  const p = CO_ORBITAL_PLANETS[name];
+  const T = (nowJD - J2000_JD) / 36525;
+  const L = p.L0 + p.Ldot * T;
+  const periodDays = 36525 * 360 / p.Ldot;
+  const meanAnomaly = ((((L - p.varpi) % 360) + 360) % 360) * DEG;
+  return {
+    aAU: p.aAU,
+    e: p.e,
+    incRad: p.iDeg * DEG,
+    nodeRad: p.node * DEG,
+    argPeriRad: (p.varpi - p.node) * DEG,
+    meanAnomaly,
+    periodDays,
+    /* Earth's comes out at exactly its authored orbitSpeed of 0.34, which is
+     * the reference the curve is built on. */
+    visualRate: visualMeanMotion(periodDays),
+  };
+}
+
 function prepareOrbit(orbit, nowJD) {
+  if (orbit.e >= 1) return prepareHyperbolicOrbit(orbit, nowJD);
   const daysSinceEpoch = nowJD - orbit.epochJD;
   const advanced = orbit.meanAnomalyDeg + orbit.meanMotionDegPerDay * daysSinceEpoch;
   const wrapped = ((advanced % 360) + 360) % 360;
   return {
+    ...sceneConic(orbit.aAU * (1 - orbit.e), orbit.aAU * (1 + orbit.e)),
     aAU: orbit.aAU,
     e: orbit.e,
     incRad: orbit.iDeg * DEG,
@@ -498,6 +757,48 @@ const SMALL_BODY_TEXTURES = Object.freeze({
   "Altjira I": { file: "altjira-moon", meanLinear: 0.0458, normal: "altjira-moon-normal" },
   "Manwë": { file: "manwe", meanLinear: 0.0824, normal: "manwe-normal" },
   Thorondor: { file: "thorondor", meanLinear: 0.0941, normal: "thorondor-normal" },
+  /* Ranks 7-10: comets, the interstellar visitors, the Trojans and Lucy
+   * targets, the near-Earth oddities -- 33 bodies. Generated by the same lab
+   * and build (tools/binary-surface-lab, groups comets, interstellar,
+   * trojans, lucy, neos), each with a normal map. `lazy`: fetched only when
+   * the camera first comes near the body (see `loadNearbyTextures`), because
+   * together they are 24 MB and most viewers will visit a handful.
+   * Twenty-three were rebuilt in round 3 (Prompts.md) with per-body terrain,
+   * craters and described colours -- `BODY_TUNING` in surfaceDesigns.js --
+   * and their meanLinear values re-measured with them. */
+  "9P/Tempel 1": { file: "tempel-1", meanLinear: 0.1666, normal: "tempel-1-normal", lazy: true },
+  "103P/Hartley 2": { file: "hartley-2", meanLinear: 0.1661, normal: "hartley-2-normal", lazy: true },
+  "81P/Wild 2": { file: "wild-2", meanLinear: 0.1600, normal: "wild-2-normal", lazy: true },
+  "19P/Borrelly": { file: "borrelly", meanLinear: 0.1655, normal: "borrelly-normal", lazy: true },
+  "2P/Encke": { file: "encke", meanLinear: 0.1627, normal: "encke-normal", lazy: true },
+  "12P/Pons-Brooks": { file: "pons-brooks", meanLinear: 0.1640, normal: "pons-brooks-normal", lazy: true },
+  "C/2014 UN271": { file: "un271", meanLinear: 0.1650, normal: "un271-normal", lazy: true },
+  "C/1995 O1 Hale-Bopp": { file: "hale-bopp", meanLinear: 0.1640, normal: "hale-bopp-normal", lazy: true },
+  "C/2020 F3 NEOWISE": { file: "neowise", meanLinear: 0.1644, normal: "neowise-normal", lazy: true },
+  "1I/ʻOumuamua": { file: "oumuamua", meanLinear: 0.1631, normal: "oumuamua-normal", lazy: true },
+  "2I/Borisov": { file: "borisov", meanLinear: 0.1672, normal: "borisov-normal", lazy: true },
+  "3I/ATLAS": { file: "atlas-3i", meanLinear: 0.1679, normal: "atlas-3i-normal", lazy: true },
+  "Hektor": { file: "hektor", meanLinear: 0.1704, normal: "hektor-normal", lazy: true },
+  "Skamandrios": { file: "skamandrios", meanLinear: 0.1668, normal: "skamandrios-normal", lazy: true },
+  "Patroclus": { file: "patroclus", meanLinear: 0.1643, normal: "patroclus-normal", lazy: true },
+  "Menoetius": { file: "menoetius", meanLinear: 0.1729, normal: "menoetius-normal", lazy: true },
+  "Eurybates": { file: "eurybates", meanLinear: 0.1601, normal: "eurybates-normal", lazy: true },
+  "Queta": { file: "queta", meanLinear: 0.1498, normal: "queta-normal", lazy: true },
+  "Polymele": { file: "polymele", meanLinear: 0.1694, normal: "polymele-normal", lazy: true },
+  "Shaun": { file: "shaun", meanLinear: 0.1535, normal: "shaun-normal", lazy: true },
+  "Leucus": { file: "leucus", meanLinear: 0.1778, normal: "leucus-normal", lazy: true },
+  "Orus": { file: "orus", meanLinear: 0.1753, normal: "orus-normal", lazy: true },
+  "Hilda": { file: "hilda", meanLinear: 0.1619, normal: "hilda-normal", lazy: true },
+  "Donaldjohanson": { file: "donaldjohanson", meanLinear: 0.1626, normal: "donaldjohanson-normal", lazy: true },
+  "Dinkinesh": { file: "dinkinesh", meanLinear: 0.1507, normal: "dinkinesh-normal", lazy: true },
+  "Selam": { file: "selam", meanLinear: 0.1512, normal: "selam-normal", lazy: true },
+  "Phaethon": { file: "phaethon", meanLinear: 0.1484, normal: "phaethon-normal", lazy: true },
+  "Toutatis": { file: "toutatis", meanLinear: 0.1622, normal: "toutatis-normal", lazy: true },
+  "Kamoʻoalewa": { file: "kamooalewa", meanLinear: 0.1604, normal: "kamooalewa-normal", lazy: true },
+  "Cruithne": { file: "cruithne", meanLinear: 0.1628, normal: "cruithne-normal", lazy: true },
+  "Moshup": { file: "moshup", meanLinear: 0.1543, normal: "moshup-normal", lazy: true },
+  "Squannit": { file: "squannit", meanLinear: 0.1538, normal: "squannit-normal", lazy: true },
+  "Geographos": { file: "geographos", meanLinear: 0.1612, normal: "geographos-normal", lazy: true },
 });
 
 /* The map's URL for a body, for the board's binary view, which draws the
@@ -533,6 +834,15 @@ function applySmallBodyTexture(material, record) {
   if (typeof document === "undefined") return;
   const entry = SMALL_BODY_TEXTURES[record?.name];
   if (!entry) return;
+  if (entry.lazy && !material.userData.textureRequested) {
+    /* Held until the camera comes near: `loadNearbyTextures` calls this
+     * again with the flag set. */
+    material.userData.loadTexture = () => {
+      material.userData.textureRequested = true;
+      applySmallBodyTexture(material, record);
+    };
+    return;
+  }
 
   const url = `${PUBLIC_ASSET_ROOT}/textures/smallbodies/${entry.file}.jpg`;
   const attach = (map) => {
@@ -681,7 +991,72 @@ function createSmallBodyMaterial(record, baseColor, textured = true) {
     dithering: true,
   });
   if (textured) applySmallBodyTexture(material, record);
+  applyNightSide(material);
   return material;
+}
+
+/*
+ * The night side stays night.
+ *
+ * Reported: on the bodies with normal maps, the hemisphere facing away from
+ * the Sun showed its craters and boulders in a pale, whitish relief, as if
+ * lit from behind. It was lit from behind. Besides the Sun the scene has two
+ * fixed directional fills (main.js: a cool one from (-50, 40, 90) and a warm
+ * one from (120, 18, 36)) and, while an asteroid is focused, an ambient of
+ * 0.46. On a plain sphere a fill only lifts the dark side evenly; through a
+ * normal map it lights every crater wall that happens to face it, so the
+ * relief appeared on ground the Sun cannot reach.
+ *
+ * So for these materials every direct light is gated by where the Sun is:
+ * the Sun sits at the world origin, and a fragment whose *geometric* normal
+ * (before the normal map, `nonPerturbedNormal`) faces away from it gets no
+ * direct light at all, with a soft step across the terminator. That also
+ * stops the normal map itself leaking light past the terminator, which a
+ * strongly tilted crater wall otherwise does. The ambient and the emissive
+ * lift are kept on the night side at 30%, so a body's dark limb is still a
+ * shape against the sky rather than a hole in it. The day side is exactly
+ * as before. Nothing is changed for any other body in the scene.
+ */
+const NIGHT_SIDE_LIFT = 0.3;
+function applyNightSide(material) {
+  material.onBeforeCompile = (shader) => {
+    /* The direction from the body's centre to this point, for the second
+     * gate below. */
+    shader.vertexShader = shader.vertexShader
+      .replace("#include <common>", "#include <common>\nvarying vec3 sbRadial;")
+      .replace(
+        "#include <project_vertex>",
+        "#include <project_vertex>\n\tsbRadial = mvPosition.xyz - ( modelViewMatrix * vec4( 0.0, 0.0, 0.0, 1.0 ) ).xyz;",
+      );
+    shader.fragmentShader = shader.fragmentShader
+      .replace("#include <common>", "#include <common>\nvarying vec3 sbRadial;");
+    const begin = THREE.ShaderChunk.lights_fragment_begin
+      .replace(
+        "vec3 geometryNormal = normal;",
+        `vec3 geometryNormal = normal;
+        vec3 sbSunDirection = normalize( ( viewMatrix * vec4( 0.0, 0.0, 0.0, 1.0 ) ).xyz - geometryPosition );
+        // Two gates. The surface must face the Sun, and so must the side of
+        // the body it is on: there are no shadows here, so without the
+        // second a crater or trough wall on the night side that happens to
+        // face sunward was lit through the rock (Dinkinesh, round 5). The
+        // second gate is lenient -- it only closes well past the terminator
+        // -- so long bodies lit end-on keep their sunlit tips.
+        float sbHemisphere = smoothstep( -0.35, -0.05, dot( normalize( sbRadial ), sbSunDirection ) );
+        float sbDay = smoothstep( -0.04, 0.10, dot( nonPerturbedNormal, sbSunDirection ) ) * sbHemisphere;
+        float sbNightLift = mix( ${NIGHT_SIDE_LIFT.toFixed(2)}, 1.0, sbDay );`,
+      )
+      .replaceAll("RE_Direct( directLight,", "directLight.color *= sbDay;\n\t\tRE_Direct( directLight,")
+      .replace(
+        "vec3 irradiance = getAmbientLightIrradiance( ambientLightColor );",
+        "vec3 irradiance = getAmbientLightIrradiance( ambientLightColor ) * sbNightLift;",
+      );
+    shader.fragmentShader = shader.fragmentShader.replace(
+      "#include <lights_fragment_begin>",
+      `${begin}
+      totalEmissiveRadiance *= sbNightLift;`,
+    );
+  };
+  material.customProgramCacheKey = () => "small-body-night-side-2";
 }
 
 /**
@@ -870,6 +1245,18 @@ function attachMetadata(group, record, {
         semiMajorAxisAU: elements.aAU,
         eccentricity: elements.e,
         source: "jpl-small-body",
+        /* An open orbit has no aphelion, so the instrument's nearest-to-
+         * farthest range is withheld for it rather than computed wrong. */
+        unbound: Boolean(elements.hyperbolic),
+        /*
+         * Where the body is now, not its semi-major axis. The instrument
+         * placed every small body at a along its current direction, which
+         * is right for a near-circular orbit and wrong for everything else:
+         * Halley at 17.9 AU when it is at 35, and C/2014 UN271 at 14,767 AU
+         * when it is at 13.6. Kept live by `updateSmallBodies`; a moon reads
+         * its parent's, because `elements` is the parent's orbit.
+         */
+        get currentAU() { return elements.currentAU; },
       }
       : null,
     distanceBasis: "real-orbital-elements",
@@ -937,6 +1324,7 @@ function attachMetadata(group, record, {
         : `${heliocentricAU.toFixed(heliocentricAU < 10 ? 3 : 2)} AU from the Sun right now; distance from Earth continuously varies`,
       ...record.info,
       surfaceEvidence: record.info?.surfaceEvidence ?? record.surfaceEvidence,
+      activity: record.info?.activity ?? activityNote(record),
     },
   };
   /* The panel reads `visualRadius` for its scale row and the pointer reads it
@@ -1020,8 +1408,14 @@ function buildBody(record, {
    * A moon gets 40 x 28, roughly 2,000 triangles. Dactyl and Dimorphos are
    * rendered a few pixels across next to a parent twenty times their size.
    */
-  const width = Math.max(28, Math.round((parentName ? 40 : 96) * detailScale));
-  const height = Math.max(20, Math.round((parentName ? 28 : 64) * detailScale));
+  /* `meshDetail` is the Rank 7-10 bodies' share: 0.75 of the full sphere
+   * (72 x 48, about 6,900 triangles). They carry normal maps, which is where
+   * their craters and pits are drawn, so the vertices only have to carry
+   * the silhouette -- and twenty-seven more of them at the full count would
+   * add 330,000 triangles to a scene that measured 438,000. */
+  const meshDetail = record.meshDetail ?? 1;
+  const width = Math.max(28, Math.round((parentName ? 40 : 96) * detailScale * meshDetail));
+  const height = Math.max(20, Math.round((parentName ? 28 : 64) * detailScale * meshDetail));
 
   const geometry = createSmallBodyGeometry(record.shape, {
     widthSegments: width,
@@ -1128,6 +1522,9 @@ export async function createSmallBodies({
   quality = "high",
   yieldToBrowser = null,
   nowJD = null,
+  /* (name) => the drawn planet's Object3D, for the co-orbital frames. Without
+   * it (the headless harness) those frames simply do not turn. */
+  resolvePlanet = null,
 } = {}) {
   const detailScale = quality === "low" ? 0.7 : quality === "medium" ? 0.85 : 1;
   /*
@@ -1154,10 +1551,44 @@ export async function createSmallBodies({
   system.name = "Visited small bodies";
 
   const bodies = [];
+  /* Materials whose maps wait for the camera (the `lazy` texture entries). */
+  const lazyTextures = [];
+
+  /* One frame per planet that anything is drawn relative to; see
+   * CO_ORBITAL_PLANETS. `model` is the real planet on the scene's clock. */
+  const coOrbitalFrames = {};
+  const coOrbitalFrameFor = (name) => {
+    if (!CO_ORBITAL_PLANETS[name]) return null;
+    if (!coOrbitalFrames[name]) {
+      const frame = new THREE.Group();
+      frame.name = `${name} co-orbital frame`;
+      system.add(frame);
+      coOrbitalFrames[name] = {
+        name,
+        frame,
+        model: coOrbitalModel(name, referenceJD),
+        planet: resolvePlanet?.(name) ?? null,
+        guides: [],
+        angle: 0,
+      };
+    }
+    return coOrbitalFrames[name];
+  };
 
   for (let index = 0; index < ALL_SMALL_BODIES.length; index += 1) {
     const record = ALL_SMALL_BODIES[index];
     const orbit = prepareOrbit(record.orbit, referenceJD);
+    const coOrbital = record.coOrbital ? coOrbitalFrameFor(record.coOrbital.planet) : null;
+    if (coOrbital) {
+      /* On the planet's clock, at the resonance's exact ratio: Hektor and
+       * Jupiter keep step (1), Hilda goes round 3 times to Jupiter's 2
+       * (1.5). The ratio of long-term mean motions is what a resonance
+       * is; the osculating periods differ from it by a few per cent, and
+       * the scene's compressed curve (period^0.45) would turn 3:2 into
+       * 1.2:1. */
+      orbit.visualRate = coOrbital.model.visualRate * (record.coOrbital.ratio ?? 1);
+      orbit.coOrbital = coOrbital;
+    }
     /* The body's distance from the Sun has to be known *before* it is built,
      * because the colour baked into its vertices is pre-divided by the
      * irradiance it will receive there -- see `solarCompensation`. It is
@@ -1166,11 +1597,11 @@ export async function createSmallBodies({
      * about 0.1 AU over an hour of wall-clock at the scene's compressed
      * orbital rate, which is a 3% change in irradiance. Re-baking 12,000
      * vertex colours for that would be absurd. */
-    const currentAU = orbit.aAU * (1 - orbit.e * Math.cos(
-      eccentricAnomaly(orbit.meanAnomaly, orbit.e),
-    ));
+    const currentAU = radiusAtMeanAnomaly(orbit, orbit.meanAnomaly);
+    orbit.currentAU = currentAU;
     const sceneRadius = smallBodyAuToScene(currentAU);
     const built = buildBody(record, { detailScale, sceneRadius, textured });
+    if (built.mesh.material.userData.loadTexture) lazyTextures.push({ group: built.group, material: built.mesh.material });
 
     /*
      * A binary is placed by its centre of mass, not by its primary.
@@ -1309,7 +1740,12 @@ export async function createSmallBodies({
       /* In body radii, which is the unit `ringProximity` works in. */
       ringBodyRadius: built.renderedMeanRadius,
       coma,
+      /* A comet's coma follows its distance from the Sun; a Centaur's is
+       * always on. */
+      activity: coma && record.activity ? record.activity : null,
+      coOrbital,
     };
+    if (entry.activity) setComaStrength(coma, cometActivity(entry.activity, currentAU, record.orbit));
 
     satellitesOf(record).forEach((moon, moonIndex) => {
       const moonRecord = {
@@ -1343,6 +1779,7 @@ export async function createSmallBodies({
         sceneRadius,
       });
 
+      if (builtMoon.mesh.material.userData.loadTexture) lazyTextures.push({ group: builtMoon.group, material: builtMoon.mesh.material });
       attachMetadata(builtMoon.group, moonRecord, {
         visualRadius: builtMoon.renderedMeanRadius,
         reach: builtMoon.reach,
@@ -1482,12 +1919,13 @@ export async function createSmallBodies({
       bodies.push({ ...moonEntry, record: moonRecord, isMoon: true, group: builtMoon.group });
     });
 
+    const holder = coOrbital ? coOrbital.frame : system;
     if (binary) {
       /* First placement, so frame one is not every body at its centre. */
       updateBinarySystem(entry, 0);
-      system.add(binary.frame);
+      holder.add(binary.frame);
     } else {
-      system.add(built.group);
+      holder.add(built.group);
     }
     hoverTargets.push(built.group);
     bodies.push(entry);
@@ -1544,15 +1982,39 @@ export async function createSmallBodies({
         guide.userData.hoverAction = `Click this orbit to travel to the ${entry.record.name} system`;
         guide.userData.hoverSecondary = `${names.length > 2 ? "A triple: three" : "A binary: two"} bodies share this path round the Sun, circling each other as they go`;
       }
+      if (entry.orbit.hyperbolic) {
+        guide.userData.hoverSecondary = `${orbitGuideSummary(entry.record) ?? "Open orbit"} · passing through, never to return`;
+      }
+      /* A guide stays a direct child of `orbitGuides` -- the hover registry
+       * only looks there -- and is turned with its frame by hand instead. */
+      if (entry.coOrbital) entry.coOrbital.guides.push(guide);
       orbitGuides.add(guide);
     });
   system.add(orbitGuides);
+
+  /* The Trojan swarms and the Hilda triangle: a statistical population, in
+   * Jupiter's frame. See resonantSwarms.js. */
+  const jupiterFrame = coOrbitalFrames.Jupiter;
+  const swarms = jupiterFrame
+    ? createResonantSwarms({ model: jupiterFrame.model, auToScene: smallBodyAuToScene, hoverTargets, markPointerProxy })
+    : null;
+  if (swarms) {
+    jupiterFrame.frame.add(swarms.group);
+    jupiterFrame.swarmGroup = swarms.group;
+  }
+
+  const frames = Object.values(coOrbitalFrames);
+  updateCoOrbitalFrames(frames);
 
   world.add(system);
 
   return {
     system,
     orbitGuides,
+    coOrbitalFrames: frames,
+    swarms,
+    lazyTextures,
+    lazyCheck: 0,
     bodies: bodies.filter((entry) => !entry.isMoon),
     allTargets: bodies.map((entry) => entry.group),
     elapsedSeconds: 0,
@@ -1568,6 +2030,12 @@ export async function createSmallBodies({
  * past Neptune.
  */
 const ORBIT_GUIDE_COLOURS = Object.freeze([
+  /* Rank 8. First, because two of the three are comets too: a path that
+   * never closes gets a colour no closed one has. */
+  [/interstellar/i, 0xe3a8ff],
+  /* Rank 9: Jupiter's own orbitColor (0xe2bc8a), so the swarms and the
+   * resonant bodies read as Jupiter's family. */
+  [/jupiter trojan|hilda/i, 0xe2bc8a],
   [/near-earth/i, 0x74d6c0],
   /* Before the comet rule, because two of the four Centaurs carry comet
    * designations as well -- 95P Chiron and 174P Echeclus -- and a population
@@ -1756,7 +2224,14 @@ function createSmallBodyOrbitGuide(orbit, record, bodyRadius = 0.02) {
   const positions = [];
   const point = new THREE.Vector3();
   const chordMid = new THREE.Vector3();
-  const at = (E, target) => positionFromOrbit(target, orbit, E - orbit.e * Math.sin(E));
+  /* An open orbit is sampled the same way in the hyperbolic anomaly, from
+   * the inbound 60 AU crossing to the outbound one, and left open. */
+  const open = Boolean(orbit.hyperbolic);
+  const at = open
+    ? (H, target) => positionFromOrbit(target, orbit, orbit.e * Math.sinh(H) - H)
+    : (E, target) => positionFromOrbit(target, orbit, E - orbit.e * Math.sin(E));
+  const start = open ? -orbit.loopH : 0;
+  const span = open ? 2 * orbit.loopH : Math.PI * 2;
   const refine = (E0, p0, E1, p1, depth) => {
     const Em = (E0 + E1) * 0.5;
     const pm = new THREE.Vector3();
@@ -1769,14 +2244,14 @@ function createSmallBodyOrbitGuide(orbit, record, bodyRadius = 0.02) {
     }
     positions.push(p1.x, p1.y, p1.z);
   };
-  at(0, point);
+  at(start, point);
   let previous = point.clone();
   positions.push(previous.x, previous.y, previous.z);
   for (let i = 1; i <= ORBIT_GUIDE_SEGMENTS; i += 1) {
-    const E0 = ((i - 1) / ORBIT_GUIDE_SEGMENTS) * Math.PI * 2;
-    const E1 = (i / ORBIT_GUIDE_SEGMENTS) * Math.PI * 2;
+    const E0 = start + ((i - 1) / ORBIT_GUIDE_SEGMENTS) * span;
+    const E1 = start + (i / ORBIT_GUIDE_SEGMENTS) * span;
     const next = new THREE.Vector3();
-    at(i === ORBIT_GUIDE_SEGMENTS ? 0 : E1, next);
+    at(i === ORBIT_GUIDE_SEGMENTS && !open ? 0 : E1, next);
     refine(E0, previous, E1, next, 0);
     previous = next;
   }
@@ -1799,17 +2274,219 @@ function createSmallBodyOrbitGuide(orbit, record, bodyRadius = 0.02) {
     depthWrite: false,
     depthTest: true,
     toneMapped: false,
+    /*
+     * Additive, not the default normal blending.
+     *
+     * Reported: zoomed right out, the Sun turned into a black spot. From the
+     * outermost view every one of these guides passes within a few pixels of
+     * the Sun, and with normal blending each one replaced a third of the
+     * photosphere's light with its own dim colour -- sixty of them stacked
+     * there and the brightest thing in the scene came out darker than the
+     * sky. Measured in an offscreen render at the widest view: the Sun's
+     * centre read 0.78 with the guides, 1.27 without, 1.27 with them
+     * additive. (It was already dimming before Ranks 7-10; the 33 new guides
+     * took it to black.) Additive light can only ever add, so a guide can no
+     * longer darken anything it crosses, and on black space it looks the
+     * same as before.
+     */
+    blending: THREE.AdditiveBlending,
   }));
   line.name = `${record.name} orbit`;
   // An orbit that reaches 35 AU has a bounding sphere most of the scene wide,
   // so frustum culling on it is a cost with no benefit.
   line.frustumCulled = false;
   line.renderOrder = -12;
-  attachDecimatedPickPath(line, ORBIT_GUIDE_PICK_STRIDE);
+  attachDecimatedPickPath(line, ORBIT_GUIDE_PICK_STRIDE, { closed: !open });
   return line;
 }
 
+
 const _position = new THREE.Vector3();
+const _planetWorld = new THREE.Vector3();
+const _lazyWorld = new THREE.Vector3();
+
+/*
+ * Fetches a lazy body's maps once the camera comes within twelve of its
+ * framing distances -- a few seconds before arrival when flying to it, and
+ * never for a body nobody visits. Checked every 30th frame; a handful of
+ * distance tests when it runs, nothing at all once every map is in.
+ */
+function loadNearbyTextures(smallBodies, camera) {
+  const list = smallBodies.lazyTextures;
+  if (!camera || !list?.length) return;
+  smallBodies.lazyCheck = (smallBodies.lazyCheck + 1) % 30;
+  if (smallBodies.lazyCheck !== 0) return;
+  for (let i = list.length - 1; i >= 0; i -= 1) {
+    const { group, material } = list[i];
+    group.getWorldPosition(_lazyWorld);
+    const reach = (group.userData.focusDistance ?? 1) * 12;
+    if (_lazyWorld.distanceToSquared(camera.position) > reach * reach) continue;
+    material.userData.loadTexture?.();
+    list.splice(i, 1);
+  }
+}
+
+/*
+ * Turns each co-orbital frame so the modelled real planet lands on the drawn
+ * one. Two atan2s and a handful of rotations per frame.
+ */
+function updateCoOrbitalFrames(frames, motionScale = 0) {
+  for (let i = 0; i < frames.length; i += 1) {
+    const f = frames[i];
+    f.model.meanAnomaly += f.model.visualRate * motionScale;
+    if (f.model.meanAnomaly > Math.PI * 2) f.model.meanAnomaly -= Math.PI * 2;
+    positionFromOrbit(_position, f.model, f.model.meanAnomaly);
+    const modelled = Math.atan2(_position.z, _position.x);
+    if (f.swarmGroup) f.swarmGroup.rotation.y = -modelled;
+    if (!f.planet) continue;
+    f.planet.getWorldPosition(_planetWorld);
+    if (_planetWorld.lengthSq() < 1e-8) continue;
+    const drawn = Math.atan2(_planetWorld.z, _planetWorld.x);
+    /* rotation.y = theta moves a longitude by -theta in this frame. */
+    const angle = -(drawn - modelled);
+    if (angle === f.angle) continue;
+    f.angle = angle;
+    f.frame.rotation.y = angle;
+    for (let g = 0; g < f.guides.length; g += 1) f.guides[g].rotation.y = angle;
+  }
+}
+
+/*
+ * The card's "Activity" row: what the glow round a body is and when it is
+ * there (Prompts.md round 3: "mention the reflectivity property in their
+ * info cards"). The numbers are the record's own `activity` thresholds; a
+ * record with something more specific to say (Phaethon) gives
+ * `info.activity` itself.
+ */
+function activityNote(record) {
+  /* Round 8 (the owner): "Chariklo, Pholus is not glowing?" -- right, and
+   * the card now says so. No coma or outburst has ever been detected on
+   * either (Chariklo's 1997-2008 brightness changes were its rings tilting,
+   * Duffard et al. 2014, A&A 568, A79); only some Centaurs are active, Chiron
+   * and Echeclus among them. */
+  if (!record.coma) {
+    return /^Centaur/.test(record.classification ?? "")
+      ? "Never seen to glow. Unlike Chiron and Echeclus, no coma or outburst has ever been detected on it — out here it is too cold for its ice to turn to gas, so it stays a bare, dark rock."
+      : null;
+  }
+  if (record.activity) {
+    const { onsetAU } = record.activity;
+    const q = record.orbit && record.orbit.e < 1 ? record.orbit.aAU * (1 - record.orbit.e) : null;
+    const closest = q ? `brightest at its closest, ${q < 10 ? q.toFixed(2) : q.toFixed(1)} AU` : "brightest at its closest";
+    return `Wakes inside about ${onsetAU} AU of the Sun and is ${closest}. Two kinds of light: dust reflecting sunlight — the pale, whitish-yellow coma and a broad dust tail that curves back along the orbit — and gas glowing under the Sun's ultraviolet — a green head of C₂ and cyanogen, and a straight, narrow blue tail of carbon-monoxide ions pointing exactly away from the Sun. The scene follows its real distance, so far out it is a bare nucleus — to watch it wake up, open All bodies and press "Check out its glow" on its row.`;
+  }
+  return "Shows a faint coma — gas and dust round the nucleus from outbursts — even this far from the Sun. Drawn on all the time.";
+}
+
+/*
+ * How active a comet is at a distance from the Sun, 0 to 1 -- the "glow
+ * capacity" the board and the glow view print.
+ *
+ * Water ice sublimates efficiently inside about 3 AU, which is where a
+ * Jupiter-family comet's coma switches on (the standard limit; e.g. Meech &
+ * Svoreň 2004, Comets II). Each record gives its own `onsetAU` -- where the
+ * coma first appears -- because a CO-driven comet like C/2014 UN271 is
+ * active at 24 AU and Hale-Bopp went quiet only at about 28.
+ *
+ * Round 9 (the owner): Encke read 100% at 0.54 AU, though it comes in to
+ * 0.34. Two things did that. The top of the scale was the record's `fullAU`
+ * (0.4 for Encke), and the round-7 curve, 1 - (1 - t)^2, is flat at that
+ * end, so the last fifth of the way in all rounded to 100%. A comet does not
+ * level off before perihelion: its brightness keeps climbing all the way in.
+ * The standard description is a power law in distance -- total magnitude
+ * m = H + 5 log(delta) + 2.5 n log(r) (e.g. Everhart 1967; n is typically
+ * 2 to 6) -- which is a straight line in log r. So the glow now runs
+ * straight in log distance, from 0 at `onsetAU` to 1 at the comet's own
+ * perihelion, its closest point, where it is brightest:
+ *
+ *   glow = ln(onset / r) / ln(onset / q)
+ *
+ * The glow view's distance bar is logarithmic too, so the two bars move in
+ * step. `orbit` (aAU, e) gives the perihelion; without it, `fullAU` stands in.
+ */
+export function cometActivity(activity, au, orbit = null) {
+  const onset = activity.onsetAU;
+  const perihelion = orbit && Number(orbit.e) < 1
+    ? orbit.aAU * (1 - orbit.e)
+    : activity.fullAU;
+  const full = Math.min(perihelion, onset * 0.999);
+  if (!(au < onset)) return 0;
+  if (au <= full) return 1;
+  return Math.log(onset / au) / Math.log(onset / full);
+}
+
+/*
+ * Round 7: "Fly to that comet" from the glow view shows it as the viewer
+ * left it there -- at the distance they chose, glowing that much -- rather
+ * than wherever today's date puts it, which for most comets is dormant.
+ *
+ * Moves the comet along its own real orbit to the inbound point `rAU` from
+ * the Sun (the same point the glow view draws), by setting its mean anomaly.
+ * Nothing else changes: its clock carries on from there, so its coma,
+ * position, orbit and distance read-outs all agree. `restoreCometToToday`
+ * puts it back where its clock says it should be, counting any time that has
+ * passed since. One comet at a time.
+ */
+export function placeCometAt(smallBodies, name, rAU, { outbound = false } = {}) {
+  const entry = smallBodies?.bodies?.find((candidate) => candidate.record?.name === name && candidate.activity);
+  if (!entry || entry.orbit.hyperbolic) return null;
+  const orbit = entry.orbit;
+  const { aAU, e } = orbit;
+  const q = aAU * (1 - e);
+  const Q = aAU * (1 + e);
+  const r = THREE.MathUtils.clamp(rAU, q, Q);
+  /* Inbound half (before perihelion): eccentric anomaly negative. Round 8:
+   * the glow view now opens where the comet is today, which may be on its
+   * way out, so the leg comes with the distance. */
+  const E = (outbound ? 1 : -1) * Math.acos(THREE.MathUtils.clamp((1 - r / aAU) / e, -1, 1));
+  let M = E - e * Math.sin(E);
+  if (M < 0) M += Math.PI * 2;
+  if (!entry.placement) entry.placement = { todayM: orbit.meanAnomaly, setM: M };
+  else {
+    /* Placed again: bank the time that passed since the last placement. */
+    entry.placement.todayM += wrapAngle(orbit.meanAnomaly - entry.placement.setM);
+    entry.placement.setM = M;
+  }
+  orbit.meanAnomaly = M;
+  settleSmallBody(entry);
+  return { name, au: orbit.currentAU, strength: entry.coma?.strength ?? 0 };
+}
+
+export function restoreCometToToday(smallBodies, name) {
+  const entry = smallBodies?.bodies?.find((candidate) => candidate.record?.name === name && candidate.placement);
+  if (!entry) return false;
+  const { todayM, setM } = entry.placement;
+  let M = todayM + wrapAngle(entry.orbit.meanAnomaly - setM);
+  M = ((M % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
+  entry.placement = null;
+  entry.orbit.meanAnomaly = M;
+  settleSmallBody(entry);
+  return true;
+}
+
+function wrapAngle(angle) {
+  return ((angle + Math.PI) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2) - Math.PI;
+}
+
+/* One body's share of `updateSmallBodies`, applied at once, so a jump lands
+ * even while the universe is paused behind the board. The dust tail learns
+ * its trailing side from frame-to-frame motion; a jump is not motion, so it
+ * is told the real direction instead (where it was a moment earlier). */
+const _settleBefore = new THREE.Vector3();
+function settleSmallBody(entry) {
+  const orbit = entry.orbit;
+  orbit.currentAU = positionFromOrbit(_position, orbit, orbit.meanAnomaly).radiusAU;
+  (entry.binary ? entry.binary.frame : entry.group).position.copy(_position);
+  if (entry.activity) setComaStrength(entry.coma, cometActivity(entry.activity, orbit.currentAU, orbit));
+  const emission = entry.coma?.emission;
+  if (emission) {
+    positionFromOrbit(_settleBefore, orbit, orbit.meanAnomaly - 0.002);
+    emission.trailing.copy(_settleBefore).sub(_position);
+    if (emission.trailing.lengthSq() > 1e-12) emission.trailing.normalize();
+    else emission.trailing.set(1, 0, 0);
+    emission.lastPosition = null;
+  }
+}
 
 /**
  * One Kepler solve and two quaternion updates per body, per frame.
@@ -1836,14 +2513,28 @@ export function updateSmallBodies(
    */
   smallBodies.elapsedSeconds += spinSeconds;
   const elapsed = smallBodies.elapsedSeconds;
+  /* Before the bodies, which hang inside these frames. The planets have
+   * already taken this frame's step in main.js. */
+  if (smallBodies.coOrbitalFrames) updateCoOrbitalFrames(smallBodies.coOrbitalFrames, motionScale);
+  loadNearbyTextures(smallBodies, camera);
+  /* The swarms fade out from far away, where they would pile onto the Sun. */
+  updateResonantSwarms(
+    smallBodies.swarms,
+    camera,
+    typeof window !== "undefined" ? window.innerHeight : 800,
+  );
 
   for (let i = 0; i < smallBodies.bodies.length; i += 1) {
     const entry = smallBodies.bodies[i];
     const orbit = entry.orbit;
 
-    orbit.meanAnomaly += orbit.visualRate * motionScale;
-    if (orbit.meanAnomaly > Math.PI * 2) orbit.meanAnomaly -= Math.PI * 2;
-    positionFromOrbit(_position, orbit, orbit.meanAnomaly);
+    orbit.meanAnomaly += cometSafeRate(entry) * motionScale;
+    if (orbit.hyperbolic) {
+      /* Out past 60 AU: start the pass again, inbound. */
+      if (orbit.meanAnomaly > orbit.loopM) orbit.meanAnomaly -= 2 * orbit.loopM;
+    } else if (orbit.meanAnomaly > Math.PI * 2) orbit.meanAnomaly -= Math.PI * 2;
+    orbit.currentAU = positionFromOrbit(_position, orbit, orbit.meanAnomaly).radiusAU;
+    if (entry.activity) setComaStrength(entry.coma, cometActivity(entry.activity, orbit.currentAU, orbit));
     if (entry.binary) {
       entry.binary.frame.position.copy(_position);
       updateBinarySystem(entry, elapsed);
@@ -1864,6 +2555,56 @@ export function updateSmallBodies(
     if (entry.rings) updateRingSystem(entry, spinSeconds, camera);
     if (entry.coma) updateCentaurComa(entry.coma, entry.group, camera);
   }
+}
+
+/*
+ * Round 11 (the owner): a comet at 100% glow -- that is, at perihelion --
+ * made "the orbital path dance". Measured, not guessed: per 60 fps frame
+ * while it is focused (the scene clock runs at 0.026 then, main.js), a
+ * comet at perihelion moved this much of the camera's framing distance:
+ *
+ *   Tempel 1 0.95%, Wild 2 1.3%, Hartley 2 1.3%, 67P 1.7%, Encke 3.3%,
+ *   Pons-Brooks 6.4%, Halley 8.1%, Phaethon 11.6%, Hale-Bopp 20%,
+ *   UN271 83%, NEOWISE 263%
+ *
+ * against about 0.2% at aphelion. Two things compound there: Kepler's
+ * second law (at perihelion the true anomaly runs (1 + e)^2 / (1 - e^2)^1.5
+ * times its average rate -- 236 times for Halley, about 62,000 for NEOWISE)
+ * and the scene's own compressions, which shorten long periods far more
+ * than they shrink perihelion distances. The camera follows the comet
+ * rigidly, so the comet itself held still; everything near it -- its own
+ * orbit line, the Sun's -- swept past several per cent of the screen every
+ * frame, and with real frame-time jitter that reads as shaking.
+ *
+ * So a comet's clock is capped near perihelion: never faster than 0.4% of
+ * its framing distance per focused frame (about a quarter of the frame per
+ * second). Where it already moves slower -- all of the outer orbit -- the
+ * rate is exactly as before. Position still comes from the mean anomaly, so
+ * where it is, its distance and its glow are all still the real orbit's;
+ * it only lingers a little longer at its closest, which is the part worth
+ * watching. Comets only: nothing else in the scene changes.
+ */
+const COMET_FOCUSED_CLOCK = 0.026; // main.js: motionScale while a body is focused
+const COMET_MAX_FOCUSED_STEP = 0.004; // of the framing distance, per 60 fps frame
+function cometSafeRate(entry) {
+  const orbit = entry.orbit;
+  if (!entry.activity || orbit.hyperbolic || orbit.sceneP === undefined) return orbit.visualRate;
+  const framing = entry.group.userData?.focusDistance ?? 1;
+  const e = orbit.e;
+  const E = eccentricAnomaly(orbit.meanAnomaly, e);
+  const cosNu = (Math.cos(E) - e) / (1 - e * Math.cos(E));
+  const sinNu = (Math.sqrt(1 - e * e) * Math.sin(E)) / (1 - e * Math.cos(E));
+  // Scene units travelled per unit of mean anomaly, along the drawn conic:
+  // round (r dnu) and out (dr/dnu dnu) together -- far out on a long orbit
+  // the outward part is most of it.
+  const denominator = 1 + orbit.sceneE * cosNu;
+  const sceneRadius = orbit.sceneP / denominator;
+  const radialPerNu = (orbit.sceneP * orbit.sceneE * sinNu) / (denominator * denominator);
+  const nuPerM = ((1 + e * cosNu) * (1 + e * cosNu)) / Math.pow(1 - e * e, 1.5);
+  const unitsPerM = Math.hypot(sceneRadius, radialPerNu) * nuPerM;
+  if (!(unitsPerM > 0)) return orbit.visualRate;
+  const capRate = (COMET_MAX_FOCUSED_STEP * framing) / (unitsPerM * COMET_FOCUSED_CLOCK);
+  return Math.min(orbit.visualRate, capRate);
 }
 
 /*

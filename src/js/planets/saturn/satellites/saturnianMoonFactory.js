@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { captureSeamGroups, sealSeamGroups } from "../../sealSphereSeams.js";
 import { mergeVertices } from "three/addons/utils/BufferGeometryUtils.js";
 
 const PUBLIC_ASSET_ROOT = `${import.meta.env.BASE_URL}assets`;
@@ -642,6 +643,7 @@ function smoothSphereUvSeamNormals(geometry) {
 function createMimasSurface(profile, quality) {
   const [widthSegments, heightSegments] = mappedMoonGeometrySegments("Mimas", quality);
   const geometry = new THREE.SphereGeometry(1, widthSegments, heightSegments);
+  const seams = captureSeamGroups(geometry);
   const positions = geometry.getAttribute("position");
   const direction = new THREE.Vector3();
   const herschelCenter = directionFromUv(0.108, 0.545);
@@ -704,7 +706,8 @@ function createMimasSurface(profile, quality) {
     );
   }
 
-  geometry.computeVertexNormals();
+  // Closed at the texture seam and the poles: see sealSphereSeams.js.
+  sealSeamGroups(geometry, seams);
   geometry.computeBoundingSphere();
 
   const maps = getSaturnianSurfaceMaps("Mimas");
@@ -754,6 +757,7 @@ function addComplexCraterHeight(direction, center, {
 function createIapetusSurface(profile, quality) {
   const [widthSegments, heightSegments] = mappedMoonGeometrySegments("Iapetus", quality);
   const geometry = new THREE.SphereGeometry(1, widthSegments, heightSegments);
+  const seams = captureSeamGroups(geometry);
   const positions = geometry.getAttribute("position");
   const direction = new THREE.Vector3();
   const craterCount = quality === "low" ? 32 : quality === "medium" ? 54 : 78;
@@ -820,7 +824,8 @@ function createIapetusSurface(profile, quality) {
     );
   }
 
-  geometry.computeVertexNormals();
+  // Closed at the texture seam and the poles: see sealSphereSeams.js.
+  sealSeamGroups(geometry, seams);
   geometry.computeBoundingSphere();
 
   const maps = getSaturnianSurfaceMaps("Iapetus");
@@ -1084,6 +1089,7 @@ function createEnceladusPlumeSystem(quality) {
 function createEnceladusSurface(profile, quality) {
   const [widthSegments, heightSegments] = mappedMoonGeometrySegments("Enceladus", quality);
   const geometry = new THREE.SphereGeometry(1, widthSegments, heightSegments);
+  const seams = captureSeamGroups(geometry);
   const positions = geometry.getAttribute("position");
   const direction = new THREE.Vector3();
   const craterCount = quality === "low" ? 12 : quality === "medium" ? 20 : 30;
@@ -1134,7 +1140,8 @@ function createEnceladusSurface(profile, quality) {
     positions.setXYZ(index, direction.x * radius, direction.y * radius, direction.z * radius);
   }
 
-  geometry.computeVertexNormals();
+  // Closed at the texture seam and the poles: see sealSphereSeams.js.
+  sealSeamGroups(geometry, seams);
   geometry.computeBoundingSphere();
 
   const maps = getSaturnianSurfaceMaps("Enceladus");
@@ -1355,6 +1362,7 @@ function createDioneSurface(profile, quality) {
 function createRheaSurface(profile, quality) {
   const [widthSegments, heightSegments] = mappedMoonGeometrySegments("Rhea", quality);
   const geometry = new THREE.SphereGeometry(1, widthSegments, heightSegments);
+  const seams = captureSeamGroups(geometry);
   const positions = geometry.getAttribute("position");
   const direction = new THREE.Vector3();
   const craterCount = quality === "low" ? 62 : quality === "medium" ? 104 : 148;
@@ -1417,7 +1425,8 @@ function createRheaSurface(profile, quality) {
     );
   }
 
-  geometry.computeVertexNormals();
+  // Closed at the texture seam and the poles: see sealSphereSeams.js.
+  sealSeamGroups(geometry, seams);
   geometry.computeBoundingSphere();
   const maps = getSaturnianSurfaceMaps("Rhea");
   const moon = new THREE.Mesh(

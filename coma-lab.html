@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Coma lab</title>
+<!--
+  A bench for choosing how a comet's glow is drawn.
+
+  Reported (Prompts.md, round 3): the "reflectivity" round the comets looked
+  weird -- on 103P/Hartley 2 "a hollow gap on the whole body and light
+  surrounds it". The cause is in centaurComa.js ("The designs"): the cloud
+  was cleared over a disc as wide as the body's longest half-axis, which
+  round a long thin nucleus leaves a dark moat of empty sky.
+
+  Five designs, A to E, side by side on the real shape of whichever body is
+  picked on the left, each with that body's own coma, dust fan, vents and
+  jets from its catalogue record, at full strength, under one Sun. The code
+  drawing them is the scene's own (centaurComa.js) -- what is picked here is
+  what ships. The owner picked D in round 4, then E in round 5 (gas, ion
+  and dust tails, from the owner's brief); the scene now uses E, on every
+  comet and on Chiron, Echeclus and Phaethon too.
+
+  Every body in the scene that shows a coma or a tail is listed: the comets,
+  and, separately, the three that are not
+  comets but are active -- Chiron and Echeclus (Centaurs in outburst) and
+  Phaethon (a sodium tail near the Sun).
+
+  Open with the dev server running: /Beyond-Earth/coma-lab.html
+-->
+<style>
+  :root {
+    --ink: #e8eef6;
+    --dim: #8a97a8;
+    --line: rgba(140, 170, 200, 0.16);
+    --panel: rgba(10, 14, 20, 0.92);
+    --accent: #77efff;
+    --amber: #ffc482;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: #05070b; color: var(--ink);
+    font: 13px/1.5 ui-monospace, "SF Mono", Menlo, monospace; overflow: hidden; }
+  #side { position: fixed; inset: 0 auto 0 0; width: 330px; overflow-y: auto; padding: 18px 16px 24px;
+    background: var(--panel); border-right: 1px solid var(--line); }
+  #stage { position: fixed; inset: 0 0 150px 330px; }
+  #stage canvas { display: block; width: 100%; height: 100%; }
+  h1 { font-size: 15px; margin: 0 0 4px; letter-spacing: 0.02em; }
+  .lede { color: var(--dim); margin: 0 0 14px; font-size: 12px; }
+  h2 { font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--amber); margin: 18px 0 6px; }
+  .note { color: var(--dim); font-size: 11.5px; margin: 0 0 6px; }
+  button.body { display: flex; justify-content: space-between; gap: 8px; width: 100%; text-align: left; padding: 6px 8px; margin: 2px 0;
+    background: transparent; color: var(--ink); border: 1px solid transparent; border-radius: 6px; cursor: pointer; font: inherit; }
+  button.body:hover { border-color: var(--line); }
+  button.body[aria-pressed="true"] { border-color: rgba(119, 239, 255, 0.5); background: rgba(119, 239, 255, 0.07); }
+  button.body .pick { color: var(--accent); font-size: 11px; }
+  .muted { color: var(--dim); font-size: 11.5px; padding: 4px 8px; }
+  #labels { position: fixed; left: 330px; right: 0; top: 0; display: grid; grid-template-columns: repeat(5, 1fr); pointer-events: none; }
+  #labels div { padding: 10px 12px; }
+  #labels b { color: var(--accent); }
+  #labels span { display: block; color: var(--dim); font-size: 11px; max-width: 34ch; }
+  #picks { position: fixed; left: 330px; right: 0; bottom: 0; height: 150px; border-top: 1px solid var(--line); background: var(--panel);
+    padding: 10px 14px; display: grid; grid-template-columns: auto 1fr; gap: 14px; }
+  .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; }
+  .row label { color: var(--dim); }
+  .choose button { font: inherit; padding: 6px 12px; border-radius: 6px; cursor: pointer; background: transparent; color: var(--ink); border: 1px solid var(--line); }
+  .choose button.on { border-color: var(--accent); color: var(--accent); }
+  textarea { width: 100%; height: 100%; resize: none; background: #070a10; color: var(--ink); border: 1px solid var(--line); border-radius: 6px; font: 11.5px/1.45 inherit; padding: 8px; }
+  @media (max-width: 900px) {
+    #side { position: static; width: auto; max-height: 40vh; }
+    #stage, #labels, #picks { left: 0; }
+  }
+</style>
+</head>
+<body>
+<aside id="side">
+  <h1>Coma lab</h1>
+  <p class="lede">How the glow round an active body is drawn. Pick a body, compare A–E, choose one per body or for all, then copy the line at the bottom into Prompts.md.</p>
+  <div id="list"></div>
+</aside>
+<div id="stage"></div>
+<div id="labels"></div>
+<div id="picks">
+  <div>
+    <div class="row"><label>Sun angle</label>
+      <input id="phase" type="range" min="10" max="170" value="70" />
+      <span id="phaseOut"></span></div>
+    <div class="row"><label>Distance</label>
+      <input id="zoom" type="range" min="30" max="500" value="100" />
+      <label><input id="spin" type="checkbox" checked /> turn</label></div>
+    <div class="row choose" id="choose"></div>
+    <div class="row"><button id="all" type="button" style="font:inherit;padding:5px 10px;border-radius:6px;background:transparent;color:var(--ink);border:1px solid var(--line);cursor:pointer">Use this body's pick for every body</button></div>
+  </div>
+  <textarea id="out" readonly aria-label="Picks to paste into Prompts.md"></textarea>
+</div>
+
+<script type="module">
+import * as THREE from "three";
+import { SMALL_BODIES } from "/src/js/scene/smallBodies/smallBodyCatalogue.js";
+import { COMETS } from "/src/js/scene/smallBodies/cometCatalogue.js";
+import { CENTAURS } from "/src/js/scene/smallBodies/centaurCatalogue.js";
+import { NEAR_EARTH_ODDITIES } from "/src/js/scene/smallBodies/neoCatalogue.js";
+import { createSmallBodyGeometry, maxHalfExtent } from "/src/js/scene/smallBodies/smallBodyShapes.js";
+import { createCentaurComa, updateCentaurComa, applyComaDesign, COMA_DESIGNS } from "/src/js/scene/smallBodies/centaurComa.js";
+
+const DESIGNS = Object.keys(COMA_DESIGNS);
+const all = [...SMALL_BODIES, ...COMETS, ...CENTAURS, ...NEAR_EARTH_ODDITIES];
+const active = all.filter((r) => r.coma);
+const GROUPS = [
+  { title: "Comets", note: "Water- or CO-driven comae. In the scene each wakes inside its onset distance and fades outside it; here all are shown at full strength.",
+    members: active.filter((r) => /comet/i.test(String(r.info?.population ?? r.classification ?? "")) && !/interstellar/i.test(String(r.info?.population ?? ""))) },
+  { title: "Other active bodies", note: "Not comets, but they show a glow: Chiron and Echeclus are Centaurs in outburst; Phaethon gives off sodium gas near the Sun.",
+    members: active.filter((r) => /centaur/i.test(String(r.info?.population ?? r.classification ?? "")) || r.name === "Phaethon") },
+];
+const listed = new Set(GROUPS.flatMap((g) => g.members.map((m) => m.name)));
+GROUPS[0].members.push(...active.filter((r) => !listed.has(r.name)));
+
+/* ------------------------------------------------------------- picks */
+let picks = {};
+try { picks = JSON.parse(localStorage.getItem("comaLabPicks") ?? "{}"); } catch { picks = {}; }
+const save = () => { try { localStorage.setItem("comaLabPicks", JSON.stringify(picks)); } catch { /* private window */ } writeOut(); };
+function writeOut() {
+  const counts = {};
+  Object.values(picks).forEach((k) => { counts[k] = (counts[k] ?? 0) + 1; });
+  const common = Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
+  const exceptions = Object.entries(picks).filter(([, k]) => k !== common).map(([n, k]) => `${n}: ${k}`);
+  document.getElementById("out").value = common
+    ? `Coma lab picks — design ${common} (${COMA_DESIGNS[common].title}) for all${exceptions.length ? `; except ${exceptions.join(", ")}` : ""}.\n\nPer body: ${Object.entries(picks).map(([n, k]) => `${n} ${k}`).join(" · ")}`
+    : "Nothing picked yet. Choose a design for a body with the buttons on the left of this bar.";
+}
+
+/* ------------------------------------------------------------- list */
+let current = null;
+const list = document.getElementById("list");
+function drawList() {
+  list.textContent = "";
+  GROUPS.forEach((group) => {
+    const h = document.createElement("h2"); h.textContent = group.title; list.append(h);
+    const p = document.createElement("p"); p.className = "note"; p.textContent = group.note; list.append(p);
+    group.members.forEach((record) => {
+      const b = document.createElement("button");
+      b.className = "body"; b.type = "button";
+      b.setAttribute("aria-pressed", String(current?.name === record.name));
+      b.innerHTML = `<span></span><span class="pick"></span>`;
+      b.firstChild.textContent = record.name;
+      b.lastChild.textContent = picks[record.name] ? `picked ${picks[record.name]}` : "";
+      b.onclick = () => show(record);
+      list.append(b);
+    });
+  });
+}
+
+/* ------------------------------------------------------------- renderer */
+const stage = document.getElementById("stage");
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+/* The scene's own: ACES, exposure 1.18 (main.js). */
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.18;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.setScissorTest(true);
+stage.append(renderer.domElement);
+
+/* One scene per design: each pane's coma carries its own design's uniforms. */
+const BODY_AT = new THREE.Vector3(40, 0, 0);
+const panes = DESIGNS.map((key) => {
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x05070b);
+  const sun = new THREE.PointLight(0xfff4e6, 3.2, 0, 0);
+  scene.add(sun);
+  scene.add(new THREE.AmbientLight(0x30405a, 0.06));
+  const camera = new THREE.PerspectiveCamera(32, 1, 0.01, 2000);
+  return { key, scene, camera, holder: null, parts: null };
+});
+
+const labels = document.getElementById("labels");
+DESIGNS.forEach((key) => {
+  const d = document.createElement("div");
+  d.innerHTML = `<b></b><span></span>`;
+  d.firstChild.textContent = `${key} · ${COMA_DESIGNS[key].title}`;
+  d.lastChild.textContent = COMA_DESIGNS[key].why;
+  labels.append(d);
+});
+
+const choose = document.getElementById("choose");
+DESIGNS.forEach((key) => {
+  const b = document.createElement("button"); b.type = "button"; b.textContent = `Pick ${key}`; b.dataset.key = key;
+  b.onclick = () => { if (!current) return; picks[current.name] = key; save(); drawList(); markChoice(); };
+  choose.append(b);
+});
+function markChoice() { choose.querySelectorAll("button").forEach((b) => b.classList.toggle("on", picks[current?.name] === b.dataset.key)); }
+document.getElementById("all").onclick = () => {
+  const key = picks[current?.name]; if (!key) return;
+  GROUPS.forEach((g) => g.members.forEach((m) => { picks[m.name] = key; }));
+  save(); drawList();
+};
+
+let reach = 1;
+let comaRadius = 5;
+function show(record) {
+  current = record;
+  panes.forEach((pane) => {
+    if (pane.holder) { pane.scene.remove(pane.holder); pane.holder.traverse((o) => { o.geometry?.dispose?.(); }); }
+    const holder = new THREE.Group();
+    holder.position.copy(BODY_AT);
+    const geometry = createSmallBodyGeometry(record.shape, { widthSegments: 96, heightSegments: 64 });
+    const scale = 1 / maxHalfExtent(geometry);
+    geometry.scale(scale, scale, scale);
+    const albedo = Math.max(0.03, Number(record.albedo) || 0.05);
+    const body = new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({ color: new THREE.Color().setScalar(Math.min(1, albedo * 4)), roughness: 1, metalness: 0 }));
+    const spinner = new THREE.Group(); spinner.add(body); holder.add(spinner);
+    reach = 1;
+    applyComaDesign(pane.key);
+    const parts = createCentaurComa(record, reach);
+    if (parts) {
+      holder.add(parts.group);
+      spinner.add(parts.spinning);
+      applyComaDesign(pane.key, parts.materials);
+      /* Nothing moves here, so E's dust tail cannot learn which way the
+       * comet is travelling: give it one -- the orbit seen edge-on, the
+       * comet heading up the screen -- so the curve shows. */
+      if (parts.emission) parts.emission.trailing.set(0, -1, 0);
+    }
+    comaRadius = reach * (record.coma?.radii ?? 5);
+    pane.scene.add(holder);
+    pane.holder = holder; pane.parts = parts; pane.spinner = spinner;
+  });
+  drawList(); markChoice();
+}
+
+const phase = document.getElementById("phase");
+const zoom = document.getElementById("zoom");
+const spin = document.getElementById("spin");
+let angle = 0;
+function frame(now) {
+  const w = stage.clientWidth; const h = stage.clientHeight;
+  renderer.setSize(w, h, false);
+  document.getElementById("phaseOut").textContent = `${phase.value}° from the Sun`;
+  if (spin.checked) angle += 0.003;
+  const paneW = w / panes.length;
+  /* Phase angle: Sun-body-camera. The Sun is at the origin, so the body's
+   * sunward direction is -x. */
+  const ph = (Number(phase.value) * Math.PI) / 180;
+  /* Far enough for the whole cloud, and never closer than nine body radii,
+   * so a small coma (Phaethon's) does not put the camera on the rock. */
+  const dist = Math.max(comaRadius * 2.4, 9) * (Number(zoom.value) / 100);
+  panes.forEach((pane, i) => {
+    if (!pane.holder) return;
+    pane.spinner.rotation.y = angle * 4;
+    const dir = new THREE.Vector3(-Math.cos(ph), 0.25, Math.sin(ph)).normalize();
+    pane.camera.aspect = paneW / h; pane.camera.updateProjectionMatrix();
+    pane.camera.position.copy(BODY_AT).addScaledVector(dir, dist);
+    pane.camera.lookAt(BODY_AT);
+    pane.holder.updateMatrixWorld(true);
+    if (pane.parts) updateCentaurComa(pane.parts, pane.holder);
+    renderer.setViewport(i * paneW, 0, paneW, h);
+    renderer.setScissor(i * paneW, 0, paneW, h);
+    renderer.render(pane.scene, pane.camera);
+  });
+  requestAnimationFrame(frame);
+}
+show(GROUPS.find((g) => g.members.some((m) => m.name === "103P/Hartley 2"))?.members.find((m) => m.name === "103P/Hartley 2") ?? active[0]);
+writeOut();
+requestAnimationFrame(frame);
+window.__comaLab = { show: (n) => show(active.find((r) => r.name === n)), panes, active: active.map((r) => r.name) };
+</script>
+</body>
+</html>

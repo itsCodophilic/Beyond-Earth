@@ -29,7 +29,7 @@ import * as THREE from "three";
  * (The same trick the planets' ribbons use, for the opposite reason: theirs
  * have no raycastable geometry at all.)
  */
-export function attachDecimatedPickPath(line, stride = 8) {
+export function attachDecimatedPickPath(line, stride = 8, { closed = true } = {}) {
   const pos = line.geometry?.getAttribute("position");
   if (!pos || stride < 2) return line;
 
@@ -39,7 +39,13 @@ export function attachDecimatedPickPath(line, stride = 8) {
   }
   // Closed explicitly: `Line`'s raycast tests i -> i+1 and never wraps, so
   // without this the segment back to the start is drawn and unhittable.
-  if (points.length > 1) points.push(points[0].clone());
+  // An open path (an interstellar visitor's) must not be closed -- that
+  // made an invisible, hoverable chord from its outbound end straight back
+  // to its inbound end across the whole system -- but it does need its own
+  // last vertex, which the stride can step over.
+  if (closed && points.length > 1) points.push(points[0].clone());
+  const last = pos.count - 1;
+  if (!closed && last % stride !== 0) points.push(new THREE.Vector3(pos.getX(last), pos.getY(last), pos.getZ(last)));
 
   const hitLine = new THREE.Line(
     new THREE.BufferGeometry().setFromPoints(points),

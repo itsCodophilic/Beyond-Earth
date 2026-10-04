@@ -178,7 +178,79 @@ The five near-equal binaries, eleven bodies, in
 - Space mode and the events hide the binaries' paths and rings, and every
   small-body moon's "orbit path" ring.
 
-**Rank 5 onward are untouched.**
+Ranks 5 and 6 are untouched; Ranks 7-10 are below.
+
+## Ranks 7-10 are built
+
+Thirty-three bodies in four new catalogues in `src/js/scene/smallBodies/`,
+built by the same small-body builder, every number with its source in the
+file:
+
+- **Rank 7, comets** (`cometCatalogue.js`): 9P/Tempel 1, 103P/Hartley 2,
+  81P/Wild 2, 19P/Borrelly, 2P/Encke, 12P/Pons-Brooks, C/2014 UN271,
+  Hale-Bopp, NEOWISE. Shoemaker-Levy 9 is left out (this file itself calls
+  it an event, not a body). The five short-period comets use JPL Horizons
+  osculating elements for 27 September 2026, because Jupiter has moved their
+  orbits since their SBDB fits.
+- **Comets wake up.** Every comet -- Halley and 67P included -- carries a
+  coma and a dust tail (the Centaurs' shader, `centaurComa.js`) that is off
+  far out and grows inside ~3 AU (`cometActivity` in `smallBodies.js`);
+  UN271 is CO-driven and active from 24 AU, Hale-Bopp went quiet at 28 AU,
+  Phaethon shows a faint sodium tail inside 0.25 AU.
+- **Rank 8, interstellar** (`interstellarCatalogue.js`): ʻOumuamua, Borisov,
+  3I/ATLAS on **open (hyperbolic) orbits** -- a hyperbolic Kepler solver,
+  guides open at both ends, each pass drawn between its 60 AU crossings and
+  looped (the loop is the scene's, and the cards say so). The board has a
+  new last column, "Passing through".
+- **Rank 9, Trojans and Lucy** (`trojanCatalogue.js`): Hektor + Skamandrios,
+  Patroclus-Menoetius (a barycentric binary, both locked), Eurybates +
+  Queta, Polymele + 'Shaun', Leucus, Orus, Hilda; Lucy's belt flybys
+  Donaldjohanson and Dinkinesh + Selam. The Trojans and Hilda are drawn **in
+  Jupiter's frame** (`coOrbital`), so they sit at L4 and L5 of the drawn
+  Jupiter, and Hilda goes round exactly 3 times to its 2. Around them, **the
+  swarms and the Hilda triangle** (`resonantSwarms.js`): 5,600 points, one
+  draw call, a statistical population (L4:L5 = 1.6, inclinations to match
+  Li et al. 2023), the Hilda triangle emerging from real 3:2 orbits.
+- **Rank 10, near-Earth oddities** (`neoCatalogue.js`): Phaethon, Toutatis,
+  Kamoʻoalewa, Cruithne, Moshup + Squannit, Geographos. Kamoʻoalewa and
+  Cruithne are drawn **in Earth's frame**, so the quasi-satellite loops
+  around the drawn Earth once a year.
+- **Surfaces**: generated in the lab (`binary-surface-lab.html`, now the
+  small-body surface lab), five new groups, variant A shipping until picked
+  otherwise; new terrains for comets (pits, smooth flows, dark spots) and
+  unresolved bodies. Colour maps and normal maps, **loaded lazily** -- only
+  when the camera first comes near a body -- because together they are
+  24 MB.
+- **Also**: the distance instrument now uses a small body's current distance
+  from the Sun rather than its semi-major axis (Halley read 17.9 AU instead
+  of 35); the board gains "Jupiter Trojan" and "Interstellar object" kinds;
+  the roster gains a Trojans group and lists the Kuiper binaries; the Space
+  Dictionary gains four words (Trojans & Lagrange points, Interstellar
+  object, Coma & tail, Quasi-satellite & horseshoe); the Kepler solver was
+  made robust for e near 1 (UN271 had been drawn at 51.6 AU).
+- Cost: 33 meshes at 72 x 48 (+141,000 triangles in the headless count),
+  one points cloud, per-frame work 0.05 ms in the harness.
+- **Follow-ups from testing (Prompts.md):**
+  - *The Sun went black from far out.* Cause: the small-body orbit guides,
+    normally blended, stacked over the Sun's few pixels and replaced its
+    light with their own dim colours; the 33 new guides took it to black.
+    The guides are now additive (they can only add light). The Trojan and
+    Hilda clouds are additive too, in the belt's warm grey, and fade out
+    when Jupiter's orbit is under ~90 px across.
+  - *The night sides glowed with relief.* Two fixed directional fills in
+    main.js lit every crater wall facing them through the normal maps. Every
+    small-body material now gates direct light by the Sun's direction on the
+    geometric normal and keeps 30% of the ambient and emissive lift on the
+    night side (`applyNightSide` in smallBodies.js). Day sides unchanged.
+  - *The swarms are explained.* Three populations (L4, L5, Hildas), each
+    hoverable (the whole population lights up, a card says it orbits the
+    Sun) and clickable (its record opens); a board entry, "Jupiter's Trojans
+    & Hildas", opens an animated view (`ui/jupiterCompanyView.js`) with two
+    points of view: from above the Sun, and riding with Jupiter.
+  - *Space Dictionary examples.* Every word that describes something on the
+    board lists examples that fly there (`glossaryExamples` in
+    boardGlossary.js); the Trojans word also opens the animated view.
+
 
 ## Corrections to this list
 

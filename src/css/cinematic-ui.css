@@ -2662,6 +2662,12 @@ body:has(.satellite-atlas-directory.is-visible) .progress.distance-readout {
   color: rgba(158, 232, 196, 0.84);
 }
 
+/* Something that happened once, on a known date (round 5). */
+.events-dashboard__tag--recorded {
+  border-color: rgba(214, 186, 255, 0.34);
+  color: rgba(222, 204, 255, 0.88);
+}
+
 .events-dashboard__event-detail {
   margin: 0;
   font-size: 0.78rem;

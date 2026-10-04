@@ -339,6 +339,7 @@ function resolveDetails(bodyOrName, context = {}) {
       ? `${info.surfaceEvidence}${info.roughness ? ` · model roughness ${info.roughness}` : ""}`
       : null,
     rings: planet?.rings ?? info.rings,
+    activity: info.activity,
     ringRoster: collectRingRoster(body),
     ringSystemName: null,
     lore: planet?.lore
@@ -396,6 +397,7 @@ function resolveDetails(bodyOrName, context = {}) {
     details.gravity = null;
     details.surface = null;
     details.rings = null;
+    details.activity = null;
     details.ringRoster = [];
     details.showJplSource = false;
     /*
@@ -417,7 +419,7 @@ function resolveDetails(bodyOrName, context = {}) {
   [
     "massRelative", "sizeRelative", "diameter", "distance", "orbital",
     "relationValue", "atmosphere", "temperature", "rotation", "axialTilt",
-    "gravity", "surface", "rings",
+    "gravity", "surface", "rings", "activity",
   ].forEach((key) => {
     details[key] = cleanValue(details[key]);
   });
@@ -513,6 +515,10 @@ export function createCelestialDetailsPanel() {
               <span data-cosmic-text>Surface evidence</span>
               <p id="planet-details-surface" data-cosmic-text></p>
             </div>
+            <div class="planet-details__advanced-item" data-planet-field="activity">
+              <span data-cosmic-text>Activity · coma and tail</span>
+              <p id="planet-details-activity" data-cosmic-text></p>
+            </div>
             <div class="planet-details__advanced-item planet-details__advanced-item--rings" data-planet-field="rings">
               <span data-cosmic-text>Ring system</span>
               <p id="planet-details-rings" data-cosmic-text></p>
@@ -598,6 +604,7 @@ export function createCelestialDetailsPanel() {
     gravity: layer.querySelector("#planet-details-gravity"),
     surface: layer.querySelector("#planet-details-surface"),
     rings: layer.querySelector("#planet-details-rings"),
+    activity: layer.querySelector("#planet-details-activity"),
     lore: layer.querySelector("#planet-details-lore"),
   });
 

@@ -47,6 +47,18 @@
  *  snowball    a dirty snowball: dark red regolith, small fresh craters that
  *              expose paler ice, long fractures.
  *
+ * Added for Ranks 7-10 (comets, interstellar objects, Trojans, near-Earth
+ * oddities), with the features those surfaces need:
+ *
+ *  pits        flat-floored, steep-walled depressions: Wild 2's (0.25-2.5 km
+ *              across, 50-500 m deep, Kirk et al. 2005) and Tempel 1's pitted
+ *              terrain (pits to ~1 km, Thomas et al. 2013).
+ *  smooth      smooth flow deposits lying in the lows, bounded by scarps and
+ *              burying what was under them: Tempel 1 (a third of its
+ *              surface), Hartley 2's waist, Borrelly's central plains.
+ *  spots       Borrelly's dark spots, two to three times darker than the
+ *              ground around them (Soderblom et al. 2002).
+ *
  * Every number with a source is noted where it is used. Everything else is a
  * judgement made in the lab, by eye, against those references.
  */
@@ -362,6 +374,7 @@ export const DEFAULT_RECIPE = Object.freeze({
   rubble: null, mounds: null, patches: null,
   grooves: null, fractures: null,
   frost: 0, flecks: 0, collar: 0,
+  pits: null, smooth: null, spots: null,
 });
 
 /**
@@ -459,6 +472,55 @@ export function generateSurface(spec) {
   stampCraters(ctx, craterList(rand, cp));
   if (R0.giants) stampCraters(ctx, craterList(rand, { ...R0.giants, rmin: R0.giants.rmin * T.craterSize, rmax: R0.giants.rmax * T.craterSize }));
 
+  // Pits: flat floors, steep walls, almost no rim (Wild 2, Tempel 1).
+  if (R0.pits) {
+    const P = R0.pits;
+    const radii = sizes(rand, Math.round(P.count * T.craters), P.rmin * T.craterSize, P.rmax * T.craterSize, P.slope ?? 1.6);
+    for (const R of radii) {
+      const c = randomDir(rand);
+      const depth = (P.depth ?? 0.3) * R * (0.6 + 0.4 * rand());
+      const wall = P.wall ?? 0.22;
+      const win = windowFor(c, R * 1.3, width, height);
+      for (let r = win.r0; r <= win.r1; r += 1) {
+        for (let s2 = 0; s2 < win.span; s2 += 1) {
+          const col = ((win.c0 + s2) % width + width) % width;
+          const p = r * width + col;
+          const i = p * 3;
+          const cosd = dir[i] * c[0] + dir[i + 1] * c[1] + dir[i + 2] * c[2];
+          // A ragged outline: pits grow by collapse, not by impact.
+          const t = (Math.acos(Math.min(1, cosd)) / R) * (1 + 0.18 * noise2(dir[i] * 9 + c[0] * 40, dir[i + 1] * 9, dir[i + 2] * 9));
+          if (t >= 1.3) continue;
+          const inside = 1 - smoothstep(1 - wall, 1, t);
+          H[p] -= depth * inside;
+          H[p] += depth * 0.06 * Math.exp(-(((t - 1.02) / 0.1) ** 2));
+          tone[p] -= (P.dark ?? 0.02) * inside;
+          if (inside > 0.5) floor[p] = Math.max(floor[p], inside);
+        }
+      }
+    }
+  }
+
+  // Dark spots (Borrelly).
+  if (R0.spots) {
+    const S = R0.spots;
+    for (let k = 0; k < S.count; k += 1) {
+      const c = randomDir(rand);
+      const R = S.rmin + (S.rmax - S.rmin) * rand();
+      const win = windowFor(c, R * 1.6, width, height);
+      for (let r = win.r0; r <= win.r1; r += 1) {
+        for (let s2 = 0; s2 < win.span; s2 += 1) {
+          const col = ((win.c0 + s2) % width + width) % width;
+          const p = r * width + col;
+          const i = p * 3;
+          const cosd = dir[i] * c[0] + dir[i + 1] * c[1] + dir[i + 2] * c[2];
+          const t = Math.acos(Math.min(1, cosd)) / R;
+          if (t >= 1.6) continue;
+          tone[p] -= S.dark * (1 - smoothstep(0.6, 1.4, t));
+        }
+      }
+    }
+  }
+
   // Grooves (Lutetia's lineaments, Phobos's pit chains).
   if (R0.grooves) {
     const G = R0.grooves;
@@ -522,6 +584,23 @@ export function generateSurface(spec) {
         H[p] -= F.depth * prof;
         tone[p] -= (F.dark ?? 0.05) * prof;
       }
+    }
+  }
+
+  // Smooth deposits: they fill the lows and bury what was there, and end at
+  // a scarp. Last of the relief, so they cover craters and pits alike.
+  if (R0.smooth) {
+    const S = R0.smooth;
+    const f = S.freq ?? 1.5;
+    for (let p = 0; p < count; p += 1) {
+      const i = p * 3;
+      const n = fbm(noise2, dir[i] * f + 31, dir[i + 1] * f, dir[i + 2] * f, 4);
+      const m = smoothstep(S.threshold ?? 0.15, (S.threshold ?? 0.15) + (S.edge ?? 0.04), n);
+      if (m <= 0) continue;
+      H[p] = H[p] * (1 - (S.flatten ?? 0.85) * m) - (S.scarp ?? 0.004) * m;
+      tone[p] = tone[p] * (1 - 0.6 * m) + (S.bright ?? 0.05) * m;
+      bright[p] *= 1 - m;
+      ice[p] *= 1 - m;
     }
   }
 

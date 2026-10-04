@@ -225,6 +225,8 @@
 .cgloss__crater { fill: rgba(0, 0, 0, 0.28); }
 .cgloss__grain { fill: rgba(214, 196, 170, 0.7); }
 .cgloss__ice { fill: #cfe3ff; }
+/* A comet's coma: a soft blue-white cloud, lit, not glowing. */
+.cgloss__coma { fill: rgba(200, 225, 255, 0.28); }
 .cgloss__tail { stroke: rgba(190, 225, 255, 0.55); stroke-width: 1.3; stroke-linecap: round; }
 .cgloss__light { fill: #fff6d8; }
 .cgloss__venus { fill: #e8c98f; }
@@ -1112,3 +1114,219 @@ body.is-tour-open .cgloss__launch { animation: cdec-launch-turn 6s linear infini
   .csys__globe.is-lobed .csys__turn,
   .csys__surface { animation: none; }
 }
+
+/* ------------------------------------------------------------------------
+ * Space Dictionary examples: the board's bodies a word describes, each a
+ * button that flies there.
+ * ---------------------------------------------------------------------- */
+.cgloss__examples {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px 6px;
+  margin-top: 10px;
+}
+.cgloss__examples-title {
+  color: var(--cb-faint);
+  font-family: var(--cb-mono);
+  font-size: 0.48rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  margin-right: 2px;
+}
+.cgloss__example {
+  padding: 4px 9px;
+  border: 1px solid rgba(255, 196, 130, 0.32);
+  border-radius: 999px;
+  background: rgba(255, 196, 130, 0.05);
+  color: var(--cb-amber);
+  font: inherit;
+  font-size: 0.66rem;
+  line-height: 1.2;
+  cursor: pointer;
+  transition: background 0.18s, border-color 0.18s, transform 0.18s;
+}
+.cgloss__example:hover,
+.cgloss__example:focus-visible {
+  background: rgba(255, 196, 130, 0.16);
+  border-color: rgba(255, 196, 130, 0.7);
+  outline: none;
+  transform: translateY(-1px);
+}
+.cgloss__example.is-company {
+  border-color: rgba(159, 240, 220, 0.45);
+  background: rgba(159, 240, 220, 0.06);
+  color: rgba(159, 240, 220, 0.95);
+}
+.cgloss__example.is-company:hover,
+.cgloss__example.is-company:focus-visible { background: rgba(159, 240, 220, 0.16); border-color: rgba(159, 240, 220, 0.8); }
+
+/* The board's structure entry: Jupiter's Trojans & Hildas. */
+.cboard__structure .cboard__body { border: 1px dashed rgba(226, 188, 138, 0.3); border-radius: 10px; }
+.cboard__structure .cboard__body:hover { border-color: rgba(226, 188, 138, 0.65); }
+.cboard__structure-art { width: 34px; height: 26px; justify-self: center; overflow: visible; }
+
+/* ------------------------------------------------------------------------
+ * Jupiter's company: the Trojans and Hildas, from two points of view.
+ * ---------------------------------------------------------------------- */
+.cjup__sky { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.cjup__modes { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+.cjup__mode {
+  display: grid;
+  gap: 2px;
+  padding: 8px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--cb-soft);
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s, color 0.2s;
+}
+.cjup__mode-label { font-size: 0.8rem; color: inherit; }
+.cjup__mode-sub { font-family: var(--cb-mono); font-size: 0.48rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--cb-faint); }
+.cjup__mode[aria-pressed="true"] { border-color: rgba(159, 240, 220, 0.6); background: rgba(159, 240, 220, 0.08); color: var(--cb-ink); }
+.cjup__mode:hover, .cjup__mode:focus-visible { border-color: rgba(159, 240, 220, 0.45); outline: none; }
+.cjup__canvas { display: block; max-width: 100%; }
+.cjup__legend { display: flex; flex-wrap: wrap; gap: 6px 14px; justify-content: center; color: var(--cb-soft); font-size: 0.64rem; }
+.cjup__key { display: inline-flex; align-items: center; gap: 6px; }
+.cjup__swatch { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.cjup__swatch.is-sun { background: #fff4d6; box-shadow: 0 0 6px rgba(255, 220, 150, 0.9); }
+.cjup__swatch.is-jupiter { background: #e2bc8a; }
+.cjup__swatch.is-trojan { background: #d9b48c; }
+.cjup__swatch.is-hilda { background: #bdb4a8; }
+.cjup__swatch.is-named { background: #9ff0dc; box-shadow: 0 0 0 2px rgba(159, 240, 220, 0.25); }
+.cjup__swatch.is-path { width: 14px; height: 2px; border-radius: 1px; background: rgba(159, 240, 220, 0.8); }
+.cjup__caption { max-width: 640px; text-align: center; line-height: 1.6; }
+.cjup__source { margin-top: 14px; line-height: 1.6; }
+
+/* Jupiter's company, round 5: clickable names on the diagram, and the
+ * five-step explanation beside it. */
+.cjup__canvas-wrap { position: relative; }
+.cjup__hits { position: absolute; inset: 0; pointer-events: none; }
+.cjup__hit {
+  position: absolute; pointer-events: auto; padding: 0; margin: 0;
+  background: transparent; border: 0; border-radius: 4px; cursor: pointer;
+}
+.cjup__hit:hover, .cjup__hit:focus-visible { outline: 1px solid rgba(159, 240, 220, 0.65); background: rgba(159, 240, 220, 0.1); }
+.cjup__canvas { cursor: default; }
+.cjup__hint { margin: 0; color: rgba(159, 240, 220, 0.8); }
+/* Round 5: "the steps are microscopic". Each step is now its diagram,
+ * full width of a wider side column, with the words under it at reading
+ * size -- not a 96 px thumbnail beside a paragraph. */
+.cjup .cmoons__stage { grid-template-columns: minmax(0, 1fr) clamp(340px, 34vw, 500px); }
+.cjup__step {
+  display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px;
+  padding: 18px 0 20px; border-bottom: 1px solid rgba(140, 170, 200, 0.12);
+}
+.cjup__step-art svg {
+  width: 100%; max-width: 340px; height: auto; aspect-ratio: 1; display: block; margin: 0 auto;
+  border-radius: 14px; background: rgba(8, 12, 18, 0.7); border: 1px solid rgba(140, 170, 200, 0.16);
+}
+.cjup__step-title { margin: 4px 0 6px; font-size: 1rem; font-weight: 600; color: var(--cb-ink); }
+.cjup__step-text { margin: 0; font-size: 0.88rem; line-height: 1.65; color: var(--cb-soft); }
+@media (max-width: 760px) {
+  .cjup .cmoons__stage { grid-template-columns: minmax(0, 1fr); }
+  .cjup__step-art svg { max-width: 300px; }
+}
+
+/* ---------------------------------------------- watch a comet glow (round 6) */
+.cglow .cmoons__stage { grid-template-columns: minmax(0, 1fr) clamp(320px, 30vw, 440px); }
+.cglow__sky { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 14px 12px 18px; overflow-y: auto; }
+.cglow__views { display: flex; gap: 16px; align-items: center; justify-content: center; flex-wrap: wrap; }
+.cglow__gl, .cglow__map { display: block; border-radius: 14px; border: 1px solid rgba(140, 170, 200, 0.16); background: #04060a; }
+.cglow__meter { width: min(640px, 100%); }
+.cglow__meter-top { display: flex; align-items: baseline; gap: 10px; }
+.cglow__meter-label { font-family: var(--cb-mono); font-size: 0.62rem; letter-spacing: 0.16em; text-transform: uppercase; color: var(--cb-faint); }
+.cglow__meter-value { font-size: 1.3rem; color: var(--cb-ink); font-weight: 600; }
+.cglow__badge { margin-left: auto; font-size: 0.72rem; padding: 3px 10px; border-radius: 999px; border: 1px solid rgba(140, 170, 200, 0.3); color: var(--cb-soft); }
+.cglow[data-glow-state="full"] .cglow__badge { border-color: rgba(255, 214, 120, 0.8); color: #ffe3a6; background: rgba(255, 214, 120, 0.12); box-shadow: 0 0 16px rgba(255, 214, 120, 0.25); }
+.cglow[data-glow-state="glowing"] .cglow__badge, .cglow[data-glow-state="waking"] .cglow__badge { border-color: rgba(120, 230, 170, 0.6); color: #bff5d6; }
+.cglow__status { margin: 8px 0 0; font-size: 0.86rem; line-height: 1.55; color: var(--cb-soft); }
+.cglow__btn {
+  font: inherit; font-size: 0.74rem; padding: 7px 12px; border-radius: 8px; cursor: pointer;
+  background: rgba(255, 255, 255, 0.03); color: var(--cb-ink); border: 1px solid rgba(140, 170, 200, 0.3);
+}
+.cglow__btn:hover, .cglow__btn:focus-visible { border-color: rgba(120, 230, 170, 0.6); outline: none; }
+.cglow__where { margin: 0; text-align: center; }
+.cglow__step { padding: 14px 0; border-bottom: 1px solid rgba(140, 170, 200, 0.12); }
+.cglow__step-title { margin: 0 0 6px; font-size: 0.98rem; font-weight: 600; color: var(--cb-ink); }
+.cglow__step-text { margin: 0; font-size: 0.88rem; line-height: 1.65; color: var(--cb-soft); }
+.cglow__facts { padding: 16px 0 8px; }
+.cglow__facts-list { display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; margin: 0; font-size: 0.84rem; }
+.cglow__facts-list dt { color: var(--cb-faint); }
+.cglow__facts-list dd { margin: 0; color: var(--cb-ink); }
+/* On the board: each comet's way in, and whether it is glowing right now. */
+.cboard__glow { border-color: rgba(120, 230, 170, 0.45); color: #bff5d6; }
+.cboard__glow-badge.is-asleep { color: var(--cb-faint); }
+.cboard__glow-badge.is-waking, .cboard__glow-badge.is-glowing { color: #bff5d6; border-color: rgba(120, 230, 170, 0.5); }
+.cboard__glow-badge.is-full { color: #ffe3a6; border-color: rgba(255, 214, 120, 0.7); }
+@media (max-width: 760px) {
+  .cglow .cmoons__stage { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* Round 6, second pass: two bars the viewer drags, nothing moves alone. */
+.cglow__controls { display: flex; flex-direction: column; gap: 8px; width: min(640px, 100%); }
+.cglow__range {
+  -webkit-appearance: none; appearance: none; width: 100%; height: 14px; margin: 6px 0 0;
+  border-radius: 999px; cursor: pointer; outline: none;
+}
+.cglow__glow-range {
+  background:
+    linear-gradient(90deg, #4c7cff, #46e08c 60%, #ffd678) 0 0 / var(--fill, 0%) 100% no-repeat,
+    rgba(255, 255, 255, 0.08);
+}
+/* Warm at the Sun end, cold far out. */
+.cglow__distance-range { background: linear-gradient(90deg, rgba(255, 214, 120, 0.6), rgba(120, 230, 170, 0.35) 30%, rgba(110, 150, 255, 0.22)); }
+.cglow__range::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none; width: 22px; height: 22px; border-radius: 50%;
+  background: #f4fbff; border: 2px solid #46e08c; box-shadow: 0 0 10px rgba(70, 224, 140, 0.55);
+}
+.cglow__range::-moz-range-thumb {
+  width: 20px; height: 20px; border-radius: 50%;
+  background: #f4fbff; border: 2px solid #46e08c; box-shadow: 0 0 10px rgba(70, 224, 140, 0.55);
+}
+.cglow__range:focus-visible::-webkit-slider-thumb { outline: 2px solid #fff; outline-offset: 2px; }
+.cglow__ends { display: flex; justify-content: space-between; gap: 10px; }
+.cglow__flybar { width: min(640px, 100%); display: flex; justify-content: center; margin-top: 4px; }
+.cglow__fly { font-size: 0.84rem; padding: 10px 20px; border-color: rgba(159, 240, 220, 0.55); color: #cffaf0; background: rgba(159, 240, 220, 0.08); }
+
+/* Round 7: one comet per view; its 3D comet is under the mouse, and the
+ * distance bar carries a mark where the comet wakes up. */
+.cglow__gl-wrap { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.cglow__gl { cursor: grab; }
+.cglow__gl.is-dragging { cursor: grabbing; }
+.cglow__gl-hint { margin: 0; font-family: var(--cb-mono); font-size: 0.6rem; letter-spacing: 0.08em; color: var(--cb-faint); text-align: center; }
+.cglow__why { margin-top: 8px; padding-left: 0; padding-right: 0; }
+.cglow__track { position: relative; padding-bottom: 20px; }
+.cglow__wake {
+  position: absolute; top: 100%; transform: translate(-50%, -18px); white-space: nowrap; pointer-events: none;
+  font-family: var(--cb-mono); font-size: 0.6rem; letter-spacing: 0.06em; color: #bff5d6;
+}
+.cglow__wake::before {
+  content: ""; position: absolute; left: 50%; bottom: 100%; width: 2px; height: 16px; margin: 0 0 1px -1px;
+  border-radius: 1px; background: rgba(191, 245, 214, 0.85);
+}
+.cglow__wake.is-far { transform: translate(-80%, -18px); }
+.cglow__wake.is-far::before { left: 80%; }
+
+/* Round 7: a comet shown where the glow view left it, not where today puts
+   it -- said on screen until it is put back (ui/cometPlacementChip.js).
+   Under the top-right controls, clear of the distance panel bottom-left. */
+.comet-placement {
+  position: fixed; top: 76px; right: clamp(16px, 3vw, 44px); z-index: 12;
+  display: flex; align-items: center; gap: 12px; max-width: min(520px, calc(100vw - 32px));
+  padding: 8px 8px 8px 14px; border-radius: 10px;
+  border: 1px solid rgba(120, 230, 170, 0.45); background: rgba(3, 5, 11, 0.8);
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+}
+.comet-placement[hidden] { display: none; }
+.comet-placement__text { margin: 0; font-size: 0.8rem; line-height: 1.45; color: #d9efe4; }
+.comet-placement__back {
+  flex: none; font: inherit; font-size: 0.76rem; padding: 6px 12px; border-radius: 8px; cursor: pointer;
+  color: #cffaf0; background: rgba(159, 240, 220, 0.08); border: 1px solid rgba(159, 240, 220, 0.55);
+}
+.comet-placement__back:hover, .comet-placement__back:focus-visible { background: rgba(159, 240, 220, 0.18); outline: none; }
+body.is-space-mode .comet-placement { display: none; }
+/* Round 9: a Centaur that never glows, beside its "rings" badge. */
+.cboard__glow-badge.is-never { color: var(--cb-faint); border-style: dashed; }

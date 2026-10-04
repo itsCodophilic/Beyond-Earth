@@ -8,6 +8,9 @@ import { MAIN_BELT_WORLDS } from "../scene/smallBodies/mainBeltCatalogue.js";
 import { CENTAURS } from "../scene/smallBodies/centaurCatalogue.js";
 import { TRANS_NEPTUNIAN_WORLDS } from "../scene/smallBodies/tnoCatalogue.js";
 import { KUIPER_BINARIES } from "../scene/smallBodies/binaryCatalogue.js";
+import { COMETS } from "../scene/smallBodies/cometCatalogue.js";
+import { JUPITER_TROJANS } from "../scene/smallBodies/trojanCatalogue.js";
+import { NEAR_EARTH_ODDITIES } from "../scene/smallBodies/neoCatalogue.js";
 import { BELT_MAJOR_ROCKS } from "../scene/beltMajorOrbitGuides.js";
 import { hasIcyRingSystem } from "../planets/icyRings.js";
 import { JUPITER_MOON_PROFILES } from "../planets/jupiter/satellites/jovianMoonCatalog.js";
@@ -95,12 +98,16 @@ export const BOARD_REGIONS = Object.freeze([
   { key: "detached", title: "Detached & inner Oort", from: 150, to: 2000,
     blurb: "Worlds whose closest approach is beyond Neptune's reach. Something else put them there." },
   { key: "oort", title: "Oort Cloud", from: 2000, to: 100000,
-    blurb: "A shell of perhaps trillions of comet nuclei, out to 100,000 AU. Nothing here has ever been seen." },
+    blurb: "A shell of perhaps trillions of comet nuclei, out to 100,000 AU. None has been seen out there; we see the ones that fall in." },
+  /* "Passing through" -- the three interstellar visitors -- was here until
+   * round 5. They have left the Solar System; the owner moved them to the
+   * space events (dated replays of each pass), and the word stays in the
+   * Space Dictionary. */
 ]);
 
 export function regionFor(aAU) {
   const a = Number(aAU);
-  const region = BOARD_REGIONS.find((r) => a >= r.from && a < r.to);
+  const region = BOARD_REGIONS.find((r) => !r.unbound && a >= r.from && a < r.to);
   return region?.key ?? "oort";
 }
 
@@ -175,10 +182,12 @@ const PLANET_MOONS = Object.freeze({
 
 function kindForSmallBody(record) {
   const text = `${record.classification ?? ""} ${record.info?.population ?? ""}`;
+  if (/interstellar/i.test(text)) return "interstellar";
   if (/centaur/i.test(text)) return "centaur";
   if (/comet/i.test(text)) return "comet";
   if (/trans-neptunian|sednoid|kuiper/i.test(text)) return "tno";
   if (/near-earth/i.test(text)) return "nea";
+  if (/jupiter trojan/i.test(text)) return "trojan";
   return "asteroid";
 }
 
@@ -191,7 +200,29 @@ export const BODY_KINDS = Object.freeze({
   nea: "Near-Earth asteroid",
   centaur: "Centaur",
   comet: "Comet",
+  trojan: "Jupiter Trojan",
+  interstellar: "Interstellar object",
 });
+
+/*
+ * Structures: things on the board that are not one body. One so far --
+ * Jupiter's Trojan swarms and the Hildas, which orbit the Sun in Jupiter's
+ * company. Listed in the giants' column, opening an animated explanation
+ * (ui/jupiterCompanyView.js) rather than a flight.
+ */
+export const BOARD_STRUCTURES = Object.freeze([
+  {
+    key: "jupiter-company",
+    name: "Jupiter's Trojans & Hildas",
+    region: "giants",
+    meta: "Two swarms on Jupiter's orbit · a 3:2 group",
+    kind: "Orbit the Sun, shepherded by Jupiter",
+    words: "trojan trojans hilda hildas lagrange l4 l5 swarm greek camp jupiter company",
+  },
+  /* Round 6 had a "Watch a comet glow" card here, in the inner column.
+   * Round 7 (the owner) took it out: the glow view now belongs to one comet
+   * at a time, opened from that comet's own row ("Check out its glow"). */
+]);
 
 let cached = null;
 
@@ -274,18 +305,33 @@ export function buildCelestialBoard() {
     });
   });
 
-  [...SMALL_BODIES, ...MAIN_BELT_WORLDS, ...CENTAURS, ...TRANS_NEPTUNIAN_WORLDS, ...KUIPER_BINARIES].forEach((record) => {
-    const aAU = Number(record.orbit?.aAU);
+  [
+    ...SMALL_BODIES, ...MAIN_BELT_WORLDS, ...CENTAURS, ...TRANS_NEPTUNIAN_WORLDS, ...KUIPER_BINARIES,
+    ...COMETS, ...JUPITER_TROJANS, ...NEAR_EARTH_ODDITIES,
+  ].forEach((record) => {
+    /* An open orbit has a negative semi-major axis and no region: it is
+     * listed by its perihelion, in "Passing through". */
+    const unbound = Number(record.orbit?.e) >= 1;
+    const aAU = unbound
+      ? Math.abs(Number(record.orbit.aAU)) * (Number(record.orbit.e) - 1)
+      : Number(record.orbit?.aAU);
     if (!Number.isFinite(aAU)) return;
     const kind = kindForSmallBody(record);
     bodies.push({
       name: record.name,
       kind,
       aAU,
-      region: regionFor(aAU),
+      unbound,
+      region: unbound ? "interstellar" : regionFor(aAU),
       diameterKm: Number(record.diameterKm) || null,
       swatch: swatchFromChroma(record.chroma),
       rings: hasIcyRingSystem(record.name),
+      /* Round 9: a Centaur that has never been seen to glow (Chariklo,
+       * Pholus) says so on its row, beside the active ones that do. */
+      neverGlows: kind === "centaur" && !record.coma,
+      /* And one that is active all the time (Chiron, Echeclus): its coma has
+       * no distance law, so it carries no "glowing now" badge of its own. */
+      alwaysGlows: kind === "centaur" && Boolean(record.coma) && !record.activity,
       moons: satellitesOf(record).map((m) => ({
         name: m.name,
         diameterKm: Number(m.diameterKm) || null,
@@ -328,6 +374,7 @@ export function buildCelestialBoard() {
   const moonCount = bodies.reduce((sum, b) => sum + b.moons.length, 0);
   cached = Object.freeze({
     regions: BOARD_REGIONS,
+    structures: BOARD_STRUCTURES,
     bodies,
     moonCount,
     bodyCount: bodies.length,

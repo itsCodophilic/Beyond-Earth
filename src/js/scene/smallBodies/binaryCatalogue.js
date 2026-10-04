@@ -536,10 +536,14 @@ export const KUIPER_BINARIES = Object.freeze([
     shape: {
       ...COLD_RELIEF,
       lobes: [
-        { c: [-83.7, 0, 0], r: [83.7, 50, 50] },
-        { c: [83.7, 0, 0], r: [83.7, 50, 50] },
+        /* Overlapping by 20 km rather than touching at a point, which
+         * drew the neck as a thin band (reported for the "dumbbell"
+         * shapes); the lightcurve's width/length ratio of 0.30 is kept. */
+        { c: [-73, 0, 0], r: [90, 50, 50] },
+        { c: [73, 0, 0], r: [90, 50, 50] },
       ],
       neck: 10,
+      blend: "smooth", fillet: 45, /* One continuous surface, not two lobes and a band (smallBodyShapes.js, "blend"). */
       seed: 385446,
     },
     moons: [

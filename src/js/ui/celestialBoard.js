@@ -4,7 +4,12 @@ import {
   lightTime,
 } from "./celestialBoardData.js";
 import { buildBinarySystemView, systemNames } from "./binarySystemView.js";
-import { createBoardGlossary, REGION_WORD } from "./boardGlossary.js";
+import { buildJupiterCompanyView } from "./jupiterCompanyView.js";
+import { buildCometGlowView, GLOW_COMETS, glowStateLabel } from "./cometGlowView.js";
+
+/* The comets the "watch it glow" view can take round the Sun. */
+const GLOW_NAMES = new Set(GLOW_COMETS.map((r) => r.name));
+import { createBoardGlossary, glossaryArt, REGION_WORD } from "./boardGlossary.js";
 
 /**
  * The celestial board: every body the scene can fly to, laid out by where it
@@ -97,8 +102,8 @@ function matchesFilter(body, filter) {
   switch (filter) {
     case "planet": return body.kind === "planet";
     case "dwarf": return body.kind === "dwarf" || body.kind === "tno";
-    case "asteroid": return body.kind === "asteroid" || body.kind === "nea";
-    case "icy": return body.kind === "centaur" || body.kind === "comet";
+    case "asteroid": return body.kind === "asteroid" || body.kind === "nea" || body.kind === "trojan";
+    case "icy": return body.kind === "centaur" || body.kind === "comet" || body.kind === "interstellar";
     // Planets and the dwarf worlds, as the label says. The asteroids that
     // have moons -- Ida, Didymos, Sylvia and the rest -- are under Asteroids.
     case "moons": return body.moons.length > 0 && ["planet", "dwarf", "tno"].includes(body.kind);
@@ -208,7 +213,7 @@ function queryMatcher(text) {
  *   the surface map the scene already has loaded for a body, if any -- the
  *   moon board's globe is drawn from it
  */
-export function createCelestialBoard({ trigger = null, surfaceFor = null } = {}) {
+export function createCelestialBoard({ trigger = null, surfaceFor = null, cometState = null, placeComet = null, onOpen = null } = {}) {
   const data = buildCelestialBoard();
   const bodiesByName = new Map(data.bodies.map((b) => [b.name, b]));
 
@@ -276,9 +281,17 @@ export function createCelestialBoard({ trigger = null, surfaceFor = null } = {})
       say(`Flying to ${name} waits until the tour is done — the board will be here when you are.`);
       return;
     }
+    /* Round 7: the glow view's "Fly to" takes the comet as the viewer left
+     * it -- placed in the scene at the distance they chose (main.js). */
+    if (from?.dataset?.glowAu) {
+      try { placeComet?.(name, Number(from.dataset.glowAu), from.dataset.glowLeg === "out"); } catch { /* the flight still goes */ }
+    }
     close({ restoreFocus: false, departing: true, from });
     setTimeout(() => {
-      window.dispatchEvent(new CustomEvent("beyond-earth:travel-to-body", { detail: { name } }));
+      /* Round 10: from the glow view, arriving is the whole point -- never
+       * the dossier, even when that comet is already the one in focus. */
+      const noDossier = Boolean(from?.classList?.contains("cglow__fly"));
+      window.dispatchEvent(new CustomEvent("beyond-earth:travel-to-body", { detail: { name, noDossier } }));
     }, 140);
   }
 
@@ -296,6 +309,55 @@ export function createCelestialBoard({ trigger = null, surfaceFor = null } = {})
   }
 
   // ------------------------------------------------------------ building
+
+  /* Each comet's "glowing now / asleep now" badge, refreshed on every open
+   * because the scene's comets move between visits. */
+  const glowBadges = [];
+  function refreshGlowBadges() {
+    glowBadges.forEach(({ name, badge }) => {
+      const live = (() => { try { return cometState?.(name) ?? null; } catch { return null; } })();
+      badge.hidden = !live;
+      if (!live) return;
+      const st = glowStateLabel(live.strength);
+      badge.className = `cboard__ring-badge cboard__glow-badge is-${st.key}`;
+      badge.textContent = st.key === "asleep" ? "asleep now" : `glowing now · ${Math.round(live.strength * 100)}%`;
+    });
+  }
+
+  /* A structure: not one body, so it opens its explanation, not a flight. */
+  const structureItems = [];
+  function buildStructureChip(structure) {
+    const item = el("li", "cboard__item cboard__structure");
+    const button = el("button", "cboard__body");
+    button.type = "button";
+    button.dataset.company = structure.key;
+    button.setAttribute("aria-label", `${structure.name}: see how they move`);
+    const art = glossaryArt(structure.art ?? "trojan", "cboard__structure-art");
+    const text = el("span", "cboard__text");
+    text.append(el("span", "cboard__name", structure.name));
+    text.append(el("span", "cboard__meta", structure.meta));
+    text.append(el("span", "cboard__kind", structure.kind));
+    button.append(art, text);
+    item.append(button);
+    structureItems.push({ item, button, structure });
+    return item;
+  }
+
+  function openCompany(key = "jupiter-company", cometName = null) {
+    closeMoons(true);
+    glossary?.closeAll();
+    const built = key === "comet-glow"
+      ? buildCometGlowView({ closeButton, initial: cometName, liveState: (name) => { try { return cometState?.(name) ?? null; } catch { return null; } } })
+      : buildJupiterCompanyView({ closeButton });
+    moonBoard = built;
+    root.append(built.board);
+    built.fit();
+    built.render();
+    void built.board.offsetWidth;
+    built.board.classList.add("is-opening");
+    setTimeout(() => built.board.classList.remove("is-opening"), 1600);
+    built.back.focus({ preventScroll: true });
+  }
 
   function buildChip(body, index) {
     const item = el("li", "cboard__item");
@@ -354,7 +416,11 @@ export function createCelestialBoard({ trigger = null, surfaceFor = null } = {})
     } else {
       text.append(el("span", "cboard__name", body.name));
     }
-    const meta = [formatAU(body.aAU), formatKm(body.diameterKm)].filter(Boolean).join(" · ");
+    /* An unbound body has no semi-major axis to quote: its closest. */
+    const meta = [
+      body.unbound ? `nearest ${formatAU(body.aAU)}` : formatAU(body.aAU),
+      formatKm(body.diameterKm),
+    ].filter(Boolean).join(" · ");
     text.append(el("span", "cboard__meta", meta));
     text.append(el("span", "cboard__kind", body.partnerSystem
       ? `${BODY_KINDS[body.kind] ?? ""} · ${body.moons.length > 1 ? "triple" : "binary"}`
@@ -365,7 +431,26 @@ export function createCelestialBoard({ trigger = null, surfaceFor = null } = {})
     /* Under the name rather than beside it, so "Jupiter" is never cut to
      * "Jupi..." by its own badges. */
     let pill = null;
-    if (body.moons.length || body.rings) {
+    /*
+     * A comet's own way in to "watch it glow" (round 6), and whether it is
+     * glowing in the scene right now -- most are asleep at any moment, which
+     * is why the glow was easy to miss.
+     */
+    let glowPill = null;
+    if (GLOW_NAMES.has(body.name)) {
+      const extras = el("div", "cboard__extras");
+      glowPill = el("button", "cboard__moons cboard__glow", "Check out its glow");
+      glowPill.type = "button";
+      glowPill.dataset.cometGlow = body.name;
+      glowPill.setAttribute("aria-label", `Take ${body.name} round the Sun and watch it glow`);
+      extras.append(glowPill);
+      const badge = el("span", "cboard__ring-badge cboard__glow-badge");
+      badge.hidden = true;
+      extras.append(badge);
+      glowBadges.push({ name: body.name, badge });
+      item.append(extras);
+    }
+    if (body.moons.length || body.rings || body.neverGlows || body.alwaysGlows) {
       const extras = el("div", "cboard__extras");
       if (body.moons.length) {
         pill = el("button", "cboard__moons",
@@ -378,13 +463,23 @@ export function createCelestialBoard({ trigger = null, surfaceFor = null } = {})
         extras.append(pill);
       }
       if (body.rings) extras.append(el("span", "cboard__ring-badge", "rings"));
+      if (body.neverGlows) {
+        const quiet = el("span", "cboard__ring-badge cboard__glow-badge is-never", "never seen to glow");
+        quiet.title = "No coma or outburst has ever been detected on it";
+        extras.append(quiet);
+      }
+      if (body.alwaysGlows) {
+        const active = el("span", "cboard__ring-badge cboard__glow-badge is-glowing", "glowing now · always active");
+        active.title = "An active Centaur: its coma is there all the time, far from the Sun";
+        extras.append(active);
+      }
       item.append(extras);
     }
 
     chips.push({
       body,
       item,
-      buttons: [button, pill].filter(Boolean),
+      buttons: [button, pill, glowPill].filter(Boolean),
       words: words(body.name),
       moonWords: body.moons.map((m) => words(m.name)),
       moonNames: body.moons.map((m) => m.name),
@@ -499,15 +594,21 @@ export function createCelestialBoard({ trigger = null, surfaceFor = null } = {})
       header.append(regionTitle);
       const range = region.key === "sun"
         ? "The centre"
-        : `${formatAU(region.from)} – ${formatAU(region.to)}`;
+        : region.unbound
+          ? "Not in orbit · open paths"
+          : `${formatAU(region.from)} – ${formatAU(region.to)}`;
       header.append(el("p", "cboard__region-range", range));
       header.append(el("p", "cboard__region-light", region.key === "sun"
         ? "Light leaves here"
-        : `Sunlight takes ${lightTime(region.from)} – ${lightTime(region.to)}`));
+        : region.unbound
+          ? "From other stars, and back to them"
+          : `Sunlight takes ${lightTime(region.from)} – ${lightTime(region.to)}`));
       header.append(el("p", "cboard__region-blurb", region.blurb));
       column.append(header);
 
       const list = el("ol", "cboard__bodies");
+      (data.structures ?? []).filter((s) => s.region === region.key)
+        .forEach((structure) => list.append(buildStructureChip(structure)));
       const members = data.bodies.filter((b) => b.region === region.key);
       members.forEach((body, j) => list.append(buildChip(body, j)));
       if (!members.length) {
@@ -535,7 +636,7 @@ export function createCelestialBoard({ trigger = null, surfaceFor = null } = {})
     emptyNote.setAttribute("role", "status");
     root.append(emptyNote);
 
-    glossary = createBoardGlossary(root);
+    glossary = createBoardGlossary(root, { data });
     wire();
     document.body.append(root);
   }
@@ -574,6 +675,14 @@ export function createCelestialBoard({ trigger = null, surfaceFor = null } = {})
       }
     });
     const narrowing = searching || filter !== "all";
+    structureItems.forEach(({ item, button, structure }) => {
+      const on = searching
+        ? matcher(structure.name, structure.words.split(" "))
+        : filter === "all" || filter === "asteroid";
+      item.classList.toggle("is-off", !on);
+      button.disabled = !on;
+      if (on && narrowing) litRegions.add(structure.region);
+    });
     columns.forEach(({ key, column }) => {
       column.classList.toggle("is-quiet", narrowing && !litRegions.has(key));
     });
@@ -607,7 +716,7 @@ export function createCelestialBoard({ trigger = null, surfaceFor = null } = {})
     const found = [];
     data.bodies.forEach((body) => {
       if (matcher(body.name)) {
-        found.push({ name: body.name, note: `${BODY_KINDS[body.kind]} · ${formatAU(body.aAU)}`, swatch: body.swatch });
+        found.push({ name: body.name, note: `${BODY_KINDS[body.kind]} · ${body.unbound ? "nearest " : ""}${formatAU(body.aAU)}`, swatch: body.swatch });
       }
       body.moons.forEach((moon) => {
         if (matcher(moon.name)) {
@@ -1466,6 +1575,9 @@ export function createCelestialBoard({ trigger = null, surfaceFor = null } = {})
   function closeMoons(immediate = false, { departing = false, from = null } = {}) {
     if (!moonBoard) return false;
     const { board, destroy } = moonBoard;
+    /* A view may name its own point to dive into -- the glow view's comet,
+     * read before `destroy` takes its canvas (round 8). */
+    const divePoint = departing ? moonBoard.departPoint?.() ?? null : null;
     moonBoard = null;
     destroy();
     if (immediate) {
@@ -1485,7 +1597,9 @@ export function createCelestialBoard({ trigger = null, surfaceFor = null } = {})
           ?? from?.closest?.(".cmoons__moon, .cmoons__planet") ?? null)
         || board.querySelector(".cmoons__planet");
       const box = board.getBoundingClientRect();
-      const at = dot?.getBoundingClientRect();
+      const at = divePoint
+        ? { left: divePoint.x, top: divePoint.y, width: 0, height: 0 }
+        : dot?.getBoundingClientRect();
       if (at) {
         board.style.transformOrigin = `${at.left + at.width / 2 - box.left}px ${at.top + at.height / 2 - box.top}px`;
       }
@@ -1568,6 +1682,20 @@ export function createCelestialBoard({ trigger = null, surfaceFor = null } = {})
         travel(travelTo.dataset.travel, travelTo);
         return;
       }
+      /* `data-comet-glow`, not `data-glow`: the glow view's own root carried
+       * `data-glow` for its styling, so every click anywhere inside the view
+       * matched this, rebuilt the view and swallowed the click -- which is
+       * why its buttons seemed dead (round 6 report). */
+      const glow = event.target.closest("[data-comet-glow]");
+      if (glow && !glow.disabled) {
+        openCompany("comet-glow", glow.dataset.cometGlow);
+        return;
+      }
+      const company = event.target.closest("[data-company]");
+      if (company && !company.disabled) {
+        openCompany(company.dataset.company);
+        return;
+      }
       const moonsOf = event.target.closest("[data-moons-of]");
       if (moonsOf && !moonsOf.disabled) {
         openMoons(moonsOf.dataset.moonsOf);
@@ -1610,7 +1738,10 @@ export function createCelestialBoard({ trigger = null, surfaceFor = null } = {})
         event.preventDefault();
         if (glossary?.closeTop()) return;
         const active = document.activeElement;
-        if (active?.tagName === "INPUT" && active.value) {
+        /* Only a text box is cleared by Escape. A slider (the comet glow
+         * view's distance and glow bars) also has a value, and Escape used
+         * to "clear" that instead of closing the view (round 6 report). */
+        if (active?.tagName === "INPUT" && (active.type === "search" || active.type === "text") && active.value) {
           active.value = "";
           active.dispatchEvent(new Event("input"));
           return;
@@ -1709,11 +1840,15 @@ export function createCelestialBoard({ trigger = null, surfaceFor = null } = {})
     if (open) return;
     clearTimeout(closingTimer);
     open = true;
+    /* Before the badges are read: whatever the last visit changed in the
+     * scene goes back to today first (round 8). */
+    try { onOpen?.(); } catch { /* the board still opens */ }
     root.hidden = false;
     root.classList.remove("is-closing", "is-open");
     // Every visit opens on the whole Solar System, with Everything selected.
     searchInput.value = "";
     filter = "all";
+    refreshGlowBadges();
     apply();
     void root.offsetWidth;
     root.classList.add("is-opening");

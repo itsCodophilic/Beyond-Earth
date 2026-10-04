@@ -68,6 +68,11 @@ export const GLOSSARY_GROUPS = Object.freeze([
  *    about 0.8-0.9; soot and the darkest comet nuclei about 0.04.
  *  - Rubble piles: Bennu and Ryugu (OSIRIS-REx, Hayabusa2). Contact binary:
  *    Arrokoth (New Horizons, 2019).
+ *  - Jupiter Trojans: 11,552 registered with the Minor Planet Center on 26
+ *    January 2022 (Li et al. 2023, A&A 669, A68).
+ *  - Comet activity: water ice sublimates efficiently inside about 3 AU.
+ *  - Kamoʻoalewa a stable quasi-satellite (NASA/JPL 2016); Cruithne's
+ *    horseshoe (Wiegert, Innanen & Mikkola 1997).
  */
 export const GLOSSARY = Object.freeze([
   // ---- distance & light
@@ -187,6 +192,22 @@ export const GLOSSARY = Object.freeze([
     plain: "Not one solid rock but a loose heap of boulders and gravel, held together only by its own weak gravity. Bennu and Ryugu, both sampled by spacecraft, are rubble piles; Altjira may be one too.",
   },
   {
+    key: "trojan", group: "worlds",
+    term: "Trojans & Lagrange points",
+    also: "L4 and L5",
+    plain: "Two places on a planet's orbit where the Sun's pull and the planet's balance, so a small body can share the planet's orbit for ever. L4 is 60° ahead — for Jupiter, the spot it will reach in about 2 years; L5 is 60° behind — the spot it passed about 2 years ago. Jupiter never reaches L4, because the bodies there move on at its own speed. It keeps two swarms there, over 11,000 known, named for the heroes of the Trojan War.",
+  },
+  {
+    key: "interstellar", group: "worlds",
+    term: "Interstellar object",
+    plain: "Something that formed around another star and is only passing through. It moves too fast for the Sun to catch, so its path is open, not a loop: it comes in once and leaves for ever. Three are known, and all three have already gone by — ʻOumuamua in 2017, Borisov in 2019 and 3I/ATLAS in 2025 — so they are not drawn among the worlds here. Each pass can be watched as a recorded event in Space events.",
+  },
+  {
+    key: "coma", group: "worlds",
+    term: "Coma & tail",
+    plain: "The cloud a comet grows as it nears the Sun. Inside about 3 AU its ice turns straight to gas, dragging dust off with it into a glowing coma thousands of times wider than the nucleus; sunlight pushes the dust into a tail that always points away from the Sun. Far out, the comet is a bare dark rock again. To see it happen, find any comet on the board and press “Check out its glow” on its row.",
+  },
+  {
     key: "contact", group: "worlds",
     term: "Contact binary",
     plain: "Two bodies that drifted together so gently they stuck, touching at a narrow neck. Arrokoth, seen by New Horizons, is one; Manwë here is another.",
@@ -229,6 +250,11 @@ export const GLOSSARY = Object.freeze([
     plain: "Going round backwards: against the direction almost everything else in the Solar System turns. Many small, captured moons do; the board marks them with ↺.",
   },
   {
+    key: "quasisat", group: "motion",
+    term: "Quasi-satellite & horseshoe",
+    plain: "A small body on exactly Earth's one-year period but a slightly different ellipse. It orbits the Sun, not Earth, yet seen from Earth it seems to circle us once a year (Kamoʻoalewa). A little further off the same match makes a horseshoe, creeping ahead and behind Earth over centuries (Cruithne).",
+  },
+  {
     key: "resonance", group: "motion",
     term: "Resonance",
     plain: "Two orbits whose times fit a simple ratio, like 2 to 1 or 3 to 2. The regular tugs add up, and can either protect an orbit (the Plutinos) or clear one out (the gaps in the asteroid belt).",
@@ -246,6 +272,81 @@ export const GLOSSARY = Object.freeze([
     plain: "Reddish-brown gunk made when sunlight and cosmic rays break up simple ices like methane over millions of years. It is why Pluto's darker regions and most of the far worlds on this board are red.",
   },
 ]);
+
+/*
+ * Examples: the bodies on the board each word describes, so a word can be
+ * followed straight to something real. Requested: "along with the concept,
+ * people can go and check that celestial body". Words about distance and
+ * light (AU, light-year, parsec...) and a few about motion in general have
+ * nothing to point at and get none.
+ *
+ * Each entry is a rule against the board's own data (kinds, regions,
+ * binaries, rings -- so a new body joins its words without editing this)
+ * and/or named bodies, which are kept only if the board can fly to them.
+ * Named lists are in order of how good an example they are.
+ */
+const EXAMPLES = Object.freeze({
+  inner: { kinds: ["planet"], regions: ["inner"] },
+  belt: { names: ["Ceres", "Vesta", "Pallas", "Hygiea", "Psyche", "Ida", "Lutetia"] },
+  giants: { kinds: ["planet"], regions: ["giants"] },
+  kuiper: { names: ["Pluto", "Arrokoth", "Haumea", "Makemake", "Quaoar", "Orcus", "Eris"] },
+  plutinos: { regions: ["plutinos"] },
+  classical: { regions: ["classical"] },
+  scattered: { regions: ["scattered"] },
+  detached: { names: ["Sedna", "Leleākūhonua"], kinds: ["tno", "dwarf"], regions: ["detached"] },
+  oort: { names: ["C/2014 UN271", "C/1995 O1 Hale-Bopp", "C/2020 F3 NEOWISE", "1P/Halley"] },
+  asteroid: { names: ["Ceres", "Vesta", "Psyche", "Eros", "Ida", "Mathilde", "Lutetia", "Gaspra"] },
+  nea: { kinds: ["nea"] },
+  centaur: { kinds: ["centaur"] },
+  comet: { kinds: ["comet"] },
+  tno: { kinds: ["tno"], limit: 10 },
+  dwarf: { names: ["Ceres", "Pluto", "Haumea", "Makemake", "Eris"] },
+  rubble: { names: ["Bennu", "Ryugu", "Itokawa", "Dinkinesh", "Moshup", "Didymos", "Altjira"] },
+  contact: { names: ["Arrokoth", "67P/Churyumov–Gerasimenko", "Manwë", "Hektor", "Selam", "Toutatis", "Donaldjohanson", "103P/Hartley 2", "Itokawa"] },
+  trojan: { kinds: ["trojan"] },
+  coma: { names: ["2P/Encke", "1P/Halley", "67P/Churyumov–Gerasimenko", "Chiron", "Echeclus", "C/2014 UN271", "Phaethon"] },
+  binary: { flag: "binary", limit: 12 },
+  "planet-moon": { names: ["Earth", "Moon", "Ida", "Dactyl", "Hektor", "Skamandrios", "Eurybates", "Queta"] },
+  tidallock: { names: ["Moon", "Sila", "Nunam", "Patroclus", "Menoetius", "Squannit", "Charon"] },
+  rings: { flag: "rings" },
+  eccentricity: { names: ["1P/Halley", "Sedna", "Leleākūhonua", "2P/Encke", "Phaethon", "C/2020 F3 NEOWISE"] },
+  retrograde: { names: ["1P/Halley", "Triton", "Phoebe"] },
+  resonance: { names: ["Pluto", "Hilda", "Hektor", "Orcus", "Ixion", "Lempo"] },
+  quasisat: { names: ["Kamoʻoalewa", "Cruithne"] },
+  albedo: { names: ["Eris", "Kamoʻoalewa", "19P/Borrelly", "Hektor", "1P/Halley", "Haumea"] },
+  tholins: { names: ["Arrokoth", "Pluto", "Sedna", "Pholus", "Lempo", "Quaoar"] },
+});
+
+/**
+ * Resolves a word's examples against the board's data: [{ name, note }].
+ * Names the board cannot fly to are dropped.
+ */
+export function glossaryExamples(key, data) {
+  const spec = EXAMPLES[key];
+  if (!spec || !data?.bodies) return [];
+  const bodies = data.bodies;
+  const byName = new Map(bodies.map((b) => [b.name, b]));
+  const moonOf = new Map();
+  bodies.forEach((b) => (b.moons ?? []).forEach((m) => moonOf.set(m.name, b)));
+  const out = [];
+  const seen = new Set();
+  const add = (name, note) => {
+    if (!name || seen.has(name) || name === "Sun") return;
+    seen.add(name);
+    out.push({ name, note });
+  };
+  (spec.names ?? []).forEach((name) => {
+    if (byName.has(name)) add(name, byName.get(name).classification || null);
+    else if (moonOf.has(name)) add(name, `Moon of ${moonOf.get(name).name}`);
+  });
+  bodies.forEach((b) => {
+    const kindOk = !spec.kinds || spec.kinds.includes(b.kind);
+    const regionOk = !spec.regions || spec.regions.includes(b.region);
+    const flagOk = !spec.flag || Boolean(b[spec.flag]);
+    if ((spec.kinds || spec.regions || spec.flag) && kindOk && regionOk && flagOk) add(b.name);
+  });
+  return out.slice(0, spec.limit ?? 9);
+}
 
 const BY_KEY = new Map(GLOSSARY.map((entry) => [entry.key, entry]));
 export function glossaryEntry(key) {
@@ -642,6 +743,59 @@ const ART = {
       + mover(outer, 8, `<circle r="2.6" class="cgloss__jupiter" />`)
       + `<text x="0" y="35" class="cgloss__text is-soft">two laps for every one</text>`;
   },
+  trojan() {
+    // Everything turns together: Jupiter and both swarms keep their places.
+    const swarm = (centre, seed) => scatter(26, seed, (rand) => {
+      const a = ((centre + (rand() - 0.5) * 34) * Math.PI) / 180;
+      const r = 28 + (rand() - 0.5) * 6;
+      return `<circle cx="${f(Math.cos(a) * r)}" cy="${f(Math.sin(a) * r)}" r="${f(0.4 + rand() * 0.5)}" class="cgloss__grain" />`;
+    });
+    const label = (deg, text) => `<text x="${f(Math.cos((deg * Math.PI) / 180) * 36)}" y="${f(Math.sin((deg * Math.PI) / 180) * 36 + 1.5)}" class="cgloss__text is-soft">${text}</text>`;
+    return sun(3) + ring(28)
+      + spin(16, `<circle cx="28" cy="0" r="3.6" class="cgloss__jupiter" />${swarm(-60, 5)}${swarm(60, 17)}${label(-60, "L4")}${label(60, "L5")}`, { reverse: true });
+  },
+  interstellar() {
+    // A hyperbola, e = 1.6, about the Sun at a focus: r = a(e cosh H - 1).
+    const a = 9;
+    const e = 1.6;
+    const b = a * Math.sqrt(e * e - 1);
+    const pts = [];
+    for (let i = 0; i <= 80; i += 1) {
+      const H = -2.1 + (4.2 * i) / 80;
+      pts.push({ x: a * (e - Math.cosh(H)) + 10, y: b * Math.sinh(H) * 0.8 });
+    }
+    const d = pts.map((p, i) => `${i ? "L" : "M"} ${f(p.x)} ${f(p.y)}`).join(" ");
+    const values = pts.map((p) => `${f(p.x)} ${f(p.y)}`).join(";");
+    return sun(3, 10, 0) + `<path d="${d}" class="cgloss__path is-lit" />`
+      + `<g><animateTransform attributeName="transform" type="translate" values="${values}" dur="6s" repeatCount="indefinite" /><circle r="1.6" class="cgloss__retro" /></g>`
+      + `<text x="0" y="36" class="cgloss__text is-soft">comes once, leaves for ever</text>`;
+  },
+  coma() {
+    // Closer to the Sun, a bigger coma and a longer tail; farther, bare.
+    const k = "0;1;0";
+    const spline = 'calcMode="spline" keySplines="0.4 0 0.6 1;0.4 0 0.6 1"';
+    return sun(3.4, -44, 0)
+      + `<g><animateTransform attributeName="transform" type="translate" values="36 0;-18 0;36 0" dur="8s" repeatCount="indefinite" ${spline} />`
+      + `<circle r="2" class="cgloss__coma"><animate attributeName="r" values="1.6;9;1.6" dur="8s" repeatCount="indefinite" ${spline} /><animate attributeName="opacity" values="${k}" dur="8s" repeatCount="indefinite" ${spline} /></circle>`
+      + `<line x1="0" y1="0" x2="2" y2="0" class="cgloss__tail"><animate attributeName="x2" values="1;30;1" dur="8s" repeatCount="indefinite" ${spline} /><animate attributeName="opacity" values="${k}" dur="8s" repeatCount="indefinite" ${spline} /></line>`
+      + `<circle r="1.5" class="cgloss__rock" /></g>`
+      + `<text x="0" y="33" class="cgloss__text is-soft">wakes near the Sun, sleeps far out</text>`;
+  },
+  quasisat() {
+    // In Earth's frame: Earth still, the companion looping round it once a
+    // year on its own, slightly different ellipse.
+    const loop = [];
+    for (let i = 0; i <= 72; i += 1) {
+      const t = (i / 72) * Math.PI * 2;
+      loop.push({ x: -Math.sin(t) * 22, y: Math.cos(t) * 9 - 2 });
+    }
+    const values = loop.map((p) => `${f(p.x)} ${f(p.y)}`).join(";");
+    return `<path d="M -56 18 Q 0 -14 56 18" class="cgloss__path" />`
+      + `<ellipse cx="0" cy="-2" rx="22" ry="9" class="cgloss__path is-lit" />`
+      + `<circle cx="0" cy="-2" r="3" class="cgloss__earth" />`
+      + `<g><animateTransform attributeName="transform" type="translate" values="${values}" dur="7s" repeatCount="indefinite" /><circle r="1.4" class="cgloss__rock" /></g>`
+      + `<text x="0" y="31" class="cgloss__text is-soft">circling the Sun, but seeming to circle us</text>`;
+  },
   albedo() {
     const ball = (x, cls, keep, label) => `<line x1="${x - 16}" y1="-26" x2="${x - 3}" y2="-6" class="cgloss__ray" /><line x1="${x + 3}" y1="-6" x2="${x + 16}" y2="-26" class="cgloss__ray" style="opacity:${keep}" /><circle cx="${x}" cy="0" r="7" class="${cls}" /><text x="${x}" y="18" class="cgloss__text is-soft">${label}</text>`;
     return ball(-36, "cgloss__soot", 0.12, "soot 4%") + ball(0, "cgloss__earth-big", 0.45, "Earth 30%") + ball(36, "cgloss__snow", 0.95, "snow 80%");
@@ -806,7 +960,7 @@ function createCosmicField(root) {
 
 /* ---- one word's card */
 
-function card(entry, { compact = false, index = 0 } = {}) {
+function card(entry, { compact = false, index = 0, data = null } = {}) {
   const node = el("article", `cgloss__card cdec__card${compact ? " is-compact" : ""}${entry.key === "binary" ? " is-pair" : ""}`);
   node.dataset.word = entry.key;
   node.style.setProperty("--k", String(index));
@@ -824,6 +978,27 @@ function card(entry, { compact = false, index = 0 } = {}) {
   const plain = el("p", "cgloss__plain", entry.plain);
   plain.dataset.cosmicText = "";
   text.append(head, plain);
+  /* Where to see it: the board's own bodies, each a button that flies there
+   * (the board's `data-travel` handler does the flying and closes this). */
+  const examples = glossaryExamples(entry.key, data);
+  if (examples.length || entry.key === "trojan") {
+    const row = el("div", "cgloss__examples");
+    row.append(el("span", "cgloss__examples-title", examples.length ? "See it:" : ""));
+    examples.forEach(({ name, note }) => {
+      const go = el("button", "cgloss__example", name);
+      go.type = "button";
+      go.dataset.travel = name;
+      go.title = note ? `${note} — fly there` : `Fly to ${name}`;
+      row.append(go);
+    });
+    if (entry.key === "trojan") {
+      const see = el("button", "cgloss__example is-company", "See them move →");
+      see.type = "button";
+      see.dataset.company = "jupiter-company";
+      row.append(see);
+    }
+    text.append(row);
+  }
   node.append(text);
   return node;
 }
@@ -850,7 +1025,7 @@ function bunchMark(count, hue) {
 /**
  * @param {HTMLElement} host  the board's root; popover and decoder live in it
  */
-export function createBoardGlossary(host) {
+export function createBoardGlossary(host, { data = null } = {}) {
   let popover = null;
   let popoverKey = null;
   let popoverField = null;
@@ -880,7 +1055,7 @@ export function createBoardGlossary(host) {
     popover.setAttribute("role", "dialog");
     popover.setAttribute("aria-label", `${entry.term}, in plain words`);
     popover.append(el("span", "cboard__eyebrow", "Space Dictionary"));
-    popover.append(card(entry, { compact: true }));
+    popover.append(card(entry, { compact: true, data }));
     const more = el("button", "cgloss__more", "Open Space Dictionary: every word →");
     more.type = "button";
     more.dataset.glossSheet = "1";
@@ -1003,7 +1178,7 @@ export function createBoardGlossary(host) {
       section.append(bhead);
       const grid = el("div", "cdec__cards");
       const cards = entries.map((entry, k) => {
-        const node = card(entry, { index: k });
+        const node = card(entry, { index: k, data });
         grid.append(node);
         return { node, entry, text: normalise(`${entry.term} ${entry.also ?? ""} ${entry.plain}`), term: normalise(`${entry.term} ${entry.also ?? ""}`) };
       });
@@ -1118,6 +1293,9 @@ export function createBoardGlossary(host) {
       closeDecoder();
       return true;
     }
+    // An example's fly button, or "See them move": the board handles those,
+    // and closes the dictionary as it does.
+    if (event.target.closest(".cgloss [data-travel], .cgloss [data-company]")) return false;
     // Anything inside the decoder stays with the decoder.
     if (event.target.closest(".cdec")) return true;
     if (popover && !event.target.closest(".cgloss__pop")) closePopover();

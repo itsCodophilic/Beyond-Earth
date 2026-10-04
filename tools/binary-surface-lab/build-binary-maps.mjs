@@ -1,9 +1,15 @@
 /**
- * Writes the scene's maps for the eleven binary bodies from the designs
- * picked in binary-surface-lab.html -- the same generator, the same seeds,
- * the same tuning, so what was approved there is what ships.
+ * Writes the scene's maps from the designs picked in binary-surface-lab.html
+ * -- the same generator, the same seeds, the same tuning, so what was
+ * approved there is what ships.
  *
- *   node tools/binary-surface-lab/build-binary-maps.mjs <out folder>
+ *   node tools/binary-surface-lab/build-binary-maps.mjs <out folder> [group,group...]
+ *
+ * The groups are the lab's systems: the five Rank 4 binaries (lempo, sila,
+ * teharonhiawako, altjira, manwe) and the Rank 7-10 groups (comets,
+ * interstellar, trojans, lucy, neos). With no list, all of them. A group
+ * with no entry in picks.json is built from its variant A, which is what
+ * the lab shows as the proposed design until something else is picked.
  *
  * Writes <file>.albedo.raw and <file>.normal.raw (RGBA, row 0 north) and a
  * manifest.json with each map's size and mean linear luminance; then
@@ -12,10 +18,11 @@
 import fs from "node:fs";
 import path from "node:path";
 import { generateSurface } from "./surfaceGenerator.js";
-import { SYSTEMS, specFor } from "./surfaceDesigns.js";
+import { SYSTEMS, specFor, RANK_FILES, RANK_LOBED } from "./surfaceDesigns.js";
 import PICKS from "./picks.json" with { type: "json" };
 
 const out = process.argv[2] ?? "binary-maps";
+const only = process.argv[3] ? new Set(process.argv[3].split(",")) : null;
 fs.mkdirSync(out, { recursive: true });
 
 /* The scene's file names (SMALL_BODY_TEXTURES). */
@@ -23,9 +30,10 @@ const FILE = {
   Lempo: "lempo", Hiisi: "hiisi", Paha: "paha", Sila: "sila", Nunam: "nunam",
   Teharonhiawako: "teharonhiawako", Sawiskera: "sawiskera", Altjira: "altjira",
   "Altjira I": "altjira-moon", "Manwë": "manwe", Thorondor: "thorondor",
+  ...RANK_FILES,
 };
-/* Two lobes in binaryCatalogue.js: the collar and neck features apply. */
-const LOBED = new Set(["Altjira", "Manwë"]);
+/* Two lobes in the catalogues: the collar and neck features apply. */
+const LOBED = new Set(["Altjira", "Manwë", ...RANK_LOBED]);
 
 /* The lab's sliders are percentages; the generator takes multipliers. */
 const DEFAULTS = { craters: 100, craterSize: 100, fresh: 100, boulders: 100, relief: 100, contrast: 100, redness: 100, hue: 0 };
@@ -33,19 +41,20 @@ const toTweaks = (t) => Object.fromEntries(Object.entries({ ...DEFAULTS, ...t })
 
 const manifest = {};
 for (const system of SYSTEMS) {
-  const pick = PICKS.systems[system.key];
-  if (!pick) throw new Error(`No pick for ${system.key}`);
+  if (only && !only.has(system.key)) continue;
+  const pick = PICKS.systems[system.key] ?? { variant: "A", tweaks: {} };
   const tweaks = toTweaks(pick.tweaks ?? {});
+  const size = PICKS.mapSizes?.[system.key] ?? PICKS.mapSize;
   for (const body of Object.keys(system.variants[pick.variant].terrains)) {
-    const size = PICKS.mapSize;
     const spec = specFor(system, pick.variant, body, { width: size, height: size / 2, lobed: LOBED.has(body), tweaks });
     const started = Date.now();
     const result = generateSurface(spec);
     const file = FILE[body];
+    if (!file) throw new Error(`No file name for ${body}`);
     fs.writeFileSync(path.join(out, `${file}.albedo.raw`), result.albedo);
     fs.writeFileSync(path.join(out, `${file}.normal.raw`), result.normal);
     manifest[file] = { body, width: size, height: size / 2, terrain: spec.terrain, variant: pick.variant, meanLinear: result.meanLinear };
-    console.log(`${body.padEnd(15)} ${pick.variant} ${spec.terrain.padEnd(10)} ${Date.now() - started} ms`);
+    console.log(`${body.padEnd(22)} ${pick.variant} ${spec.terrain.padEnd(14)} ${Date.now() - started} ms`);
   }
 }
 fs.writeFileSync(path.join(out, "manifest.json"), JSON.stringify(manifest, null, 2));

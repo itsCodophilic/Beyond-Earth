@@ -781,6 +781,7 @@ export const MAIN_BELT_WORLDS = Object.freeze([
         { c: [66, 0, 0], r: [72, 38, 42] },
       ],
       neck: 9,
+      blend: "smooth", fillet: 60, /* One continuous surface: the handle as a solid bridge, not a band (smallBodyShapes.js, "blend"). */
       relief: 0.026,
       grain: 0.010,
       craterCount: 74,

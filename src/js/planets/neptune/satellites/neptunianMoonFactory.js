@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { captureSeamGroups, sealSeamGroups } from "../../sealSphereSeams.js";
 import { mergeVertices } from "three/addons/utils/BufferGeometryUtils.js";
 
 const PALETTES = Object.freeze({
@@ -219,6 +220,7 @@ function deformIrregularMappedMoonGeometry(profile, geometry) {
   const axisB = new THREE.Vector3(-0.75, 0.18, 0.58).normalize();
   const axisC = new THREE.Vector3(-0.15, -0.92, -0.20).normalize();
   const shape = profile.shape ?? [1, 1, 1];
+  const seams = captureSeamGroups(geometry);
 
   for (let i = 0; i < positions.count; i += 1) {
     direction.fromBufferAttribute(positions, i).normalize();
@@ -250,11 +252,15 @@ function deformIrregularMappedMoonGeometry(profile, geometry) {
       radius -= Math.pow(cavity, 7.0) * 0.052;
       radius += relief * 0.018;
     } else if (profile.name === "Larissa") {
-      radius += noise(direction, profile.seed + 3.0, 4.0) * 0.022;
+      /* Continuous relief, as every other moon here already uses: the cell
+       * noise these three had gave the two copies of each seam vertex
+       * different heights and opened the surface (see sealSphereSeams.js),
+       * and stepped the ground into flat terraces. Same amplitudes. */
+      radius += smoothDirectionalRelief(direction, profile.seed + 3.0) * 0.022;
     } else if (profile.name === "Hippocamp") {
-      radius += noise(direction, profile.seed + 4.0, 4.5) * 0.018;
+      radius += smoothDirectionalRelief(direction, profile.seed + 4.0) * 0.018;
     } else if (profile.name === "Proteus") {
-      radius += noise(direction, profile.seed + 4.6, 4.0) * 0.028;
+      radius += smoothDirectionalRelief(direction, profile.seed + 4.6) * 0.028;
     } else if (profile.name === "Sao") {
       const relief = smoothDirectionalRelief(direction, profile.seed + 0.13);
       const shallowPit = Math.max(0, direction.dot(featureA));
@@ -310,10 +316,10 @@ function deformIrregularMappedMoonGeometry(profile, geometry) {
   }
 
   if (!isStableWrappedIrregularMoon(profile.name)) {
-    geometry.deleteAttribute("normal");
-    geometry.computeVertexNormals();
-  } else if (normals) {
-    normals.needsUpdate = true;
+    sealSeamGroups(geometry, seams);
+  } else {
+    sealSeamGroups(geometry, seams, { normals: false });
+    if (normals) normals.needsUpdate = true;
   }
 
   geometry.computeBoundingBox();
@@ -404,6 +410,7 @@ export function createNeptunianMoonSurface(profile, quality = "high") {
   }
 
   const source = createBaseGeometry(profile, quality, hero);
+  const seams = captureSeamGroups(source);
   const positions = source.getAttribute("position");
   const colours = new Float32Array(positions.count * 3);
   const paletteValues = PALETTES[profile.appearance] ?? PALETTES["outer-dark"];
@@ -460,6 +467,9 @@ export function createNeptunianMoonSurface(profile, quality = "high") {
   }
 
   source.setAttribute("color", new THREE.BufferAttribute(colours, 3));
+  // Weld before merging: cell noise can give coincident copies different
+  // heights, and then mergeVertices cannot find them (sealSphereSeams.js).
+  sealSeamGroups(source, seams, { normals: false });
   source.deleteAttribute("normal");
   const geometry = mergeVertices(source, 1e-5);
   geometry.computeVertexNormals();

@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { INTERSTELLAR_EVENTS } from "./interstellarPassages.js";
 
 /**
  * Things that actually happen out there, staged on a timer.
@@ -8010,6 +8011,13 @@ const EVENT_KINDS = Object.freeze({
     label: "Ongoing process",
     blurb: "It never actually stops. What changes is how strong it is, not whether it is happening.",
   },
+  /* Round 5: things that happened once, on a known date -- the three
+   * interstellar visitors' passes. */
+  recorded: {
+    short: "recorded",
+    label: "Recorded event",
+    blurb: "It happened once, on a date we know. What you watch is a replay of what was measured.",
+  },
 });
 
 /**
@@ -8423,6 +8431,8 @@ const EVENTS = [
     shotZoom: 1.5,
     build: createTritonGeysers,
   },
+  // Recorded events: the interstellar visitors (interstellarPassages.js).
+  ...INTERSTELLAR_EVENTS,
 ];
 
 /**
@@ -8558,7 +8568,7 @@ export function createSolarSystemEvents({
       announce?.({
         id: definition.id,
         // Sky events have no world to name, so they say where they are.
-        body: definition.body ?? "Deep space",
+        body: definition.place ?? definition.body ?? "Deep space",
         title: definition.title,
         detail: definition.detail,
         note: definition.note,
@@ -8611,6 +8621,10 @@ export function createSolarSystemEvents({
     list: () => EVENTS.map((event) => ({
       id: event.id,
       body: event.body ?? "Deep space",
+      /** Where to say it happens, when that is not the body it is staged on. */
+      place: event.place ?? event.body ?? "Deep space",
+      /** The date, for a recorded event. */
+      when: event.when ?? null,
       /** True when the event is staged against the sky rather than on a world. */
       isSky: event.body === null,
       title: event.title,

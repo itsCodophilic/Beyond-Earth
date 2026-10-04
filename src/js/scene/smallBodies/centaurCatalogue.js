@@ -155,7 +155,7 @@ export const CENTAURS = Object.freeze([
       surfaceEvidence: "A point of light in every telescope ever pointed at it. Everything drawn here that is not the rings is borrowed from Mathilde",
       roughness: "unknown — no image has ever resolved its disc",
       description:
-        "In June 2013 a star passed behind Chariklo and winked twice on the way in and twice on the way out, thirteen seconds either side of the body, from every telescope in South America that was watching. Nobody was looking for rings. Nobody thought a 250 km asteroid could hold any. Chariklo has two: a dense one 6.5 km wide at 390.6 km out, and a faint one 14 km beyond it, and they are the reason planetary rings are no longer considered a giant-planet phenomenon. The rings are twice as bright as the body — 7 per cent against 3.6 — which means Chariklo had been looking slightly too reflective for years and nobody knew why. They were edge-on in 2008 and invisible; by 2013 they had opened to 34 degrees, and that change is how its pole was solved. It is the largest Centaur known, and it will not stay on this orbit: like every Centaur, Saturn and Uranus will throw it somewhere else within a few million years.",
+        "In June 2013 a star passed behind Chariklo and winked twice on the way in and twice on the way out, thirteen seconds either side of the body, from every telescope in South America that was watching. Nobody was looking for rings. Nobody thought a 250 km asteroid could hold any. Chariklo has two: a dense one 6.5 km wide at 390.6 km out, and a faint one 14 km beyond it, and they are the reason planetary rings are no longer considered a giant-planet phenomenon. The rings are twice as bright as the body — 7 per cent against 3.6 — which means Chariklo had been looking slightly too reflective for years and nobody knew why. They were edge-on in 2008 and invisible; by 2013 they had opened to 34 degrees, and that change is how its pole was solved. It is the largest Centaur known, and it will not stay on this orbit: like every Centaur, Saturn and Uranus will throw it somewhere else within a few million years. Unlike Chiron and Echeclus, it has never been seen to glow: no coma or outburst has ever been detected on it, and the brightness changes once read as activity turned out to be its rings tilting — so the scene draws it as a bare rock.",
     },
   },
   {
@@ -242,8 +242,15 @@ export const CENTAURS = Object.freeze([
     coma: { radii: 5.0, opacity: 0.14, colour: 0xc3d4dc, sunwardBias: 0.14, forward: 0.2 },
     tail: { length: 9, width: 3.0, opacity: 0.06, colour: 0xb4c8d4 },
     vents: { count: 3, size: 0.32, opacity: 0.45, colour: 0xe2f0f6 },
+    /* Coma design E (centaurComa.js). Chiron's gas is measured: CN emission
+     * in its coma (Bus, A'Hearn, Schleicher & Bowell 1991, Science 251, 774)
+     * -- the green head, kept at 0.6 because at 13 AU it is faint -- and CO
+     * (Womack & Stern 1999), the parent of CO+ ions: a faint ion tail. The
+     * dust tail at 0.7. */
+    emission: { gas: 0.6, ion: 0.35, dust: 0.7 },
     surfaceEvidence: "Never resolved. Shape from the 2018 and 2019 stellar occultations — Braga-Ribas et al. 2023, A&A 676, A72. Ring material from Pereira et al. 2025, ApJL 992, L19. Surface relief borrowed from Arrokoth",
     info: {
+      activity: "Active far from the Sun, in outbursts. Two kinds of light round it: dust reflecting sunlight — the pale coma and a short curved dust tail — and gas glowing under the Sun's ultraviolet. Chiron's gas is measured: cyanogen (CN), which glows green in the head, and carbon monoxide, whose ions make a faint straight blue tail. At 13 AU all of it is faint; the scene draws it always on.",
       population: "Centaurs · 8.5-18.9 AU, crossing Saturn's and Uranus's orbits",
       diameter: "252 × 218 × 136 km (Jacobi semi-axes 126 ± 22, 109 ± 19, 68 ± 13 km); 196 ± 34 km volume-equivalent — Braga-Ribas et al. 2023",
       rotationPeriod: "5.918 h — JPL SBDB physical parameters",
@@ -319,7 +326,7 @@ export const CENTAURS = Object.freeze([
       surfaceEvidence: "A point of light. The colour is measured to a hundredth of a magnitude; everything else about the surface is borrowed from Phobos",
       roughness: "unknown",
       description:
-        "Pholus is the reddest object anybody has measured. Its B-R colour is 2.05 where the Sun's is 1.00 and where most of the Solar System sits between 1.0 and 1.5 — a spectrum that climbs steeply and without a break from the blue right through the near infrared, which is what happens to organic ice after a few billion years of cosmic rays and no resurfacing. The material is thought to be tholins over water ice and methanol; nothing has ever been anywhere near it to check. It is one half of the Centaur colour problem: Centaurs are either grey or extremely red with almost nothing in between, and Chiron, drawn in the same scene as the colour of plain sunlight, is the other half. Its 0.60-magnitude lightcurve makes it the most elongated body here; at 0.5 g/cm³ it is less dense than water and holding itself together by not much.",
+        "Pholus is the reddest object anybody has measured. Its B-R colour is 2.05 where the Sun's is 1.00 and where most of the Solar System sits between 1.0 and 1.5 — a spectrum that climbs steeply and without a break from the blue right through the near infrared, which is what happens to organic ice after a few billion years of cosmic rays and no resurfacing. The material is thought to be tholins over water ice and methanol; nothing has ever been anywhere near it to check. It is one half of the Centaur colour problem: Centaurs are either grey or extremely red with almost nothing in between, and Chiron, drawn in the same scene as the colour of plain sunlight, is the other half. Its 0.60-magnitude lightcurve makes it the most elongated body here; at 0.5 g/cm³ it is less dense than water and holding itself together by not much. It has never been seen to glow: unlike Chiron and Echeclus, no coma or outburst has ever been detected on Pholus, so the scene draws it as a bare rock.",
     },
   },
   {
@@ -409,8 +416,15 @@ export const CENTAURS = Object.freeze([
       { dir: [-0.48, 0.30, -0.82], length: 7.5, spread: 0.07, opacity: 0.15, colour: 0x9cc0f4 },
     ],
     fragment: { offset: [3.1, 0.9, -1.4], radii: 1.7, opacity: 0.22, colour: 0x8fb4ee },
+    /* Coma design E. Echeclus's gas is CO (Wierzchos, Womack & Sarid 2017,
+     * AJ 153, 230), so the blue CO+ ion tail is the gas it has; mostly it
+     * throws out dust in outbursts, so the dust tail is near full. No CN or
+     * C2 has been measured: its green head is drawn faint (0.25), for the
+     * same look as the other active bodies, and its card says so. */
+    emission: { gas: 0.25, ion: 0.45, dust: 0.85 },
     surfaceEvidence: "Never resolved. Shape and albedo from stellar occultations — Pereira et al. 2024, MNRAS 527, 3624. Surface relief borrowed from 67P/Churyumov–Gerasimenko",
     info: {
+      activity: "Active in outbursts — in 2005 it threw off a fragment brighter than itself. Mostly dust: the pale coma and a broad curved dust tail are sunlight reflected off grains. Its gas is carbon monoxide, whose ions glow blue in a straight tail. No cyanogen or C₂ has been measured on Echeclus, so the faint green in its head is drawn for the look, not from a measurement.",
       population: "Centaurs · 5.9-15.6 AU, crossing Jupiter's and Saturn's orbits",
       diameter: "74.0 × 56.8 × 49.8 km (semi-axes 37.0 ± 0.6, 28.4 ± 0.5, 24.9 ± 0.4 km); 60.0 ± 1.0 km area-equivalent — Pereira et al. 2024",
       rotationPeriod: "26.785178 ± 0.000001 h — Rousselot et al. 2021",

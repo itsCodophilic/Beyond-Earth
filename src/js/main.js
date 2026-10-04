@@ -57,7 +57,8 @@ import { createOuterBoundaries, updateOuterBoundaries, applyOuterBoundaryQuality
  * them is scattered through the shared registries. Fifteen meshes, fifteen
  * draw calls, no textures.
  */
-import { createSmallBodies, updateSmallBodies, updateBinaryHighlights } from './scene/smallBodies/smallBodies.js';
+import { createSmallBodies, updateSmallBodies, updateBinaryHighlights, placeCometAt, restoreCometToToday, cometActivity } from './scene/smallBodies/smallBodies.js';
+import { createCometPlacementChip } from './ui/cometPlacementChip.js';
 import {
   ASTRONOMICAL_UNIT_KM,
   createEarthDistanceTracker,
@@ -112,6 +113,7 @@ const JOURNEY_UI_SELECTOR = [
   ".progress",
   ".distance-cinematic-layer",
   ".system-return-button",
+  ".comet-placement",
 ].join(", ");
 import { createIntroSequence } from './ui/introSequence.js';
 import { createCosmicIntro } from './scene/space/cosmicIntro.js';
@@ -1455,8 +1457,8 @@ composeSolarEventShot(
     let remaining = EVENT_ARRIVAL_DELAY_SECONDS;
     const tick = () => {
       solarEventEyebrow.textContent = remaining > 0
-        ? `${definition.body} · beginning in ${remaining}s`
-        : `${definition.body} · beginning now`;
+        ? `${definition.place ?? definition.body} · beginning in ${remaining}s`
+        : `${definition.place ?? definition.body} · beginning now`;
     };
     tick();
     solarEventCountdownTimer = setInterval(() => {
@@ -2116,7 +2118,11 @@ composeSolarEventShot(
      * The event carries the multiplier because the event is what knows how big
      * the thing it is staging is.
      */
-    focusZoomTarget = THREE.MathUtils.clamp(Number(shotZoom) || 1, 0.5, 12);
+    /* Up to 30: the interstellar passes need the inner Solar System out to
+     * Jupiter in frame (interstellarPassages.js) -- 29 for 3I/ATLAS, about
+     * 5,200 units from the Sun. The camera's own limit,
+     * MAX_CINEMATIC_CAMERA_DISTANCE (11,500), still applies after this. */
+    focusZoomTarget = THREE.MathUtils.clamp(Number(shotZoom) || 1, 0.5, 30);
   }
   // Null in ordinary inspection; set to the parent of the complete catalogue
   // atlas while its alternate system-wide shot is active.
@@ -3078,9 +3084,63 @@ composeSolarEventShot(
     return found;
   }
 
+  /* Round 7: a comet flown to from its glow view is shown where the viewer
+   * set it, and this chip says so until they put it back. */
+  const cometPlacementChip = createCometPlacementChip({
+    /* Round 8: back to today *and* back to it -- the same comet, flown to
+     * where today's date puts it, glowing as much as it does today. */
+    onReturn: (name) => {
+      restoreCometToToday(smallBodies, name);
+      /* Round 9 (the owner): "Back to today" opened the comet's dossier.
+       * Travelling to the body already in focus is the "press it again"
+       * gesture, which opens its card. When the viewer is still on this
+       * comet the camera simply follows it back to today's position --
+       * focus tracks the body every frame -- so no travel is sent. */
+      const focusedName = focusedBody?.userData?.name ?? focusedBody?.name ?? null;
+      if (focusedName !== name) {
+        dispatchEvent(new CustomEvent("beyond-earth:travel-to-body", { detail: { name } }));
+      }
+    },
+  });
+  /* Round 8: every visit to the board starts from today. A comet left where
+   * the glow view put it goes back first, so the board's badges, the glow
+   * view's bars and the scene all show the same, current, state. */
+  const resetPlacedComets = () => {
+    const name = cometPlacementChip.current;
+    if (!name) return;
+    restoreCometToToday(smallBodies, name);
+    cometPlacementChip.hide();
+  };
   const celestialBoard = createCelestialBoard({
     trigger: document.querySelector("#celestial-board-trigger"),
     surfaceFor: surfaceImageFor,
+    /* A comet's live state in the scene, for the board's "glowing now"
+     * badges and the glow view (round 6). `smallBodies` is declared further
+     * down and only filled once the bodies are built; the board only asks
+     * after the viewer opens it. */
+    cometState: (name) => {
+      const entry = smallBodies?.bodies?.find((e) => e.record?.name === name && e.activity);
+      if (!entry) return null;
+      /* The activity law itself, not the coma's last-written strength,
+       * which skips changes under half a per cent: the badge and the glow
+       * view's bar must print the same number (round 8). `outbound`: past
+       * perihelion, on the way out. */
+      const M = entry.orbit.meanAnomaly;
+      return {
+        au: entry.orbit.currentAU,
+        strength: cometActivity(entry.activity, entry.orbit.currentAU, entry.orbit),
+        placed: Boolean(entry.placement),
+        outbound: !entry.orbit.hyperbolic && M > 0 && M < Math.PI,
+      };
+    },
+    placeComet: (name, au, outbound = false) => {
+      if (!Number.isFinite(au)) return;
+      const previous = cometPlacementChip.current;
+      if (previous && previous !== name) restoreCometToToday(smallBodies, previous);
+      const placed = placeCometAt(smallBodies, name, au, { outbound });
+      if (placed) cometPlacementChip.show(placed.name, placed.au, placed.strength);
+    },
+    onOpen: resetPlacedComets,
   });
   addEventListener("beyond-earth:board-state", (event) => {
     isCelestialBoardOpen = Boolean(event.detail?.open);
@@ -3430,6 +3490,9 @@ composeSolarEventShot(
       hoverTargets,
       quality: asteroidBeltDensity === "low" ? "low" : "medium",
       yieldToBrowser,
+      /* The drawn Jupiter and Earth, which the Trojans, Hilda, Cruithne and
+       * Kamoʻoalewa are drawn relative to (smallBodies.js CO_ORBITAL_PLANETS). */
+      resolvePlanet: (name) => planets.find((planet) => planet.name === name) ?? null,
     });
     performance.mark("BE:smallBodies-end");
     // Thirteen more hoverable paths. These guides already carry their body,
@@ -7191,6 +7254,19 @@ composeSolarEventShot(
       });
     }
     if (!target) return;
+    /*
+     * Round 10 (the owner): "Fly to" from a comet's glow view opened its info
+     * card. With that comet already in focus, `focusBody` reads a second
+     * travel as "pressed it again" and opens the dossier. The glow view asks
+     * for no dossier: the comet stays in focus and the camera follows it to
+     * where it now is (focus eases to the body every frame). Only the
+     * dormant-card case still goes through `focusBody`, which wakes the
+     * compact card and nothing more.
+     */
+    if (event.detail?.noDossier && target === focusedBody) {
+      if (focusedUiSuppressedByWideView) setTimeout(() => focusBody(target), 180);
+      return;
+    }
     // A beat, so the dossier's close animation is not fighting the flight.
     setTimeout(() => focusBody(target), 180);
   });
@@ -8163,7 +8239,7 @@ composeSolarEventShot(
     if (hoveredPlanetOrbit && !isPointerStillOnHoveredPlanetOrbit()) {
       clearPlanetOrbitHover();
     }
-    if (event.target.closest?.(".about-experience, .events-dashboard, .planet-details, .celestial-selection-card, .satellite-system-overview, .satellite-atlas-directory, .satellite-name-label, .hud, .body-card, .body-card-restore, .progress, .distance-cinematic-layer, .system-return-button")) {
+    if (event.target.closest?.(".about-experience, .events-dashboard, .planet-details, .celestial-selection-card, .satellite-system-overview, .satellite-atlas-directory, .satellite-name-label, .hud, .body-card, .body-card-restore, .progress, .distance-cinematic-layer, .system-return-button, .comet-placement")) {
       clearCelestialHover();
       clearPlanetOrbitHover();
       lastPointer = { x: event.clientX, y: event.clientY };

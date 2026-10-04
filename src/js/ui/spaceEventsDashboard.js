@@ -73,9 +73,9 @@ export function createSpaceEventsDashboard({ events, trigger = null, onView = nu
   const rows = roster.map((event) => `
     <li class="events-dashboard__event" data-event-id="${event.id}"
         data-event-kind="${event.kind}"
-        data-search="${normalise(`${event.body} ${event.title} ${event.detail} ${event.frequency} ${event.cause} ${event.note} ${event.kindLabel} ${event.kindShort} ${event.familyLabel}`)}">
+        data-search="${normalise(`${event.place} ${event.when ?? ""} ${event.title} ${event.detail} ${event.frequency} ${event.cause} ${event.note} ${event.kindLabel} ${event.kindShort} ${event.familyLabel}`)}">
       <div class="events-dashboard__event-head">
-        <span class="events-dashboard__event-body">${event.body}</span>
+        <span class="events-dashboard__event-body">${event.place}</span>
         <h3 class="events-dashboard__event-title">${event.title}</h3>
         <span class="events-dashboard__count" data-count-for="${event.id}"></span>
       </div>
@@ -85,6 +85,10 @@ export function createSpaceEventsDashboard({ events, trigger = null, onView = nu
       </p>
       <p class="events-dashboard__event-detail">${event.detail}</p>
       <dl class="events-dashboard__facts">
+        ${event.when ? `<div>
+          <dt>When</dt>
+          <dd>${event.when}</dd>
+        </div>` : ""}
         <div>
           <dt>How often</dt>
           <dd>${event.frequency}</dd>
@@ -122,8 +126,10 @@ export function createSpaceEventsDashboard({ events, trigger = null, onView = nu
         invented. Pick one and you will be taken to the world it happens on to
         watch it. Each is tagged with what kind of thing it is: a
         <strong>one-off event</strong> happens and is over, a
-        <strong>recurring event</strong> comes back on a schedule, and an
-        <strong>ongoing process</strong> never stops in the first place.
+        <strong>recurring event</strong> comes back on a schedule, an
+        <strong>ongoing process</strong> never stops in the first place, and a
+        <strong>recorded event</strong> happened once, on a date we know —
+        like the three visitors from other stars.
       </p>
 
       <div class="events-dashboard__search">

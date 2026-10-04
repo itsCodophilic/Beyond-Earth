@@ -435,6 +435,13 @@ export const SMALL_BODIES = Object.freeze([
     rotationState: "principal-axis",
     metalness: 0,
     isComet: true,
+    /* Rank 7 gave every comet an activity law (smallBodies.js `cometActivity`):
+     * bare out here, a coma and a dust tail that grow inside the ~3 AU
+     * water-ice limit and are full by perihelion (q = 1.24 AU). */
+    coma: { radii: 6, opacity: 0.16, colour: 0xc6d3dc, sunwardBias: 0.14, forward: 0.2 },
+    tail: { length: 16, width: 2.6, opacity: 0.08, colour: 0xb8cadb },
+    vents: { count: 3, size: 0.3, opacity: 0.45, colour: 0xe2eef6 },
+    activity: { onsetAU: 3.0, fullAU: 1.25 },
     orbit: {
       solution: "JPL SBDB orbit solution K213/6, epoch JD 2457305.5",
       epochJD: 2457305.5,
@@ -488,7 +495,7 @@ export const SMALL_BODIES = Object.freeze([
       surfaceEvidence: "Rosetta OSIRIS NAC to 0.1 m/pixel; SHAP7 shape model (Jorda et al. 2016); Philae surface imagery",
       roughness: "extreme — cliffs, sinkholes and boulders at every scale",
       description:
-        "The only comet anyone has watched for a whole apparition. Rosetta arrived on 6 August 2014, stayed until it was set down on the surface in September 2016, and Philae landed — bounced twice, for two hours, and came to rest in a crack — on 12 November 2014. Bulk density 0.533 ± 0.006 g/cm³ from Rosetta's radio science: 67P would float in water, and about three quarters of it is void. Geometric albedo around 0.06, as dark as charcoal, which is normal for a comet and was still a surprise when Halley first showed it. The two lobes are a contact binary with their own distinct layering, so they formed separately; the neck, Hapi, is the smoothest ground on the comet because coma dust falls back and settles there. Rosetta measured the deuterium ratio in its water and found it three times Earth's — evidence against Jupiter-family comets having delivered the oceans. It also found molecular oxygen, glycine and phosphorus, none of which anyone expected. It is drawn here bare, with no coma, because that is what it is: its perihelion was November 2021 and the next is 2028, so it is out near aphelion with nothing sublimating. The element set is the 2015-epoch JPL solution K213/6 propagated forward, and for a comet that is an osculating fit rather than a long-baseline one, so the distance drawn is good to a few tenths of an AU rather than exactly.",
+        "The only comet anyone has watched for a whole apparition. Rosetta arrived on 6 August 2014, stayed until it was set down on the surface in September 2016, and Philae landed — bounced twice, for two hours, and came to rest in a crack — on 12 November 2014. Bulk density 0.533 ± 0.006 g/cm³ from Rosetta's radio science: 67P would float in water, and about three quarters of it is void. Geometric albedo around 0.06, as dark as charcoal, which is normal for a comet and was still a surprise when Halley first showed it. The two lobes are a contact binary with their own distinct layering, so they formed separately; the neck, Hapi, is the smoothest ground on the comet because coma dust falls back and settles there. Rosetta measured the deuterium ratio in its water and found it three times Earth's — evidence against Jupiter-family comets having delivered the oceans. It also found molecular oxygen, glycine and phosphorus, none of which anyone expected. It is drawn bare now, with no coma, because that is what it is: its perihelion was November 2021 and the next is 2028, so it is out near aphelion with nothing sublimating. As it comes round again on the scene's clock, its coma and tail switch on inside about 3 AU. The element set is the 2015-epoch JPL solution K213/6 propagated forward, and for a comet that is an osculating fit rather than a long-baseline one, so the distance drawn is good to a few tenths of an AU rather than exactly.",
     },
   },
 
@@ -536,12 +543,22 @@ export const SMALL_BODIES = Object.freeze([
      */
     shape: {
       lobes: [
-        { c: [-7.6, 0, 0], r: [10.0, 5.7, 5.7] },
-        { c: [7.9, 0.4, 0], r: [9.3, 4.9, 5.1] },
+        /* Three overlapping lobes in a gentle bend -- a banana, as NEAR saw
+         * it -- rather than two blobs end to end: 34.4 km long (-17.4 to
+         * +17.0), 11.2 km through the middle, the concave side down where
+         * Himeros is cut. */
+        { c: [-9.4, 0.5, 0], r: [8.0, 5.3, 5.4] },
+        { c: [0, -0.5, 0], r: [8.5, 5.6, 5.6] },
+        { c: [9.2, 0.6, 0], r: [7.8, 5.0, 5.2] },
       ],
       // Fillet 0.693 x 17.6 / 8 = 1.5 km, taking the waist to about 10.5 km
       // thick against the 11.2 km mid-section NEAR measured.
       neck: 8,
+      /* Round 5: reported as a dumbbell. The smooth blend makes it one
+       * surface; a 3 km fillet keeps the waist near NEAR's 11 km while the
+       * Himeros saddle below is still cut by the dent. */
+      blend: "smooth",
+      fillet: 3,
       dents: [
         /* Himeros: the saddle. About 10 km across and roughly 1.5 km below
          * the surrounding surface -- deep enough that Eros is genuinely
@@ -693,6 +710,13 @@ export const SMALL_BODIES = Object.freeze([
     rotationState: "tumbling",
     metalness: 0,
     isComet: true,
+    /* Rank 7 gave every comet an activity law (smallBodies.js `cometActivity`):
+     * bare out here, a coma and a dust tail that grow inside the ~3 AU
+     * water-ice limit and are full by perihelion (q = 0.575 AU). */
+    coma: { radii: 6, opacity: 0.16, colour: 0xc6d3dc, sunwardBias: 0.14, forward: 0.2 },
+    tail: { length: 16, width: 2.6, opacity: 0.08, colour: 0xb8cadb },
+    vents: { count: 3, size: 0.3, opacity: 0.45, colour: 0xe2eef6 },
+    activity: { onsetAU: 3.0, fullAU: 0.6 },
     orbit: {
       solution: "JPL SBDB orbit solution 75, epoch JD 2439875.5",
       epochJD: 2439875.5,
@@ -751,7 +775,7 @@ export const SMALL_BODIES = Object.freeze([
       surfaceEvidence: "Giotto HMC from 596 km, 14 March 1986, through a destructive dust coma; ~25% of the nucleus at 50 m at best. Relief beyond the outline is inferred",
       roughness: "unmeasured — a dark inert crust with bright active vents",
       description:
-        "Geometric albedo 0.04. Halley reflects four per cent of the light that hits it, which makes the most famous object in the sky one of the darkest things in the Solar System — and nobody expected that until Giotto arrived. The comet is bright because of its coma, not its nucleus. Where you are looking at it now is real: Halley is currently about 35 AU from the Sun, past Neptune, having reached aphelion on 9 December 2023, and it does not come back to perihelion until 28 July 2061. Out here there is no coma at all, which is why it is drawn bare. Its orbit is retrograde, inclined 162°, so it runs backwards around the Sun and meets Earth head-on; that is why the Orionid and Eta Aquariid meteor showers, both Halley's debris, are so fast. Mass (2.2 ± 0.9) × 10¹⁴ kg and density 0.55 ± 0.25 g/cm³ from the 1986 flybys: like 67P, it would float. Its elements here are the 1968-epoch JPL solution propagated forward, so its position is good to a fraction of an AU rather than exactly.",
+        "Geometric albedo 0.04. Halley reflects four per cent of the light that hits it, which makes the most famous object in the sky one of the darkest things in the Solar System — and nobody expected that until Giotto arrived. The comet is bright because of its coma, not its nucleus. Where you are looking at it now is real: Halley is currently about 35 AU from the Sun, past Neptune, having reached aphelion on 9 December 2023, and it does not come back to perihelion until 28 July 2061. Out here there is no coma at all, which is why it is drawn bare; as it falls back in on the scene's clock, its coma and tail switch on inside about 3 AU. Its orbit is retrograde, inclined 162°, so it runs backwards around the Sun and meets Earth head-on; that is why the Orionid and Eta Aquariid meteor showers, both Halley's debris, are so fast. Mass (2.2 ± 0.9) × 10¹⁴ kg and density 0.55 ± 0.25 g/cm³ from the 1986 flybys: like 67P, it would float. Its elements here are the 1968-epoch JPL solution propagated forward, so its position is good to a fraction of an AU rather than exactly.",
     },
   },
 
@@ -892,10 +916,19 @@ export const SMALL_BODIES = Object.freeze([
      */
     shape: {
       lobes: [
-        { c: [-0.105, 0, 0], r: [0.178, 0.1045, 0.147] },
-        { c: [0.155, 0.006, 0], r: [0.098, 0.085, 0.098] },
+        /* Overlapping by 90 m, not touching: the head grows out of the body
+         * as the "sea otter" does in the AMICA images. Same 535 m length
+         * (-0.28 to +0.255 km) and 294 m width. */
+        { c: [-0.09, 0, 0], r: [0.19, 0.1045, 0.147] },
+        { c: [0.135, 0.006, 0], r: [0.12, 0.09, 0.1] },
       ],
       neck: 14,
+      /* One surface, not two lobes on a stick (round 5: "looks like a
+       * dumbbell"). The smooth blend merges the head and body through a
+       * fillet of 80 m, filling the waist where Muses Sea lies; the overall
+       * 535 m length is unchanged because only the crease is filled. */
+      blend: "smooth",
+      fillet: 0.08,
       relief: 0.060,
       grain: 0.030,
       craterCount: 10,

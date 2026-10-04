@@ -152,6 +152,74 @@ function softMaxSupport(direction, lobes, sharpness) {
   return sum > 0 ? peak + Math.log(sum) / sharpness : peak;
 }
 
+/*
+ * A continuous body, for the shapes that came out as dumbbells.
+ *
+ * Reported: Donaldjohanson looked like "a dumbbell, a ribbon", and Toutatis
+ * like a dhol drum -- two lobes joined by a thin wrapped band. The cause is
+ * the radial construction above: a ray from the centre that passes between
+ * two lobes misses both, gets the fallback radius, and the vertices round
+ * the waist are stretched across the crease into a band. Kleopatra and Manwë
+ * showed it as a straight collar, Itokawa and Arrokoth as a pinched seam.
+ *
+ * `shape.blend: "smooth"` builds those bodies another way: as one surface,
+ * the smooth minimum of the lobes' (approximate) distance fields, so the
+ * lobes merge through a fillet of width `fillet` (in the shape's own units;
+ * default a quarter of the smallest lobe's mean radius) the way two blobs of
+ * clay pressed together do. Each vertex's radius is found by marching in
+ * from outside along its ray to the first crossing and bisecting, so a
+ * concave waist is followed rather than skipped. Selam -- the shape the
+ * owner pointed to as right -- is the model: one continuous body that is
+ * plainly two lobes.
+ */
+function ellipsoidDistance(px, py, pz, lobe) {
+  const qx = (px - lobe.c[0]) / lobe.r[0];
+  const qy = (py - lobe.c[1]) / lobe.r[1];
+  const qz = (pz - lobe.c[2]) / lobe.r[2];
+  const k0 = Math.sqrt(qx * qx + qy * qy + qz * qz);
+  const rx = qx / lobe.r[0];
+  const ry = qy / lobe.r[1];
+  const rz = qz / lobe.r[2];
+  const k1 = Math.sqrt(rx * rx + ry * ry + rz * rz);
+  return k1 > 1e-9 ? (k0 * (k0 - 1)) / k1 : -Math.min(...lobe.r);
+}
+
+function smoothUnionDistance(px, py, pz, lobes, k) {
+  let d = ellipsoidDistance(px, py, pz, lobes[0]);
+  for (let i = 1; i < lobes.length; i += 1) {
+    const e = ellipsoidDistance(px, py, pz, lobes[i]);
+    const h = Math.max(k - Math.abs(d - e), 0) / k;
+    d = Math.min(d, e) - h * h * k * 0.25;
+  }
+  return d;
+}
+
+function smoothRadius(direction, lobes, k, outer) {
+  const steps = 64;
+  let previous = outer;
+  let previousD = smoothUnionDistance(direction.x * outer, direction.y * outer, direction.z * outer, lobes, k);
+  for (let i = steps - 1; i >= 0; i -= 1) {
+    const t = (outer * i) / steps;
+    const d = smoothUnionDistance(direction.x * t, direction.y * t, direction.z * t, lobes, k);
+    if (d <= 0 && previousD > 0) {
+      let lo = t;
+      let hi = previous;
+      /* 12 halvings of a 1/64 step leave the crossing within 1/262,144 of
+       * the march span -- far below a vertex's spacing at any mesh detail
+       * in this scene (96 segments), so more would only cost build time. */
+      for (let j = 0; j < 12; j += 1) {
+        const mid = (lo + hi) * 0.5;
+        if (smoothUnionDistance(direction.x * mid, direction.y * mid, direction.z * mid, lobes, k) <= 0) lo = mid;
+        else hi = mid;
+      }
+      return (lo + hi) * 0.5;
+    }
+    previous = t;
+    previousD = d;
+  }
+  return 0;
+}
+
 /**
  * A negative lobe: a sphere carved out of the body.
  *
@@ -531,6 +599,8 @@ export function createSmallBodyGeometry(shape, {
     }
   }
   const sharpness = (shape.neck ?? 4) / Math.max(1e-6, halfLength);
+  const smooth = shape.blend === "smooth" && lobes.length > 1;
+  const fillet = shape.fillet ?? 0.25 * Math.min(...lobes.map((l) => (l.r[0] + l.r[1] + l.r[2]) / 3));
 
   /*
    * How much detail this mesh can actually shade.
@@ -579,7 +649,9 @@ export function createSmallBodyGeometry(shape, {
   for (let index = 0; index < positions.count; index += 1) {
     _dir.fromBufferAttribute(positions, index).normalize();
 
-    let radius = softMaxSupport(_dir, lobes, sharpness);
+    let radius = smooth
+      ? smoothRadius(_dir, lobes, fillet, halfLength * 1.6)
+      : softMaxSupport(_dir, lobes, sharpness);
     if (radius <= 0) radius = halfLength * 0.2;
 
     for (let i = 0; i < dents.length; i += 1) radius = applyDent(_dir, radius, dents[i]);
