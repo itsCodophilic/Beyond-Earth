@@ -10,6 +10,7 @@ import * as THREE from "three";
 import { makeNoiseTexture } from "../graphics/proceduralTextures.js";
 import { createOrbitLine } from "./orbits.js";
 import { createIcyRingSystem, hasIcyRingSystem } from "../planets/icyRings.js";
+import { applyRingProximityVisibility } from "../planets/ringProximity.js";
 import { createSaturnSurfaceMaterial } from "../planets/saturn/saturn.js";
 import { createSaturnRingSystem, updateSaturnRingSystem } from "../planets/saturn/saturnRings.js";
 import { createUranusRingSystem, updateUranusRingSystem } from "../planets/uranus/uranusRings.js";
@@ -1641,11 +1642,43 @@ export function updatePlanetVisuals(planet, time, motionScale = 1, camera = null
     } else if (typeof layers.ringSystem.update === "function") {
       // Haumea and Quaoar: differential rotation, inner ring fastest.
       layers.ringSystem.update(0.016 * motionScale);
+      updateDwarfRingProximity(planet, layers.ringSystem, camera);
     } else {
       layers.ringSystem.rotation.y += 0.000012 * motionScale;
     }
   }
   if (layers.dustArcs) layers.dustArcs.rotation.z += 0.000085 * motionScale;
+}
+
+/*
+ * Final round: Haumea's and Quaoar's rings fade with distance, as every other
+ * faint ring system here already does.
+ *
+ * They were the last two left out. `rings-visible-near-gone-far` wired the
+ * rule (`planets/ringProximity.js`) into Jupiter, Uranus and Neptune, and the
+ * Centaurs' rings got it in smallBodies.js, measured in *ring* radii because
+ * these systems reach several body radii out: full below 10 ring radii, gone
+ * above 55, and past that the group's `visible` goes false and its pointer
+ * annuli leave the raycaster. Those are the same numbers here, for the same
+ * reason -- Haumea's ring sits at 2.2 and Quaoar's Q1R at 7.4 body radii, so a
+ * rule counted in body radii would fade Quaoar's in the very view it is
+ * framed for. Without it both systems, folded into a few pixels at the
+ * system view, could glow brighter than the worlds they circle.
+ */
+const _dwarfRingCentre = new THREE.Vector3();
+const _dwarfRingScale = new THREE.Vector3();
+function updateDwarfRingProximity(planet, rings, camera) {
+  if (!camera || !rings?.group || !(rings.outerRadius > 0)) return;
+  planet.getWorldPosition(_dwarfRingCentre);
+  planet.getWorldScale(_dwarfRingScale);
+  const ringRadius = rings.outerRadius * Math.max(1e-6, _dwarfRingScale.x);
+  const ringRadii = camera.position.distanceTo(_dwarfRingCentre) / ringRadius;
+  const fade = 1 - THREE.MathUtils.smoothstep(ringRadii, 10, 55);
+  if (!applyRingProximityVisibility(rings.group, fade)) return;
+  for (let i = 0; i < rings.fields.length; i += 1) {
+    const field = rings.fields[i];
+    field.material.uniforms.uOpacity.value = field.ring.opacity * fade;
+  }
 }
 
 /** Retained for Earth and any future simple layer that still needs it. */

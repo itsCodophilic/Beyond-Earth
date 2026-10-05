@@ -1,4 +1,3 @@
-import { buildAsteroidRoster, ASTEROID_ROSTER_LABEL } from "./asteroidRoster.js";
 
 /**
  * Reusable celestial dossier for planets, stars, moons, and asteroids.
@@ -52,6 +51,7 @@ const PLANET_DETAILS = Object.freeze({
     scienceUrl: "https://science.nasa.gov/earth/facts/",
   }),
   Mars: Object.freeze({
+    spectrum: "The aurora drawn on Mars is an ultraviolet picture. Its two southern patches over Terra Sirenum and Terra Cimmeria sit where the crust is still magnetised, and they were mapped in the far ultraviolet by NASA's MAVEN and the Emirates Mars Mission. A person standing there would see almost nothing: the first visible-light (green oxygen) aurora on Mars was only recorded from the surface, by Perseverance, in March 2024, and it was very faint.",
     classification: "Terrestrial Planet",
     relativeScale: "0.107 Earth masses · 0.532× Earth's diameter",
     distanceFromStar: "1.52 AU · about 228 million km from the Sun",
@@ -66,6 +66,7 @@ const PLANET_DETAILS = Object.freeze({
     scienceUrl: "https://science.nasa.gov/mars/facts/",
   }),
   Jupiter: Object.freeze({
+    spectrum: "The aurora drawn on Jupiter is an ultraviolet picture. Its electric-blue ovals are the shape Hubble and Juno's ultraviolet spectrograph see; the same light also shines in infrared from H₃⁺ ions (Juno's JIRAM) and in X-rays. Spacecraft have caught a faint visible-light glow on the night side, but to an eye in orbit the aurora would be far dimmer and nothing like this colour.",
     classification: "Gas Giant",
     relativeScale: "317.8 Earth masses · 10.97× Earth's diameter",
     distanceFromStar: "5.2 AU · about 778 million km from the Sun",
@@ -81,6 +82,7 @@ const PLANET_DETAILS = Object.freeze({
     scienceUrl: "https://science.nasa.gov/jupiter/facts/",
   }),
   Saturn: Object.freeze({
+    spectrum: "The aurora drawn on Saturn is an ultraviolet picture. Its spiral rings are the shape Hubble and Cassini's ultraviolet imager recorded; Saturn's aurora also shines in infrared from H₃⁺ ions (Cassini VIMS). Cassini did catch a faint visible-light glow, but the bright ovals drawn here are what only an ultraviolet camera sees.",
     classification: "Gas Giant",
     relativeScale: "95.2 Earth masses · 9.45× Earth's diameter",
     distanceFromStar: "9.5 AU · about 1.4 billion km from the Sun",
@@ -96,6 +98,7 @@ const PLANET_DETAILS = Object.freeze({
     scienceUrl: "https://science.nasa.gov/saturn/facts/",
   }),
   Uranus: Object.freeze({
+    spectrum: "The aurora drawn on Uranus is an ultraviolet and infrared picture. Its off-axis glow was found by Hubble in ultraviolet images and mapped in infrared from H₃⁺ ions by Keck and JWST. It sits far from the poles because Uranus's magnetic field is tipped about 59° from its spin axis. To the eye it is invisible.",
     classification: "Ice Giant",
     relativeScale: "14.5 Earth masses · 4.01× Earth's diameter",
     distanceFromStar: "19 AU · about 2.9 billion km from the Sun",
@@ -170,43 +173,6 @@ function dispatchPanelState(open, bodyName = null) {
 function splitRelativeScale(value = "") {
   const [massRelative = "", sizeRelative = ""] = String(value).split(" · ");
   return { massRelative, sizeRelative };
-}
-
-/**
- * The three kinds of rock in the belt, and a way to get to one of each.
- *
- * There are about a million asteroids drawn here and, looked at one at a
- * time, each is an unnamed grey lump with a serial number. What a viewer
- * actually wants to know standing next to one is *what kind it is and what
- * else is out there* -- and then to go and see the difference rather than
- * read about it. So every asteroid's record now carries all three classes,
- * with the one you are standing on marked, and each of the other two is a
- * button that flies you to the best example of it in the scene.
- *
- * The representatives are the belt's own named bodies, which is what makes
- * this honest: Ceres really is the C-type case, Vesta really is the S-type
- * case, and Psyche is the M-type that a NASA mission is on its way to. The
- * percentages are the standard taxonomic shares of the known population.
- */
-function asteroidClassCode(body) {
-  const explicit = String(body?.userData?.composition ?? "").trim().toUpperCase();
-  if (["C", "S", "M"].includes(explicit)) return explicit;
-  // The instanced rocks carry their class in their name -- "S-class asteroid
-  // 2-1-0177", "C-type asteroid 001" -- and nowhere else this panel can
-  // reach. Both spellings are in use; matching only one silently dropped the
-  // "this one" mark on every resolved rock in the main belt.
-  const match = /^([CSM])-(?:class|type)/i.exec(String(body?.userData?.name ?? body?.name ?? ""));
-  return match ? match[1].toUpperCase() : null;
-}
-
-/*
- * The roster itself lives in `asteroidRoster.js`, because it now reads the
- * small-body catalogue and the belt's named rocks rather than being three
- * hand-written rows. See that file for why it grew.
- */
-function asteroidClassRoster(body) {
-  const name = String(body?.userData?.name ?? body?.name ?? "");
-  return buildAsteroidRoster(name, asteroidClassCode(body));
 }
 
 function isAsteroidRecord(body, info) {
@@ -340,6 +306,14 @@ function resolveDetails(bodyOrName, context = {}) {
       : null,
     rings: planet?.rings ?? info.rings,
     activity: info.activity,
+    /*
+     * Final round, the rule in docs/not-covered.md § B: anything drawn from
+     * outside 380-700 nm says which light it came from. The aurorae on Mars,
+     * Jupiter, Saturn and Uranus are drawn as ultraviolet (and infrared)
+     * instruments see them, so their cards say so. Earth's is not here: its
+     * green and red are visible light.
+     */
+    spectrum: planet?.spectrum ?? info.spectrum ?? null,
     ringRoster: collectRingRoster(body),
     ringSystemName: null,
     lore: planet?.lore
@@ -361,14 +335,6 @@ function resolveDetails(bodyOrName, context = {}) {
      */
     isRegion: Boolean(region),
     region,
-    /*
-     * Asteroids get the class roster; nothing else does. It is synthesised
-     * here rather than attached to each rock because there are a million of
-     * them, they are built inside `asteroidBelt.js` which is frozen, and the
-     * roster is identical for every one -- only the "this one" mark moves.
-     */
-    relatedBodies: null,
-    relatedBodiesLabel: ASTEROID_ROSTER_LABEL,
   };
 
   if (region) {
@@ -398,6 +364,7 @@ function resolveDetails(bodyOrName, context = {}) {
     details.surface = null;
     details.rings = null;
     details.activity = null;
+    details.spectrum = null;
     details.ringRoster = [];
     details.showJplSource = false;
     /*
@@ -519,6 +486,10 @@ export function createCelestialDetailsPanel() {
               <span data-cosmic-text>Activity · coma and tail</span>
               <p id="planet-details-activity" data-cosmic-text></p>
             </div>
+            <div class="planet-details__advanced-item" data-planet-field="spectrum">
+              <span data-cosmic-text>Aurora · light your eyes cannot see</span>
+              <p id="planet-details-spectrum" data-cosmic-text></p>
+            </div>
             <div class="planet-details__advanced-item planet-details__advanced-item--rings" data-planet-field="rings">
               <span data-cosmic-text>Ring system</span>
               <p id="planet-details-rings" data-cosmic-text></p>
@@ -531,27 +502,6 @@ export function createCelestialDetailsPanel() {
             <div class="planet-details__advanced-item planet-details__advanced-item--lore" data-planet-field="lore">
               <span data-cosmic-text>Celestial story</span>
               <p id="planet-details-lore" data-cosmic-text></p>
-            </div>
-          </div>
-        </details>
-
-        <!--
-          Where to next: its own section, not a row inside the scientific
-          details. It is a different kind of thing -- not a fact about this
-          body but a way out of it -- and inside that block it was buried
-          under atmosphere, gravity and rotation where nobody looked for it.
-        -->
-        <details class="planet-details__advanced planet-details__travel" data-planet-section="members" hidden>
-          <summary>
-            <span>
-              <strong id="planet-details-travel-title" data-cosmic-text>Where to next</strong>
-              <small id="planet-details-travel-note" data-cosmic-text>Worlds you can fly to from here</small>
-            </span>
-            <span class="planet-details__summary-icon" aria-hidden="true"></span>
-          </summary>
-          <div class="planet-details__advanced-grid">
-            <div class="planet-details__advanced-item planet-details__advanced-item--rings" data-planet-field="members" hidden>
-              <ol class="planet-details__ring-roster" id="planet-details-member-roster" hidden></ol>
             </div>
           </div>
         </details>
@@ -586,7 +536,6 @@ export function createCelestialDetailsPanel() {
     relation: layer.querySelector("#planet-details-relation"),
   });
   const ringRoster = layer.querySelector("#planet-details-ring-roster");
-  const memberRoster = layer.querySelector("#planet-details-member-roster");
   const regionSections = layer.querySelector("#planet-details-region-sections");
   const sizeLabel = layer.querySelector("#planet-details-size-label");
   const diameterLabel = layer.querySelector("#planet-details-diameter-label");
@@ -605,6 +554,7 @@ export function createCelestialDetailsPanel() {
     surface: layer.querySelector("#planet-details-surface"),
     rings: layer.querySelector("#planet-details-rings"),
     activity: layer.querySelector("#planet-details-activity"),
+    spectrum: layer.querySelector("#planet-details-spectrum"),
     lore: layer.querySelector("#planet-details-lore"),
   });
 
@@ -715,263 +665,6 @@ export function createCelestialDetailsPanel() {
       block.append(term, copy);
       regionSections.append(block);
     });
-  }
-
-  /**
-   * The named worlds inside a region, each one travellable.
-   *
-   * A region is a place, and the point of a place is that there is something
-   * in it. These are the individually modelled bodies that belong to this
-   * zone, in the same visual language as the ring roster, and pressing one
-   * closes the dossier and flies there -- which is the answer to "can I visit
-   * the members of each belt part".
-   */
-  /*
-   * The asteroid roster's search box and filters. Built once, the first time
-   * an asteroid dossier opens, and hidden for the region rosters that share
-   * this list -- a belt region's five members do not need a search box.
-   */
-  let rosterTools = null;
-  let rosterSearch = null;
-  let rosterSummary = null;
-  let rosterEmpty = null;
-  let rosterFilter = "all";
-
-  function applyRosterFilter() {
-    if (!memberRoster) return;
-    const terms = String(rosterSearch?.value ?? "").trim().toLowerCase().split(/\s+/).filter(Boolean);
-    let shown = 0;
-    let header = null;
-    let headerCount = 0;
-    const closeGroup = () => {
-      if (header) header.hidden = headerCount === 0;
-    };
-    Array.from(memberRoster.children).forEach((item) => {
-      if (item.dataset.rosterGroup !== undefined) {
-        closeGroup();
-        header = item;
-        headerCount = 0;
-        return;
-      }
-      if (item.dataset.rosterSearch === undefined) return;
-      const text = item.dataset.rosterSearch;
-      const tags = item.dataset.rosterTags ? item.dataset.rosterTags.split(" ") : [];
-      const match = terms.every((term) => text.includes(term))
-        && (rosterFilter === "all" || tags.includes(rosterFilter));
-      item.hidden = !match;
-      if (match) {
-        shown += 1;
-        headerCount += 1;
-      }
-    });
-    closeGroup();
-    if (rosterEmpty) rosterEmpty.hidden = shown > 0;
-  }
-
-  function ensureRosterTools(filters) {
-    if (rosterTools || !memberRoster) return rosterTools;
-    rosterTools = document.createElement("div");
-    rosterTools.className = "planet-details__roster-tools";
-
-    const label = document.createElement("label");
-    label.className = "planet-details__roster-search";
-    const caption = document.createElement("span");
-    caption.className = "planet-details__roster-search-label";
-    caption.textContent = "Search";
-    rosterSearch = document.createElement("input");
-    rosterSearch.type = "search";
-    rosterSearch.placeholder = "Name, class letter, “moon”, “rings”…";
-    rosterSearch.autocomplete = "off";
-    rosterSearch.spellcheck = false;
-    rosterSearch.setAttribute("aria-label", "Search the asteroids, moons and comets you can travel to");
-    rosterSearch.addEventListener("input", applyRosterFilter);
-    /*
-     * Typing must stay in the box. The scene listens on window for Space,
-     * the arrows and Shift+P; without this, a space in "Didymos I" would
-     * scroll the journey and a capital P would toggle the performance HUD.
-     * Escape with text in the box clears it; Escape on an empty box falls
-     * through and closes the dossier as it does everywhere else. Tab falls
-     * through so the dossier's focus trap still works.
-     */
-    rosterSearch.addEventListener("keydown", (event) => {
-      if (event.key === "Tab") return;
-      if (event.key === "Escape") {
-        if (!rosterSearch.value) return;
-        event.preventDefault();
-        event.stopPropagation();
-        rosterSearch.value = "";
-        applyRosterFilter();
-        return;
-      }
-      event.stopPropagation();
-    });
-    label.append(caption, rosterSearch);
-
-    const bar = document.createElement("div");
-    bar.className = "planet-details__roster-filters";
-    bar.setAttribute("role", "group");
-    bar.setAttribute("aria-label", "Show only");
-    filters.forEach(({ key, label: text }) => {
-      const chip = document.createElement("button");
-      chip.type = "button";
-      chip.className = "planet-details__roster-filter";
-      chip.dataset.rosterFilter = key;
-      chip.textContent = text;
-      chip.setAttribute("aria-pressed", String(key === rosterFilter));
-      bar.append(chip);
-    });
-    bar.addEventListener("click", (event) => {
-      const chip = event.target.closest("[data-roster-filter]");
-      if (!chip) return;
-      rosterFilter = chip.dataset.rosterFilter;
-      bar.querySelectorAll("[data-roster-filter]").forEach((node) => {
-        node.setAttribute("aria-pressed", String(node === chip));
-      });
-      applyRosterFilter();
-    });
-
-    rosterSummary = document.createElement("p");
-    rosterSummary.className = "planet-details__roster-summary";
-
-    rosterTools.append(label, bar, rosterSummary);
-    memberRoster.before(rosterTools);
-    return rosterTools;
-  }
-
-  function writeRosterRow(member) {
-    const entry = document.createElement("li");
-    entry.className = "planet-details__ring planet-details__member";
-    if (member.isMoon) entry.classList.add("is-moon");
-    if (member.current) entry.classList.add("is-current", "is-selected");
-    if (member.search !== undefined) entry.dataset.rosterSearch = member.search;
-    if (member.tags) entry.dataset.rosterTags = member.tags.join(" ");
-
-    // The body you are already at is marked, not offered: a button that
-    // flies you to where you are standing is a dead end.
-    const button = document.createElement(member.current ? "div" : "button");
-    button.className = "planet-details__member-button";
-    if (member.current) {
-      button.setAttribute("aria-current", "true");
-    } else {
-      button.type = "button";
-      button.dataset.travelTo = member.body;
-      button.setAttribute("aria-label", `Travel to ${member.body}`);
-    }
-
-    /* Only the name gets the per-letter hover effect. Every glyph becomes a
-     * span, and across sixty cards of prose that is fifteen thousand nodes
-     * built each time the dossier opens -- which would be lag. */
-    const append = (className, text, tag = "span", cosmic = false) => {
-      if (!text) return;
-      const node = document.createElement(tag);
-      node.className = className;
-      if (cosmic) node.setAttribute("data-cosmic-text", "");
-      node.textContent = text;
-      button.append(node);
-    };
-
-    append("planet-details__ring-order", member.order);
-    append("planet-details__ring-name", member.body, "strong", true);
-    if (member.badges?.length) {
-      const badges = document.createElement("span");
-      badges.className = "planet-details__roster-badges";
-      member.badges.forEach((badge) => {
-        const chip = document.createElement("span");
-        chip.className = `planet-details__roster-badge planet-details__roster-badge--${badge.key}`;
-        chip.textContent = badge.text;
-        badges.append(chip);
-      });
-      button.append(badges);
-    }
-    append("planet-details__ring-character", member.character);
-    append("planet-details__ring-range", member.range);
-    append("planet-details__ring-description", member.note, "p");
-    append("planet-details__ring-motion", member.motion);
-
-    if (!member.current) {
-      const go = document.createElement("span");
-      go.className = "planet-details__member-go";
-      go.textContent = "Travel there →";
-      button.append(go);
-    }
-
-    entry.append(button);
-    memberRoster.append(entry);
-  }
-
-  function writeGroupedRoster(roster) {
-    ensureRosterTools(roster.filters ?? []);
-    rosterTools.hidden = false;
-    // Every dossier opens on the whole list, not on the last one's search.
-    rosterSearch.value = "";
-    rosterFilter = "all";
-    rosterTools.querySelectorAll("[data-roster-filter]").forEach((node) => {
-      node.setAttribute("aria-pressed", String(node.dataset.rosterFilter === "all"));
-    });
-    // The counts now head the section itself, in its summary line; printing
-    // them a second time under the search box was the same line twice.
-    rosterSummary.textContent = "";
-    rosterSummary.hidden = true;
-
-    roster.groups.forEach((group) => {
-      if (!group.rows?.length) return;
-      const header = document.createElement("li");
-      header.className = "planet-details__roster-group";
-      header.dataset.rosterGroup = group.key;
-      const title = document.createElement("span");
-      title.className = "planet-details__roster-group-title";
-      title.setAttribute("data-cosmic-text", "");
-      title.textContent = group.title;
-      header.append(title);
-      if (group.blurb) {
-        const blurb = document.createElement("p");
-        blurb.className = "planet-details__roster-group-blurb";
-        blurb.textContent = group.blurb;
-        header.append(blurb);
-      }
-      memberRoster.append(header);
-      group.rows.forEach(writeRosterRow);
-    });
-
-    rosterEmpty = document.createElement("li");
-    rosterEmpty.className = "planet-details__roster-empty";
-    rosterEmpty.textContent = "Nothing matches. Try a name, a class letter such as “C”, or “moon”.";
-    rosterEmpty.hidden = true;
-    memberRoster.append(rosterEmpty);
-  }
-
-  function writeMemberRoster(members, label = null) {
-    if (!memberRoster) return;
-    memberRoster.textContent = "";
-    rosterEmpty = null;
-    const row = layer.querySelector('[data-planet-field="members"]');
-    const section = layer.querySelector('[data-planet-section="members"]');
-    // The same section serves two purposes -- the worlds inside a region, and
-    // every rock you can travel to -- so its title and line move with it.
-    const grouped = members?.kind === "asteroid-roster";
-    const title = layer.querySelector("#planet-details-travel-title");
-    const note = layer.querySelector("#planet-details-travel-note");
-    if (title) title.textContent = grouped ? (label ?? "Where to next") : "Worlds you can visit here";
-    if (note) {
-      note.textContent = grouped
-        ? `${members.summary} — search, filter and fly to any of them`
-        : "The modelled worlds in this region — press one to fly there";
-    }
-    const available = grouped
-      ? members.groups.some((group) => group.rows?.length)
-      : Array.isArray(members) && members.length > 0;
-    memberRoster.hidden = !available;
-    if (row) row.hidden = !available;
-    if (section) section.hidden = !available;
-    memberRoster.classList.toggle("is-grouped", grouped);
-    if (rosterTools) rosterTools.hidden = !grouped || !available;
-    if (!available) return;
-
-    if (grouped) {
-      writeGroupedRoster(members);
-      return;
-    }
-    members.forEach(writeRosterRow);
   }
 
   function writeAdvancedField(key, value) {
@@ -1119,8 +812,7 @@ export function createCelestialDetailsPanel() {
     if (!sectionKey) return;
     const row = layer.querySelector(`[data-planet-field="${sectionKey}"]`);
     if (!(row instanceof HTMLElement) || row.hidden) return;
-    // The row may live in the scientific block or in its own section (the
-    // travel roster does), so open whichever one actually holds it.
+    // Open whichever collapsible section actually holds the row.
     if (options.openAdvanced !== false) {
       const host = row.closest("details");
       if (host) host.open = true;
@@ -1177,9 +869,9 @@ export function createCelestialDetailsPanel() {
      * celestial board (All bodies, in the HUD), which answers "what else is
      * out there" once, from anywhere, instead of under the facts of whatever
      * body is open. Reported as "very very clumsy", and it was. The dossier is
-     * the scientific details and nothing else.
+     * the scientific details and nothing else. (Final round: the hidden
+     * section, its code and `asteroidRoster.js` itself are now gone.)
      */
-    writeMemberRoster(null, null);
     Object.keys(advancedFields).forEach((key) => writeAdvancedField(key, details[key]));
 
     sources.hidden = !details.scienceUrl;
@@ -1194,10 +886,6 @@ export function createCelestialDetailsPanel() {
      * block, so it opens with it already shown.
      */
     advanced.open = Boolean(details.isRegion);
-    // For a region the members are the answer, so they open with it; for an
-    // asteroid the roster is forty cards and waits to be asked for.
-    const travelSection = layer.querySelector('[data-planet-section="members"]');
-    if (travelSection) travelSection.open = Boolean(details.isRegion);
 
     resetCosmicText();
     activeCosmicTarget = null;
@@ -1357,22 +1045,6 @@ export function createCelestialDetailsPanel() {
     }
   }, { capture: true });
 
-  /*
-   * The panel does not move the camera. It says which world was asked for and
-   * lets the scene decide -- the same separation the events dashboard already
-   * uses, where pressing an event calls back into `presentSolarEvent` rather
-   * than staging anything itself.
-   */
-  layer.addEventListener("click", (event) => {
-    const button = event.target.closest("[data-travel-to]");
-    if (!button) return;
-    event.preventDefault();
-    const target = button.dataset.travelTo;
-    hide({ restoreFocus: false });
-    window.dispatchEvent(new CustomEvent("beyond-earth:travel-to-body", {
-      detail: { name: target },
-    }));
-  });
 
   return Object.freeze({
     show,

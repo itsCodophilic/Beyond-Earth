@@ -628,10 +628,25 @@ function createInteractionTarget({ group, planet, radius, region, regionIndex })
   // The two gossamer rings overlap the same inner edge, so their pick fields
   // are trimmed to the part of each that is not under the other.
   const pickInner = regionIndex === 3 ? toRadii(182_000, radius) : innerRadius;
+  /*
+   * Final round: and the Thebe ring's field stops where its drawn dust does.
+   * Its grains are weighted inward (`Math.pow(random(), 1.8)` across the
+   * width, below), so three quarters of them lie inside 0.75^1.8 = 60% of the
+   * band -- 187,000 km -- and its sheet fades over the outer 88%. The field
+   * used to run to the full 226,000 km, the faint tail past Thebe's orbit,
+   * where nothing on screen is bright enough to point at; at Jupiter's
+   * arrival distance that tail was most of the hover area the gossamer rings
+   * claimed across empty sky. 200,000 km keeps the whole visible part and a
+   * margin. It removes 62% of the Thebe field ((226^2 - 200^2) /
+   * (226^2 - 182^2)) and 32% of the two gossamer fields together
+   * ((226^2 - 200^2) / (226^2 - 129^2)). The tail
+   * is still drawn and still described on the card.
+   */
+  const pickOuter = regionIndex === 3 ? toRadii(200_000, radius) : outerRadius;
   const target = new THREE.Mesh(
     new THREE.RingGeometry(
       Math.max(pickInner, radius * 0.05),
-      Math.max(outerRadius, pickInner + radius * 0.03),
+      Math.max(pickOuter, pickInner + radius * 0.03),
       320,
       1,
     ),

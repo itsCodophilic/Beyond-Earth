@@ -669,7 +669,7 @@ const SMALL_BODY_TEXTURES = Object.freeze({
   "1P/Halley": { file: "halley", meanLinear: 0.2326 },
   Ida: { file: "ida", meanLinear: 0.2204 },
   Dactyl: { file: "dactyl", meanLinear: 0.2208 },
-  Itokawa: { file: "itokawa", meanLinear: 0.2322 },
+  Itokawa: { file: "itokawa", meanLinear: 0.2324 }, // final round: Muses Sea re-grown (build-small-body-textures.py)
   Mathilde: { file: "mathilde", meanLinear: 0.2340 },
   Lutetia: { file: "lutetia", meanLinear: 0.2595 },
   Gaspra: { file: "gaspra", meanLinear: 0.2273 },

@@ -567,7 +567,37 @@ function createBoundaryRing(spec, radius) {
     blending: THREE.AdditiveBlending,
     toneMapped: false,
   });
+  /*
+   * Final round (the owner's "amber band near 43 AU"): the width above is
+   * sized for the system view, five to eleven thousand units out, where it
+   * comes to two to eight pixels. Focused on a Kuiper Belt world the camera
+   * can sit under a hundred units from the termination-shock marker, and the
+   * same 31-unit band then spans a quarter of the screen. So each fragment
+   * works out how wide the band is on screen where it is being drawn, and
+   * fades it out between 10 and 28 pixels: a line stays a line, and close up
+   * -- where the shell itself already says where the boundary is -- it steps
+   * aside. From the system view nothing changes.
+   */
+  const markerUniforms = {
+    uMarkerHalfWidth: { value: width },
+    uMarkerProjScale: { value: 400 },
+  };
+  material.onBeforeCompile = (shader) => {
+    Object.assign(shader.uniforms, markerUniforms);
+    shader.vertexShader = shader.vertexShader
+      .replace("#include <common>", "#include <common>\nvarying vec3 vMarkerWorld;")
+      .replace("#include <project_vertex>", "#include <project_vertex>\n  vMarkerWorld = (modelMatrix * vec4(transformed, 1.0)).xyz;");
+    shader.fragmentShader = shader.fragmentShader
+      .replace("#include <common>", "#include <common>\nvarying vec3 vMarkerWorld;\nuniform float uMarkerHalfWidth;\nuniform float uMarkerProjScale;")
+      .replace("#include <clipping_planes_fragment>", [
+        "#include <clipping_planes_fragment>",
+        "  float markerPixels = 2.0 * uMarkerHalfWidth * uMarkerProjScale / max(distance(vMarkerWorld, cameraPosition), 1e-3);",
+        "  diffuseColor.a *= 1.0 - smoothstep(10.0, 28.0, markerPixels);",
+      ].join("\n"));
+  };
+  material.customProgramCacheKey = () => "outer-boundary-marker";
   const ring = new THREE.Mesh(geometry, material);
+  ring.userData.markerUniforms = markerUniforms;
   ring.name = `${spec.name} ecliptic marker`;
   ring.rotation.x = Math.PI * 0.5;
   ring.renderOrder = -38;
@@ -712,6 +742,10 @@ export function updateOuterBoundaries(system, motionScale = 1, camera = null) {
     const projScale = camera.projectionMatrix.elements[5] * height * 0.5;
     const uniforms = system.userData.motes?.material?.uniforms;
     if (uniforms?.uProjScale) uniforms.uProjScale.value = projScale;
+    system.userData.boundaryRings?.forEach((ring) => {
+      const markerUniforms = ring.userData.markerUniforms;
+      if (markerUniforms) markerUniforms.uMarkerProjScale.value = projScale;
+    });
   }
 
   const target = system.userData.hiliteTarget ?? 0;

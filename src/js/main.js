@@ -1182,7 +1182,10 @@ import { POINTER_PROXY_LAYER } from "./scene/pointerProxies.js";
   /* "orbit path" is the ring each small body's moon keeps (Dactyl, Linus,
    * Huya I...): found still drawn in space mode while checking the binaries'
    * lines, which main.js switches off by focus (see updateBinaryHighlights). */
-  const SOLAR_EVENT_GUIDE_NAMES = /orbit (guide|guides|path)|satellite atlas orbit/i;
+  /* Final round: the outer boundaries' ecliptic markers are guides too --
+   * lines drawn to show where something is -- so space mode and the events
+   * take them with the rest ("... ecliptic marker"). The shells stay. */
+  const SOLAR_EVENT_GUIDE_NAMES = /orbit (guide|guides|path)|satellite atlas orbit|ecliptic marker/i;
 
   /*
    * Two things now want the guides gone, and they do not coordinate.

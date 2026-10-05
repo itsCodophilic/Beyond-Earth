@@ -102,7 +102,15 @@ BODIES = {
         # fine grains have collected in the gravitational low.
         # Fujiwara et al. 2006, Science 312, 1330.
         craters=(38, (3.5, 14.0), 0.09), boulders=(1600, (0.30, 3.5), 0.38),
-        features=[("smooth", dict(lat=-5.0, lon=0.0, radius=30.0, gain=0.13, blur=4.0))],
+        # Final round: the pond still read as a bright, blurred, bald disc.
+        # The Muses Sea is *finer*, not brighter or emptier -- AMICA frames
+        # show cm-scale gravel all over it at roughly the albedo of the rest
+        # of the surface (Miyamoto et al. 2007, Science 316, 1011; Yano et al.
+        # 2006, Science 312, 1350). So it keeps most of its relief (keep 0.62
+        # against the default 0.34), carries half again as much fine grain,
+        # is lifted 5% rather than 13%, and is blurred less (3 px, not 4).
+        features=[("smooth", dict(lat=-5.0, lon=0.0, radius=28.0, gain=0.05, blur=3.0,
+                                  keep=0.62, fines=1.5))],
     ),
     "eros": dict(
         contrastCap=0.2,
@@ -790,9 +798,12 @@ def apply_features(field, features, seed):
             # against the surrounding contrast. Blurring to nothing and
             # adding 7% noise left a disc that was still, unmistakably, bald.
             relief = field / np.maximum(blurred, 1e-3)
-            softened = blurred * (1.0 + (relief - 1.0) * 0.34)
-            fines = (1.0 + sphere_noise(34.0, seed + 41, octaves=2) * 0.15
-                         + sphere_noise(70.0, seed + 47, octaves=2) * 0.09)
+            # `keep` and `fines` default to the values every other body was
+            # built with, so only a body that sets them (Itokawa) changes.
+            softened = blurred * (1.0 + (relief - 1.0) * p.get("keep", 0.34))
+            fine_gain = p.get("fines", 1.0)
+            fines = (1.0 + sphere_noise(34.0, seed + 41, octaves=2) * 0.15 * fine_gain
+                         + sphere_noise(70.0, seed + 47, octaves=2) * 0.09 * fine_gain)
             field = field * (1 - mask) + softened * fines * mask
             field = field * (1 + mask * p["gain"] * 0.55)
         else:
