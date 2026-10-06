@@ -51,7 +51,11 @@ const PLANET_DETAILS = Object.freeze({
     scienceUrl: "https://science.nasa.gov/earth/facts/",
   }),
   Mars: Object.freeze({
-    spectrum: "The aurora drawn on Mars is an ultraviolet picture. Its two southern patches over Terra Sirenum and Terra Cimmeria sit where the crust is still magnetised, and they were mapped in the far ultraviolet by NASA's MAVEN and the Emirates Mars Mission. A person standing there would see almost nothing: the first visible-light (green oxygen) aurora on Mars was only recorded from the surface, by Perseverance, in March 2024, and it was very faint.",
+    aurora: {
+      how: "Mars lost its global magnetic field billions of years ago, so it has no ring of aurora round each pole. It has three other kinds. Discrete aurora glows where patches of ancient crust are still magnetised, mostly in the southern hemisphere, when electrons are pushed down those field lines. Diffuse aurora spreads over the whole night side when a solar storm drives energetic particles into the air. Proton aurora lights the day side, made by the solar wind itself. The particles strike oxygen, carbon dioxide and carbon monoxide, which glow.",
+      poles: "No — Mars has no auroral poles. The discrete aurora clusters over the magnetised crust in the southern hemisphere (the two patches drawn here, over Terra Sirenum and Terra Cimmeria), and diffuse aurora can cover the whole night side.",
+      why: "Almost all of that glow is ultraviolet — oxygen at 130.4 nm, carbon monoxide at 135–170 nm. The only visible-light aurora ever recorded on Mars was a faint green glow Perseverance saw from the surface in March 2024. So the normal view shows it barely at all; the ultraviolet view shows it the way NASA's MAVEN and the Emirates Mars Mission's Hope probe see it.",
+    },
     classification: "Terrestrial Planet",
     relativeScale: "0.107 Earth masses · 0.532× Earth's diameter",
     distanceFromStar: "1.52 AU · about 228 million km from the Sun",
@@ -66,7 +70,11 @@ const PLANET_DETAILS = Object.freeze({
     scienceUrl: "https://science.nasa.gov/mars/facts/",
   }),
   Jupiter: Object.freeze({
-    spectrum: "The aurora drawn on Jupiter is an ultraviolet picture. Its electric-blue ovals are the shape Hubble and Juno's ultraviolet spectrograph see; the same light also shines in infrared from H₃⁺ ions (Juno's JIRAM) and in X-rays. Spacecraft have caught a faint visible-light glow on the night side, but to an eye in orbit the aurora would be far dimmer and nothing like this colour.",
+    aurora: {
+      how: "Jupiter has the strongest magnetic field of any planet, and its moon Io feeds it about a tonne of volcanic gas every second. That gas becomes plasma, whirled round with the planet; where it falls behind, electric currents drive electrons down the field lines into the polar atmosphere. They strike hydrogen, which glows. The solar wind adds to it, and Io, Europa and Ganymede each leave a spot of aurora where their own field lines come down.",
+      poles: "Yes — rings of aurora surround both magnetic poles at once, north and south, and Juno has flown low over both. They are not mirror images: the northern one is more lopsided, because the magnetic field there is more tangled.",
+      why: "Glowing hydrogen gives out almost all its light in ultraviolet and infrared. Hubble and Juno's ultraviolet spectrograph see auroras hundreds of times more powerful than Earth's; in visible light only a faint glow on the night side has ever been caught (Galileo, 1997). In ultraviolet the disc reflects little sunlight, so the aurora stands out.",
+    },
     classification: "Gas Giant",
     relativeScale: "317.8 Earth masses · 10.97× Earth's diameter",
     distanceFromStar: "5.2 AU · about 778 million km from the Sun",
@@ -82,7 +90,11 @@ const PLANET_DETAILS = Object.freeze({
     scienceUrl: "https://science.nasa.gov/jupiter/facts/",
   }),
   Saturn: Object.freeze({
-    spectrum: "The aurora drawn on Saturn is an ultraviolet picture. Its spiral rings are the shape Hubble and Cassini's ultraviolet imager recorded; Saturn's aurora also shines in infrared from H₃⁺ ions (Cassini VIMS). Cassini did catch a faint visible-light glow, but the bright ovals drawn here are what only an ultraviolet camera sees.",
+    aurora: {
+      how: "Gusts of solar wind squeeze Saturn's magnetic field; its stretched tail snaps and reconnects, firing electrons down the field lines towards the poles. Plasma from the geysers of its moon Enceladus also fills the field. The electrons strike hydrogen high in the atmosphere, which glows.",
+      poles: "Yes — both. Hubble and Cassini imaged rings of aurora round the north and the south pole; they brighten and swell together when a gust of solar wind arrives.",
+      why: "Most of that light is ultraviolet and infrared. Cassini once caught a faint pink-to-purple glow in visible light, but the bright rings round the poles are only an ultraviolet sight — which is why Hubble and Cassini's ultraviolet imager are the cameras that show them.",
+    },
     classification: "Gas Giant",
     relativeScale: "95.2 Earth masses · 9.45× Earth's diameter",
     distanceFromStar: "9.5 AU · about 1.4 billion km from the Sun",
@@ -98,7 +110,11 @@ const PLANET_DETAILS = Object.freeze({
     scienceUrl: "https://science.nasa.gov/saturn/facts/",
   }),
   Uranus: Object.freeze({
-    spectrum: "The aurora drawn on Uranus is an ultraviolet and infrared picture. Its off-axis glow was found by Hubble in ultraviolet images and mapped in infrared from H₃⁺ ions by Keck and JWST. It sits far from the poles because Uranus's magnetic field is tipped about 59° from its spin axis. To the eye it is invisible.",
+    aurora: {
+      how: "Uranus's magnetic field is tipped 59° from its spin axis and offset from the planet's centre, so its magnetic poles sit far from the spin poles — one well into the mid-latitudes. When gusts of solar wind reach it, electrons stream down the field lines near those magnetic poles and make the hydrogen glow.",
+      poles: "Yes — at both magnetic poles. Voyager 2 saw aurora near both in 1986, and Hubble caught spots round both during solar storms (2011–2014). Because the magnetic poles are not the spin poles, the aurora sits far from where you would expect it.",
+      why: "It has been seen only in ultraviolet (Voyager 2, Hubble) and infrared (H₃⁺ ions, Keck and JWST) — never in visible light. The ultraviolet view follows Hubble's October 2022 images: blue-purple glows over a blue disc with a white polar cap. In January 2025 JWST mapped it as two bright bands near the magnetic poles, with a dimmer gap between them.",
+    },
     classification: "Ice Giant",
     relativeScale: "14.5 Earth masses · 4.01× Earth's diameter",
     distanceFromStar: "19 AU · about 2.9 billion km from the Sun",
@@ -307,13 +323,13 @@ function resolveDetails(bodyOrName, context = {}) {
     rings: planet?.rings ?? info.rings,
     activity: info.activity,
     /*
-     * Final round, the rule in docs/not-covered.md § B: anything drawn from
-     * outside 380-700 nm says which light it came from. The aurorae on Mars,
-     * Jupiter, Saturn and Uranus are drawn as ultraviolet (and infrared)
-     * instruments see them, so their cards say so. Earth's is not here: its
-     * green and red are visible light.
+     * Final rounds: the aurorae of Mars, Jupiter, Saturn and Uranus. How each
+     * happens, whether it lights both poles, and why it is shown in
+     * ultraviolet -- the card the board's "Aurora · UV mode" opens on. It
+     * replaces the older "light your eyes cannot see" row. Earth's aurora is
+     * visible light and has no entry.
      */
-    spectrum: planet?.spectrum ?? info.spectrum ?? null,
+    aurora: planet?.aurora ?? null,
     ringRoster: collectRingRoster(body),
     ringSystemName: null,
     lore: planet?.lore
@@ -364,7 +380,7 @@ function resolveDetails(bodyOrName, context = {}) {
     details.surface = null;
     details.rings = null;
     details.activity = null;
-    details.spectrum = null;
+    details.aurora = null;
     details.ringRoster = [];
     details.showJplSource = false;
     /*
@@ -448,6 +464,20 @@ export function createCelestialDetailsPanel() {
           </div>
         </dl>
 
+        <section class="planet-details__aurora" data-planet-field="aurora" hidden>
+          <p class="planet-details__aurora-eyebrow" data-cosmic-text>Aurora · UV mode</p>
+          <h3 data-cosmic-text>How the aurora happens</h3>
+          <p id="planet-details-aurora-how" data-cosmic-text></p>
+          <h3 data-cosmic-text>At both poles?</h3>
+          <p id="planet-details-aurora-poles" data-cosmic-text></p>
+          <h3 data-cosmic-text>Why ultraviolet</h3>
+          <p id="planet-details-aurora-why" data-cosmic-text></p>
+          <button type="button" class="planet-details__uv-button" data-uv-view>
+            <span class="planet-details__uv-glyph" aria-hidden="true"></span>
+            See it in ultraviolet
+          </button>
+        </section>
+
         <details class="planet-details__advanced">
           <summary>
             <span>
@@ -485,10 +515,6 @@ export function createCelestialDetailsPanel() {
             <div class="planet-details__advanced-item" data-planet-field="activity">
               <span data-cosmic-text>Activity · coma and tail</span>
               <p id="planet-details-activity" data-cosmic-text></p>
-            </div>
-            <div class="planet-details__advanced-item" data-planet-field="spectrum">
-              <span data-cosmic-text>Aurora · light your eyes cannot see</span>
-              <p id="planet-details-spectrum" data-cosmic-text></p>
             </div>
             <div class="planet-details__advanced-item planet-details__advanced-item--rings" data-planet-field="rings">
               <span data-cosmic-text>Ring system</span>
@@ -545,6 +571,12 @@ export function createCelestialDetailsPanel() {
     diameter: "Physical diameter",
     orbital: "Orbital period / motion",
   });
+  const auroraSection = layer.querySelector('[data-planet-field="aurora"]');
+  const auroraFields = Object.freeze({
+    how: layer.querySelector("#planet-details-aurora-how"),
+    poles: layer.querySelector("#planet-details-aurora-poles"),
+    why: layer.querySelector("#planet-details-aurora-why"),
+  });
   const advancedFields = Object.freeze({
     atmosphere: layer.querySelector("#planet-details-atmosphere"),
     temperature: layer.querySelector("#planet-details-temperature"),
@@ -554,7 +586,6 @@ export function createCelestialDetailsPanel() {
     surface: layer.querySelector("#planet-details-surface"),
     rings: layer.querySelector("#planet-details-rings"),
     activity: layer.querySelector("#planet-details-activity"),
-    spectrum: layer.querySelector("#planet-details-spectrum"),
     lore: layer.querySelector("#planet-details-lore"),
   });
 
@@ -873,6 +904,10 @@ export function createCelestialDetailsPanel() {
      * section, its code and `asteroidRoster.js` itself are now gone.)
      */
     Object.keys(advancedFields).forEach((key) => writeAdvancedField(key, details[key]));
+    auroraSection.hidden = !details.aurora;
+    auroraFields.how.textContent = details.aurora?.how ?? "";
+    auroraFields.poles.textContent = details.aurora?.poles ?? "";
+    auroraFields.why.textContent = details.aurora?.why ?? "";
 
     sources.hidden = !details.scienceUrl;
     if (details.scienceUrl) {
@@ -1045,6 +1080,22 @@ export function createCelestialDetailsPanel() {
     }
   }, { capture: true });
 
+
+  /*
+   * Final round: "See it in ultraviolet". The card closes and the scene
+   * takes over (main.js, scene/ultravioletView.js) -- the view is a place to
+   * look, not more text, so it is not drawn inside the card.
+   */
+  layer.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-uv-view]");
+    if (!button) return;
+    event.preventDefault();
+    const name = activeBodyName;
+    hide({ restoreFocus: false });
+    window.dispatchEvent(new CustomEvent("beyond-earth:ultraviolet-view", {
+      detail: { name },
+    }));
+  });
 
   return Object.freeze({
     show,

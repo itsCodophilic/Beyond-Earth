@@ -3807,3 +3807,174 @@ body.is-tour-open .distance-cinematic-panel {
 /* The member roster, the asteroid roster and "Where to next" are gone (final
    round): their markup left the dossier when travel moved to the celestial
    board, and their styles went with the code. */
+
+/* ======================================================= ultraviolet view
+   Final rounds. Opened from a planet's info card ("See it in ultraviolet";
+   the board's "Aurora · UV mode" opens that card); scene/ultravioletView.js builds the view and
+   main.js holds it. The colours are the planet's own false colour, drawn in
+   the scene -- nothing here tints the frame. */
+.planet-details__uv-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  margin-top: 12px;
+  padding: 8px 14px;
+  border: 1px solid rgba(167, 139, 250, 0.55);
+  border-radius: 999px;
+  background: rgba(124, 77, 255, 0.12);
+  color: #ddd2ff;
+  font: inherit;
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s;
+}
+.planet-details__uv-button:hover,
+.planet-details__uv-button:focus-visible {
+  background: rgba(124, 77, 255, 0.24);
+  border-color: rgba(196, 181, 253, 0.9);
+  outline: none;
+}
+.planet-details__uv-glyph {
+  width: 10px;
+  height: 10px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: radial-gradient(circle, #f5f0ff 0 22%, #a78bfa 45%, rgba(124, 77, 255, 0) 72%);
+  box-shadow: 0 0 10px rgba(167, 139, 250, 0.8);
+}
+
+/* The card: small, in the corner, saying why the view changed. */
+.uv-view {
+  position: fixed;
+  /* Right-hand side: a focused planet is framed left of centre. */
+  right: clamp(16px, 2.4vw, 32px);
+  bottom: clamp(16px, 4vh, 36px);
+  z-index: 190;
+  width: min(330px, calc(100vw - 32px));
+  padding: 12px 14px 12px;
+  border: 1px solid rgba(167, 139, 250, 0.4);
+  border-radius: 10px;
+  background: rgba(8, 6, 18, 0.78);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  color: #e9e3ff;
+}
+.uv-view[hidden] { display: none; }
+.uv-view__eyebrow {
+  margin: 0 0 2px;
+  font-family: var(--cin-mono, ui-monospace, monospace);
+  font-size: 0.58rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: #c4b5fd;
+}
+.uv-view__title { margin: 0 0 6px; font-size: 1.12rem; font-weight: 300; color: #fff; }
+.uv-view__why { margin: 0 0 6px; font-size: 0.74rem; line-height: 1.45; color: #ede9fe; }
+.uv-view__text { margin: 0 0 10px; font-size: 0.7rem; line-height: 1.45; color: rgba(221, 214, 254, 0.72); }
+.uv-view__foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.uv-view__hint {
+  font-family: var(--cin-mono, ui-monospace, monospace);
+  font-size: 0.56rem;
+  letter-spacing: 0.08em;
+  color: rgba(221, 214, 254, 0.6);
+}
+.uv-view__exit {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+  padding: 6px 10px;
+  border: 1px solid rgba(196, 181, 253, 0.7);
+  border-radius: 7px;
+  background: rgba(124, 77, 255, 0.18);
+  color: #fff;
+  font: inherit;
+  font-size: 0.74rem;
+  cursor: pointer;
+}
+.uv-view__exit:hover, .uv-view__exit:focus-visible { background: rgba(124, 77, 255, 0.34); outline: none; }
+.uv-view__exit kbd {
+  padding: 1px 5px;
+  border: 1px solid rgba(221, 214, 254, 0.5);
+  border-radius: 4px;
+  font-size: 0.62rem;
+}
+
+/* The dossier's aurora section (second final round): how it happens, both
+   poles, why ultraviolet, and the way into the view. Reached from the
+   board's "Aurora · UV mode" pill, which scrolls to and highlights it. */
+.planet-details__aurora {
+  margin: 0 0 16px;
+  padding: 14px 16px 16px;
+  border: 1px solid rgba(167, 139, 250, 0.32);
+  border-radius: 13px;
+  background: linear-gradient(180deg, rgba(76, 52, 160, 0.16), rgba(18, 14, 40, 0.34));
+  transition: border-color 0.4s, box-shadow 0.4s;
+}
+.planet-details__aurora[hidden] { display: none; }
+.planet-details__aurora.is-context-highlight {
+  border-color: rgba(196, 181, 253, 0.85);
+  box-shadow: 0 0 0 1px rgba(167, 139, 250, 0.4), 0 0 28px rgba(124, 77, 255, 0.25);
+}
+.planet-details__aurora-eyebrow {
+  margin: 0 0 8px;
+  font-family: var(--cin-mono, ui-monospace, monospace);
+  font-size: 0.6rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: #c4b5fd;
+}
+.planet-details__aurora h3 {
+  margin: 10px 0 4px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  letter-spacing: 0.03em;
+  color: #ede9fe;
+}
+.planet-details__aurora p:not(.planet-details__aurora-eyebrow) {
+  margin: 0;
+  font-size: 0.82rem;
+  line-height: 1.6;
+  color: rgba(226, 232, 240, 0.86);
+}
+
+/* The board's pill, in the view's violet so it reads apart from the moons. */
+.cboard__moons.cboard__aurora {
+  border-color: rgba(167, 139, 250, 0.55);
+  color: #d8ccff;
+}
+.cboard__moons.cboard__aurora:hover,
+.cboard__moons.cboard__aurora:focus-visible { background: rgba(124, 77, 255, 0.2); }
+
+/* Everything that is offered goes while the view is up, the HUD included, and
+   at once rather than in a fade: the only control on screen is the way back. */
+body.is-ultraviolet-view .hud,
+body.is-ultraviolet-view .celestial-selection-card,
+body.is-ultraviolet-view .satellite-system-overview,
+body.is-ultraviolet-view .satellite-atlas-directory,
+body.is-ultraviolet-view .satellite-name-label,
+body.is-ultraviolet-view .satellite-name-layer,
+body.is-ultraviolet-view .planet-orbit-hover-tooltip,
+body.is-ultraviolet-view .planet-system-banner,
+body.is-ultraviolet-view .space-explore-hint,
+body.is-ultraviolet-view .space-dive-pulse,
+body.is-ultraviolet-view .solar-event-notice,
+body.is-ultraviolet-view .body-card,
+body.is-ultraviolet-view .body-card-restore,
+body.is-ultraviolet-view .body-connector,
+body.is-ultraviolet-view .saturn-ring-hover-card,
+body.is-ultraviolet-view .asteroid-hover-tooltip,
+body.is-ultraviolet-view .progress,
+body.is-ultraviolet-view .distance-cinematic-layer,
+body.is-ultraviolet-view .system-return-button,
+body.is-ultraviolet-view .comet-placement,
+body.is-ultraviolet-view .brand {
+  opacity: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+  transition: none !important;
+}
+body.is-ultraviolet-view { cursor: grab; touch-action: none; }
+body.is-ultraviolet-view.is-ultraviolet-dragging { cursor: grabbing; }
+body.is-ultraviolet-view .uv-view { cursor: auto; }

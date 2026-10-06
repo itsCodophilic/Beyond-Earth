@@ -213,6 +213,9 @@ function queryMatcher(text) {
  *   the surface map the scene already has loaded for a body, if any -- the
  *   moon board's globe is drawn from it
  */
+/* The planets whose aurora is an ultraviolet sight (scene/ultravioletView.js). */
+const AURORA_PLANETS = new Set(["Mars", "Jupiter", "Saturn", "Uranus"]);
+
 export function createCelestialBoard({ trigger = null, surfaceFor = null, cometState = null, placeComet = null, onOpen = null } = {}) {
   const data = buildCelestialBoard();
   const bodiesByName = new Map(data.bodies.map((b) => [b.name, b]));
@@ -292,6 +295,19 @@ export function createCelestialBoard({ trigger = null, surfaceFor = null, cometS
        * the dossier, even when that comet is already the one in focus. */
       const noDossier = Boolean(from?.classList?.contains("cglow__fly"));
       window.dispatchEvent(new CustomEvent("beyond-earth:travel-to-body", { detail: { name, noDossier } }));
+    }, 140);
+  }
+
+  /* The aurora pill: the board goes, the camera flies to the planet, and its
+   * card opens at the aurora section once it arrives (main.js). */
+  function showAurora(name, from = null) {
+    if (document.body.classList.contains("is-tour-open")) {
+      say(`${name}'s aurora waits until the tour is done — the board will be here when you are.`);
+      return;
+    }
+    close({ restoreFocus: false, departing: true, from });
+    setTimeout(() => {
+      window.dispatchEvent(new CustomEvent("beyond-earth:aurora-info", { detail: { name } }));
     }, 140);
   }
 
@@ -437,6 +453,7 @@ export function createCelestialBoard({ trigger = null, surfaceFor = null, cometS
      * is why the glow was easy to miss.
      */
     let glowPill = null;
+    let auroraPill = null;
     if (GLOW_NAMES.has(body.name)) {
       const extras = el("div", "cboard__extras");
       glowPill = el("button", "cboard__moons cboard__glow", "Check out its glow");
@@ -463,6 +480,18 @@ export function createCelestialBoard({ trigger = null, surfaceFor = null, cometS
         extras.append(pill);
       }
       if (body.rings) extras.append(el("span", "cboard__ring-badge", "rings"));
+      /* Second final round (the owner): the way in to a planet's aurora sits
+       * here, beside its moons, rather than as a control of its own in the
+       * HUD. It opens the planet's card at the aurora section -- how it
+       * happens, whether both poles glow, why it is shown in ultraviolet --
+       * and the card's button opens the ultraviolet view (main.js). */
+      if (AURORA_PLANETS.has(body.name)) {
+        auroraPill = el("button", "cboard__moons cboard__aurora", "Aurora · UV mode");
+        auroraPill.type = "button";
+        auroraPill.dataset.auroraOf = body.name;
+        auroraPill.setAttribute("aria-label", `How ${body.name}'s aurora happens, and see it in ultraviolet`);
+        extras.append(auroraPill);
+      }
       if (body.neverGlows) {
         const quiet = el("span", "cboard__ring-badge cboard__glow-badge is-never", "never seen to glow");
         quiet.title = "No coma or outburst has ever been detected on it";
@@ -479,7 +508,7 @@ export function createCelestialBoard({ trigger = null, surfaceFor = null, cometS
     chips.push({
       body,
       item,
-      buttons: [button, pill, glowPill].filter(Boolean),
+      buttons: [button, pill, glowPill, auroraPill].filter(Boolean),
       words: words(body.name),
       moonWords: body.moons.map((m) => words(m.name)),
       moonNames: body.moons.map((m) => m.name),
@@ -1694,6 +1723,11 @@ export function createCelestialBoard({ trigger = null, surfaceFor = null, cometS
       const company = event.target.closest("[data-company]");
       if (company && !company.disabled) {
         openCompany(company.dataset.company);
+        return;
+      }
+      const auroraOf = event.target.closest("[data-aurora-of]");
+      if (auroraOf && !auroraOf.disabled) {
+        showAurora(auroraOf.dataset.auroraOf, auroraOf);
         return;
       }
       const moonsOf = event.target.closest("[data-moons-of]");

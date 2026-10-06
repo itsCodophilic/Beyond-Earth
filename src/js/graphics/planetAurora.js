@@ -1,5 +1,61 @@
 import * as THREE from "three";
 
+/*
+ * What an eye would see, as against what an ultraviolet camera sees (final
+ * round, the owner).
+ *
+ * Every aurora in this file was drawn from spacecraft images, and for four of
+ * the five planets those images are not visible light. Jupiter's, Saturn's and
+ * Uranus's aurorae are brightest in the ultraviolet (Hubble STIS/ACS, Juno UVS,
+ * Cassini UVIS) and infrared (H3+ -- Juno JIRAM, Cassini VIMS, Keck, JWST);
+ * Mars's in the far ultraviolet (MAVEN IUVS, Emirates Mars Mission EMUS).
+ * What a person would actually see is a small fraction of that:
+ *
+ *   Mars     a faint diffuse green glow, oxygen 557.7 nm -- the first visible
+ *            Martian aurora, photographed by Perseverance after a solar storm
+ *            in March 2024, about as faint as a weak aurora on Earth
+ *   Jupiter  a dim glow at the poles, caught in visible light only on the night
+ *            side (Galileo 1997, NASA PIA00605 / PIA01097). Its colour was
+ *            not measured; the gas is hydrogen, the same as Saturn's, so it is
+ *            drawn in the same pink-red-to-violet as Saturn's measured one
+ *   Saturn   a faint pink-to-purple glow -- Cassini's camera saw it at visible
+ *            wavelengths (Dyudina et al. 2016, Icarus 263, 32): pink a few
+ *            hundred km above the horizon, purple at 1,000-1,500 km
+ *   Uranus   never detected in visible light; hydrogen would glow the same way,
+ *            so it is drawn as the faintest of all, pale pink-white
+ *
+ * Earth's aurora is visible light, so Earth has no entry and is unchanged.
+ *
+ * `level` is a render value, not a measurement: the owner asked for these to
+ * be "very very dim ... barely there", and at 4-6% of the ultraviolet view's
+ * strength they are a hint on the night side and invisible on the day side,
+ * which is the honest reading. `uSpectrum` switches between the two at run
+ * time: 0 is the eye, 1 is the ultraviolet view (scene/ultravioletView.js).
+ *
+ * `uvA` / `uvB` are the aurora's colours in the ultraviolet view. Ultraviolet
+ * has no colour, so these copy how the published ultraviolet images show
+ * each one: Jupiter's and Saturn's in blue-violet to white (the Hubble STIS
+ * composites -- ESA/Hubble 2016 for Jupiter, heic1815 for Saturn), Uranus's
+ * as fuzzy blue-purple glows (ESA/Hubble heic2503, the October 2022
+ * images; the 2012 release showed white spots), Mars's in pale blue-white over
+ * the night side (no single convention exists for Mars; this matches the
+ * blue-to-white brightness scales MAVEN IUVS and EMM EMUS are usually shown
+ * in). Brightness and shape are what the instruments measured; the hue is a
+ * choice. `uvGain` brightens each in that view only (the owner asked for
+ * Jupiter's and Mars's to be stronger; Uranus's spots are small, and Hubble
+ * needed a solar storm to catch them). `uvDayLift` stops the sunlit side
+ * hiding them there: in the far ultraviolet, where aurora cameras work, a
+ * planet reflects little sunlight, so Hubble sees Jupiter's and Saturn's
+ * aurorae on the day side too. Mars keeps most of its dimming, because its
+ * discrete aurora is a night-side glow.
+ */
+const EYE_AURORA = Object.freeze({
+  Mars: { level: 0.06, colorA: 0x7dffa0, colorB: 0x5be08a, uvA: 0x8fa8ff, uvB: 0xeef0ff, uvGain: 2.4, uvDayLift: 0.35 },
+  Jupiter: { level: 0.05, colorA: 0xff4566, colorB: 0x9a6bff, uvA: 0x5f6bff, uvB: 0xe4dcff, uvGain: 2.0, uvDayLift: 0.8 },
+  Saturn: { level: 0.05, colorA: 0xff6a96, colorB: 0xa36cff, uvA: 0x6a72ff, uvB: 0xe8e0ff, uvGain: 1.3, uvDayLift: 0.7 },
+  Uranus: { level: 0.035, colorA: 0xffc4d2, colorB: 0xffe6ee, uvA: 0x9a6bff, uvB: 0xcfd8ff, uvGain: 3.0, uvDayLift: 0.9 },
+});
+
 function jsonColourHex(value) {
   const color = new THREE.Color(value);
   return `vec3(${color.r.toFixed(4)}, ${color.g.toFixed(4)}, ${color.b.toFixed(4)})`;
@@ -74,6 +130,17 @@ function buildShaderMaterial(config) {
     uniforms: {
       uTime: { value: 0 },
       uAuroraStrength: { value: 1 },
+      // 1 = as the spacecraft images show it (the default, and Earth always);
+      // 0 = as an eye would see it. See EYE_AURORA.
+      uSpectrum: { value: 1 },
+      uEyeLevel: { value: 1 },
+      uEyeColorA: { value: new THREE.Color(0xffffff) },
+      uEyeColorB: { value: new THREE.Color(0xffffff) },
+      uUvOverride: { value: 0 },
+      uUvColorA: { value: new THREE.Color(0xffffff) },
+      uUvColorB: { value: new THREE.Color(0xffffff) },
+      uUvGain: { value: 1 },
+      uUvDayLift: { value: 0 },
     },
     vertexShader: `
       uniform float uTime;
@@ -176,6 +243,15 @@ function buildShaderMaterial(config) {
     fragmentShader: `
       uniform float uTime;
       uniform float uAuroraStrength;
+      uniform float uSpectrum;
+      uniform float uEyeLevel;
+      uniform vec3 uEyeColorA;
+      uniform vec3 uEyeColorB;
+      uniform float uUvOverride;
+      uniform vec3 uUvColorA;
+      uniform vec3 uUvColorB;
+      uniform float uUvGain;
+      uniform float uUvDayLift;
       varying vec3 vWorldNormal;
       varying vec3 vWorldPosition;
       varying vec3 vLocalPosition;
@@ -222,6 +298,9 @@ function buildShaderMaterial(config) {
         float limb = pow(1.0 - max(dot(normal, viewDirection), 0.0), 1.08);
         float viewingVisibility = ${viewFloor} + smoothstep(0.03, 0.76, limb) * (1.0 - ${viewFloor});
         float darknessVisibility = mix(${dayFloor}, 1.0, nightside);
+        // In the ultraviolet view the sunlit disc is dim in the aurora's own
+        // band, so the aurora is not lost against it as it is to an eye.
+        darknessVisibility = mix(darknessVisibility, 1.0, uUvDayLift * uUvOverride * uSpectrum);
 
         float arcNoise = fbm(vec2(longitude * 2.4 + uTime * (${speed} * 0.08), latitude * 24.0));
         float mainArc = sin(longitude * ${arcFreq} + arcNoise * 2.4 + uTime * (${speed} * 0.12)) * 0.5 + 0.5;
@@ -270,7 +349,23 @@ function buildShaderMaterial(config) {
         color *= 0.92 + spikeColumns * 0.38 + vSpikeField * 0.22;
         color *= 0.80 + vLongitudeMask * 0.24;
 
-        if (alpha < 0.008) discard;
+        // The ultraviolet view's own colours (second final round): the false
+        // colour the published ultraviolet images give each aurora. Only the
+        // four eye-limited planets set it; Earth keeps its own.
+        vec3 uvColor = mix(uUvColorA, uUvColorB, smoothstep(0.34, 0.88, fineBands));
+        uvColor *= (0.76 + limb * 1.14) * (0.92 + spikeColumns * 0.38) * sqrt(uUvGain);
+        color = mix(color, uvColor, uUvOverride);
+        alpha *= mix(1.0, uUvGain, uUvOverride * uSpectrum);
+
+        // The eye's version: the same shape and motion, in the colour the
+        // gas really emits, and a small fraction of the brightness.
+        vec3 eyeColor = mix(uEyeColorA, uEyeColorB, smoothstep(0.34, 0.88, fineBands));
+        eyeColor *= 0.76 + limb * 1.14;
+        color = mix(eyeColor, color, uSpectrum);
+        alpha *= mix(uEyeLevel, 1.0, uSpectrum);
+
+        // Earth (and the ultraviolet view) keep the original cut-off.
+        if (alpha < mix(0.002, 0.008, uSpectrum)) discard;
         gl_FragColor = vec4(color, clamp(alpha, 0.0, ${alphaMax}));
       }
     `,
@@ -366,6 +461,30 @@ export function createPlanetAuroraLayer({
   );
   aurora.renderOrder = 6;
   aurora.name = `${planet.name} aurora`;
+  const eye = EYE_AURORA[planet.name];
+  if (eye) {
+    material.uniforms.uSpectrum.value = 0;
+    material.uniforms.uEyeLevel.value = eye.level;
+    material.uniforms.uEyeColorA.value.set(eye.colorA);
+    material.uniforms.uEyeColorB.value.set(eye.colorB);
+    material.uniforms.uUvOverride.value = 1;
+    material.uniforms.uUvColorA.value.set(eye.uvA);
+    material.uniforms.uUvColorB.value.set(eye.uvB);
+    material.uniforms.uUvGain.value = eye.uvGain ?? 1;
+    material.uniforms.uUvDayLift.value = eye.uvDayLift ?? 0;
+    aurora.userData.eyeAurora = true;
+    /* Where the emission is centred, in the shell's own frame, so the
+     * ultraviolet view can turn the camera to face it (latitude is the
+     * sine, as the shader reads it; longitude is atan(z, x)). In spiral mode
+     * the arms wind round the shell's own pole, a few degrees out, so the
+     * centre is pulled to that pole by the spiral's share. */
+    aurora.userData.auroraCentre = {
+      sinLatitude: latitudeCenter,
+      longitude: longitudeCenter,
+      wholeRing: longitudeWidth >= Math.PI * 0.9,
+      spiral: THREE.MathUtils.clamp(spiralStrength, 0, 1),
+    };
+  }
   planet.add(aurora);
   return aurora;
 }
@@ -374,6 +493,18 @@ export function updatePlanetAuroraLayer(aurora, frameScale = 1, { rotationSpeed 
   if (!aurora?.material?.uniforms?.uTime) return;
   aurora.material.uniforms.uTime.value += 0.018 * frameScale;
   aurora.rotation.y += rotationSpeed * frameScale;
+}
+
+/**
+ * Switches every eye-limited aurora under `root` between the eye (false) and
+ * the ultraviolet view (true). Earth's has no eye entry and is left alone.
+ */
+export function setAuroraSpectrum(root, ultraviolet) {
+  root?.traverse?.((object) => {
+    if (!object.userData?.eyeAurora) return;
+    const uniforms = object.material?.uniforms;
+    if (uniforms?.uSpectrum) uniforms.uSpectrum.value = ultraviolet ? 1 : 0;
+  });
 }
 
 export function setPlanetAuroraStrength(aurora, strength = 1) {

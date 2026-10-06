@@ -59,6 +59,7 @@ import { createOuterBoundaries, updateOuterBoundaries, applyOuterBoundaryQuality
  */
 import { createSmallBodies, updateSmallBodies, updateBinaryHighlights, placeCometAt, restoreCometToToday, cometActivity } from './scene/smallBodies/smallBodies.js';
 import { createCometPlacementChip } from './ui/cometPlacementChip.js';
+import { createUltravioletView, ULTRAVIOLET_PLANETS, auroraViewDirection, ultravioletFramingRadii } from './scene/ultravioletView.js';
 import {
   ASTRONOMICAL_UNIT_KM,
   createEarthDistanceTracker,
@@ -96,6 +97,84 @@ import { createGuidedTour, replayGuidedTour } from './ui/guidedTour.js';
  * Declared at module scope so there is exactly one list and every handler
  * reads it, whatever order they are defined in.
  */
+/*
+ * The ultraviolet view holds the viewer still (final rounds, the owner: "the
+ * user can only see and escape that mode", then "give user right left top
+ * down ability ... just revolve rotate up down that's it"). These listeners
+ * are registered here, at module level, before any other in this file, so in
+ * the capture phase on `window` they run first and can stop every gesture
+ * before the journey, the hover, the picking or the tour sees it.
+ *
+ * What is left: dragging turns the camera round the planet and the arrow keys
+ * do the same (both through `rotate`, filled in where the view is built).
+ * No clicking, hovering, zooming or travelling. The view's own panel answers
+ * normally; Escape always leaves.
+ *
+ * Escape leaves on keydown, so the matching keyup -- and any auto-repeat of a
+ * held key -- is swallowed too: neither may reach the scene's own Escape,
+ * which would then leave the planet as well.
+ */
+const ULTRAVIOLET_LOCK = { active: false, exit: null, rotate: null, drag: null, swallowEscape: false };
+["pointerdown", "pointermove", "pointerup", "pointercancel", "click", "dblclick", "contextmenu", "wheel", "touchstart", "touchmove"]
+  .forEach((type) => {
+    addEventListener(type, (event) => {
+      if (!ULTRAVIOLET_LOCK.active) return;
+      if (event.target?.closest?.(".uv-view")) return;
+      const lock = ULTRAVIOLET_LOCK;
+      if (type === "pointerdown" && event.button === 0) {
+        lock.drag = { id: event.pointerId, x: event.clientX, y: event.clientY };
+        document.body.classList.add("is-ultraviolet-dragging");
+      } else if (type === "pointermove" && lock.drag && event.pointerId === lock.drag.id) {
+        lock.rotate?.(event.clientX - lock.drag.x, event.clientY - lock.drag.y);
+        lock.drag.x = event.clientX;
+        lock.drag.y = event.clientY;
+      } else if ((type === "pointerup" || type === "pointercancel") && lock.drag && event.pointerId === lock.drag.id) {
+        lock.drag = null;
+        document.body.classList.remove("is-ultraviolet-dragging");
+      }
+      event.stopImmediatePropagation();
+      if (event.cancelable && type !== "pointermove" && type !== "pointerdown") event.preventDefault();
+    }, { capture: true, passive: false });
+  });
+const ULTRAVIOLET_ARROWS = { ArrowLeft: [-30, 0], ArrowRight: [30, 0], ArrowUp: [0, -30], ArrowDown: [0, 30] };
+addEventListener("keydown", (event) => {
+  if (!ULTRAVIOLET_LOCK.active) {
+    if (ULTRAVIOLET_LOCK.swallowEscape && event.key === "Escape" && event.repeat) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+    }
+    return;
+  }
+  if (event.key === "Escape") {
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    ULTRAVIOLET_LOCK.swallowEscape = true;
+    ULTRAVIOLET_LOCK.exit?.();
+    return;
+  }
+  const arrow = ULTRAVIOLET_ARROWS[event.key];
+  if (arrow) {
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    ULTRAVIOLET_LOCK.rotate?.(arrow[0], arrow[1]);
+    return;
+  }
+  // Tab, Enter and Space still work on the view's own button.
+  if (event.target?.closest?.(".uv-view") && ["Tab", "Enter", " "].includes(event.key)) return;
+  event.preventDefault();
+  event.stopImmediatePropagation();
+}, { capture: true });
+addEventListener("keyup", (event) => {
+  if (event.key === "Escape" && ULTRAVIOLET_LOCK.swallowEscape) {
+    ULTRAVIOLET_LOCK.swallowEscape = false;
+    event.stopImmediatePropagation();
+    return;
+  }
+  if (!ULTRAVIOLET_LOCK.active) return;
+  if (event.target?.closest?.(".uv-view")) return;
+  event.stopImmediatePropagation();
+}, { capture: true });
+
 const JOURNEY_UI_SELECTOR = [
   ".about-experience",
   ".tour__card",
@@ -3108,6 +3187,114 @@ composeSolarEventShot(
   /* Round 8: every visit to the board starts from today. A comet left where
    * the glow view put it goes back first, so the board's badges, the glow
    * view's bars and the scene all show the same, current, state. */
+  /*
+   * Final rounds: the ultraviolet view, opened from a planet's info card
+   * ("See it in ultraviolet"; the board's "Aurora · UV mode" opens that card
+   * at its aurora section). Guides go, the
+   * HUD goes, the camera turns to face the aurora, and the lock above leaves
+   * only turning and Escape.
+   */
+  const ultravioletPlanets = planets.filter((planet) => ULTRAVIOLET_PLANETS.includes(planet.name));
+  const ultravioletView = createUltravioletView({
+    planets: ultravioletPlanets,
+    // Built further down; only read once the view is opened.
+    getSky: () => {
+      try { return spaceEnvironment?.root ?? null; } catch { return null; }
+    },
+    onExitRequest: () => leaveUltravioletView(),
+  });
+  function leaveUltravioletView() {
+    if (!ultravioletView.active) return;
+    ultravioletView.exit();
+    ULTRAVIOLET_LOCK.active = false;
+    ULTRAVIOLET_LOCK.exit = null;
+    ULTRAVIOLET_LOCK.rotate = null;
+    ULTRAVIOLET_LOCK.drag = null;
+    focusZoomTarget = 1;
+    document.body.classList.remove("is-ultraviolet-view", "is-ultraviolet-dragging");
+    setGuideSuppression("ultraviolet", false);
+  }
+  /* Same rates as the scene's own drag and arrow keys (see the pointermove
+   * and keydown handlers further down). */
+  function rotateUltravioletView(dx, dy) {
+    targetYaw -= dx * 0.006;
+    targetPitch = wrapAngle(targetPitch - dy * 0.004);
+  }
+  /* Turns the camera to face the aurora (ultravioletView.js decides where
+   * that is). The camera's offset is (cos p sin y, 0.64 sin p, cos p cos y),
+   * so this is that formula run backwards; the yaw goes the short way. */
+  function aimAtAurora(planet) {
+    const direction = auroraViewDirection(planet);
+    if (!direction) return;
+    const horizontal = Math.hypot(direction.x, direction.z);
+    const desiredYaw = Math.atan2(direction.x, direction.z);
+    targetYaw += wrapAngle(desiredYaw - targetYaw);
+    targetPitch = wrapAngle(Math.atan2(direction.y / 0.64, horizontal));
+    /* The zoom multiplies the body's own framing distance. The planet's
+     * radius, not the ring-inclusive framing radius: the view is for the
+     * disc and its aurora. The frame loop still keeps the usual clearance. */
+    const baseDistance = Math.max(0.001, getFocusedBaseDistance(planet));
+    const radius = planet.userData?.visualRadius ?? 1;
+    focusZoomTarget = THREE.MathUtils.clamp(
+      ultravioletFramingRadii(planet) * radius / baseDistance,
+      getFocusedMinimumZoom(planet),
+      30,
+    );
+  }
+  addEventListener("beyond-earth:ultraviolet-view", (event) => {
+    const planet = ultravioletPlanets.find((body) => body.name === event.detail?.name);
+    if (!planet) return;
+    clearCelestialHover();
+    clearPlanetOrbitHover();
+    celestialDetailsPanel?.hide({ restoreFocus: false });
+    if (focusedBody !== planet) focusBody(planet);
+    if (!ultravioletView.enter(planet)) return;
+    aimAtAurora(planet);
+    document.body.classList.add("is-ultraviolet-view");
+    setGuideSuppression("ultraviolet", true);
+    ULTRAVIOLET_LOCK.exit = leaveUltravioletView;
+    ULTRAVIOLET_LOCK.rotate = rotateUltravioletView;
+    ULTRAVIOLET_LOCK.active = true;
+  });
+  /*
+   * The board's "Aurora · UV mode" pill (second final round). Flies to the
+   * planet, then opens its card at the aurora section once the camera has
+   * arrived -- the card freezes the scene, so opening it earlier would stop
+   * the flight half-way. Already there: the card opens at once.
+   */
+  let auroraInfoWait = null;
+  addEventListener("beyond-earth:aurora-info", (event) => {
+    const planet = ultravioletPlanets.find((body) => body.name === event.detail?.name);
+    if (!planet) return;
+    if (auroraInfoWait) clearInterval(auroraInfoWait);
+    const openCard = () => {
+      queueCelestialDetailsContext(planet.name, { highlightSection: "aurora", openAdvanced: false });
+      openCelestialDetails(planet);
+    };
+    if (focusedBody === planet) {
+      openCard();
+      return;
+    }
+    setTimeout(() => focusBody(planet), 180);
+    const startedAt = performance.now();
+    const centre = new THREE.Vector3();
+    auroraInfoWait = setInterval(() => {
+      const waited = performance.now() - startedAt;
+      if (focusedBody !== planet) {
+        if (waited > 1500) { clearInterval(auroraInfoWait); auroraInfoWait = null; }
+        return;
+      }
+      planet.getWorldPosition(centre);
+      const framing = getFocusedBaseDistance(planet) * focusZoomCurrent;
+      const arrived = camera.position.distanceTo(centre) < framing * 1.3 && !isArrivalCaptionPlaying;
+      if (arrived || waited > 20000) {
+        clearInterval(auroraInfoWait);
+        auroraInfoWait = null;
+        openCard();
+      }
+    }, 250);
+  });
+
   const resetPlacedComets = () => {
     const name = cometPlacementChip.current;
     if (!name) return;
@@ -7177,6 +7364,8 @@ composeSolarEventShot(
   let lastPointerResolution = null;
 
   function openCelestialDetails(body = focusedBody) {
+    // Nothing opens over the ultraviolet view: it is for looking only.
+    if (ULTRAVIOLET_LOCK.active) return false;
     if (!body || focusExitTransition || !celestialDetailsPanel?.hasDetailsFor(body)) return false;
     const queuedContext = consumeQueuedCelestialDetailsContext(body);
     return celestialDetailsPanel.show(body, {
