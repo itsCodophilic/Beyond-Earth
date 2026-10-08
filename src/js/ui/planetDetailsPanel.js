@@ -37,6 +37,12 @@ const PLANET_DETAILS = Object.freeze({
     scienceUrl: "https://science.nasa.gov/venus/facts/",
   }),
   Earth: Object.freeze({
+    aurora: {
+      how: "Earth's magnetic field shields it from the solar wind, but on the night side the wind stretches the field into a long tail. When a gust or a solar storm arrives, the tail snaps and reconnects, and electrons are fired back along the field lines into the upper atmosphere near the poles. They strike oxygen and nitrogen, which glow.",
+      poles: "Around both magnetic poles at once: the aurora borealis in the north and the aurora australis in the south, as near-mirror images. Each is an oval ring at about 65–75° magnetic latitude — over northern Scandinavia, Iceland, Alaska and northern Canada, and over Antarctica and the Southern Ocean — and it widens towards the equator in big storms (in May 2024 it was seen as far south as Mexico). The light comes from about 100 to 300 km up.",
+      why: "Earth's is the one aurora you can see with your own eyes. Green is oxygen at about 100–200 km (557.7 nm), red is oxygen higher up, above about 200 km (630 nm), and blue and purple come from nitrogen low down, at the bottom edge of the curtains. Satellites see it in ultraviolet too, but since it is already bright in colours an eye can see, Earth has no ultraviolet view here.",
+      visible: true,
+    },
     classification: "Terrestrial Planet",
     relativeScale: "1 Earth mass · 1× Earth's diameter",
     distanceFromStar: "1 AU · about 150 million km from the Sun",
@@ -53,7 +59,7 @@ const PLANET_DETAILS = Object.freeze({
   Mars: Object.freeze({
     aurora: {
       how: "Mars lost its global magnetic field billions of years ago, so it has no ring of aurora round each pole. It has three other kinds. Discrete aurora glows where patches of ancient crust are still magnetised, mostly in the southern hemisphere, when electrons are pushed down those field lines. Diffuse aurora spreads over the whole night side when a solar storm drives energetic particles into the air. Proton aurora lights the day side, made by the solar wind itself. The particles strike oxygen, carbon dioxide and carbon monoxide, which glow.",
-      poles: "No — Mars has no auroral poles. The discrete aurora clusters over the magnetised crust in the southern hemisphere (the two patches drawn here, over Terra Sirenum and Terra Cimmeria), and diffuse aurora can cover the whole night side.",
+      poles: "Not at the poles — Mars has none to speak of. The discrete aurora sits over the patches of ancient magnetised crust, mostly in the southern hemisphere: the two drawn here are over Terra Sirenum and Terra Cimmeria, at roughly 30–60° south, and they glow on the night side, well above 100 km. During solar storms a diffuse aurora can cover the whole night side, lower down (about 60–70 km), and proton aurora lights the day side.",
       why: "Almost all of that glow is ultraviolet — oxygen at 130.4 nm, carbon monoxide at 135–170 nm. The only visible-light aurora ever recorded on Mars was a faint green glow Perseverance saw from the surface in March 2024. So the normal view shows it barely at all; the ultraviolet view shows it the way NASA's MAVEN and the Emirates Mars Mission's Hope probe see it.",
     },
     classification: "Terrestrial Planet",
@@ -72,7 +78,7 @@ const PLANET_DETAILS = Object.freeze({
   Jupiter: Object.freeze({
     aurora: {
       how: "Jupiter has the strongest magnetic field of any planet, and its moon Io feeds it about a tonne of volcanic gas every second. That gas becomes plasma, whirled round with the planet; where it falls behind, electric currents drive electrons down the field lines into the polar atmosphere. They strike hydrogen, which glows. The solar wind adds to it, and Io, Europa and Ganymede each leave a spot of aurora where their own field lines come down.",
-      poles: "Yes — rings of aurora surround both magnetic poles at once, north and south, and Juno has flown low over both. They are not mirror images: the northern one is more lopsided, because the magnetic field there is more tangled.",
+      poles: "Around both magnetic poles at once, north and south, as bright rings a little way out from each pole — far bigger than Earth itself — with patchier glow inside them, nearer the pole. Just outside each ring sit small spots where the field lines from Io, Europa and Ganymede come down. Juno has flown low over both. They are not mirror images: the northern ring is more lopsided, because the field there is more tangled.",
       why: "Glowing hydrogen gives out almost all its light in ultraviolet and infrared. Hubble and Juno's ultraviolet spectrograph see auroras hundreds of times more powerful than Earth's; in visible light only a faint glow on the night side has ever been caught (Galileo, 1997). In ultraviolet the disc reflects little sunlight, so the aurora stands out.",
     },
     classification: "Gas Giant",
@@ -92,7 +98,7 @@ const PLANET_DETAILS = Object.freeze({
   Saturn: Object.freeze({
     aurora: {
       how: "Gusts of solar wind squeeze Saturn's magnetic field; its stretched tail snaps and reconnects, firing electrons down the field lines towards the poles. Plasma from the geysers of its moon Enceladus also fills the field. The electrons strike hydrogen high in the atmosphere, which glows.",
-      poles: "Yes — both. Hubble and Cassini imaged rings of aurora round the north and the south pole; they brighten and swell together when a gust of solar wind arrives.",
+      poles: "Around both poles, as rings at about 70–80° latitude, north and south. The glow comes from high in the atmosphere — Cassini found it pink a few hundred kilometres above the cloud tops and purple at 1,000–1,500 km. The rings brighten and swell towards the equator together when a gust of solar wind arrives.",
       why: "Most of that light is ultraviolet and infrared. Cassini once caught a faint pink-to-purple glow in visible light, but the bright rings round the poles are only an ultraviolet sight — which is why Hubble and Cassini's ultraviolet imager are the cameras that show them.",
     },
     classification: "Gas Giant",
@@ -112,7 +118,7 @@ const PLANET_DETAILS = Object.freeze({
   Uranus: Object.freeze({
     aurora: {
       how: "Uranus's magnetic field is tipped 59° from its spin axis and offset from the planet's centre, so its magnetic poles sit far from the spin poles — one well into the mid-latitudes. When gusts of solar wind reach it, electrons stream down the field lines near those magnetic poles and make the hydrogen glow.",
-      poles: "Yes — at both magnetic poles. Voyager 2 saw aurora near both in 1986, and Hubble caught spots round both during solar storms (2011–2014). Because the magnetic poles are not the spin poles, the aurora sits far from where you would expect it.",
+      poles: "Around the two magnetic poles — which are far from the spin poles, because the field is tipped 59° and pushed off-centre. So the aurora appears as spots and bands well away from the top and bottom of the planet, one of them in the mid-latitudes. Voyager 2 saw it near both magnetic poles in 1986, Hubble caught it there during solar storms (2011–2014, 2022), and JWST mapped it in 2025 as two bright bands with a dimmer gap between them.",
       why: "It has been seen only in ultraviolet (Voyager 2, Hubble) and infrared (H₃⁺ ions, Keck and JWST) — never in visible light. The ultraviolet view follows Hubble's October 2022 images: blue-purple glows over a blue disc with a white polar cap. In January 2025 JWST mapped it as two bright bands near the magnetic poles, with a dimmer gap between them.",
     },
     classification: "Ice Giant",
@@ -258,6 +264,54 @@ function collectRingRoster(body) {
   return rings;
 }
 
+/*
+ * Fifth final round: the aurora section for the other bodies in the scene
+ * that have one (graphics/extraAurorae.js draws them). The four giants and
+ * Mars keep theirs in PLANET_DETAILS.
+ */
+const EXTRA_AURORA_DETAILS = Object.freeze({
+  "Neptune": {
+    how: "Neptune's magnetic field is tipped 47° from its spin and pushed far off the planet's centre. Electrons from the solar wind and from its own magnetosphere stream down the field lines near its magnetic poles and make hydrogen high in the atmosphere glow.",
+    poles: "Around its magnetic poles, which are nowhere near its spin poles: the field is tipped 47° and pushed far off-centre. JWST found the aurora across the southern mid-latitudes, between 30° and 60° south, with a counterpart expected in the north.",
+    why: "It shines in infrared (H₃⁺ ions, confirmed by JWST in data from June 2023) and faintly in ultraviolet (Voyager 2, 1989) — never seen in visible light. The view shows it in cyan, as JWST's image did.",
+  },
+  "Io": {
+    how: "Io sits inside Jupiter's magnetic field, which sweeps past it at about 57 km/s. Jupiter's field lines and the charged gas round Jupiter crash into Io's thin sulfur-dioxide atmosphere, and the electrons make oxygen, sulfur and sodium glow.",
+    poles: "Not at the poles — Io has no magnetic field of its own. The brightest glow is two spots on the equator, one on the side facing Jupiter and one on the side facing away, where Jupiter's field lines graze the moon; a fainter glow surrounds the whole limb. The spots slide up and down as Jupiter's tilted field turns.",
+    why: "Most of it is ultraviolet (Hubble). It is the one Galilean aurora seen in colour — red and green oxygen and a blue glow — but only with Io hidden in Jupiter's shadow (Galileo, Cassini, New Horizons, Keck). The ultraviolet view shows the spots.",
+  },
+  "Europa": {
+    how: "Europa has no magnetic field of its own, so nothing steers particles to its poles the way Earth's or Ganymede's field does. Instead Jupiter's magnetic field, and the charged gas it carries, sweeps over the whole moon. Electrons strike Europa's thin oxygen atmosphere everywhere and make the oxygen glow — so it is the atmosphere all round the moon that shines, not the surface and not one region.",
+    poles: "All around the moon, in its thin atmosphere — not at the poles and not on the surface. That is why you see it as a ring at the edge: looking straight down at the middle of the disc you look through very little gas, and the glow is lost against the bright ice; at the edge you look along the layer through far more gas, so the edge shines brightest. Hubble's ultraviolet images show exactly this — brightest near the edge, patchy, and consistently brighter on the dusk side (Roth et al. 2016), which visible-light observations later confirmed (de Kleer & Brown 2018). It also changes as Jupiter's field sweeps past.",
+    why: "The glow is ultraviolet oxygen light (Hubble); a faint red and green version was caught from Keck in 2023 while Europa was in Jupiter's shadow. Hubble used the same ultraviolet images to look for water plumes.",
+  },
+  "Ganymede": {
+    how: "Ganymede is the only moon with its own magnetic field, a small bubble inside Jupiter's. Where the two fields meet, electrons are driven down Ganymede's field lines and make oxygen glow — just as on Earth, only far fainter.",
+    poles: "Around both of its own magnetic poles: two rings of aurora at about 40–50° latitude, north and south. As Jupiter's tilted field swings past they rock back and forth, and they rock less than they would without a conducting salt-water ocean under the ice — Hubble's evidence for that ocean (2015).",
+    why: "The rings are ultraviolet oxygen light (Hubble STIS); Hubble's image shows them in blue over a Galileo picture of the moon. A faint red glow was seen from Keck in 2023.",
+  },
+  "Callisto": {
+    how: "Like Europa, Callisto has no magnetic field of its own, so nothing funnels particles to its poles. Jupiter's magnetic field brushes past the whole moon, and its electrons make the oxygen in Callisto's very thin carbon-dioxide and oxygen atmosphere glow — the atmosphere all round the moon, not the surface.",
+    poles: "All around the moon, in its very thin atmosphere — not at the poles and not on the surface. The glow so it shows best as a ring at the edge, where your line of sight runs along the gas instead of straight through it. Callisto's aurora is so faint that it has only ever been measured as one combined light from the whole moon (Keck, 2023): nobody has yet mapped where on Callisto it is brightest, so it is drawn as an even, faint ring.",
+    why: "It is the faintest of the four. Its oxygen emission was found in ultraviolet with Hubble and in visible light from Keck in 2023, with Callisto in Jupiter's shadow.",
+  },
+  "Venus": {
+    how: "Venus has no magnetic field, so the solar wind drapes its field lines round the planet and charged particles reach the upper atmosphere directly, mostly on the night side. Oxygen there glows, especially after a solar storm hits.",
+    poles: "Not at the poles — Venus has no magnetic field, so it has none. The glow is spread patchily over the night side of the planet, high in the atmosphere, more like Mars's diffuse aurora than Earth's rings.",
+    why: "Pioneer Venus saw it as ultraviolet oxygen light; from the ground a faint green oxygen line has been caught after solar storms (2014). The ultraviolet view also shows Venus's famous ultraviolet face: bright clouds streaked by an unknown dark absorber.",
+  },
+  "Mercury": {
+    how: "Mercury has a small magnetic field but almost no atmosphere. Electrons are pushed from the tail of its magnetosphere towards the planet and, with no air to stop them, hit the rock itself — which then glows in X-rays.",
+    poles: "Not at the poles and not in the air — Mercury has almost none. It is on the surface itself, on the dawn side, where BepiColombo saw electrons rain down onto the bare rock during its first flyby (1 October 2021).",
+    why: "This one is not ultraviolet at all but X-rays, which are invisible to the eye too. The view shows it in the same false colour, and says so.",
+  },
+  "67P/Churyumov–Gerasimenko": {
+    how: "The comet has no magnetic field. Electrons from the solar wind are sped up near the nucleus and crash into the gas of the coma — water, carbon dioxide, oxygen — breaking it apart and making it glow.",
+    poles: "Not on the comet itself: in the coma, the cloud of gas around the nucleus, close in where the gas is densest. It was the first aurora found at a comet (Rosetta, published 2020).",
+    why: "It shines only in far ultraviolet, found by Rosetta's Alice spectrograph. Once thought to be ordinary sunlit glow, it turned out to be an aurora.",
+  },
+});
+
 function resolveDetails(bodyOrName, context = {}) {
   const name = getBodyName(bodyOrName);
   const body = typeof bodyOrName === "string" ? null : bodyOrName;
@@ -329,7 +383,7 @@ function resolveDetails(bodyOrName, context = {}) {
      * replaces the older "light your eyes cannot see" row. Earth's aurora is
      * visible light and has no entry.
      */
-    aurora: planet?.aurora ?? null,
+    aurora: planet?.aurora ?? EXTRA_AURORA_DETAILS[name] ?? null,
     ringRoster: collectRingRoster(body),
     ringSystemName: null,
     lore: planet?.lore
@@ -465,12 +519,12 @@ export function createCelestialDetailsPanel() {
         </dl>
 
         <section class="planet-details__aurora" data-planet-field="aurora" hidden>
-          <p class="planet-details__aurora-eyebrow" data-cosmic-text>Aurora · UV mode</p>
+          <p class="planet-details__aurora-eyebrow" id="planet-details-aurora-eyebrow" data-cosmic-text>Aurora · UV mode</p>
           <h3 data-cosmic-text>How the aurora happens</h3>
           <p id="planet-details-aurora-how" data-cosmic-text></p>
-          <h3 data-cosmic-text>At both poles?</h3>
+          <h3 data-cosmic-text>Where it happens</h3>
           <p id="planet-details-aurora-poles" data-cosmic-text></p>
-          <h3 data-cosmic-text>Why ultraviolet</h3>
+          <h3 id="planet-details-aurora-why-heading" data-cosmic-text>Why ultraviolet</h3>
           <p id="planet-details-aurora-why" data-cosmic-text></p>
           <button type="button" class="planet-details__uv-button" data-uv-view>
             <span class="planet-details__uv-glyph" aria-hidden="true"></span>
@@ -572,6 +626,9 @@ export function createCelestialDetailsPanel() {
     orbital: "Orbital period / motion",
   });
   const auroraSection = layer.querySelector('[data-planet-field="aurora"]');
+  const auroraEyebrow = layer.querySelector("#planet-details-aurora-eyebrow");
+  const auroraWhyHeading = layer.querySelector("#planet-details-aurora-why-heading");
+  const auroraUvButton = auroraSection.querySelector("[data-uv-view]");
   const auroraFields = Object.freeze({
     how: layer.querySelector("#planet-details-aurora-how"),
     poles: layer.querySelector("#planet-details-aurora-poles"),
@@ -905,6 +962,13 @@ export function createCelestialDetailsPanel() {
      */
     Object.keys(advancedFields).forEach((key) => writeAdvancedField(key, details[key]));
     auroraSection.hidden = !details.aurora;
+    /* Earth's aurora is visible light: no ultraviolet view for it, and its
+     * third heading says what an eye sees instead (tenth final round). */
+    const visibleOnly = Boolean(details.aurora?.visible);
+    auroraEyebrow.textContent = visibleOnly ? "Aurora · visible light" : "Aurora · UV mode";
+    auroraWhyHeading.textContent = visibleOnly ? "What you would see" : "Why ultraviolet";
+    auroraUvButton.hidden = visibleOnly;
+    auroraUvButton.style.display = visibleOnly ? "none" : "";
     auroraFields.how.textContent = details.aurora?.how ?? "";
     auroraFields.poles.textContent = details.aurora?.poles ?? "";
     auroraFields.why.textContent = details.aurora?.why ?? "";

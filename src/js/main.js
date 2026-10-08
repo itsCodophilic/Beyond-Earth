@@ -60,6 +60,7 @@ import { createOuterBoundaries, updateOuterBoundaries, applyOuterBoundaryQuality
 import { createSmallBodies, updateSmallBodies, updateBinaryHighlights, placeCometAt, restoreCometToToday, cometActivity } from './scene/smallBodies/smallBodies.js';
 import { createCometPlacementChip } from './ui/cometPlacementChip.js';
 import { createUltravioletView, ULTRAVIOLET_PLANETS, auroraViewDirection, ultravioletFramingRadii } from './scene/ultravioletView.js';
+import { attachExtraAurorae, updateExtraAurorae, bodyRadius as auroraBodyRadius } from './graphics/extraAurorae.js';
 import {
   ASTRONOMICAL_UNIT_KM,
   createEarthDistanceTracker,
@@ -3194,9 +3195,40 @@ composeSolarEventShot(
    * HUD goes, the camera turns to face the aurora, and the lock above leaves
    * only turning and Escape.
    */
-  const ultravioletPlanets = planets.filter((planet) => ULTRAVIOLET_PLANETS.includes(planet.name));
+  /*
+   * The bodies with an aurora view are planets, Jupiter's moons (built a few
+   * at a time after the opening) and a comet, so they are found by name when
+   * needed rather than listed once here.
+   */
+  function findSceneBody(name) {
+    if (!name) return null;
+    const matches = (candidate) => (candidate?.userData?.name ?? candidate?.name) === name;
+    const planet = planets.find(matches);
+    if (planet) return planet;
+    try {
+      for (const system of majorSatelliteSystems) {
+        const moon = system.moons.find(({ moon: candidate }) => matches(candidate))?.moon;
+        if (moon) return moon;
+      }
+    } catch { /* not built yet */ }
+    try {
+      return (smallBodies?.allTargets ?? []).find(matches) ?? null;
+    } catch {
+      return null;
+    }
+  }
+  function findAuroraBody(name) {
+    return ULTRAVIOLET_PLANETS.includes(name) ? findSceneBody(name) : null;
+  }
+  /* The other bodies' aurorae (graphics/extraAurorae.js), added as each body
+   * appears; the moons arrive over the first seconds. */
+  const extraAuroraTimer = setInterval(() => {
+    try {
+      if (attachExtraAurorae(findSceneBody)) clearInterval(extraAuroraTimer);
+    } catch { /* the scene is still being built */ }
+  }, 1500);
   const ultravioletView = createUltravioletView({
-    planets: ultravioletPlanets,
+    bodies: () => ULTRAVIOLET_PLANETS.map(findSceneBody).filter(Boolean),
     // Built further down; only read once the view is opened.
     getSky: () => {
       try { return spaceEnvironment?.root ?? null; } catch { return null; }
@@ -3234,7 +3266,16 @@ composeSolarEventShot(
      * radius, not the ring-inclusive framing radius: the view is for the
      * disc and its aurora. The frame loop still keeps the usual clearance. */
     const baseDistance = Math.max(0.001, getFocusedBaseDistance(planet));
-    const radius = planet.userData?.visualRadius ?? 1;
+    /* World-space radius, from the drawn sphere where there is one: a
+     * moon's userData radius is not always the size it is drawn at. */
+    let radius = planet.userData?.visualRadius ?? 1;
+    if (planet.geometry) {
+      if (!planet.geometry.boundingSphere) planet.geometry.computeBoundingSphere();
+      radius = (planet.geometry.boundingSphere?.radius ?? radius) * planet.getWorldScale(new THREE.Vector3()).x;
+    } else {
+      // A small body: the size of its solid nucleus (extraAurorae.js).
+      radius = auroraBodyRadius(planet) * planet.getWorldScale(new THREE.Vector3()).x || radius;
+    }
     focusZoomTarget = THREE.MathUtils.clamp(
       ultravioletFramingRadii(planet) * radius / baseDistance,
       getFocusedMinimumZoom(planet),
@@ -3242,12 +3283,29 @@ composeSolarEventShot(
     );
   }
   addEventListener("beyond-earth:ultraviolet-view", (event) => {
-    const planet = ultravioletPlanets.find((body) => body.name === event.detail?.name);
-    if (!planet) return;
+    const planet = findAuroraBody(event.detail?.name);
+    if (!planet) {
+      /* A Jovian moon not built yet: travelling there builds it (see the
+       * travel listener); the view opens once it exists. */
+      const name = event.detail?.name;
+      if (!ULTRAVIOLET_PLANETS.includes(name) || event.detail?.retried) return;
+      dispatchEvent(new CustomEvent("beyond-earth:travel-to-body", { detail: { name, noDossier: true } }));
+      const startedAt = performance.now();
+      const wait = setInterval(() => {
+        if (findAuroraBody(name) || performance.now() - startedAt > 6000) {
+          clearInterval(wait);
+          dispatchEvent(new CustomEvent("beyond-earth:ultraviolet-view", { detail: { name, retried: true } }));
+        }
+      }, 250);
+      return;
+    }
     clearCelestialHover();
     clearPlanetOrbitHover();
     celestialDetailsPanel?.hide({ restoreFocus: false });
     if (focusedBody !== planet) focusBody(planet);
+    // A moon built a moment ago may not have its aurora yet; add it before
+    // the view switches every aurora to ultraviolet.
+    try { attachExtraAurorae(findSceneBody); } catch { /* still building */ }
     if (!ultravioletView.enter(planet)) return;
     aimAtAurora(planet);
     document.body.classList.add("is-ultraviolet-view");
@@ -3264,33 +3322,42 @@ composeSolarEventShot(
    */
   let auroraInfoWait = null;
   addEventListener("beyond-earth:aurora-info", (event) => {
-    const planet = ultravioletPlanets.find((body) => body.name === event.detail?.name);
-    if (!planet) return;
+    const name = event.detail?.name;
+    /* Earth's aurora is visible light, so it has a card section but no
+     * ultraviolet view (tenth final round: "earth etc.."). */
+    const findInfoBody = (n) => (n === "Earth" ? findSceneBody(n) : findAuroraBody(n));
+    if (name !== "Earth" && !ULTRAVIOLET_PLANETS.includes(name)) return;
     if (auroraInfoWait) clearInterval(auroraInfoWait);
-    const openCard = () => {
-      queueCelestialDetailsContext(planet.name, { highlightSection: "aurora", openAdvanced: false });
-      openCelestialDetails(planet);
+    const openCard = (body) => {
+      queueCelestialDetailsContext(name, { highlightSection: "aurora", openAdvanced: false });
+      openCelestialDetails(body);
     };
-    if (focusedBody === planet) {
-      openCard();
+    const already = findInfoBody(name);
+    if (already && focusedBody === already) {
+      openCard(already);
       return;
     }
-    setTimeout(() => focusBody(planet), 180);
+    /* The travel listener finds planets, moons (building one that is still
+     * queued) and comets alike. */
+    setTimeout(() => {
+      dispatchEvent(new CustomEvent("beyond-earth:travel-to-body", { detail: { name, noDossier: true } }));
+    }, 0);
     const startedAt = performance.now();
     const centre = new THREE.Vector3();
     auroraInfoWait = setInterval(() => {
       const waited = performance.now() - startedAt;
-      if (focusedBody !== planet) {
-        if (waited > 1500) { clearInterval(auroraInfoWait); auroraInfoWait = null; }
+      const body = findInfoBody(name);
+      if (!body || focusedBody !== body) {
+        if (waited > 6000) { clearInterval(auroraInfoWait); auroraInfoWait = null; }
         return;
       }
-      planet.getWorldPosition(centre);
-      const framing = getFocusedBaseDistance(planet) * focusZoomCurrent;
+      body.getWorldPosition(centre);
+      const framing = getFocusedBaseDistance(body) * focusZoomCurrent;
       const arrived = camera.position.distanceTo(centre) < framing * 1.3 && !isArrivalCaptionPlaying;
       if (arrived || waited > 20000) {
         clearInterval(auroraInfoWait);
         auroraInfoWait = null;
-        openCard();
+        openCard(body);
       }
     }, 250);
   });
@@ -9237,6 +9304,7 @@ composeSolarEventShot(
     // Major satellite transforms are inexpensive (only a few dozen objects)
     // and must remain synchronized with their parent planets every frame.
     // Throttling this update caused visible stepping and cursor/target flicker.
+    updateExtraAurorae(frameMotionScale);
     updateMajorSatelliteSystems(
       majorSatelliteSystems,
       frameMotionScale,

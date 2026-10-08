@@ -207,6 +207,218 @@ Not committed to git.
    - After leaving, the normal rings and colours are back.
 3. **Saturn:** unchanged from Part 7.
 
+## Part 9 — Ring shadows, everywhere: done
+
+Not committed to git.
+
+1. **In the normal view, every ring system now takes its body's shadow** (new `graphics/ringShadow.js`, hooked in `planetFactory.js` and `smallBodies.js`).
+   - This covers Saturn, Jupiter, Uranus and Neptune, the rings of Haumea and Quaoar, and Chariklo's and Chiron's.
+   - **How:** one patch works for every ring material, the hand-written particle shaders and three's `PointsMaterial` alike. The shader's own `main` is renamed and wrapped. The new vertex `main` turns `gl_Position` back into a view-space point and asks whether the line from it to the Sun (at the origin) passes through the body. The fragment multiplies its colour by the answer.
+   - **Cost:** a few operations per particle and nothing per pixel; the uniforms are set in `onBeforeRender`.
+   - The shadow keeps 10 % of the light, and its edge is softened over 3 % of the radius.
+   - **Measured:** from behind each body, the shadow darkens 2.8 % of the screen at Saturn, 6.8 % at Jupiter, 0.5 % at Neptune and 0.4 % at Haumea.
+   - At Uranus it is 0.03 %. That is right for now: Uranus's pole points close to the Sun this decade, so its rings face the Sun and lie mostly outside the planet's shadow. It is the same reason they are rarely eclipsed near solstice.
+   - No shader errors.
+2. **Jupiter's ultraviolet rings no longer look broken.**
+   - The first version drew the shadowed arc as a dark film over the stars.
+   - A dust ring in shadow mostly fades instead (`glow` 0.65), so it runs on through the shadow as a dim band.
+   - Saturn's dense rings keep a dark band (`glow` 0); Uranus's are in between (0.5).
+   - The ultraviolet view already shadowed Uranus's rings.
+
+**Aurorae on bodies in the scene that are not drawn (researched, not built):**
+- **Neptune:**
+  - ultraviolet hints from Voyager 2 (1989);
+  - infrared H₃⁺ aurora confirmed by JWST (June 2023 data, published 2025, Nature Astronomy), in the southern mid-latitudes (30–60° S), where its tilted field puts the auroral zone.
+- **Jupiter's moons (Io, Europa, Ganymede, Callisto):**
+  - oxygen aurorae, in ultraviolet from Hubble;
+  - in visible light, faint red and green oxygen plus sodium and potassium, seen from Keck while the moons were in Jupiter's shadow (2023);
+  - Io's is the brightest; Ganymede's two ovals are evidence for its underground ocean.
+- **Venus:** a faint green oxygen glow, with no global magnetic field.
+- **Mercury:** an X-ray aurora where solar-wind electrons hit the bare surface (BepiColombo, 2023).
+- **Comet 67P:** a far-ultraviolet aurora from solar-wind electrons in its coma (Rosetta, 2020).
+- **Triton:** possible ultraviolet emission from electrons out of Neptune's magnetosphere (Voyager 2) — not settled.
+- **Not on the list:** the Moon, Pluto and Charon have no aurora detected.
+
+## What to test (part 9)
+1. **Saturn:** fly behind the planet (to its night side) and look back. A dark band, the planet's shadow, lies across the rings behind it.
+2. **Jupiter (normal view):** the faint rings dim where they pass behind the planet.
+3. **Jupiter (ultraviolet):** the ring runs on through the shadow as a dimmer band, with no dark patch hiding the stars.
+4. **Neptune, Haumea and Chariklo:** the same dimming behind the body, and nothing else changed.
+5. **Frame rate:** unchanged at Saturn.
+
+## What to test (part 10)
+1. **All bodies:**
+   - The new filter "UV mode · aurora" lights Mercury, Venus, Mars, Jupiter, Saturn, Uranus, Neptune and 67P.
+   - Each has an "Aurora · UV mode" pill.
+   - In Jupiter's moon board, Io, Europa, Ganymede and Callisto each have an aurora button on their card.
+2. **Each pill or button:** the camera flies there and the card opens at the aurora section; "See it in ultraviolet" opens the view. Check:
+   - **Neptune:** a blue disc and a cyan aurora band in the south.
+   - **Venus:** a blue-white ultraviolet cloud face, with a faint aurora on the night side.
+   - **Mercury:** a grey disc and a teal X-ray glow on the dawn edge.
+   - **Io:** two bright spots at the equator, on the Jupiter-facing and far sides.
+   - **Europa:** a patchy glow.
+   - **Ganymede:** blue ovals.
+   - **Callisto:** a faint haze.
+   - **67P:** a violet coma round the nucleus.
+3. **Eye view:** Io's aurora is very faint, and the others are almost invisible. Mercury's and 67P's are not drawn at all.
+4. **Ring shadows:** at Saturn, Jupiter, Uranus, Neptune, Haumea, Quaoar, Chariklo and Chiron, the part of the ring in the planet's shadow is darker but still visible. Check this in both the normal and the ultraviolet view.
+
+## What to test (part 11)
+1. **Aurorae look like glow, not a second surface:**
+   - Mars: wait for the storm surge in the normal view.
+   - Venus, Mercury, Jupiter, Saturn, Uranus, Neptune, Io, Europa, Ganymede and Callisto: check each in UV.
+   - The night side shows the planet's own surface with a soft glow over it.
+2. **Mercury's aurora** is violet-blue.
+3. **67P in UV:** a soft violet glow around the nucleus, with no cage.
+4. **Saturn in UV:** the rings are still made of particles, now peach, cream and blue.
+5. **Jupiter, both views:** the ring passing through Jupiter's shadow is dimmer but still visible, not broken.
+6. **Ganymede in UV:** Io, Europa and Callisto in the distance stay as normal.
+
+## What to test (part 12)
+1. **Jupiter in UV:** the aurora glows only round the north pole. Turn to the night side: it shows the same bands, dimmer, with no glow or lines across it.
+2. **Venus and Mars in UV:**
+   - Venus: a soft glow along the night-side limb only.
+   - Mars: glowing patches in the south, on the night side.
+   - Neither should have long lines across the planet.
+3. **67P in UV:** a still violet glow, with nothing pink moving as you turn it.
+4. **Saturn:** unchanged.
+5. **Uranus, Neptune and the four big moons:** same check as Jupiter — the aurora only where it belongs.
+
+## What to test (part 13)
+1. **Venus, Mars, Uranus and Neptune in UV, plus Mars's storm glow in the normal view:** soft patches of light, with no curved lines running across them.
+2. **The four big moons in UV:** the same.
+3. **67P in UV:** an even blue-violet glow over and around the nucleus, with no pink edge as it turns.
+4. **Jupiter and Saturn:** still as you liked them, with curtains in their polar spirals.
+
+## What to test (part 14)
+1. **Europa and Callisto in UV:** a thin ring of light round the edge of each moon. Turn them: the surface on the face, day and night side, looks the same as in the normal view, only coloured for UV.
+2. **Every other body:** unchanged from the last round.
+
+## Part 10 — Aurorae for eight more bodies, a "UV mode" filter, softer shadows: done
+
+Not committed to git.
+
+1. **New aurorae** (new `graphics/extraAurorae.js`, colours in `graphics/planetAurora.js`). These use the same shells as the giants: barely there to the eye (or not drawn at all where no eye could see them), and full strength in the ultraviolet view.
+   - **Neptune:** a partial band across 30–60° S, where JWST found it in infrared (June 2023 data; Melin et al. 2025), and a faint northern counterpart. Cyan in the view, as in JWST's image.
+   - **Io:** the two equatorial spots, facing towards and away from Jupiter, plus a faint limb glow. The shell is turned every frame to face Jupiter. To the eye: red, green and blue, the brightest of the moons.
+   - **Europa:** a patchy oxygen glow over the whole disc.
+   - **Ganymede:** two auroral ovals at about ±43°, blue in the view, as in Hubble's image.
+   - **Callisto:** a faint, diffuse glow.
+   - **Venus:** a diffuse night-side glow; to the eye, a faint green.
+   - **Mercury:** an X-ray glow on the dawn side at the surface, turned every frame to stay at dawn. Drawn only in the view, and the card says it is X-rays.
+   - **67P:** a far-ultraviolet coma glow about 1.8 nucleus radii out. Drawn only in the view.
+   - **Triton:** left out, because its aurora is unconfirmed.
+2. **Ultraviolet looks for each** (`UV_LOOK`):
+   - Neptune: Hubble's blue with white clouds, from the JWST composite;
+   - Venus: Mariner 10's blue-white ultraviolet clouds with dark absorber streaks;
+   - Mercury: dim grey, so the X-ray glow shows;
+   - Io: sulfur dark, SO₂ frost bright (new `whiteness` option);
+   - Europa, Ganymede and Callisto: dim greys;
+   - 67P: no skin.
+   - Neptune's rings get ultraviolet bands: dark, reddish dust, so dim warm grey.
+   - The visible-light cloud and haze layers of Venus and Neptune are switched off in the view.
+3. **Cards:** every new body's card has the aurora section — how it happens, at both poles?, and why ultraviolet.
+4. **Finding the bodies:** moons are built a few at a time after the opening, so the view and the board pill find any body by name. Travelling there builds a moon that isn't built yet, and its aurora is attached before the view switches on.
+5. **The board:**
+   - a new filter, **"UV mode · aurora"**. It lights every chip with an aurora view, and Jupiter for its moons;
+   - the "Aurora · UV mode" pill on Mercury, Venus, Neptune and 67P (Mars, Jupiter, Saturn and Uranus already had one);
+   - an "Aurora · UV mode" button on the moon card of Io, Europa, Ganymede and Callisto.
+6. **Shadows on rings, in every mode:**
+   - The shadowed arc now keeps 24 % of its light (was 10 %), in its own colour, as in Saturn's ultraviolet view.
+   - Dust rings in the ultraviolet view keep at least half their opacity there.
+
+**Measured headless:**
+- All eight shells are attached; Mercury's and 67P's are hidden outside the view.
+- The filter lights the right chips; the pills, and the moon card button for Ganymede, are present.
+- Io's aurora pill flies there and opens the card at its aurora section.
+- The ultraviolet view opens on Neptune, Ganymede, Io, Venus, Mercury and 67P.
+- No page errors.
+
+## Part 11 — The owner's eight observations (Prompts.md): done
+
+Not committed to git.
+
+1. **"The back side does not match the front" (points 1, 2, 3, 5, 6, 7) — one cause, in the shared aurora shader** (`graphics/planetAurora.js`).
+   - Its brightness came from two noise fields at 8×28 and 22×58 cells, which drew a hard, blotchy pattern.
+   - Spread over a night side (Mars's storm aurora, Venus, the moons) or a polar cap, it read as a second surface painted on the planet, not as light above it.
+   - Now there is one slow, large-scale variation, the arcs of the oval, and thin rays inside the band, and the latitude noise is smoothed.
+   - Every aurora's place, colour and timing are unchanged.
+   - Earth's aurora does not use this shader and is untouched.
+2. **Mercury's aurora** is violet-blue (`uvA` 0x8a6bff, `uvB` 0x7f9cff).
+3. **67P** — rechecked: its aurora is real (Galand et al. 2020, Nature Astronomy; the first aurora found at a comet).
+   - The sphere shell looked like a cage. A coma has no surface, so it is now a soft violet glow fading outwards from the nucleus, on a camera-facing sprite that swells slowly.
+4. **Saturn's rings in UV stay particles.**
+   - The banded disc is gone. Every ring particle keeps its own brightness and takes its band's false colour, through the same shader patch as the shadow (`setRingUltraviolet` in `graphics/ringShadow.js`).
+   - The same applies to Jupiter, Uranus and Neptune.
+   - Saturn's band hues are stronger: peach-orange B ring, cream A ring, blue C ring.
+5. **Shadowed ring arcs stay visible** in both modes:
+   - shadow floor 32 % for Saturn, 50 % for Jupiter, 40 % for Uranus, 45 % for Neptune, 35 % for the small bodies' rings;
+   - set in `planetFactory.js`; `smallBodies.js` uses the 32 % default.
+6. **Only the body in view switches to ultraviolet.** Previously every aurora body switched, so distant moons lit up too.
+
+**Measured headless:**
+- UV view on Saturn, Jupiter, Venus, 67P and Ganymede; in each case only that body's aurora is switched.
+- Saturn's particles show peach, cream and blue against grey-white in visible light.
+- 67P is a soft halo; Ganymede's band is smooth.
+- No page errors.
+
+## Part 12 — Aurorae kept to their own regions: done
+
+Not committed to git.
+
+1. **Why the far side still looked different** (Jupiter, Venus, Mars):
+   - The shell's diffuse part was spread over the whole sphere (`mix(band, 1.0, diffuse)`). Jupiter's polar fill (22 %) and Mars's storm glow therefore lit the far side of the planet too, in long arcs.
+   - In the ultraviolet view, `uvGain` and `uvDayLift` made that bright.
+   - Now the diffuse glow reaches a few band-widths from its own oval (`regionBand` in `graphics/planetAurora.js`).
+   - Arcs and rays are drawn only on the oval itself; the rest of the glow is smooth.
+   - The broad night-side glows of Venus, Europa and Callisto still cover their discs, but more softly. Venus no longer gets a dayside lift, and its gain is 1.2. Europa's and Callisto's faces are dimmer (the glow sits at their limbs), with a dayside lift of 0.5.
+2. **The skin's night side** keeps 8 % of its light (was 3 %), so it reads as the same surface in shadow.
+3. **67P:** in the view, its visible-light coma, tails and vents are hidden. They were the pink patterns sliding over the glow as it turned. The ultraviolet halo replaces them. The `hide` list now matches at any depth in the body.
+
+**Measured headless:**
+- Jupiter's aurora is at the pole only, and its night side shows the same bands, dimmer.
+- Venus has a soft glow at the night limb.
+- Mars's aurora is confined to the southern night side.
+- 67P shows a halo with nothing moving across it.
+- No page errors.
+
+## Part 13 — No more "watermelon" stripes; 67P's glow without the pink edge: done
+
+Not committed to git.
+
+1. **The stripes** (`graphics/planetAurora.js`).
+   - The arcs, the rays and the shell's ridges were all `sin(longitude × k)`: stripes running pole to pole.
+   - Inside a full spiral round a pole (Jupiter, Saturn) they read as curtains, and they stay there.
+   - Every other aurora — Mars, Venus, Uranus, Neptune, the moons and Jupiter's polar fill — is now a smooth glow with slow, large-scale variation. Its ridges and rays are off and its arcs come from smooth noise (`raysOn`, set when `spiralStrength` ≥ 0.95).
+2. **67P** (`graphics/extraAurorae.js`).
+   - The glow is a flat card through the comet's centre. With depth testing, the half of the nucleus behind the card was tinted and the front half was not, which made a pink edge that slid round as the comet turned.
+   - Depth testing is now off, so the glow lies evenly over and around the nucleus, as the coma surrounds it.
+   - It is also blue-violet (0x6f86ff) rather than lavender, which read as pink over grey rock.
+
+**Measured headless:**
+- Venus, Mars, Uranus and Neptune show soft glows with no stripes.
+- Jupiter's and Saturn's spiral curtains are unchanged.
+- 67P has an even blue-violet glow over the nucleus.
+- No page errors.
+
+## Part 14 — Europa and Callisto: the glow at the limb only: done
+
+Not committed to git.
+
+- **Europa:** the aurora is not the whole moon. Its emission comes from the thin oxygen atmosphere and is brightest round the limb (Hubble; Roth et al. 2016). It was drawn over the face as well, which looked as if the surface itself glowed.
+- **Callisto:** the same. Its night-side face glowed and no longer matched the day side.
+- **The fix:** both are now a ring of light at the limb, and the face — day and night side — keeps its own surface. This uses `faceOnVisibility: 0` and a new `limbGlowStart: 0.5`.
+- **Other bodies untouched:** `limbGlowStart` defaults to 0.03, the value every other aurora always had, so their shaders are byte-for-byte the same.
+- The view's card text and the dossier's "At both poles?" for both moons now say it is the atmosphere that glows, not the surface.
+
+**Measured headless:** Europa and Callisto show a limb ring with an unchanged face. No page errors.
+
+**Later the same round: the descriptions spell it out** (the owner: "highlight this in the description"). Europa's and Callisto's cards ("How the aurora happens", "At both poles?") and their ultraviolet-view text now say:
+- **Why not at the poles:** neither moon has a magnetic field of its own, so Jupiter's field makes its whole thin atmosphere glow.
+- **Why a ring:** the glow is seen as a ring at the edge because your line of sight runs along the gas there.
+- **Europa:** brightest on the dusk side (Hubble, Roth et al. 2016; confirmed in visible light by de Kleer & Brown 2018).
+- **Callisto:** only ever measured as one combined light (Keck, 2023), so where it is brightest is not yet known.
+
 ## Part 3 — Bodies and populations not built (later)
 - Real New Horizons surfaces for Nix, Hydra, Kerberos and Styx.
 - Real surfaces for the photographed mid-sized moons:
@@ -297,4 +509,29 @@ Not committed to git.
 5. Saturn: the rings are cream and peach with a dark blue inner ring, and the planet's shadow falls across them. After leaving, the normal particle rings are back.
 6. Uranus: a dark disc with a faint blue rim, and bright white aurora spots. After leaving, Uranus looks normal again.
 7. Mars: blue-white aurora patches on the night side in the south, brighter than before.
-8. Earth's card has no aurora section.
+8. Earth's card has no aurora section. (Changed in part 8: Earth now has one.)
+
+## Part 8 — Where and how, for every aurora
+The owner asked for every body with an aurora to say where and how it happens, Earth included. Text only; nothing visual changed on any planet.
+
+- Earth has an aurora section now. It covers how the solar wind's stretched magnetotail snaps and fires electrons down the field lines. It says where: oval rings at about 65–75° magnetic latitude around both poles (borealis and australis), widening towards the equator in storms, about 100–300 km up. It also says what you would see: green and red oxygen, blue and purple nitrogen.
+- Earth's aurora is visible light, so its section is headed "Aurora · visible light", its third heading reads "What you would see", and it has no "See it in ultraviolet" button.
+- The board shows an "Aurora" pill beside Earth's moon count, without "UV mode". Earth stays out of the "UV mode · aurora" filter.
+- The card heading "At both poles?" is now "Where it happens" on every body. Every text under it names a place:
+  - Mars: Terra Sirenum and Terra Cimmeria, 30–60° S, on the night side.
+  - Jupiter: rings round both magnetic poles, with the moon footprints just outside them.
+  - Saturn: 70–80° in both hemispheres.
+  - Uranus and Neptune: around their tilted magnetic poles, well away from the spin poles.
+  - Io: equatorial spots.
+  - Europa and Callisto: all around, in the atmosphere.
+  - Ganymede: 40–50° rings.
+  - Venus: the night side.
+  - Mercury: the dawn-side surface.
+  - 67P: the coma.
+- Files: `ui/planetDetailsPanel.js`, `ui/celestialBoard.js`, `main.js` (the aurora-info handler accepts Earth).
+
+## What to test (part 8)
+1. Open All bodies: Earth has a violet "Aurora" pill. Press it. The camera returns to Earth, and the card opens at "Aurora · visible light", with the sections "How the aurora happens", "Where it happens" and "What you would see". There is no ultraviolet button.
+2. Press Mars's "Aurora · UV mode" pill. "Where it happens" names Terra Sirenum and Terra Cimmeria, and the ultraviolet button is still there.
+3. Spot-check Jupiter, Saturn, Uranus, Neptune, Io, Europa, Ganymede, Callisto, Venus, Mercury and 67P. Each card says where its aurora is.
+4. Nothing looks different on any planet, in either view.

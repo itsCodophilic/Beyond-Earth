@@ -10,6 +10,7 @@ import * as THREE from "three";
 import { makeNoiseTexture } from "../graphics/proceduralTextures.js";
 import { createOrbitLine } from "./orbits.js";
 import { createIcyRingSystem, hasIcyRingSystem } from "../planets/icyRings.js";
+import { applyRingShadow } from "../graphics/ringShadow.js";
 import { applyRingProximityVisibility } from "../planets/ringProximity.js";
 import { createSaturnSurfaceMaterial } from "../planets/saturn/saturn.js";
 import { createSaturnRingSystem, updateSaturnRingSystem } from "../planets/saturn/saturnRings.js";
@@ -1527,6 +1528,14 @@ export function createPlanet({
   }
   if (["Jupiter", "Saturn", "Uranus", "Neptune"].includes(config.name)) {
     mesh.userData.visualLayers.ringSystem = addGiantPlanetRings(mesh, config, textures, segmentScale, hoverTargets);
+    // The planet's shadow across its own rings (graphics/ringShadow.js).
+    // Faint dust rings keep more light in the shadow, so the shadowed arc
+    // still reads as ring (sixth final round, the owner).
+    applyRingShadow(mesh.userData.visualLayers.ringSystem, {
+      body: mesh,
+      radius: config.radius,
+      floor: { Saturn: 0.32, Jupiter: 0.5, Uranus: 0.4, Neptune: 0.45 }[config.name] ?? 0.35,
+    });
     const ringBoundsMultiplier = {
       /*
        * Framed on the main ring, not on the whole system.
@@ -1573,6 +1582,7 @@ export function createPlanet({
     });
     mesh.userData.visualLayers.ringSystem = icyRings;
     mesh.userData.icyRingSystem = icyRings;
+    applyRingShadow(icyRings?.group, { body: mesh, radius: config.radius });
     mesh.userData.focusVisualRadius = (icyRings?.outerRadius ?? config.radius) * 1.35;
   } else {
     mesh.userData.focusVisualRadius = config.radius;

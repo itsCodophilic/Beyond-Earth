@@ -88,6 +88,9 @@ const FILTERS = Object.freeze([
   /* Double bodies, by the rule in celestialBoardData.js `isBinarySystem`. */
   { key: "binary", label: "Binaries & triples" },
   { key: "rings", label: "Have rings" },
+  /* Fifth final round: everything with an aurora view, the moons' planet
+   * included (its moon board lists them). */
+  { key: "uv", label: "UV mode · aurora" },
 ]);
 
 /*
@@ -108,6 +111,7 @@ function matchesFilter(body, filter) {
     // have moons -- Ida, Didymos, Sylvia and the rest -- are under Asteroids.
     case "moons": return body.moons.length > 0 && ["planet", "dwarf", "tno"].includes(body.kind);
     case "rings": return body.rings;
+    case "uv": return AURORA_PLANETS.has(body.name) || body.moons.some((moon) => AURORA_MOONS.has(moon.name));
     case "binary": return Boolean(body.binary);
     default: return true;
   }
@@ -213,8 +217,14 @@ function queryMatcher(text) {
  *   the surface map the scene already has loaded for a body, if any -- the
  *   moon board's globe is drawn from it
  */
-/* The planets whose aurora is an ultraviolet sight (scene/ultravioletView.js). */
-const AURORA_PLANETS = new Set(["Mars", "Jupiter", "Saturn", "Uranus"]);
+/* Every body with an aurora view (scene/ultravioletView.js): the planets and
+ * the comet carry the pill on their own chip; Jupiter's four big moons carry
+ * it on their moon card. Earth's aurora is visible light, so not here. */
+const AURORA_PLANETS = new Set(["Mercury", "Venus", "Mars", "Jupiter", "Saturn", "Uranus", "Neptune", "67P/Churyumov–Gerasimenko"]);
+const AURORA_MOONS = new Set(["Io", "Europa", "Ganymede", "Callisto"]);
+/* Earth's aurora is the one seen by eye: its pill opens the card's aurora
+ * section, and there is no ultraviolet view for it (tenth final round). */
+const VISIBLE_AURORA = new Set(["Earth"]);
 
 export function createCelestialBoard({ trigger = null, surfaceFor = null, cometState = null, placeComet = null, onOpen = null } = {}) {
   const data = buildCelestialBoard();
@@ -467,7 +477,7 @@ export function createCelestialBoard({ trigger = null, surfaceFor = null, cometS
       glowBadges.push({ name: body.name, badge });
       item.append(extras);
     }
-    if (body.moons.length || body.rings || body.neverGlows || body.alwaysGlows) {
+    if (body.moons.length || body.rings || body.neverGlows || body.alwaysGlows || AURORA_PLANETS.has(body.name) || VISIBLE_AURORA.has(body.name)) {
       const extras = el("div", "cboard__extras");
       if (body.moons.length) {
         pill = el("button", "cboard__moons",
@@ -485,11 +495,14 @@ export function createCelestialBoard({ trigger = null, surfaceFor = null, cometS
        * HUD. It opens the planet's card at the aurora section -- how it
        * happens, whether both poles glow, why it is shown in ultraviolet --
        * and the card's button opens the ultraviolet view (main.js). */
-      if (AURORA_PLANETS.has(body.name)) {
-        auroraPill = el("button", "cboard__moons cboard__aurora", "Aurora · UV mode");
+      if (AURORA_PLANETS.has(body.name) || VISIBLE_AURORA.has(body.name)) {
+        const byEye = VISIBLE_AURORA.has(body.name);
+        auroraPill = el("button", "cboard__moons cboard__aurora", byEye ? "Aurora" : "Aurora · UV mode");
         auroraPill.type = "button";
         auroraPill.dataset.auroraOf = body.name;
-        auroraPill.setAttribute("aria-label", `How ${body.name}'s aurora happens, and see it in ultraviolet`);
+        auroraPill.setAttribute("aria-label", byEye
+          ? `Where and how ${body.name}'s aurora happens`
+          : `How ${body.name}'s aurora happens, and see it in ultraviolet`);
         extras.append(auroraPill);
       }
       if (body.neverGlows) {
@@ -1305,6 +1318,13 @@ export function createCelestialBoard({ trigger = null, surfaceFor = null, cometS
       card.append(ruler({ moon, group }));
       const actions = el("div", "cmoons__actions");
       actions.append(flyButton(moon.name));
+      if (AURORA_MOONS.has(moon.name)) {
+        const aurora = el("button", "cmoons__fly cmoons__aurora", "Aurora · UV mode");
+        aurora.type = "button";
+        aurora.dataset.auroraOf = moon.name;
+        aurora.setAttribute("aria-label", `How ${moon.name}'s aurora happens, and see it in ultraviolet`);
+        actions.append(aurora);
+      }
       card.append(actions);
     }
 

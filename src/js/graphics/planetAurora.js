@@ -54,6 +54,29 @@ const EYE_AURORA = Object.freeze({
   Jupiter: { level: 0.05, colorA: 0xff4566, colorB: 0x9a6bff, uvA: 0x5f6bff, uvB: 0xe4dcff, uvGain: 2.0, uvDayLift: 0.8 },
   Saturn: { level: 0.05, colorA: 0xff6a96, colorB: 0xa36cff, uvA: 0x6a72ff, uvB: 0xe8e0ff, uvGain: 1.3, uvDayLift: 0.7 },
   Uranus: { level: 0.035, colorA: 0xffc4d2, colorB: 0xffe6ee, uvA: 0x9a6bff, uvB: 0xcfd8ff, uvGain: 3.0, uvDayLift: 0.9 },
+  /*
+   * Fifth final round: the other bodies in the scene with a detected aurora
+   * (graphics/extraAurorae.js says where each one glows and why).
+   *   Neptune   hydrogen, like the giants; to the eye a faint pink. Its UV
+   *             colours copy the cyan JWST used for it (ESA/Webb, 2025).
+   *   Io        visible in eclipse: red and green oxygen and a blue glow from
+   *             SO2 (Galileo, Cassini, New Horizons; Keck 2023), the
+   *             brightest of the four moons
+   *   Europa, Ganymede, Callisto   faint red and green oxygen (Keck, 2023);
+   *             Hubble's ultraviolet images of Ganymede's show it in blue
+   *   Venus     a faint green oxygen line (Gray et al. 2014)
+   *   Mercury   X-rays only (BepiColombo, 2021 flyby) -- nothing an eye sees,
+   *             so level 0 hides it outside the view
+   *   67P       far ultraviolet only (Rosetta, 2020) -- level 0 as well
+   */
+  Neptune: { level: 0.02, colorA: 0xff9ab4, colorB: 0xc8b4ff, uvA: 0x45e6dc, uvB: 0xe0fffb, uvGain: 2.4, uvDayLift: 0.9 },
+  Io: { level: 0.09, colorA: 0xff5040, colorB: 0x5a8cff, uvA: 0x7f86ff, uvB: 0xe6e0ff, uvGain: 2.2, uvDayLift: 0.9 },
+  Europa: { level: 0.02, colorA: 0xff5a4a, colorB: 0x8cff9e, uvA: 0x8c86ff, uvB: 0xe8e6ff, uvGain: 2.0, uvDayLift: 0.5 },
+  Ganymede: { level: 0.03, colorA: 0xff5a4a, colorB: 0x8cff9e, uvA: 0x4f98ff, uvB: 0xd8ecff, uvGain: 2.4, uvDayLift: 0.9 },
+  Callisto: { level: 0.015, colorA: 0xff5a4a, colorB: 0x8cff9e, uvA: 0x8aa0ff, uvB: 0xdde6ff, uvGain: 1.8, uvDayLift: 0.5 },
+  Venus: { level: 0.03, colorA: 0x7dff9a, colorB: 0x9affb4, uvA: 0x8fb0ff, uvB: 0xf0f4ff, uvGain: 1.2, uvDayLift: 0 },
+  Mercury: { level: 0, colorA: 0xffffff, colorB: 0xffffff, uvA: 0x8a6bff, uvB: 0x7f9cff, uvGain: 1.8, uvDayLift: 1 },
+  "67P/Churyumov–Gerasimenko": { level: 0, colorA: 0xffffff, colorB: 0xffffff, uvA: 0x9a8cff, uvB: 0xe4e0ff, uvGain: 1.8, uvDayLift: 1 },
 });
 
 function jsonColourHex(value) {
@@ -77,6 +100,7 @@ function buildShaderMaterial(config) {
     globalDiffuseStrength,
     intensity,
     faceOnVisibility,
+    limbGlowStart = 0.03,
     daysideVisibility,
     arcFrequency,
     spikeFrequency,
@@ -109,6 +133,10 @@ function buildShaderMaterial(config) {
   const diffuseStrength = Number(globalDiffuseStrength).toFixed(4);
   const brightness = Number(intensity).toFixed(4);
   const viewFloor = Number(faceOnVisibility).toFixed(4);
+  /* Where across the disc the glow starts (ninth final round). 0.03, the
+   * value every aurora has always used, lights most of the disc; a thin
+   * oxygen atmosphere's glow (Europa, Callisto) sits at the limb only. */
+  const limbStart = String(limbGlowStart);
   const dayFloor = Number(daysideVisibility).toFixed(4);
   const arcFreq = Number(arcFrequency).toFixed(4);
   const spikeFreq = Number(spikeFrequency).toFixed(4);
@@ -117,6 +145,17 @@ function buildShaderMaterial(config) {
   const speed = Number(animationSpeed).toFixed(4);
   const fringe = Number(redFringeStrength).toFixed(4);
   const spiralMix = Number(spiralStrength).toFixed(4);
+  /*
+   * Rays and arcs, or a smooth glow (eighth final round, the owner: "lines
+   * like a watermelon ... on Venus, Mars, Uranus, Neptune when they glow").
+   * The arcs, the rays and the shell's ridges were all sin(longitude x k):
+   * stripes running pole to pole. Inside a narrow spiral round a pole --
+   * Jupiter's and Saturn's -- they read as curtains, and the owner is happy
+   * with those. Over any wider region they read as the stripes of a melon.
+   * So they are kept only for the full spiral aurorae; every other aurora is
+   * a smooth glow with slow, large-scale variation.
+   */
+  const raysOn = Number(spiralStrength) >= 0.95 ? "1.0" : "0.0";
   const turns = Math.max(Number(spiralTurns), 0.1).toFixed(4);
   const innerRadius = Math.max(Number(spiralInnerRadius), 0).toFixed(4);
   const radiusSpan = Math.max(Number(spiralRadiusSpan), 0).toFixed(4);
@@ -225,8 +264,8 @@ function buildShaderMaterial(config) {
         float mask = latMask * lonMask;
 
         float sweepingArc = sin(longitude * ${arcFreq} + uTime * (${speed} * 0.35) + sin(longitude * (${arcFreq} * 1.8)) * 0.35) * 0.5 + 0.5;
-        float spikes = pow(sin(longitude * ${spikeFreq} + latitude * 16.0 + uTime * (${speed} * 0.7)) * 0.5 + 0.5, 3.0);
-        float localHeight = mask * (${displacement} * (0.22 + sweepingArc * 0.52 + spikes * 0.76));
+        float spikes = pow(sin(longitude * ${spikeFreq} + latitude * 16.0 + uTime * (${speed} * 0.7)) * 0.5 + 0.5, 3.0) * ${raysOn};
+        float localHeight = mask * (${displacement} * (0.22 + mix(0.5, sweepingArc, ${raysOn}) * 0.52 + spikes * 0.76));
         vec3 displaced = position + localNormal * localHeight;
 
         vLocalPosition = displaced;
@@ -286,6 +325,20 @@ function buildShaderMaterial(config) {
         return value;
       }
 
+      // The region an aurora may light (seventh final round). Its diffuse
+      // part used to be spread over the whole sphere ("mix(band, 1.0, d)"),
+      // so Jupiter's polar fill and Mars's storm glow lit the far side of the
+      // planet too, in long arcs: light where there is no aurora, reading as
+      // a different surface. Now it reaches a few band-widths from its own
+      // oval and no further; the night-side glows of Venus, Europa and
+      // Callisto, whose bands are broad, still cover their whole disc.
+      float regionBand(float latitude) {
+        float spread = ${width} * 5.0 + 0.14;
+        float primaryRegion = exp(-pow((latitude - ${center}) / spread, 2.0));
+        float mirroredRegion = exp(-pow((latitude + ${center}) / spread, 2.0)) * ${mirrored};
+        return clamp(primaryRegion + mirroredRegion, 0.0, 1.0);
+      }
+
       void main() {
         vec3 normal = normalize(vWorldNormal);
         vec3 localNormal = normalize(vLocalPosition);
@@ -296,32 +349,49 @@ function buildShaderMaterial(config) {
 
         float nightside = 1.0 - smoothstep(-0.18, 0.22, dot(normal, lightDirection));
         float limb = pow(1.0 - max(dot(normal, viewDirection), 0.0), 1.08);
-        float viewingVisibility = ${viewFloor} + smoothstep(0.03, 0.76, limb) * (1.0 - ${viewFloor});
+        float viewingVisibility = ${viewFloor} + smoothstep(${limbStart}, 0.76, limb) * (1.0 - ${viewFloor});
         float darknessVisibility = mix(${dayFloor}, 1.0, nightside);
         // In the ultraviolet view the sunlit disc is dim in the aurora's own
         // band, so the aurora is not lost against it as it is to an eye.
         darknessVisibility = mix(darknessVisibility, 1.0, uUvDayLift * uUvOverride * uSpectrum);
 
-        float arcNoise = fbm(vec2(longitude * 2.4 + uTime * (${speed} * 0.08), latitude * 24.0));
+        float arcNoise = fbm(vec2(longitude * 2.4 + uTime * (${speed} * 0.08), latitude * 8.0));
         float mainArc = sin(longitude * ${arcFreq} + arcNoise * 2.4 + uTime * (${speed} * 0.12)) * 0.5 + 0.5;
         float secondaryArc = sin(longitude * (${arcFreq} * 1.9) - arcNoise * 3.2 - uTime * (${speed} * 0.1)) * 0.5 + 0.5;
-        float arcMask = smoothstep(0.18, 0.82, mainArc) * 0.72 + smoothstep(0.44, 0.90, secondaryArc) * 0.28;
+        float stripedArcs = smoothstep(0.18, 0.82, mainArc) * 0.72 + smoothstep(0.44, 0.90, secondaryArc) * 0.28;
+        float arcMask = mix(0.55 + arcNoise * 0.45, stripedArcs, ${raysOn});
 
-        float broadBands = fbm(vec2(longitude * 8.2 + uTime * (${speed} * 0.26), latitude * 28.0 - uTime * (${speed} * 0.12)));
-        float fineBands = fbm(vec2(longitude * 22.0 - uTime * (${speed} * 0.65), latitude * 58.0 + uTime * (${speed} * 0.18)));
-        float ribs = pow(smoothstep(0.36, 0.92, 0.58 * broadBands + 0.42 * fineBands), 1.6);
-        float spikeColumns = pow(smoothstep(0.68, 0.992, sin(longitude * ${spikeFreq} + fineBands * 8.0 + uTime * (${speed} * 0.38)) * 0.5 + 0.5), 2.45);
+        /*
+         * Sixth final round (the owner: "the backside of the planet does not
+         * match the frontside ... I suspect a common aurora is being used").
+         * It was this shader. Its brightness came from two noise fields at
+         * 8x28 and 22x58 cells, which drew a hard, blotchy pattern; over a
+         * whole night side (Mars's storm aurora, Venus, the moons) or a whole
+         * polar cap that read as a second surface painted over the planet,
+         * not as light above it. An aurora is a glow in the upper atmosphere:
+         * smooth, translucent, brightest along its oval and at the limb.
+         *
+         * So the cells are gone. What is left is one slow, large-scale
+         * variation (a few swirls round the planet), the arcs of the oval,
+         * and thin vertical rays inside the band -- the curtains. Shape,
+         * place, colour and timing of every aurora are unchanged.
+         */
+        float softNoise = fbm(vec2(longitude * 1.7 + uTime * (${speed} * 0.05), latitude * 4.5 - uTime * (${speed} * 0.03)));
+        float fineBands = softNoise;
+        float spikeColumns = pow(smoothstep(0.70, 0.995, sin(longitude * ${spikeFreq} + softNoise * 4.0 + uTime * (${speed} * 0.38)) * 0.5 + 0.5), 2.45) * ${raysOn};
 
-        float curtain = arcMask * (0.30 + ribs * 0.70) * (0.62 + spikeColumns * 0.50);
+        float curtain = arcMask * (0.58 + softNoise * 0.42) * (0.86 + spikeColumns * 0.22);
         float breathing = 0.92 + sin(uTime * (${speed} * 0.35) + longitude * 2.0) * 0.08;
         // Some planets, especially Mars, can produce diffuse ultraviolet
         // aurora across much of the nightside rather than a narrow polar oval.
-        float geographicMask = mix(vBandMask, 1.0, ${diffuseStrength});
-        float diffuseTexture = 0.36 + broadBands * 0.40 + fineBands * 0.24;
+        float geographicMask = mix(vBandMask, regionBand(latitude) * vLongitudeMask, ${diffuseStrength});
+        float diffuseTexture = 0.6 + softNoise * 0.4;
+        // Arcs and rays belong to the oval itself; away from it the glow is
+        // smooth, so no long lines are drawn across the disc.
         float structuredEmission = mix(
           diffuseTexture,
           0.28 + curtain * 0.72,
-          1.0 - ${diffuseStrength} * 0.72
+          (1.0 - ${diffuseStrength} * 0.72) * smoothstep(0.04, 0.55, vBandMask)
         );
         float alpha = geographicMask
           * structuredEmission
@@ -346,14 +416,14 @@ function buildShaderMaterial(config) {
         float tertiaryField = mix(upperFringe, warmKnots, ${spiralMix});
         color = mix(color, ${tertiary}, clamp(tertiaryField * ${fringe}, 0.0, 0.92));
         color *= 0.76 + limb * 1.14;
-        color *= 0.92 + spikeColumns * 0.38 + vSpikeField * 0.22;
+        color *= 0.94 + spikeColumns * 0.22 + vSpikeField * 0.10;
         color *= 0.80 + vLongitudeMask * 0.24;
 
         // The ultraviolet view's own colours (second final round): the false
         // colour the published ultraviolet images give each aurora. Only the
         // four eye-limited planets set it; Earth keeps its own.
         vec3 uvColor = mix(uUvColorA, uUvColorB, smoothstep(0.34, 0.88, fineBands));
-        uvColor *= (0.76 + limb * 1.14) * (0.92 + spikeColumns * 0.38) * sqrt(uUvGain);
+        uvColor *= (0.76 + limb * 1.14) * (0.94 + spikeColumns * 0.22) * sqrt(uUvGain);
         color = mix(color, uvColor, uUvOverride);
         alpha *= mix(1.0, uUvGain, uUvOverride * uSpectrum);
 
@@ -398,6 +468,7 @@ export function createPlanetAuroraLayer({
   globalDiffuseStrength = 0,
   intensity = 1,
   faceOnVisibility = 0.35,
+  limbGlowStart = 0.03,
   daysideVisibility = 0.18,
   arcFrequency = 3.4,
   spikeFrequency = 20,
@@ -436,6 +507,7 @@ export function createPlanetAuroraLayer({
       globalDiffuseStrength,
       intensity,
       faceOnVisibility,
+      limbGlowStart,
       daysideVisibility,
       arcFrequency,
       spikeFrequency,
@@ -473,6 +545,11 @@ export function createPlanetAuroraLayer({
     material.uniforms.uUvGain.value = eye.uvGain ?? 1;
     material.uniforms.uUvDayLift.value = eye.uvDayLift ?? 0;
     aurora.userData.eyeAurora = true;
+    // Nothing an eye could see: drawn only in the ultraviolet view.
+    if (!(eye.level > 0)) {
+      aurora.userData.eyeHidden = true;
+      aurora.visible = false;
+    }
     /* Where the emission is centred, in the shell's own frame, so the
      * ultraviolet view can turn the camera to face it (latitude is the
      * sine, as the shader reads it; longitude is atan(z, x)). In spiral mode
@@ -504,6 +581,7 @@ export function setAuroraSpectrum(root, ultraviolet) {
     if (!object.userData?.eyeAurora) return;
     const uniforms = object.material?.uniforms;
     if (uniforms?.uSpectrum) uniforms.uSpectrum.value = ultraviolet ? 1 : 0;
+    if (object.userData.eyeHidden) object.visible = Boolean(ultraviolet);
   });
 }
 

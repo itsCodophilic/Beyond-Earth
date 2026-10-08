@@ -1,17 +1,23 @@
-Few Observations Buddy
+Great Work Buddy Few Observations:
 
-- The Lock in Screen is absolutely perfect but let's give user right left top down ability to view atleast that planet in ultravoilet spectrum, they can rotate and see but they can't click on any other thing just revole rotate up down that's it.
-- When switched to ultra voilet, the camera angle should always show that view where we will see aurora, not random camera view.
-- The Card which gives up "Ultravoilet View" should be smaller and specify that why we have switched to Ultravoilet view to spectate the aurora borelis.
-- I see the "info" card of planet also appears when clicked in ultravoilet mode that should happen
-- In Dashboard, can we give a label "Aurora Borelis . UV Mode", a directly facility which user can see?
-- I also see a delay when switch from UV mode to normal mode, basically color fills up lately but it does but a slight gap i see
-- Also when i clicked on Escape button on mars in UV Mode, it lands me up on Moshup
+1. Mercury Aurora i think they are purplish voilet blue we just have to change its color, even the aurora light surface backside does not matches with the frontside design texture
+2. Venur Aurora i see the back side of its glowing but you compare the surface design of front end back, it differs compleltely the surface design front back, also the color of aruroa looks like its it is part of surface it isn't visible due to surface texture color, as aruroas glows dim glows right?
+3. Same thing like in Venus, the surface design of the backside when Mars Aurora Glows does not matches in the front side, see i know mars arurora glows in 5 seconds but when it glows it has same design same back side design which we observed in Venus, that back side design of planet surface does not matches with front. I suspect common aurora is being used to display?
+4. 67P/Churyumov–Gerasimenko awful design buddy, it seems like it is in cage of globe or something buddy? does it have aurora first of aLL? can you recheck internet?
+5. Even in case of Jupiter, the backside of the Jupiter does not matches with the frontside in UV mode due to auroras, also i had mentioned earlier buddy about the ring getting break in case of UV and Non UV mode, it should be slightly visible the back side where the jupiter shadow falls
+6. Saturn looks perfectly fine, but again the aurora shape where it occurs does not matches with surface design of the body now i am confident something is wrong in the common logic of aurora, also one important thing in Saturn, the rings in non-uv mode has very particles just like a real rings which comprises of several particle dust and all, but in UV mode it becomes a continous which breaks our reality, i think in the non-uv mode we have to flip the colors of those small large particle belts which gonna make the saturn ring real in UV with all its rocks and stuff made up for ring
+7. Even in case of Uranus & Neptune and all moons of Jupiter, Aurora wherever appears have different surface design 
+8. Incase of Moons i observed on thing when i switched to UV mode one moon, i do see other moons at far distance also gets switched to UV mode
 
-Major Issue:
-- In UV mode, everything isn't purple buddy, you have certainly made everything purple but it isn't. 
-- Based on partciles and region the UV mode color of planet varies buddy.
-- I have added some images of UV photos i found on internet in folder uvmode i wanted you to analyze them understand it, because UV mode all things does not goes into voilet, and firstly UV ins't visible to human naked eye, we use specialized effects to see it right buddy? mentioned this also in the UV card info.
-- The aurora borelis of each planet on internet please perform search and find out the color and all it reference buddy, space background in UV mode how does it looks in color and all. 
-- Based on this we have to recolor everything for those 4 planets buddy
-- Understand learn and implement out.
+let me know if i missed any testing
+
+
+
+
+1. Jupiter, Venus, Mars backside in UV mode still does not matches with front side surface textures, these aurora have huge lines patched, it should not be like that buddy,
+2. 67P in UV have a different issue i see that there are pinkish color textures move as we rotate the body
+3. In jupiter the aruroas are on the top idk why the backside is glowing and how it got affected?
+4. Saturns Looks perfect
+
+
+i have not tested further buddy but i think the aurora design affects surface as well, ideally auroras are part where specific regions or part glows it should not change the surface textures design of the planet which is been seen

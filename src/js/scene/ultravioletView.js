@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { setAuroraSpectrum } from "../graphics/planetAurora.js";
+import { setRingUltraviolet } from "../graphics/ringShadow.js";
 
 /**
  * The ultraviolet view (final rounds, the owner).
@@ -59,6 +60,10 @@ const rgb = (r, g, b) => new THREE.Vector3(r, g, b);
  *   haze       white cloud and dust, as broken noise
  *   limb       the thin atmosphere lit at the edge of the disc
  *   hide       the planet's own layers that do not belong in the view
+ *   whiteness  how far colourful material is darkened (Io: sulfur absorbs
+ *              ultraviolet, SO2 frost does not)
+ *   skin       false: no skin (67P's nucleus is not a sphere, and it is near
+ *              black at every wavelength anyway)
  */
 const UV_LOOK = Object.freeze({
   Mars: {
@@ -142,6 +147,135 @@ const UV_LOOK = Object.freeze({
     hide: ["Uranus methane haze shell", "Uranus atmosphere"],
     line: "After Hubble's 2022 ultraviolet aurora images: a blue disc, the white haze cap over the north pole, a faint grey ring, and the aurora as blue-purple glows in two bands near the magnetic poles — far from the spin poles, because the field is tipped 59°.",
   },
+  Neptune: {
+    // After the published JWST + Hubble composite of its aurora (ESA/Webb,
+    // March 2025): Hubble's deep blue disc with white methane-ice clouds,
+    // the aurora in cyan. Neptune itself has no ultraviolet portrait of note;
+    // that composite is the image of its aurora.
+    radii: 5.2,
+    mode: "lat",
+    range: [0.3, 0.75],
+    ramp: [rgb(0.10, 0.22, 0.62), rgb(0.12, 0.26, 0.68), rgb(0.11, 0.24, 0.66), rgb(0.13, 0.27, 0.70), rgb(0.15, 0.30, 0.74), rgb(0.17, 0.33, 0.78)],
+    detail: 1.1,
+    spot: null,
+    pole: null,
+    cap: null,
+    haze: null,
+    limb: { color: rgb(0.55, 0.72, 1.0), strength: 0.35 },
+    hide: ["Neptune atmosphere"],
+    line: "After JWST's 2025 image of its aurora: Hubble's blue disc and white clouds, the aurora in cyan across the southern mid-latitudes — where Neptune's steeply tilted magnetic field puts it, far from the pole.",
+  },
+  Venus: {
+    // Mariner 10's 1974 ultraviolet mosaic as NASA presents it, blue-white;
+    // Pioneer Venus, Venus Express and Akatsuki (UVI, 365 nm) show the same
+    // thing: bright cloud tops streaked by the dark "unknown ultraviolet
+    // absorber", in the sideways Y the winds draw across the disc.
+    radii: 4.8,
+    mode: "lum",
+    range: [0.35, 0.9],
+    ramp: [rgb(0.24, 0.28, 0.46), rgb(0.40, 0.45, 0.64), rgb(0.58, 0.63, 0.80), rgb(0.74, 0.78, 0.90), rgb(0.86, 0.89, 0.96), rgb(0.95, 0.96, 1.0)],
+    detail: 0,
+    spot: null,
+    pole: null,
+    cap: null,
+    haze: { color: rgb(0.22, 0.25, 0.42), strength: 0.45 },
+    limb: { color: rgb(0.80, 0.86, 1.0), strength: 0.4 },
+    hide: ["Venus atmosphere", "Venus cloud deck"],
+    line: "After Mariner 10's ultraviolet view: bright cloud tops streaked by a dark absorber nobody has identified. With no magnetic field, Venus's aurora is a faint glow spread over the night side, strongest after solar storms.",
+  },
+  Mercury: {
+    // Its aurora is not ultraviolet at all but X-rays, so the planet is
+    // drawn dim and grey to let it show; the card says so.
+    radii: 5.0,
+    mode: "lum",
+    range: [0.2, 0.7],
+    ramp: [rgb(0.10, 0.10, 0.12), rgb(0.16, 0.16, 0.18), rgb(0.22, 0.22, 0.25), rgb(0.28, 0.28, 0.31), rgb(0.34, 0.34, 0.37), rgb(0.42, 0.42, 0.45)],
+    detail: 0,
+    spot: null,
+    pole: null,
+    cap: null,
+    haze: null,
+    limb: { color: rgb(0.5, 0.55, 0.65), strength: 0.15 },
+    line: "Not ultraviolet but X-rays: electrons from Mercury's small magnetosphere rain onto the bare rock on the dawn side and make the surface itself glow (BepiColombo, 2021). Shown here in the same false colour.",
+  },
+  Io: {
+    // In ultraviolet Io's yellow sulfur goes dark and its SO2 frost stays
+    // bright (Hubble); the aurora shows as two bright spots at the equator,
+    // facing towards and away from Jupiter.
+    radii: 6.2,
+    mode: "lum",
+    range: [0.12, 0.62],
+    whiteness: 1,
+    ramp: [rgb(0.10, 0.09, 0.12), rgb(0.20, 0.19, 0.24), rgb(0.32, 0.31, 0.38), rgb(0.46, 0.45, 0.52), rgb(0.62, 0.62, 0.70), rgb(0.80, 0.80, 0.88)],
+    detail: 0,
+    spot: null,
+    pole: null,
+    cap: null,
+    haze: null,
+    limb: { color: rgb(0.65, 0.62, 0.95), strength: 0.35 },
+    line: "Yellow sulfur goes dark in ultraviolet; the SO2 frost stays bright. The aurora is the two bright spots at the equator, facing towards and away from Jupiter, where Jupiter's field lines graze Io — they rock up and down as Jupiter turns.",
+  },
+  Europa: {
+    radii: 6.2,
+    mode: "lum",
+    range: [0.3, 0.85],
+    ramp: [rgb(0.16, 0.17, 0.22), rgb(0.26, 0.27, 0.34), rgb(0.38, 0.40, 0.48), rgb(0.52, 0.54, 0.62), rgb(0.66, 0.68, 0.76), rgb(0.80, 0.82, 0.90)],
+    detail: 0,
+    spot: null,
+    pole: null,
+    cap: null,
+    haze: null,
+    limb: { color: rgb(0.62, 0.62, 0.95), strength: 0.3 },
+    line: "Not at the poles and not on the surface: Europa has no magnetic field of its own, so Jupiter's field makes its whole thin oxygen atmosphere glow. You see it as a ring at the edge, where you look along the gas — brightest on the dusk side, as Hubble found.",
+  },
+  Ganymede: {
+    radii: 6.2,
+    mode: "lum",
+    range: [0.2, 0.75],
+    ramp: [rgb(0.12, 0.12, 0.15), rgb(0.20, 0.20, 0.24), rgb(0.30, 0.30, 0.35), rgb(0.42, 0.42, 0.48), rgb(0.55, 0.55, 0.62), rgb(0.70, 0.70, 0.78)],
+    detail: 0,
+    spot: null,
+    pole: null,
+    cap: null,
+    haze: null,
+    limb: { color: rgb(0.55, 0.65, 1.0), strength: 0.25 },
+    line: "Two rings of aurora, one in each hemisphere, shown in blue as in Hubble's image. Ganymede is the only moon with its own magnetic field, and the way these rings rock less than expected is the evidence for a salt-water ocean under the ice.",
+  },
+  Callisto: {
+    radii: 6.2,
+    mode: "lum",
+    range: [0.15, 0.6],
+    ramp: [rgb(0.08, 0.08, 0.10), rgb(0.14, 0.14, 0.17), rgb(0.22, 0.22, 0.26), rgb(0.32, 0.32, 0.37), rgb(0.44, 0.44, 0.50), rgb(0.58, 0.58, 0.66)],
+    detail: 0,
+    spot: null,
+    pole: null,
+    cap: null,
+    haze: null,
+    limb: { color: rgb(0.55, 0.62, 1.0), strength: 0.25 },
+    line: "Not at the poles and not on the surface: with no magnetic field of its own, Callisto's whole thin atmosphere glows faintly, seen as a ring at the edge. The faintest of Jupiter's four — only ever measured as one combined light (Keck, 2023), so where it is brightest is not yet known.",
+  },
+  "67P/Churyumov–Gerasimenko": {
+    // No skin: the nucleus is not a sphere, and it is near black anyway.
+    radii: 15,
+    skin: false,
+    // Its visible-light coma, tails and vents are drawn by view-dependent
+    // shaders that turned pink and slid across the glow as the comet turned
+    // (the owner). In the view the ultraviolet coma replaces them.
+    hide: [
+      "67P/Churyumov–Gerasimenko activity",
+      "67P/Churyumov–Gerasimenko surface activity",
+    ],
+    mode: "lum",
+    range: [0, 1],
+    ramp: [rgb(0, 0, 0), rgb(0, 0, 0), rgb(0, 0, 0), rgb(0, 0, 0), rgb(0, 0, 0), rgb(0, 0, 0)],
+    detail: 0,
+    spot: null,
+    pole: null,
+    cap: null,
+    haze: null,
+    limb: { color: rgb(0, 0, 0), strength: 0 },
+    line: "The first aurora found at a comet (Rosetta, 2020): solar-wind electrons sped up near the nucleus make the gas of the coma glow in far ultraviolet, all round the comet — the glow drawn here.",
+  },
 });
 
 export const ULTRAVIOLET_PLANETS = Object.freeze(Object.keys(UV_LOOK));
@@ -174,6 +308,7 @@ function createUltravioletSkin(planet, look) {
       // A map flagged sRGB is decoded to linear when sampled; the ranges
       // above were read from the files, so the shader re-encodes it.
       uMapSrgb: { value: texture?.colorSpace === THREE.SRGBColorSpace ? 1 : 0 },
+      uWhiteness: { value: look.whiteness ?? 0 },
       uMode: { value: look.mode === "lat" ? 1 : 0 },
       uRange: { value: new THREE.Vector2(look.range[0], look.range[1]) },
       uRamp: { value: look.ramp },
@@ -215,6 +350,7 @@ function createUltravioletSkin(planet, look) {
       uniform sampler2D uMap;
       uniform float uHasMap;
       uniform float uMapSrgb;
+      uniform float uWhiteness;
       uniform float uMode;
       uniform vec2 uRange;
       uniform vec3 uRamp[6];
@@ -291,6 +427,10 @@ function createUltravioletSkin(planet, look) {
         if (uHasMap > 0.5) mapColor = texture2D(uMap, vUv).rgb;
         if (uMapSrgb > 0.5) mapColor = pow(max(mapColor, vec3(0.0)), vec3(1.0 / 2.2));
         float lum = dot(mapColor, vec3(0.2126, 0.7152, 0.0722));
+        // Colourful material (Io's sulfur) is dark in ultraviolet; only the
+        // white (SO2 frost) stays bright.
+        float sat = max(mapColor.r, max(mapColor.g, mapColor.b)) - min(mapColor.r, min(mapColor.g, mapColor.b));
+        lum *= 1.0 - uWhiteness * clamp(sat * 1.6, 0.0, 0.85);
         float lumT = clamp((lum - uRange.x) / max(uRange.y - uRange.x, 0.001), 0.0, 1.0);
 
         // Palette: by brightness (belts and zones) or by latitude.
@@ -324,7 +464,9 @@ function createUltravioletSkin(planet, look) {
         vec3 viewDir = normalize(cameraPosition - vWorldPos);
         float ndl = dot(n, sunDir);
         float day = smoothstep(-0.06, 0.22, ndl);
-        float shade = 0.03 + 0.97 * day * (0.6 + 0.4 * max(ndl, 0.0));
+        // The night side keeps a trace of the same surface, so it reads as the
+        // same planet in shadow rather than as a blank (seventh final round).
+        float shade = 0.08 + 0.92 * day * (0.6 + 0.4 * max(ndl, 0.0));
         float limb = pow(1.0 - max(dot(n, viewDir), 0.0), 2.6);
         vec3 haze = uLimbColor * uLimb * limb * smoothstep(-0.2, 0.3, ndl);
         gl_FragColor = vec4(clamp(color * shade + haze, 0.0, 1.0), 1.0);
@@ -345,11 +487,11 @@ function createUltravioletSkin(planet, look) {
 /*
  * Rings in the ultraviolet view (second and third final rounds, the owner:
  * "Saturn Rings are not design in UV mode", then "Uranus rings does have UV
- * mode colors? ... perform more R&D on Jupiter ring"). The scene's rings are
- * moving particles in their visible colours; for the view they are swapped
- * for one banded disc per planet, coloured from what is known of each ring
- * at short wavelengths. Band edges in km are the ones the ring files use.
- * The planet's shadow falls across the disc and the unlit face is dimmer.
+ * mode colors? ... perform more R&D on Jupiter ring"). Each ring band's false
+ * colour in the ultraviolet view, from what is known of it at short
+ * wavelengths. Band edges in km are the ones the ring files use. (`group`,
+ * `ringlets` and `glow` belonged to the banded disc of rounds 7-10, which the
+ * sixth final round replaced by recolouring the particles; see below.)
  *
  *   Saturn   copied from Hubble's 2003 ultraviolet image (Karkoschka, the
  *            owner's saturn/1-3): C ring dark blue-grey, B ring cream to
@@ -377,13 +519,14 @@ const RING_LOOKS = Object.freeze({
     planetKm: 60_268,
     edgeKm: 250,
     ringlets: 1,
+    glow: 0,
     bands: [
-      [km(74_658), km(92_000), rgb(0.30, 0.38, 0.62), 0.42],
-      [km(92_000), km(99_000), rgb(0.93, 0.84, 0.60), 0.82],
-      [km(99_000), km(117_580), rgb(0.97, 0.74, 0.47), 0.94],
-      [km(117_580), km(122_170), rgb(0.24, 0.26, 0.40), 0.12],
-      [km(122_170), km(133_423), rgb(0.88, 0.82, 0.68), 0.78],
-      [km(133_745), km(136_775), rgb(0.88, 0.82, 0.68), 0.74],
+      [km(74_658), km(92_000), rgb(0.26, 0.38, 0.80), 0.42],
+      [km(92_000), km(99_000), rgb(0.98, 0.82, 0.50), 0.82],
+      [km(99_000), km(117_580), rgb(1.0, 0.64, 0.34), 0.94],
+      [km(117_580), km(122_170), rgb(0.24, 0.28, 0.48), 0.12],
+      [km(122_170), km(133_423), rgb(0.94, 0.82, 0.60), 0.78],
+      [km(133_745), km(136_775), rgb(0.94, 0.82, 0.60), 0.74],
     ],
   },
   Jupiter: {
@@ -391,6 +534,7 @@ const RING_LOOKS = Object.freeze({
     planetKm: 71_492,
     edgeKm: 900,
     ringlets: 0,
+    glow: 0.65,
     bands: [
       [km(92_000), km(122_500), rgb(0.62, 0.70, 0.92), 0.12],
       [km(122_500), km(129_000), rgb(0.66, 0.58, 0.50), 0.42],
@@ -403,6 +547,7 @@ const RING_LOOKS = Object.freeze({
     planetKm: 25_559,
     edgeKm: 70,
     ringlets: 0,
+    glow: 0.5,
     // Narrow rings: centre +/- (width x 1.5), widened like the scene's own
     // rings so they are not lost below a pixel.
     bands: [
@@ -414,119 +559,45 @@ const RING_LOOKS = Object.freeze({
       [km(86_000), km(103_000), rgb(0.48, 0.64, 0.98), 0.14],
     ],
   },
+  Neptune: {
+    // Fifth final round. Its rings are dark, reddish dust (Voyager 2), so
+    // like Jupiter's they are dimmer still at short wavelengths: faint warm
+    // grey, the narrow Le Verrier and Adams rings (with Adams's arcs folded
+    // in) strongest. Radii from neptuneRings.js.
+    group: "Neptune five-ring dusty system with Adams arcs",
+    planetKm: 24_764,
+    edgeKm: 120,
+    ringlets: 0,
+    glow: 0.65,
+    bands: [
+      [km(40_900), km(42_900), rgb(0.58, 0.54, 0.52), 0.06],
+      [km(53_050), km(53_350), rgb(0.62, 0.58, 0.56), 0.28],
+      [km(53_350), km(57_450), rgb(0.58, 0.54, 0.52), 0.04],
+      [km(57_450), km(57_750), rgb(0.60, 0.56, 0.54), 0.12],
+      [km(62_780), km(63_080), rgb(0.64, 0.60, 0.58), 0.32],
+    ],
+  },
 });
-const MAX_RING_BANDS = 16;
-
-function createUltravioletRings(planet, radius) {
-  const look = RING_LOOKS[planet.name];
+/*
+ * Sixth final round (the owner: "in non-UV mode the rings are particles, just
+ * like real rings ... in UV mode it becomes continuous, which breaks our
+ * reality"). The banded disc is gone. The particles stay, and each one takes
+ * its band's false colour while keeping its own brightness, through the same
+ * shader patch that gives the rings their shadow (graphics/ringShadow.js).
+ * The colours and the bands above are unchanged; `gain` turns each band's
+ * old opacity into a brightness, so the faint rings stay faint.
+ */
+function applyUltravioletRings(planet) {
+  const look = RING_LOOKS[planet?.name];
   if (!look) return null;
-  let group = null;
-  planet.traverse((object) => {
-    if (!group && object.name === look.group) group = object;
-  });
-  if (!group) return null;
-  const unitPerKm = radius / look.planetKm;
-  const bands = look.bands.slice(0, MAX_RING_BANDS);
-  const pad = (list, fill) => list.concat(Array.from({ length: MAX_RING_BANDS - list.length }, () => fill));
-  const centre = new THREE.Vector3();
-  const material = new THREE.ShaderMaterial({
-    uniforms: {
-      uKmPerUnit: { value: 1 / unitPerKm },
-      uPlanetCentre: { value: centre },
-      uPlanetRadius: { value: radius },
-      uCount: { value: bands.length },
-      uEdgeKm: { value: look.edgeKm },
-      uRinglets: { value: look.ringlets },
-      uBandInner: { value: pad(bands.map((b) => b[0]), 0) },
-      uBandOuter: { value: pad(bands.map((b) => b[1]), 0) },
-      uBandColor: { value: pad(bands.map((b) => b[2]), rgb(0, 0, 0)) },
-      uBandAlpha: { value: pad(bands.map((b) => b[3]), 0) },
-    },
-    vertexShader: /* glsl */ `
-      varying float vKm;
-      varying vec3 vWorldPos;
-      varying vec3 vWorldNormal;
-      uniform float uKmPerUnit;
-      void main() {
-        vKm = length(position.xy) * uKmPerUnit;
-        vec4 world = modelMatrix * vec4(position, 1.0);
-        vWorldPos = world.xyz;
-        vWorldNormal = normalize(mat3(modelMatrix) * vec3(0.0, 0.0, 1.0));
-        gl_Position = projectionMatrix * viewMatrix * world;
-      }
-    `,
-    fragmentShader: /* glsl */ `
-      uniform vec3 uPlanetCentre;
-      uniform float uPlanetRadius;
-      uniform int uCount;
-      uniform float uEdgeKm;
-      uniform float uRinglets;
-      uniform float uBandInner[16];
-      uniform float uBandOuter[16];
-      uniform vec3 uBandColor[16];
-      uniform float uBandAlpha[16];
-      varying float vKm;
-      varying vec3 vWorldPos;
-      varying vec3 vWorldNormal;
-      void main() {
-        float k = vKm;
-        vec3 color = vec3(0.0);
-        float alpha = 0.0;
-        for (int i = 0; i < 16; i++) {
-          if (i >= uCount) break;
-          float inside = smoothstep(uBandInner[i] - uEdgeKm, uBandInner[i] + uEdgeKm, k)
-            * (1.0 - smoothstep(uBandOuter[i] - uEdgeKm, uBandOuter[i] + uEdgeKm, k));
-          color += uBandColor[i] * inside * uBandAlpha[i];
-          alpha += uBandAlpha[i] * inside;
-        }
-        if (alpha < 0.004) discard;
-        color /= max(alpha, 0.0001);
-        color *= mix(1.0, 0.92 + 0.08 * sin(k * 0.0011) * sin(k * 0.0043 + 1.3), uRinglets);
-        // Sunlight: the planet's shadow, and the unlit face.
-        vec3 toSun = normalize(-vWorldPos);
-        vec3 toCentre = uPlanetCentre - vWorldPos;
-        float t = dot(toCentre, toSun);
-        float miss = length(toCentre - toSun * t);
-        float shadow = t > 0.0 ? smoothstep(uPlanetRadius * 0.97, uPlanetRadius * 1.03, miss) : 1.0;
-        vec3 toCamera = normalize(cameraPosition - vWorldPos);
-        float sameFace = sign(dot(vWorldNormal, toSun)) * sign(dot(vWorldNormal, toCamera));
-        float light = (sameFace > 0.0 ? 1.0 : 0.55) * mix(0.12, 1.0, shadow);
-        gl_FragColor = vec4(color * light, clamp(alpha, 0.0, 1.0));
-      }
-    `,
-    transparent: true,
-    depthWrite: false,
-    side: THREE.DoubleSide,
-  });
-  const inner = Math.min(...bands.map((b) => b[0])) - look.edgeKm * 2;
-  const outer = Math.max(...bands.map((b) => b[1])) + look.edgeKm * 2;
-  const ring = new THREE.Mesh(
-    new THREE.RingGeometry(inner * unitPerKm, outer * unitPerKm, 256, 24),
-    material,
-  );
-  ring.name = `${planet.name} ultraviolet rings`;
-  ring.rotation.x = Math.PI * 0.5;
-  ring.renderOrder = 2;
-  ring.raycast = () => {};
-  ring.onBeforeRender = () => { planet.getWorldPosition(centre); };
-  // The group's own visibility still follows the camera's distance
-  // (ringProximity.js); only its particles and bands are swapped out.
-  const hidden = [];
-  group.children.forEach((object) => {
-    if (object.visible) {
-      object.visible = false;
-      hidden.push(object);
-    }
-  });
-  group.add(ring);
-  return {
-    dispose() {
-      ring.parent?.remove(ring);
-      ring.geometry.dispose();
-      material.dispose();
-      hidden.forEach((object) => { object.visible = true; });
-    },
-  };
+  const bands = look.bands.map(([inner, outer, colour, alpha]) => [
+    inner / look.planetKm,
+    outer / look.planetKm,
+    colour,
+    0.55 + alpha * 0.85,
+  ]);
+  const applied = setRingUltraviolet(planet, { edge: look.edgeKm / look.planetKm, bands });
+  return applied ? { dispose: () => setRingUltraviolet(planet, null) } : null;
 }
 
 /**
@@ -581,7 +652,7 @@ export function ultravioletFramingRadii(planet) {
   return UV_LOOK[planet?.name]?.radii ?? 4.5;
 }
 
-export function createUltravioletView({ planets = [], getSky = () => null, onExitRequest = null } = {}) {
+export function createUltravioletView({ bodies = () => [], getSky = () => null, onExitRequest = null } = {}) {
   const chrome = document.createElement("section");
   chrome.className = "uv-view";
   chrome.setAttribute("role", "dialog");
@@ -653,7 +724,7 @@ export function createUltravioletView({ planets = [], getSky = () => null, onExi
     if (!look) return false;
     if (active) exit_();
     active = planet;
-    skin = createUltravioletSkin(planet, look);
+    skin = look.skin === false ? null : createUltravioletSkin(planet, look);
     if (skin) {
       hiddenSurface = [].concat(planet.material ?? []).map((material) => {
         const saved = { material, colorWrite: material.colorWrite, depthWrite: material.depthWrite };
@@ -662,16 +733,19 @@ export function createUltravioletView({ planets = [], getSky = () => null, onExi
         return saved;
       });
     }
-    if (!planet.geometry.boundingSphere) planet.geometry.computeBoundingSphere();
-    uvRings = createUltravioletRings(planet, planet.geometry.boundingSphere?.radius ?? 1);
-    (look.hide ?? []).forEach((name) => {
-      const object = planet.getObjectByName(name);
-      if (object?.visible) {
-        object.visible = false;
-        hiddenParts.push(object);
-      }
-    });
-    planets.forEach((body) => setAuroraSpectrum(body, true));
+    uvRings = applyUltravioletRings(planet);
+    const hideNames = new Set(look.hide ?? []);
+    if (hideNames.size) {
+      planet.traverse((object) => {
+        if (object !== planet && hideNames.has(object.name) && object.visible) {
+          object.visible = false;
+          hiddenParts.push(object);
+        }
+      });
+    }
+    /* Only the body in view (sixth final round, the owner: "when I switched
+     * one moon to UV mode, other moons at a distance also switched"). */
+    setAuroraSpectrum(planet, true);
     hideSky();
     title.textContent = planet.name;
     line.textContent = look.line;
@@ -700,7 +774,7 @@ export function createUltravioletView({ planets = [], getSky = () => null, onExi
     uvRings = null;
     hiddenParts.forEach((object) => { object.visible = true; });
     hiddenParts = [];
-    planets.forEach((body) => setAuroraSpectrum(body, false));
+    setAuroraSpectrum(active, false);
     active = null;
     chrome.hidden = true;
   }

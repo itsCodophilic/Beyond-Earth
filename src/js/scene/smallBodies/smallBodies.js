@@ -18,6 +18,7 @@ import { NEAR_EARTH_ODDITIES } from "./neoCatalogue.js";
 import { createCentaurComa, updateCentaurComa, setComaStrength } from "./centaurComa.js";
 import { createResonantSwarms, updateResonantSwarms } from "./resonantSwarms.js";
 import { createIcyRingSystem, hasIcyRingSystem } from "../../planets/icyRings.js";
+import { applyRingShadow } from "../../graphics/ringShadow.js";
 import { applyRingProximityVisibility } from "../../planets/ringProximity.js";
 
 /*
@@ -1669,6 +1670,8 @@ export async function createSmallBodies({
           2,
         ),
       });
+      // The body's shadow across its rings (graphics/ringShadow.js).
+      applyRingShadow(rings?.group, { body: built.group, radius: built.renderedMeanRadius });
     }
 
     /*
