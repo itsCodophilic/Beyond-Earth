@@ -1,0 +1,417 @@
+/* ==================================================== space events · carousel
+   Round 43: the Space events panel as the owner's chosen concept C, "Cosmic
+   carousel" (prototypes/space-events-concepts.html). One event large, with
+   an animated preview, and every event on a curved 3D ring underneath.
+   Loaded after cinematic-ui.css, whose older right-hand sheet rules it
+   replaces for `.events-dashboard--carousel`. */
+
+.events-dashboard--carousel {
+  justify-content: center;
+  align-items: center;
+  padding: clamp(10px, 2.4vw, 28px);
+}
+
+.events-dashboard--carousel .events-dashboard__backdrop {
+  background: radial-gradient(120% 90% at 60% 10%, rgba(10, 16, 30, 0.72), rgba(2, 3, 8, 0.86));
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+.sec {
+  --sec-line: rgba(206, 216, 234, 0.14);
+  --sec-line-strong: rgba(206, 216, 234, 0.3);
+  position: relative;
+  display: grid;
+  gap: 6px;
+  width: min(1180px, 100%);
+  max-height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  padding: clamp(14px, 2vw, 22px) clamp(14px, 2.2vw, 26px) 16px;
+  border: 1px solid var(--sec-line);
+  border-radius: 20px;
+  background: linear-gradient(180deg, rgba(14, 20, 34, 0.94), rgba(4, 6, 12, 0.96));
+  box-shadow: 0 40px 120px -30px rgba(0, 0, 0, 0.9);
+  color: var(--cin-ink);
+  animation: sec-in 520ms cubic-bezier(0.16, 0.84, 0.3, 1) both;
+}
+
+/* Transform only, no fade: a sheet caught mid-animation (a slow frame) is
+   still readable. */
+@keyframes sec-in {
+  from { transform: translateY(16px) scale(0.985); }
+}
+
+.sec__head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 300px) auto;
+  gap: 12px 18px;
+  align-items: end;
+}
+
+.sec__heading { display: grid; gap: 4px; min-width: 0; }
+
+.sec__eyebrow,
+.sec__place {
+  font-family: var(--cin-mono);
+  font-size: 0.6rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--cin-amber);
+}
+
+.sec__head h2 {
+  margin: 0;
+  font-size: clamp(1.35rem, 2.6vw, 1.9rem);
+  font-weight: 200;
+  letter-spacing: 0.02em;
+}
+
+.sec__search { display: grid; gap: 4px; min-width: 0; }
+
+.sec__search-label {
+  font-family: var(--cin-mono);
+  font-size: 0.54rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--cin-ink-faint);
+}
+
+.sec__search-input {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--sec-line);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--cin-ink);
+  font: inherit;
+  font-size: 0.82rem;
+}
+
+.sec__search-input:focus { outline: none; border-color: var(--cin-amber); }
+
+.sec__close {
+  width: 38px;
+  height: 38px;
+  border: 1px solid var(--sec-line-strong);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--cin-ink);
+  font-size: 1.2rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.sec__close:hover,
+.sec__close:focus-visible { border-color: var(--cin-amber); color: var(--cin-amber); outline: none; }
+
+/* ---- the front event */
+
+.sec__hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+  gap: clamp(14px, 2.4vw, 26px);
+  align-items: center;
+  padding-block: 10px 4px;
+}
+
+.sec__stage {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  max-width: 100%;
+  border: 1px solid var(--sec-line);
+  border-radius: 14px;
+  overflow: hidden;
+  background: #020309;
+}
+
+.sec__preview { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+
+.sec__text { min-width: 0; }
+
+.sec__swap {
+  display: grid;
+  gap: 10px;
+  animation: sec-rise 460ms both;
+}
+
+@keyframes sec-rise {
+  from { opacity: 0.25; transform: translateY(8px); }
+}
+
+.sec__title {
+  margin: 0;
+  font-size: clamp(1.35rem, 2.8vw, 2.05rem);
+  font-weight: 200;
+  line-height: 1.12;
+  text-wrap: balance;
+}
+
+.sec__tags { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+
+.sec__tag,
+.sec__seen {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 9px;
+  border: 1px solid color-mix(in srgb, var(--c, #ffc482) 45%, transparent);
+  border-radius: 999px;
+  font-family: var(--cin-mono);
+  font-size: 0.58rem;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: var(--c, #ffc482);
+}
+
+.sec__tag--quiet { --c: rgba(226, 216, 204, 0.75); }
+
+.sec__seen { border-color: transparent; padding-inline: 2px; color: var(--cin-ink-faint); }
+.sec__seen[data-tone="live"] { color: #ff9a7a; }
+.sec__seen[data-tone="live"]::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: sec-blink 1.2s infinite;
+}
+
+@keyframes sec-blink { 50% { opacity: 0.2; } }
+
+.sec__detail { margin: 0; color: var(--cin-ink-soft); line-height: 1.55; font-size: 0.92rem; max-width: 60ch; }
+
+.sec__when {
+  margin: 0;
+  display: grid;
+  gap: 2px;
+  font-size: 0.78rem;
+  color: var(--cin-ink-soft);
+  line-height: 1.5;
+}
+
+.sec__when span,
+.sec__more summary {
+  font-family: var(--cin-mono);
+  font-size: 0.56rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--cin-ink-faint);
+}
+
+/* Round 43: when it last happened, and when next. */
+.sec__timeline {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 10px 16px;
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--sec-line);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.sec__timeline div { display: grid; gap: 3px; min-width: 0; }
+
+.sec__timeline dt {
+  font-family: var(--cin-mono);
+  font-size: 0.54rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--c, var(--cin-amber));
+}
+
+.sec__timeline dd { margin: 0; font-size: 0.76rem; line-height: 1.5; color: var(--cin-ink-soft); }
+
+@media (max-width: 560px) {
+  .sec__timeline { grid-template-columns: minmax(0, 1fr); }
+}
+
+.sec__more { border-top: 1px solid var(--sec-line); padding-top: 8px; }
+.sec__more summary { cursor: pointer; }
+.sec__more summary:hover { color: var(--cin-ink); }
+.sec__more p { margin: 8px 0 0; font-size: 0.8rem; line-height: 1.55; color: var(--cin-ink-soft); max-width: 62ch; }
+.sec__more .sec__accuracy { color: var(--cin-ink-faint); font-size: 0.74rem; }
+
+.sec__actions { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; }
+
+.sec__go {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 18px;
+  border: 1px solid var(--cin-amber);
+  border-radius: 999px;
+  background: rgba(255, 196, 130, 0.95);
+  color: #05070d;
+  font: inherit;
+  font-family: var(--cin-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  cursor: pointer;
+  box-shadow: 0 0 26px -6px rgba(255, 196, 130, 0.9);
+  transition: filter 0.2s, transform 0.2s;
+}
+
+.sec__go span {
+  width: 0;
+  height: 0;
+  border-left: 8px solid currentColor;
+  border-top: 5px solid transparent;
+  border-bottom: 5px solid transparent;
+}
+
+.sec__go:hover,
+.sec__go:focus-visible { filter: brightness(1.08); transform: translateY(-1px); outline: none; }
+
+.sec__go--travel {
+  background: transparent;
+  color: var(--cin-amber);
+  box-shadow: none;
+}
+
+.sec__hint { color: var(--cin-ink-faint); font-size: 0.72rem; line-height: 1.45; max-width: 36ch; }
+
+/* ---- the ring */
+
+.sec__track {
+  position: relative;
+  height: 214px;
+  perspective: 1100px;
+  overflow: hidden;
+  outline: none;
+  touch-action: pan-y;
+}
+
+.sec__track:focus-visible { box-shadow: inset 0 0 0 1px var(--cin-amber); border-radius: 12px; }
+
+.sec__ring {
+  position: absolute;
+  left: 50%;
+  top: 20px;
+  width: 0;
+  height: 0;
+  transform-style: preserve-3d;
+  transition: transform 720ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.sec__ring.is-instant { transition: none; }
+
+.sec__card {
+  position: absolute;
+  left: -75px;
+  top: 0;
+  width: 150px;
+  height: 172px;
+  display: grid;
+  grid-template-rows: 82px auto 1fr;
+  gap: 7px;
+  padding: 9px;
+  border: 1px solid var(--sec-line);
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(20, 26, 42, 0.96), rgba(8, 11, 20, 0.96));
+  color: var(--cin-ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  backface-visibility: hidden;
+  transition: border-color 0.3s, box-shadow 0.3s, opacity 0.4s;
+}
+
+.sec__card canvas { width: 100%; height: 82px; border-radius: 9px; background: #020309; display: block; }
+.sec__card strong { font-weight: 500; font-size: 0.8rem; line-height: 1.25; }
+.sec__card span {
+  font-family: var(--cin-mono);
+  font-size: 0.52rem;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: var(--cin-ink-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sec__card.is-front { border-color: var(--c); box-shadow: 0 0 30px -6px var(--c); }
+.sec__card:focus-visible { outline: 2px solid var(--cin-amber); outline-offset: 2px; }
+
+.sec__controls {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 12px;
+  font-family: var(--cin-mono);
+  font-size: 0.64rem;
+  letter-spacing: 0.16em;
+  color: var(--cin-ink-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.sec__turn {
+  width: 38px;
+  height: 38px;
+  border: 1px solid var(--sec-line-strong);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--cin-ink);
+  font-size: 1.1rem;
+  cursor: pointer;
+}
+
+.sec__turn:hover,
+.sec__turn:focus-visible { border-color: var(--cin-amber); color: var(--cin-amber); outline: none; }
+
+.sec__empty { margin: 8px 0; text-align: center; color: var(--cin-ink-soft); font-size: 0.86rem; }
+
+.sec__foot {
+  margin: 6px 0 0;
+  text-align: center;
+  font-family: var(--cin-mono);
+  font-size: 0.54rem;
+  letter-spacing: 0.1em;
+  line-height: 1.6;
+  color: var(--cin-ink-faint);
+}
+
+@media (max-width: 860px) {
+  .sec__head { grid-template-columns: minmax(0, 1fr) auto; }
+  .sec__search { grid-column: 1 / -1; grid-row: 2; }
+  .sec__hero { grid-template-columns: minmax(0, 1fr); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sec, .sec__swap { animation: none; }
+  .sec__ring { transition: none; }
+  .sec__seen[data-tone="live"]::before { animation: none; }
+}
+
+/* ---- the event card's stage line (formation, solar wind, magnetosphere,
+   seasons): the step the event is on, replacing the summary meanwhile. */
+
+.solar-event-notice__stage {
+  display: grid;
+  gap: 0.25rem;
+  padding-left: 0.6rem;
+  border-left: 2px solid var(--cin-amber);
+}
+
+.solar-event-notice__stage[hidden] { display: none; }
+.solar-event-notice__detail[hidden] { display: none; }
+
+.solar-event-notice__stage.is-new { animation: sec-rise 520ms both; }
+
+.solar-event-notice__stage-label {
+  font-family: var(--cin-mono);
+  font-size: 0.52rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--cin-amber);
+}
+
+.solar-event-notice__stage-text {
+  font-size: 0.8rem;
+  font-weight: 300;
+  line-height: 1.6;
+  color: var(--cin-ink-soft);
+}

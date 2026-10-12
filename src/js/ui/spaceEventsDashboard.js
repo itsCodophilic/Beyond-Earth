@@ -1,50 +1,208 @@
+import { drawEventVignette, FAMILY_COLOURS } from "./eventVignettes.js";
+
 /**
- * The catalogue of things that happen, and the way to go and watch one.
+ * Space events, as a carousel (round 43).
  *
- * The event system worked and nobody could find it. Fifteen events firing on a
- * timer means a viewer who stays ten minutes sees three of them, in an order
- * they did not choose, on a body they were probably not looking at. That is a
- * discoverability problem, not a content problem, and the fix is a list.
+ * The owner looked at three live concepts (prototypes/space-events-concepts.html:
+ * an orrery map, a mission-control console and a cosmic carousel) and chose
+ * the carousel: one event at a time, large, with an animated preview of what
+ * it is, and a curved ring of every other event underneath to turn through.
+ * The four that used to be listed as "coming soon" are built now
+ * (scene/events/systemProcesses.js), so every card in the ring can be
+ * watched.
  *
- * ## What pressing an event does
+ * ## What pressing "Go watch it" does
  *
- * It is not a play button, it is a *journey*. Pressing one closes the panel,
- * flies the camera to the body the event happens on, and then waits five
- * seconds before anything starts -- because arriving somewhere and immediately
- * being shown something means missing the beginning of it. The wait is
- * announced and counted down, so the pause reads as anticipation rather than
- * as nothing happening. Then the event runs **once** and stops, and a replay
- * control appears for anyone who wants to see it again.
+ * Unchanged from the list it replaces: the panel closes, the camera flies to
+ * the body the event happens on, a five-second countdown names what is
+ * coming, and the event plays once (main.js, presentSolarEvent). An event
+ * whose body is not built yet (a moon, before the camera has been to its
+ * planet) offers to fly to the planet first instead of failing.
  *
- * The alternative -- staging it where the camera already is -- was what the
- * first version did, and it produces events on planets that are off screen or
- * a pixel wide. Going there first is the difference between watching something
- * and being told it happened.
+ * ## Order
  *
- * ## The controls that are not here
+ * The ring runs as a journey: how it all began, then the Sun, then outwards
+ * world by world, then the visitors from other stars, then beyond the Solar
+ * System. Search narrows the ring to the events that match.
  *
- * There was an autoplay toggle and an interval slider. Both are gone, with the
- * rotation they configured. A dashboard whose entire purpose is "choose what
- * to watch" does not also need a setting for "choose randomly for me, at this
- * cadence" -- it is a second, worse way of using the same list, and it means
- * events keep interrupting a viewer who is in the middle of reading about a
- * different one.
+ * ## Cost
+ *
+ * Only while open: the large preview and the cards within four places of
+ * the front are redrawn each frame (2D canvas); the rest are not drawn.
  */
 
 const CLOSE_KEY = "Escape";
 
-/* Round 38: planned space events, shown disabled. See the note where they
- * are rendered. */
-const COMING_SOON = Object.freeze([
-  { place: "The early Solar System", title: "How the Solar System formed", detail: "From a collapsing cloud to a disc, the first solids 4,567 million years ago, Jupiter's early core, the rocky planets and the giants' great reshuffle." },
-  { place: "The Sun · out to the heliopause", title: "The solar wind", detail: "The Sun's stream of charged particles, fast from the poles and slow from the equator, wound into a spiral by the Sun's turning — out to where it stops." },
-  { place: "Mercury · Earth · the giants · Ganymede", title: "Magnetospheres", detail: "The magnetic shields round the worlds that have them: bow shock, wall, tail and radiation belts — invisible, so shown as they would be measured." },
-  { place: "Every planet", title: "Why there are seasons", detail: "The tilt, not the distance: how each planet's axis keeps one direction as it goes round the Sun, from Uranus on its side to Jupiter with almost none." },
-]);
+/* The ring's order: a journey from the beginning and outwards. Ids missing
+ * here go at the end in roster order. */
+const ORDER = [
+  "solar-system-formation", "solar-wind", "solar-cme", "sungrazer",
+  "mercury-sodium-tail", "meteor-shower", "solar-eclipse", "seasons",
+  "earth-magnetosphere", "lunar-impact-flash", "mars-dust-storm",
+  "jupiter-impact", "io-eruption", "saturn-impact", "saturn-white-spot",
+  "ring-spokes", "enceladus-plumes", "uranus-storms", "triton-geysers",
+  "oumuamua-passage", "borisov-passage", "atlas-3i-passage",
+  "supernova", "kilonova",
+];
 
-/** Escapes a value for use in a plain-text DOM comparison, not for HTML. */
+/* Short "how often" words for the tag; the full sentence is in the card. */
+const OFTEN = {
+  "solar-system-formation": "Once, 4.6 billion years ago",
+  "solar-wind": "All the time",
+  "solar-cme": "Several a day at maximum",
+  sungrazer: "One every ~3 days",
+  "mercury-sodium-tail": "Every 88-day orbit",
+  "meteor-shower": "~12 major showers a year",
+  "solar-eclipse": "2–5 a year",
+  seasons: "Every orbit",
+  "earth-magnetosphere": "Several storms a year at maximum",
+  "lunar-impact-flash": "~0.7 an hour watched",
+  "mars-dust-storm": "Every ~5½ years",
+  "jupiter-impact": "Tens a year",
+  "io-eruption": "Always erupting",
+  "saturn-impact": "A fifth of Jupiter's rate",
+  "saturn-white-spot": "Every ~30 years",
+  "ring-spokes": "Each equinox, ~15 years",
+  "enceladus-plumes": "Continuous",
+  "uranus-storms": "Seasonal",
+  "triton-geysers": "Vents run ~a year",
+  "oumuamua-passage": "Once, 2017",
+  "borisov-passage": "Once, 2019",
+  "atlas-3i-passage": "Once, 2025",
+  supernova: "~2 per century",
+  kilonova: "Seen once, 2017",
+};
+
+/*
+ * Round 43 (the owner: "add date timings details as well like when it
+ * occurred and if it is possible it may be reoccur"). When each last
+ * happened and when it can next be expected, as of October 2026. Sources:
+ *   eclipses       NASA, science.nasa.gov/eclipses/future-eclipses
+ *   storms         SpaceWeatherLive 2025 top-50 (12 Nov 2025, Kp 9-);
+ *                  NOAA SWPC (10-11 May 2024, G5); NASA/NOAA solar
+ *                  maximum announcement, 15 October 2024
+ *   Mercury        perihelia 6 Feb, 5 May, 1 Aug 2027 (derekscope.co.uk);
+ *                  the late-2026 dates are those less 87.97-day orbits
+ *   equinox        23 September 2026, 00:05 UTC (timedate.org)
+ *   Jupiter flash  28 August 2023, Tadao Ohsugi (Japan)
+ *   Saturn flash   5 July 2025, Mario Rana -- not confirmed (DeTeCt,
+ *                  10 July 2025; EarthSky)
+ *   Uranus         northern summer solstice April 2030 (nakedeyeplanets)
+ *   the rest       as cited on each event's card
+ * These go out of date: "next" is the next one after October 2026.
+ */
+const TIMELINE = {
+  "solar-system-formation": {
+    last: "4,567.3 million years ago — dated from the oldest grains in meteorites",
+    next: "Never again here. It is happening now round young stars: ALMA's 2014 picture of HL Tauri's disc was the first sharp view",
+  },
+  "solar-wind": {
+    last: "Right now. The Sun has never stopped blowing it",
+    next: "Continuous. The 11-year cycle peaked around October 2024 and is now declining",
+  },
+  "solar-cme": {
+    last: "11 November 2025: a fast CME that drove a severe storm at Earth. 8–10 May 2024: the burst behind the strongest storm in 20 years",
+    next: "Any day — several a day near solar maximum, still frequent as the cycle declines",
+  },
+  sungrazer: {
+    last: "SOHO catches one every few days. Famous: Comet ISON broke up on 28 November 2013; Comet Lovejoy survived on 16 December 2011",
+    next: "Within days — the next Kreutz sungrazer in SOHO's cameras",
+  },
+  "mercury-sodium-tail": {
+    last: "Around Mercury's perihelion of 14 August 2026",
+    next: "Around 10 November 2026, then 6 February 2027 — each perihelion",
+  },
+  "meteor-shower": {
+    last: "The Perseids, peaking 12–13 August 2026",
+    next: "Orionids about 21–22 October 2026 · Leonids about 17 November · Geminids 13–14 December",
+  },
+  "solar-eclipse": {
+    last: "12 August 2026: total, over Greenland, Iceland and northern Spain",
+    next: "6 February 2027: annular (South America, Africa) · 2 August 2027: total, Spain to Egypt — over 6 minutes at best",
+  },
+  seasons: {
+    last: "September equinox: 23 September 2026",
+    next: "December solstice: 21 December 2026 · Earth closest to the Sun: early January 2027",
+  },
+  "earth-magnetosphere": {
+    last: "11–12 November 2025: a severe storm (Kp 9−) with aurorae far south. 10–11 May 2024: the strongest (G5) since 2003",
+    next: "Not forecastable beyond a few days; big storms often come in the years after solar maximum",
+  },
+  "lunar-impact-flash": {
+    last: "Every clear night someone watches. The brightest on record: 11 September 2013, a rock of about 400 kg (Madiedo et al.)",
+    next: "Tonight, on the Moon's unlit side",
+  },
+  "mars-dust-storm": {
+    last: "30 May – autumn 2018: the storm that silenced the Opportunity rover (last heard 10 June 2018)",
+    next: "Cannot be predicted. Dust-storm season returns every Mars year, in the southern spring and summer",
+  },
+  "jupiter-impact": {
+    last: "28 August 2023: a flash filmed by Tadao Ohsugi in Japan — one of four impacts caught in 2023",
+    next: "Tens hit every year; amateurs' cameras catch one every year or so",
+  },
+  "saturn-impact": {
+    last: "None confirmed yet. A possible flash filmed on 5 July 2025 (Mario Rana) was not confirmed by other observers",
+    next: "Unknown — the first confirmed Saturn impact flash is still waiting to be caught",
+  },
+  "saturn-white-spot": {
+    last: "December 2010 – August 2011, watched by Cassini. Before that: 1876, 1903, 1933, 1960, 1990",
+    next: "Not predictable; on the old pattern, sometime in the 2030s or 2040s",
+  },
+  "ring-spokes": {
+    last: "Now: Saturn's equinox fell on 6 May 2025, and this is spoke season",
+    next: "The next equinox, around 2039",
+  },
+  "enceladus-plumes": {
+    last: "Continuous since Cassini found the jets in 2005. JWST saw a plume about 9,600 km long in 2022",
+    next: "Ongoing — stronger each time Enceladus is farthest from Saturn, every 33 hours",
+  },
+  "uranus-storms": {
+    last: "August 2014: eight large storms in one night (Keck)",
+    next: "Uranus reaches northern summer solstice in April 2030; activity is expected to stay high as it nears",
+  },
+  "triton-geysers": {
+    last: "25 August 1989: Voyager 2, the only spacecraft ever to visit",
+    next: "Unknown — no mission has been back since",
+  },
+  "oumuamua-passage": {
+    last: "Closest to the Sun 9 September 2017 · found 19 October 2017",
+    next: "Never — it is leaving for good. The Vera C. Rubin Observatory is expected to find new visitors",
+  },
+  "borisov-passage": {
+    last: "Found 30 August 2019 · closest to the Sun 8 December 2019",
+    next: "Never — it is leaving for good. More visitors like it are expected to be found",
+  },
+  "atlas-3i-passage": {
+    last: "Found 1 July 2025 · closest to the Sun 29 October 2025 · passed Jupiter March 2026",
+    next: "Never — it passes Neptune's distance in March 2028 on its way out",
+  },
+  supernova: {
+    last: "In our galaxy, seen by eye: 1604 (Kepler's star). Nearest since: SN 1987A, 23 February 1987, in the Large Magellanic Cloud",
+    next: "Unpredictable — about two a century in the Milky Way, most hidden behind dust",
+  },
+  kilonova: {
+    last: "17 August 2017 (GW170817), 130 million light-years away",
+    next: "Whenever gravitational-wave detectors catch another neutron-star merger close enough to see",
+  },
+};
+
+/* A moon is built when the camera first reaches its planet. */
+const PARENT = { Moon: "Earth", Io: "Jupiter", Enceladus: "Saturn", Triton: "Neptune" };
+
+/* 150 px cards with 20 px between them, round the ring's circumference. */
+const CARD_PITCH = 170;
+
 function normalise(value) {
   return String(value ?? "").toLowerCase();
+}
+
+function fitCanvas(canvas) {
+  const rect = canvas.getBoundingClientRect();
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  const w = Math.max(1, Math.round(rect.width * dpr));
+  const h = Math.max(1, Math.round(rect.height * dpr));
+  if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
+  return { w: rect.width, h: rect.height, dpr };
 }
 
 /**
@@ -57,244 +215,233 @@ function normalise(value) {
 export function createSpaceEventsDashboard({ events, trigger = null, onView = null }) {
   if (!events) return null;
 
-  const roster = events.list();
+  const unordered = events.list();
+  const roster = [
+    ...ORDER.map((id) => unordered.find((e) => e.id === id)).filter(Boolean),
+    ...unordered.filter((e) => !ORDER.includes(e.id)),
+  ];
+  const reduced = typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const colourOf = (event) => FAMILY_COLOURS[event.family] ?? "#ffc482";
 
   let panel = document.querySelector("#space-events-dashboard");
   if (!panel) {
     panel = document.createElement("section");
     panel.id = "space-events-dashboard";
-    panel.className = "events-dashboard";
-    panel.hidden = true;
-    panel.setAttribute("role", "dialog");
-    panel.setAttribute("aria-modal", "false");
-    panel.setAttribute("aria-labelledby", "events-dashboard-title");
     document.body.append(panel);
   }
+  panel.className = "events-dashboard events-dashboard--carousel";
+  panel.hidden = true;
+  panel.setAttribute("role", "dialog");
+  panel.setAttribute("aria-modal", "false");
+  panel.setAttribute("aria-labelledby", "events-dashboard-title");
 
-  /*
-   * Built as one string and parsed once. Fifteen rows of seven fields each is
-   * about a hundred and thirty element creations; doing that with createElement
-   * and append is a hundred and thirty layout-invalidating mutations while a 3D
-   * scene wants the main thread. One innerHTML parse is a single insertion. The
-   * content is entirely ours -- no user input reaches this -- so there is
-   * nothing to escape.
-   */
-  const rows = roster.map((event) => `
-    <li class="events-dashboard__event" data-event-id="${event.id}"
-        data-event-kind="${event.kind}"
-        data-search="${normalise(`${event.place} ${event.when ?? ""} ${event.title} ${event.detail} ${event.frequency} ${event.cause} ${event.note} ${event.kindLabel} ${event.kindShort} ${event.familyLabel}`)}">
-      <div class="events-dashboard__event-head">
-        <span class="events-dashboard__event-body">${event.place}</span>
-        <h3 class="events-dashboard__event-title">${event.title}</h3>
-        <span class="events-dashboard__count" data-count-for="${event.id}"></span>
-      </div>
-      <p class="events-dashboard__tags">
-        <span class="events-dashboard__tag events-dashboard__tag--${event.kind}" title="${event.kindBlurb}">${event.kindLabel}</span>
-        <span class="events-dashboard__tag events-dashboard__tag--family">${event.familyLabel}</span>
-      </p>
-      <p class="events-dashboard__event-detail">${event.detail}</p>
-      <dl class="events-dashboard__facts">
-        ${event.when ? `<div>
-          <dt>When</dt>
-          <dd>${event.when}</dd>
-        </div>` : ""}
-        <div>
-          <dt>How often</dt>
-          <dd>${event.frequency}</dd>
-        </div>
-        <div>
-          <dt>Why it happens</dt>
-          <dd>${event.cause}</dd>
-        </div>
-        ${event.accuracy ? `<div>
-          <dt>What you are watching</dt>
-          <dd>${event.accuracy}</dd>
-        </div>` : ""}
-      </dl>
-      <p class="events-dashboard__event-note">${event.note}</p>
-      <button class="events-dashboard__play" type="button" data-play="${event.id}">
-        <span class="events-dashboard__play-icon" aria-hidden="true"></span>
-        <span data-play-label>View this space event</span>
-      </button>
-    </li>
-  `).join("");
-
-  /*
-   * Round 38 (Prompts.md): four things the owner has filed under space events
-   * to be built properly later -- how the Solar System formed, the solar
-   * wind, magnetospheres and why there are seasons. Their first versions
-   * (board explanations and scene layers) were taken out; what they did is
-   * kept in docs/archive/space-events-coming-soon/. Listed here, disabled,
-   * so the plan is visible.
-   */
-  const soon = `
-    <section class="events-dashboard__soon" aria-labelledby="events-dashboard-soon-title">
-      <h3 class="events-dashboard__soon-title" id="events-dashboard-soon-title">Coming soon</h3>
-      <ol class="events-dashboard__soon-list">
-        ${COMING_SOON.map((item) => `
-          <li class="events-dashboard__soon-item" aria-disabled="true">
-            <span class="events-dashboard__event-body">${item.place}</span>
-            <h4 class="events-dashboard__soon-name">${item.title} <span class="events-dashboard__soon-badge">(coming soon)</span></h4>
-            <p class="events-dashboard__event-detail">${item.detail}</p>
-            <button class="events-dashboard__play" type="button" disabled aria-disabled="true">
-              <span class="events-dashboard__play-icon" aria-hidden="true"></span>
-              <span>Coming soon</span>
-            </button>
-          </li>`).join("")}
-      </ol>
-    </section>`;
-
+  /* Built as one string and parsed once: the content is entirely ours. */
   panel.innerHTML = `
     <div class="events-dashboard__backdrop" data-events-dismiss></div>
-    <article class="events-dashboard__sheet">
-      <header class="events-dashboard__header">
-        <div>
-          <span class="events-dashboard__eyebrow">The Solar System is not furniture</span>
+    <article class="sec">
+      <header class="sec__head">
+        <div class="sec__heading">
+          <span class="sec__eyebrow">${roster.length} real things that happen · from the beginning, outwards</span>
           <h2 id="events-dashboard-title">Space events</h2>
         </div>
-        <button class="events-dashboard__close" type="button" aria-label="Close space events">×</button>
+        <div class="sec__search">
+          <label class="sec__search-label" for="events-dashboard-filter">Find an event</label>
+          <input type="search" id="events-dashboard-filter" class="sec__search-input"
+            placeholder="A world, or a word like storm…" autocomplete="off" spellcheck="false" />
+        </div>
+        <button class="sec__close" type="button" aria-label="Close space events">×</button>
       </header>
 
-      <p class="events-dashboard__intro">
-        Every one of these is real, and the rates are measured rather than
-        invented. Pick one and you will be taken to the world it happens on to
-        watch it. Each is tagged with what kind of thing it is: a
-        <strong>one-off event</strong> happens and is over, a
-        <strong>recurring event</strong> comes back on a schedule, an
-        <strong>ongoing process</strong> never stops in the first place, and a
-        <strong>recorded event</strong> happened once, on a date we know —
-        like the three visitors from other stars.
-      </p>
-
-      <div class="events-dashboard__search">
-        <label class="events-dashboard__search-label" for="events-dashboard-filter">Find an event</label>
-        <input
-          type="search"
-          id="events-dashboard-filter"
-          class="events-dashboard__search-input"
-          placeholder="Search by world, event or cause…"
-          autocomplete="off"
-          spellcheck="false"
-        />
-        <span class="events-dashboard__tally" id="events-dashboard-tally"></span>
+      <div class="sec__hero">
+        <div class="sec__stage"><canvas class="sec__preview" aria-hidden="true"></canvas></div>
+        <div class="sec__text" aria-live="polite"></div>
       </div>
 
-      <ol class="events-dashboard__list">${rows}</ol>
-
-      ${soon}
-
-      <p class="events-dashboard__empty" hidden>Nothing matches that. Try a world's name, or a word like <em>storm</em>, <em>impact</em> or <em>ice</em>.</p>
-
-      <p class="events-dashboard__footnote">
-        Timings are compressed — nobody is going to wait five and a half years
-        for a Martian dust storm — but the sizes, colours, durations and rates
-        are the observed ones.
-      </p>
+      <div class="sec__track" tabindex="0" aria-label="Every space event. Use the arrow keys to turn the ring.">
+        <div class="sec__ring"></div>
+      </div>
+      <div class="sec__controls">
+        <button class="sec__turn" type="button" data-turn="-1" aria-label="Previous event">‹</button>
+        <span class="sec__count" aria-live="off"></span>
+        <button class="sec__turn" type="button" data-turn="1" aria-label="Next event">›</button>
+      </div>
+      <p class="sec__empty" hidden>Nothing matches that. Try a world's name, or a word like <em>storm</em>, <em>impact</em> or <em>ice</em>.</p>
+      <p class="sec__foot">Timings are compressed — nobody waits five and a half years for a Martian dust storm — but the sizes, colours, durations and rates are the observed ones.</p>
     </article>
   `;
 
-  const sheet = panel.querySelector(".events-dashboard__sheet");
-  const closeButton = panel.querySelector(".events-dashboard__close");
-  const list = panel.querySelector(".events-dashboard__list");
+  const sheet = panel.querySelector(".sec");
+  const closeButton = panel.querySelector(".sec__close");
   const filterInput = panel.querySelector("#events-dashboard-filter");
-  const tally = panel.querySelector("#events-dashboard-tally");
-  const emptyNote = panel.querySelector(".events-dashboard__empty");
-
-  const rowFor = new Map(
-    roster.map((event) => [event.id, list.querySelector(`[data-event-id="${event.id}"]`)]),
-  );
+  const ringEl = panel.querySelector(".sec__ring");
+  const track = panel.querySelector(".sec__track");
+  const textEl = panel.querySelector(".sec__text");
+  const countEl = panel.querySelector(".sec__count");
+  const emptyEl = panel.querySelector(".sec__empty");
+  const preview = panel.querySelector(".sec__preview");
+  const previewCtx = preview.getContext("2d");
 
   let open = false;
   let unsubscribe = null;
-  let query = "";
-  let lastActiveId = null;
-  /*
-   * The event most recently played, which outlives the event itself.
-   *
-   * `activeId` is only set while something is running, so on its own it marks
-   * a row for a few seconds and then lets go -- and by the time anyone opens
-   * this list to see what they just watched, nothing is marked at all. Holding
-   * the last one keeps the answer to "which was that?" on screen.
-   */
-  let selectedId = null;
+  let shown = roster.slice();
+  let index = 0;
+  let turn = 0;
+  let cards = [];
+  let state = { activeId: null, lastPlayedId: null, viewCounts: {} };
+  let availability = {};
+  let frame = 0;
+  let autoTurn = !reduced;
+  let lastTurnAt = 0;
 
-  /* --------------------------------------------------------------- rendering */
+  /* ------------------------------------------------------------ the ring */
 
-  /**
-   * The count, in the three tenses the viewer asked for.
-   *
-   * Not watched yet, running right now, or watched N times before -- which is
-   * past, present and future for every row at a glance, and is the only piece
-   * of state that survives an event ending.
-   */
-  function renderCounts(state) {
-    selectedId = state.lastPlayedId ?? state.activeId ?? selectedId;
-    roster.forEach((event) => {
-      const row = rowFor.get(event.id);
-      if (!row) return;
-      const chip = row.querySelector(`[data-count-for="${event.id}"]`);
-      const seen = state.viewCounts?.[event.id] ?? 0;
-      const running = state.activeId === event.id;
-      if (chip) {
-        chip.textContent = running
-          ? "Happening now"
-          : seen === 0
-            ? "Not seen yet"
-            : `Seen ${seen}×`;
-        chip.dataset.state = running ? "live" : seen === 0 ? "unseen" : "seen";
-      }
-      if (state.activeId !== lastActiveId) row.classList.toggle("is-running", running);
-      row.classList.toggle("is-selected", event.id === selectedId);
-      if (event.id === selectedId) row.setAttribute("aria-current", "true");
-      else row.removeAttribute("aria-current");
-    });
-    lastActiveId = state.activeId;
+  function buildRing() {
+    ringEl.innerHTML = shown.map((event, i) => `
+      <button class="sec__card" type="button" data-i="${i}" style="--c:${colourOf(event)}" aria-label="${event.title}, ${event.place}">
+        <canvas aria-hidden="true"></canvas>
+        <strong>${event.title}</strong>
+        <span>${event.place}</span>
+      </button>`).join("");
+    cards = [...ringEl.children].map((node) => ({ node, canvas: node.querySelector("canvas") }));
+    cards.forEach((card) => { card.ctx = card.canvas.getContext("2d"); });
+    layout();
   }
+
+  const radius = () => Math.max(260, Math.round((shown.length * CARD_PITCH) / (2 * Math.PI)));
+  const step = () => 360 / Math.max(1, shown.length);
+  const distance = (i) => {
+    const n = shown.length;
+    const d = Math.abs(i - index) % n;
+    return Math.min(d, n - d);
+  };
+
+  function layout() {
+    const r = radius();
+    cards.forEach((card, i) => {
+      card.node.style.transform = `rotateY(${i * step()}deg) translateZ(${r}px)`;
+    });
+    turnTo(index, { instant: true });
+  }
+
+  function turnTo(next, { instant = false } = {}) {
+    if (!shown.length) return;
+    const n = shown.length;
+    /* Round 44 (Prompts.md: "when I am at 24 and press next the number
+     * shows 1 but the carousel turns backwards to 1 -- it should not break
+     * the flowing loop"). The ring's angle comes from `turn`, which only
+     * ever moves by the shortest way round and is never wrapped, so 24 -> 1
+     * is one step forward, not twenty-three back. */
+    if (instant) {
+      turn = ((next % n) + n) % n;
+    } else {
+      let delta = (((next - index) % n) + n) % n;
+      if (delta > n / 2) delta -= n;
+      turn += delta;
+    }
+    index = ((turn % n) + n) % n;
+    ringEl.classList.toggle("is-instant", instant);
+    ringEl.style.transform = `translateZ(${-radius()}px) rotateY(${-turn * step()}deg)`;
+    cards.forEach((card, i) => {
+      const d = distance(i);
+      card.node.classList.toggle("is-front", i === index);
+      card.node.style.opacity = d > 4 ? "0" : String(1 - d * 0.17);
+      card.node.tabIndex = d > 2 ? -1 : 0;
+      card.node.setAttribute("aria-current", i === index ? "true" : "false");
+    });
+    countEl.textContent = `${String(index + 1).padStart(2, "0")} / ${String(n).padStart(2, "0")}`;
+    renderText();
+  }
+
+  /* --------------------------------------------------------- the front */
+
+  function seenWords(event) {
+    if (state.activeId === event.id) return { text: "Happening now", tone: "live" };
+    const seen = state.viewCounts?.[event.id] ?? 0;
+    return seen ? { text: `Seen ${seen}×`, tone: "seen" } : { text: "Not seen yet", tone: "unseen" };
+  }
+
+  function renderText() {
+    const event = shown[index];
+    if (!event) { textEl.innerHTML = ""; return; }
+    const ready = availability[event.id] !== false;
+    const parent = PARENT[event.body];
+    const seen = seenWords(event);
+    textEl.style.setProperty("--c", colourOf(event));
+    textEl.innerHTML = `
+      <div class="sec__swap">
+        <span class="sec__place">${event.place}</span>
+        <h3 class="sec__title">${event.title}</h3>
+        <div class="sec__tags">
+          <span class="sec__tag" style="--c:${colourOf(event)}">${event.familyLabel}</span>
+          <span class="sec__tag sec__tag--quiet" title="${event.kindBlurb ?? ""}">${event.kindLabel} · ${OFTEN[event.id] ?? event.kindShort}</span>
+          <span class="sec__seen" data-tone="${seen.tone}">${seen.text}</span>
+        </div>
+        <p class="sec__detail">${event.detail}.</p>
+        ${TIMELINE[event.id] ? `<dl class="sec__timeline">
+          <div><dt>Last happened</dt><dd>${TIMELINE[event.id].last}</dd></div>
+          <div><dt>Next</dt><dd>${TIMELINE[event.id].next}</dd></div>
+        </dl>` : event.when ? `<p class="sec__when"><span>When</span>${event.when}</p>` : ""}
+        <details class="sec__more">
+          <summary>Why it happens · how often</summary>
+          <p>${event.cause}</p>
+          <p>${event.frequency}.</p>
+          ${event.accuracy ? `<p class="sec__accuracy">${event.accuracy}</p>` : ""}
+        </details>
+        <div class="sec__actions">
+          ${ready
+            ? `<button class="sec__go" type="button" data-play="${event.id}"><span aria-hidden="true"></span>Go watch it</button>`
+            : `<button class="sec__go sec__go--travel" type="button" data-travel="${parent ?? event.body}"><span aria-hidden="true"></span>Fly to ${parent ?? event.body} first</button>
+               <small class="sec__hint">${event.body} is built when the camera first reaches ${parent ?? "it"}; then it can be watched.</small>`}
+        </div>
+      </div>`;
+  }
+
+  /* ------------------------------------------------------------ drawing */
+
+  function draw(now) {
+    if (!open) return;
+    frame = requestAnimationFrame(draw);
+    const t = reduced ? 2.4 : now / 1000;
+    const event = shown[index];
+    if (event) {
+      const { w, h, dpr } = fitCanvas(preview);
+      previewCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      try { drawEventVignette(previewCtx, w, h, t, event); } catch { /* a sketch failing must not stop the panel */ }
+    }
+    cards.forEach((card, i) => {
+      if (distance(i) > 4) return;
+      const { w, h, dpr } = fitCanvas(card.canvas);
+      card.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      try { drawEventVignette(card.ctx, w, h, t + i * 0.7, shown[i]); } catch { /* as above */ }
+    });
+    /* Turns on its own every 7 s until the viewer touches it. */
+    if (autoTurn && now - lastTurnAt > 7000 && !sheet.matches(":hover") && !sheet.contains(document.activeElement)) {
+      lastTurnAt = now;
+      if (shown.length > 1) turnTo(index + 1);
+    }
+  }
+
+  /* ------------------------------------------------------------ filter */
 
   function applyFilter() {
-    const needle = normalise(query).trim();
-    let shown = 0;
-    roster.forEach((event) => {
-      const row = rowFor.get(event.id);
-      if (!row) return;
-      const hit = !needle || row.dataset.search.includes(needle);
-      row.hidden = !hit;
-      if (hit) shown += 1;
-    });
-    emptyNote.hidden = shown > 0;
-    tally.textContent = needle
-      ? `${shown} of ${roster.length} events`
-      : `${roster.length} events`;
+    const needle = normalise(filterInput.value).trim();
+    const current = shown[index]?.id;
+    shown = needle
+      ? roster.filter((e) => normalise(`${e.place} ${e.body} ${e.title} ${e.detail} ${e.familyLabel} ${e.kindLabel} ${e.cause}`).includes(needle))
+      : roster.slice();
+    emptyEl.hidden = shown.length > 0;
+    track.hidden = shown.length === 0;
+    const keep = shown.findIndex((e) => e.id === current);
+    index = keep >= 0 ? keep : 0;
+    buildRing();
   }
 
-  /**
-   * Marks the rows whose bodies are not in the scene yet.
-   *
-   * The row is not hidden and the button is not disabled: the event is real and
-   * worth reading about, and a disabled control tells you nothing about how to
-   * enable it. It says where to go instead.
-   */
-  function markAvailability() {
-    const available = events.getAvailability?.() ?? {};
-    roster.forEach((event) => {
-      const row = rowFor.get(event.id);
-      if (!row) return;
-      const ready = available[event.id] !== false;
-      row.classList.toggle("is-unavailable", !ready);
-      const label = row.querySelector("[data-play-label]");
-      if (label) {
-        label.textContent = ready
-          ? "View this space event"
-          : `Travel out to ${event.body} first`;
-      }
-    });
-  }
+  /* -------------------------------------------------------------- state */
 
-  function render(state) {
-    renderCounts(state);
+  function onState(next) {
+    state = next;
+    renderText();
   }
-
-  /* ------------------------------------------------------------------- open */
 
   function setOpen(next) {
     if (open === next) return;
@@ -302,70 +449,79 @@ export function createSpaceEventsDashboard({ events, trigger = null, onView = nu
     panel.hidden = !open;
     panel.classList.toggle("is-open", open);
     trigger?.setAttribute("aria-expanded", String(open));
-
     if (open) {
-      // Subscribing only while visible is the point of subscribing at all: a
-      // closed panel that keeps re-rendering is pure cost, and this one renders
-      // while a 3D scene wants the main thread.
-      unsubscribe = events.subscribe(render);
-      // Availability is read on open rather than watched, because the only
-      // thing that changes it is travelling, and travelling closes the panel.
-      markAvailability();
-      applyFilter();
-      /*
-       * Put the last event played where the viewer can see it. A list of
-       * seventeen rows opens at the top, and the one they just watched is
-       * usually not near it.
-       */
-      const marked = selectedId ? rowFor.get(selectedId) : null;
-      if (marked && !marked.hidden) {
-        requestAnimationFrame(() => {
-          marked.scrollIntoView({ block: "center", behavior: "auto" });
-        });
-      }
-      // Deferred a frame: focusing inside a node that was hidden on the
-      // previous frame is a no-op in some browsers.
+      availability = events.getAvailability?.() ?? {};
+      unsubscribe = events.subscribe(onState);
+      /* Open on the event last watched, if any. */
+      const last = state.lastPlayedId ?? state.activeId;
+      const at = last ? shown.findIndex((e) => e.id === last) : -1;
+      if (at >= 0) index = at;
+      autoTurn = !reduced && !last;
+      lastTurnAt = performance.now();
+      turnTo(index, { instant: true });
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(draw);
       requestAnimationFrame(() => closeButton?.focus({ preventScroll: true }));
     } else {
+      cancelAnimationFrame(frame);
       unsubscribe?.();
       unsubscribe = null;
-      lastActiveId = null;
     }
-
-    /*
-     * Announced, so main.js can suppress scene picking exactly as it does for
-     * the about panel. Without this a click on the backdrop also reaches the
-     * raycaster and selects whatever planet is behind the dialog.
-     */
-    window.dispatchEvent(new CustomEvent("beyond-earth:events-dashboard-state", {
-      detail: { open },
-    }));
+    /* Announced, so main.js suppresses scene picking while the panel is up. */
+    window.dispatchEvent(new CustomEvent("beyond-earth:events-dashboard-state", { detail: { open } }));
   }
 
-  /* -------------------------------------------------------------- listeners */
+  /* ---------------------------------------------------------- listeners */
+
+  const stopAuto = () => { autoTurn = false; };
 
   trigger?.addEventListener("click", () => setOpen(!open));
   closeButton.addEventListener("click", () => setOpen(false));
   panel.querySelector("[data-events-dismiss]")?.addEventListener("click", () => setOpen(false));
+  sheet.addEventListener("pointerdown", (e) => e.stopPropagation());
+  sheet.addEventListener("click", (e) => e.stopPropagation());
+  /* The sheet owns its wheel: a scroll inside it must never reach the camera. */
+  sheet.addEventListener("wheel", (e) => e.stopPropagation(), { passive: true });
 
-  // Clicks inside the sheet are the dialog's own business and must not reach
-  // the canvas underneath.
-  sheet.addEventListener("pointerdown", (pointerEvent) => pointerEvent.stopPropagation());
-  sheet.addEventListener("click", (clickEvent) => clickEvent.stopPropagation());
+  panel.querySelectorAll("[data-turn]").forEach((button) => {
+    button.addEventListener("click", () => { stopAuto(); turnTo(index + Number(button.dataset.turn)); });
+  });
 
-  /*
-   * The sheet owns its own wheel.
-   *
-   * `.events-dashboard` is in main.js's JOURNEY_UI_SELECTOR, which stops the
-   * journey handlers cancelling the gesture -- but that only gets the panel as
-   * far as scrolling natively. Stopping propagation here as well means a wheel
-   * that reaches the end of the list does not then continue into the page
-   * behind it, which is how a scroll gesture ends up moving the camera at the
-   * exact moment the reader hits the bottom of the panel.
-   */
-  sheet.addEventListener("wheel", (wheelEvent) => {
-    wheelEvent.stopPropagation();
-  }, { passive: true });
+  ringEl.addEventListener("click", (e) => {
+    const card = e.target.closest(".sec__card");
+    if (!card) return;
+    stopAuto();
+    const i = Number(card.dataset.i);
+    if (i === index) {
+      const event = shown[i];
+      if (availability[event.id] !== false) play(event.id);
+    } else turnTo(i);
+  });
+
+  /* Swipe or drag across the ring to turn it. */
+  let dragX = null;
+  track.addEventListener("pointerdown", (e) => { dragX = e.clientX; });
+  track.addEventListener("pointerup", (e) => {
+    if (dragX !== null && Math.abs(e.clientX - dragX) > 40) { stopAuto(); turnTo(index + (e.clientX < dragX ? 1 : -1)); }
+    dragX = null;
+  });
+
+  textEl.addEventListener("click", (e) => {
+    const go = e.target.closest("[data-play]");
+    if (go) { play(go.dataset.play); return; }
+    const travel = e.target.closest("[data-travel]");
+    if (travel) {
+      setOpen(false);
+      window.dispatchEvent(new CustomEvent("beyond-earth:travel-to-body", { detail: { name: travel.dataset.travel } }));
+    }
+  });
+  textEl.addEventListener("toggle", stopAuto, true);
+
+  sheet.addEventListener("keydown", (e) => {
+    if (e.target === filterInput) return;
+    if (e.key === "ArrowRight") { e.preventDefault(); stopAuto(); turnTo(index + 1); }
+    if (e.key === "ArrowLeft") { e.preventDefault(); stopAuto(); turnTo(index - 1); }
+  });
 
   addEventListener("keydown", (keyEvent) => {
     if (open && keyEvent.key === CLOSE_KEY) {
@@ -374,35 +530,30 @@ export function createSpaceEventsDashboard({ events, trigger = null, onView = nu
     }
   });
 
-  filterInput.addEventListener("input", () => {
-    query = filterInput.value;
-    applyFilter();
-  });
+  filterInput.addEventListener("input", () => { stopAuto(); applyFilter(); });
 
-  list.addEventListener("click", (clickEvent) => {
-    const button = clickEvent.target.closest("[data-play]");
-    if (!button) return;
-    const id = button.dataset.play;
+  function play(id) {
     if (!events.isAvailable?.(id)) {
-      // Could have changed since the panel opened; relabel everything at once
-      // so the panel corrects itself rather than showing one stale button.
-      markAvailability();
+      availability = events.getAvailability?.() ?? {};
+      renderText();
       return;
     }
-    // Closed first, so the flight to the body is not watched through a panel.
+    /* Closed first, so the flight to the body is not watched through a panel. */
     setOpen(false);
     const staged = onView ? onView(id) : events.play(id);
-    if (!staged) {
-      setOpen(true);
-      markAvailability();
-    }
-  });
+    if (!staged) setOpen(true);
+  }
+
+  addEventListener("resize", () => { if (open) layout(); });
+
+  buildRing();
 
   return {
     open: () => setOpen(true),
     close: () => setOpen(false),
     get isOpen() { return open; },
     dispose() {
+      cancelAnimationFrame(frame);
       unsubscribe?.();
       panel.remove();
     },

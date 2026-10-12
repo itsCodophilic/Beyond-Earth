@@ -910,3 +910,87 @@ The owner sent NASA's orange Magellan globe of Venus and chose to keep the true 
   - The view shows the deep-orange radar globe from both sides.
   - Clouds back restores the cream cloud ball.
   - No console errors.
+
+## Part 25 — Space events as a carousel; the four "coming soon" events built; last and next dates
+The owner reviewed three live prototypes (`prototypes/space-events-concepts.html`) and chose **C, the Cosmic carousel**. They also asked to build the four "coming soon" events and to show when each event last happened and when it can next happen.
+
+### The panel (`ui/spaceEventsDashboard.js`, `ui/eventVignettes.js`, `css/space-events.css`)
+- **Layout:**
+  - A centred sheet with one event large: an animated 2D preview of what it is, its place, kind and family tags, and the summary.
+  - **Last happened / Next** dates (below).
+  - A fold-out "Why it happens · how often", which includes the accuracy note.
+  - A **Go watch it** button.
+  - Underneath, a curved 3D ring of all 24 cards, each with its own small animation.
+- **Order:** the ring runs as a journey: formation, the Sun, then outwards world by world, then the visitors from other stars, then deep sky.
+- **Controls:**
+  - It turns by itself every 7 s until touched.
+  - Arrows, the ‹ › buttons, a swipe, or a click on a card turn it. Clicking the front card plays it.
+  - Search narrows the ring.
+- **A moon not built yet** (Io, Enceladus, Triton, the Moon) offers "Fly to Saturn first" instead of failing.
+- **Cost:** drawing runs only while the panel is open, for the preview and the cards within four places of the front.
+
+### The four new events (`scene/events/systemProcesses.js`)
+| Event | Where | Runs | What you see |
+|---|---|---|---|
+| How the Solar System formed | Sun, framed to ~45 AU | 58 s | The cloud collapses into a disc; the snow line; Jupiter's core opens a gap; the gas clears; rocky embryos merge (with the Moon-forming flash); the giants migrate and scatter the icy disc into the Kuiper Belt and Trojans; today's system fades in |
+| The solar wind | Sun, framed to the heliopause | 40 s | The first wind leaves as a front: slow, warm-coloured from the equator, fast, whiter-blue from the poles. Parker spirals to 10 AU. The wind slows, reddens and bends tailward at the drawn termination shock and heliopause, with Voyager crossing dates |
+| A magnetic shield in a storm | Earth, side-on | 36 s | True-scale Shue magnetopause (10 Re) and bow shock, field lines, Van Allen belts and aurora ovals, with solar wind flowing round them. A CME pushes the stand-off to 6.6 Re; the aurorae spread to 58° and brighten, then everything relaxes |
+| Why there are seasons | Sun, framed to Earth's orbit | 36 s | A diagram Earth with its axis tipped 23.44°, always pointing the same way, goes round one year. It slows at each solstice and equinox, shows the tropics and polar circles, and reads out the date and the Sun's overhead latitude. It marks perihelion (January, northern winter) |
+
+- **Stage captions:** each event tells its steps on the event card (new `setStage`, which takes the summary's place while it runs).
+- **The veil** (new `setVeil` in `main.js`):
+  - **Formation and seasons:** every planet, belt, moon system and orbit line is hidden until the end, so no planet exists before it forms and there is no second Earth. Each object's visibility is put back exactly when the veil lifts.
+  - **Magnetosphere:** only the Moon is hidden, because it is drawn at 3.15 Re, inside a true-scale magnetopause.
+- **Camera:** the shot zoom limit went from 30 to 60, so the system-wide events fit.
+- **Fixes on the way:**
+  - Event labels now ignore the scene's fog; distant labels were grey ghosts.
+  - A label whose text grows now gets a fresh texture (the WebGL texture-size error).
+
+### Last happened / Next (round 43, the owner)
+Every event shows when it last happened and when it can next be expected, as of October 2026. Examples:
+- **Eclipse:** last on 12 Aug 2026; next an annular on 6 Feb 2027 and a total on 2 Aug 2027.
+- **Geomagnetic storm:** 11–12 Nov 2025 (Kp 9−); before that, May 2024 (G5).
+- **Jupiter flash:** 28 Aug 2023.
+- **Saturn:** no confirmed impact flash yet; the 5 July 2025 candidate was not confirmed.
+- **Uranus:** its solstice is in April 2030.
+
+Sources are listed above the `TIMELINE` table in `spaceEventsDashboard.js`. These dates go out of date and need revisiting.
+
+### Verified headless
+- **Panel:** desktop and phone widths; filter; the travel button for a moon not built yet.
+- **Events:** each new event at several points:
+  - formation at six points;
+  - the solar wind and the magnetosphere at three each (on a later re-check, the magnetosphere at two);
+  - the seasons at two.
+- **Veil:** it hid the 37 non-Sun world children and restored them afterwards.
+- **Console:** no errors after the fixes.
+
+## Part 26 — Prompts.md improvements (round 44)
+1. **Seasons: Earth no longer as big as the Sun.**
+   - **Size:** the diagram Earth is 3.2% of the orbit radius (was 8.5%). It is still enlarged, and a label says so (true size is about 1/109 of the Sun across).
+   - **Orbit:** drawn as the real ellipse (e = 0.0167, Sun at a focus, perihelion at 102.94°), which looks like a circle. A label gives the 147.1–152.1 million km range.
+   - **View:** seen from as high as the camera allows (pitch 1.1), so the circle is less foreshortened.
+   - **Labels:** the equinox labels now have two lines like the solstices, so all four read at the same size.
+   - **Note for the owner:** the elongated look was the viewing angle. Northern winter comes when Earth is *closest* to the Sun (early January).
+2. **2I/Borisov and 3I/ATLAS labels no longer pile up.** New `declutterLabels` (in `interstellarPassages.js`):
+   - Each frame, every label is tried at its anchor, then a label-height down, then up, and so on, until its on-screen box is clear. It eases to the chosen place.
+   - Milestones keep their places; the moving date and farewell labels give way.
+   - Also used for the solar-wind labels.
+3. **The carousel loops.**
+   - The ring's angle comes from an unwrapped turn counter that always moves the short way round, so 24 → 1 is one step forward.
+   - Checked: 1 → 24 is +15°, and 24 → 1 → 2 is 0° then −15°.
+4. **The Space events panel resets like All Bodies.**
+   - **Opening it:** clears the layer notes and the Back history.
+   - **Closing it without choosing:** zooms all the way out to the Solar System.
+   - **Choosing an event or "Fly to … first":** travels from where the camera is.
+5. **The solar wind, rebuilt as a streaming gas.**
+   - **Drawing:** soft overlapping puffs for the density and short moving streaks for the flow, all moved on the GPU. No drawn field lines.
+   - **The spiral:** it forms by itself. Each parcel flies radially from a source that turns with the Sun (25.38 days), the garden-sprinkler effect (Parker 1958).
+   - **Streams:**
+     - slow wind (400 km/s) from four streamer-belt streams near the solar equator;
+     - fast wind (750 km/s) from the polar coronal holes.
+   - **Speed:** it accelerates near the Sun (r = v(t − τ(1 − e^(−t/τ))), τ = 0.4 d), then coasts, thinning as it spreads.
+   - **Boundaries:** at the drawn termination shock it slows to a third, heats (redder) and bends tailward. It fades at the heliopause.
+   - **Clock:** days = 0.594 (e^(7.2p) − 1), so the first quarter of the event is the first ~3 days and the end is ~800 days.
+   - **Camera:** the event moves it (new `api.setZoom`, honoured only while an event runs on the focused body): close on the Sun (3.6×), out through the planets (15×), then to the heliopause (54×).
+   - **Captions:** they say plainly that the wind does not slow on the way out; it coasts and thins until the termination shock.

@@ -1,0 +1,702 @@
+<title>Space Events Concepts</title>
+<style>
+/* Layout: one dark viewing deck; a tab bar switches between three live
+   concepts for the Space Events panel, all drawing from the same 20 events.
+   Single committed dark look, matching the site's cinematic HUD
+   (warm ink on a near-black veil, amber accent, mono labels). */
+:root {
+  color-scheme: dark;
+  --void: #04060c;
+  --deck: #0a0e18;
+  --line: rgba(206, 216, 234, 0.14);
+  --line-strong: rgba(206, 216, 234, 0.3);
+  --ink: rgba(255, 246, 232, 0.96);
+  --ink-soft: rgba(226, 216, 204, 0.66);
+  --ink-faint: rgba(206, 216, 234, 0.38);
+  --amber: #ffc482;
+  --amber-soft: rgba(255, 196, 130, 0.22);
+  --f-solar: #ffb347;
+  --f-planetary: #e8c48f;
+  --f-smallBody: #8fd3ff;
+  --f-impact: #ff7a59;
+  --f-ring: #f3e3a6;
+  --f-surface: #9ff0c4;
+  --f-alignment: #b9a4ff;
+  --f-deepSky: #ff8fd8;
+  --f-recorded: #7fe3e0;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --micro: 0.66rem;
+}
+html, body { height: 100%; }
+body {
+  background: radial-gradient(120% 80% at 70% 0%, #0d1424 0%, var(--void) 60%) fixed, var(--void);
+  color: var(--ink);
+  font-family: var(--sans);
+  padding-inline: 16px;
+  padding-block: 20px 40px;
+  overflow-x: hidden;
+}
+.wrap { max-width: 1180px; margin: 0 auto; display: grid; gap: 18px; }
+.eyebrow { font-family: var(--mono); font-size: var(--micro); letter-spacing: 0.22em; text-transform: uppercase; color: var(--amber); }
+header { display: grid; gap: 8px; }
+h1 { margin: 0; font-weight: 300; font-size: clamp(1.5rem, 3.2vw, 2.2rem); letter-spacing: 0.01em; text-wrap: balance; }
+header p { margin: 0; color: var(--ink-soft); max-width: 62ch; line-height: 1.55; }
+.tabs { display: flex; flex-wrap: wrap; gap: 8px; }
+.tab {
+  font: inherit; font-family: var(--mono); font-size: 0.74rem; letter-spacing: 0.12em; text-transform: uppercase;
+  color: var(--ink-soft); background: transparent; border: 1px solid var(--line); border-radius: 999px;
+  padding: 9px 16px; cursor: pointer; display: inline-flex; gap: 10px; align-items: center;
+  transition: color .2s, border-color .2s, background .2s;
+}
+.tab b { font-weight: 500; color: var(--ink-faint); }
+.tab:hover { color: var(--ink); border-color: var(--line-strong); }
+.tab[aria-selected="true"] { color: var(--void); background: var(--amber); border-color: var(--amber); }
+.tab[aria-selected="true"] b { color: rgba(4,6,12,.55); }
+.tab:focus-visible, button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+.pane { border: 1px solid var(--line); border-radius: 18px; background: linear-gradient(180deg, rgba(16,22,36,.72), rgba(6,9,16,.9)); overflow: hidden; position: relative; }
+.pane-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 10px 18px; align-items: baseline; padding: 16px 18px 0; }
+.pane-head h2 { margin: 0; font-weight: 400; font-size: 1.15rem; }
+.pane-head p { margin: 0; color: var(--ink-soft); font-size: 0.85rem; max-width: 60ch; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { font: inherit; font-family: var(--mono); font-size: 0.64rem; letter-spacing: .12em; text-transform: uppercase; padding: 6px 10px; border-radius: 999px; border: 1px solid var(--line); background: rgba(255,255,255,.02); color: var(--ink-soft); cursor: pointer; display: inline-flex; align-items: center; gap: 7px; }
+.chip i { width: 7px; height: 7px; border-radius: 50%; background: var(--c); box-shadow: 0 0 8px var(--c); }
+.chip[aria-pressed="true"] { border-color: var(--c); color: var(--ink); background: color-mix(in srgb, var(--c) 14%, transparent); }
+
+/* ---------- Concept A: orrery ---------- */
+.orrery { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 0; }
+.orrery-stage { position: relative; aspect-ratio: 1 / 0.78; max-width: 100%; min-width: 0; }
+.orrery-stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; cursor: crosshair; }
+.orrery-side { border-left: 1px solid var(--line); padding: 16px; display: grid; gap: 12px; align-content: start; min-width: 0; }
+.tip { position: absolute; pointer-events: none; transform: translate(-50%, calc(-100% - 14px)); background: rgba(4,6,12,.92); border: 1px solid var(--line-strong); border-radius: 10px; padding: 8px 10px; font-size: .78rem; white-space: nowrap; opacity: 0; transition: opacity .15s; }
+.tip small { display: block; font-family: var(--mono); font-size: .6rem; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-faint); }
+.tip.on { opacity: 1; }
+.soon-list { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.soon-list li { font-size: .8rem; color: var(--ink-faint); border: 1px dashed var(--line); border-radius: 10px; padding: 8px 10px; }
+.soon-list li span { display: block; font-family: var(--mono); font-size: .58rem; letter-spacing: .16em; text-transform: uppercase; }
+.legend-note { font-size: .8rem; color: var(--ink-soft); line-height: 1.5; margin: 0; }
+
+/* ---------- Concept B: mission control ---------- */
+.console { display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); gap: 0; font-family: var(--mono); }
+.radar-wrap { position: relative; padding: 16px; border-right: 1px solid var(--line); display: grid; gap: 12px; align-content: start; min-width: 0; }
+.radar { position: relative; aspect-ratio: 1; max-width: 100%; }
+.radar canvas { position: absolute; inset: 0; width: 100%; height: 100%; cursor: crosshair; }
+.status-bar { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: .64rem; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-faint); }
+.status-bar .live { color: #ff7a59; }
+.status-bar .live::before { content: ""; display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: currentColor; margin-right: 7px; animation: blink 1.2s infinite; vertical-align: 1px; }
+@keyframes blink { 50% { opacity: .2; } }
+.ticker { height: 92px; overflow: hidden; font-size: .7rem; line-height: 1.6; color: var(--f-surface); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; background: rgba(0,0,0,.35); display: flex; flex-direction: column; justify-content: flex-end; }
+.ticker div { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ticker div:last-child::after { content: "▍"; animation: blink 1s infinite; }
+.board { padding: 12px 12px 16px; display: flex; flex-direction: column; gap: 6px; max-height: 640px; overflow-y: auto; min-width: 0; }
+.row {
+  display: grid; grid-template-columns: 4px minmax(0, 1fr) auto; gap: 12px; align-items: center;
+  border: 1px solid var(--line); border-radius: 10px; padding: 9px 12px 9px 0; background: rgba(255,255,255,.015);
+  cursor: pointer; position: relative; overflow: hidden; text-align: left; font: inherit; color: inherit; width: 100%; flex-shrink: 0;
+  animation: boot .55s both; animation-delay: calc(var(--i) * 45ms);
+}
+.row::after { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--c) 18%, transparent), transparent); transform: translateX(-100%); }
+.row.ping::after { animation: sweep .9s ease-out; }
+@keyframes sweep { to { transform: translateX(100%); } }
+@keyframes boot { 0% { opacity: .25; clip-path: inset(0 100% 0 0); } 60% { opacity: 1; } 100% { clip-path: inset(0 0 0 0); } }
+.row:hover { border-color: var(--c); background: color-mix(in srgb, var(--c) 8%, transparent); }
+.row .stripe { align-self: stretch; background: var(--c); box-shadow: 0 0 10px var(--c); border-radius: 0 3px 3px 0; }
+.row .name { display: grid; gap: 2px; min-width: 0; }
+.row .name strong { font-family: var(--sans); font-weight: 500; font-size: .9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.row .name span { font-size: .6rem; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.signal { display: grid; justify-items: end; gap: 4px; }
+.bars { display: flex; gap: 3px; align-items: flex-end; height: 16px; }
+.bars i { width: 4px; border-radius: 1px; background: var(--line); }
+.bars i.on { background: var(--c); box-shadow: 0 0 6px var(--c); animation: flick 2.4s infinite; animation-delay: calc(var(--k) * 120ms); }
+@keyframes flick { 0%, 100% { opacity: 1; } 47% { opacity: 1; } 50% { opacity: .45; } 53% { opacity: 1; } }
+.state { font-size: .56rem; letter-spacing: .16em; text-transform: uppercase; color: var(--c); }
+.row.off { cursor: default; opacity: .5; animation-name: boot; }
+.row.off .stripe { background: var(--ink-faint); box-shadow: none; }
+.row.off:hover { border-color: var(--line); background: rgba(255,255,255,.015); }
+.board-label { font-size: .6rem; letter-spacing: .18em; text-transform: uppercase; color: var(--ink-faint); padding: 8px 2px 2px; }
+
+/* ---------- Concept C: carousel ---------- */
+.carousel { display: grid; gap: 4px; padding-bottom: 18px; }
+.hero { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 22px; padding: 18px; align-items: center; }
+.hero-canvas { position: relative; aspect-ratio: 16 / 9; max-width: 100%; border-radius: 14px; overflow: hidden; border: 1px solid var(--line); background: #020309; }
+.hero-canvas canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+.hero-text { display: grid; gap: 10px; align-content: center; min-width: 0; }
+.hero-text h3 { margin: 0; font-weight: 300; font-size: clamp(1.4rem, 3vw, 2.1rem); text-wrap: balance; line-height: 1.12; }
+.hero-text p { margin: 0; color: var(--ink-soft); line-height: 1.55; }
+.hero-swap { animation: rise .5s both; }
+@keyframes rise { from { opacity: .3; transform: translateY(8px); } }
+.ring-track { position: relative; height: 210px; perspective: 1100px; overflow: hidden; }
+.ring { position: absolute; left: 50%; top: 18px; width: 0; height: 0; transform-style: preserve-3d; transition: transform .7s cubic-bezier(.2,.8,.2,1); }
+.card {
+  position: absolute; width: 150px; height: 170px; left: -75px; top: 0; border-radius: 14px; border: 1px solid var(--line);
+  background: linear-gradient(180deg, rgba(20,26,42,.95), rgba(8,11,20,.95)); padding: 10px; display: grid; grid-template-rows: 80px auto 1fr; gap: 8px;
+  cursor: pointer; font: inherit; color: inherit; text-align: left; backface-visibility: hidden; transition: border-color .3s, box-shadow .3s, opacity .3s;
+}
+.card canvas { width: 100%; height: 80px; border-radius: 9px; background: #020309; display: block; }
+.card strong { font-weight: 500; font-size: .84rem; line-height: 1.25; }
+.card span { font-family: var(--mono); font-size: .56rem; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-faint); }
+.card.active { border-color: var(--c); box-shadow: 0 0 28px -6px var(--c); }
+.card.soon { opacity: .55; border-style: dashed; }
+.car-ctl { display: flex; justify-content: center; gap: 10px; align-items: center; font-family: var(--mono); font-size: .66rem; letter-spacing: .14em; color: var(--ink-faint); }
+.round { width: 38px; height: 38px; border-radius: 50%; border: 1px solid var(--line-strong); background: transparent; color: var(--ink); cursor: pointer; font-size: 1rem; }
+.round:hover { border-color: var(--amber); color: var(--amber); }
+
+/* ---------- shared ---------- */
+.tag { display: inline-flex; align-items: center; gap: 6px; font-family: var(--mono); font-size: .6rem; letter-spacing: .14em; text-transform: uppercase; color: var(--c); border: 1px solid color-mix(in srgb, var(--c) 45%, transparent); border-radius: 999px; padding: 4px 9px; }
+.tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.go {
+  justify-self: start; font: inherit; font-family: var(--mono); font-size: .74rem; letter-spacing: .14em; text-transform: uppercase;
+  border: 1px solid var(--amber); color: var(--void); background: var(--amber); border-radius: 999px; padding: 10px 18px; cursor: pointer;
+  display: inline-flex; gap: 10px; align-items: center; box-shadow: 0 0 24px -6px var(--amber);
+}
+.go::before { content: ""; width: 0; height: 0; border-left: 8px solid currentColor; border-top: 5px solid transparent; border-bottom: 5px solid transparent; }
+.go:hover { filter: brightness(1.08); }
+.facts { display: grid; gap: 8px; margin: 0; }
+.facts dt { font-family: var(--mono); font-size: .58rem; letter-spacing: .16em; text-transform: uppercase; color: var(--ink-faint); }
+.facts dd { margin: 2px 0 0; font-size: .86rem; color: var(--ink-soft); line-height: 1.5; }
+
+.sheet-bg { position: fixed; inset: 0; background: rgba(2,3,8,.7); backdrop-filter: blur(6px); display: grid; place-items: center; padding: 16px; z-index: 20; animation: fade .25s both; }
+@keyframes fade { from { opacity: 0; } }
+.sheet { width: min(760px, 100%); max-height: calc(100% - 32px); overflow-y: auto; border: 1px solid var(--line-strong); border-radius: 18px; background: linear-gradient(180deg, #0f1524, #070a12); display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); animation: pop .35s cubic-bezier(.2,.9,.25,1.1) both; box-shadow: 0 30px 80px -20px #000, 0 0 0 1px color-mix(in srgb, var(--c) 30%, transparent); }
+@keyframes pop { from { opacity: 0; transform: translateY(18px) scale(.97); } }
+.sheet-canvas { position: relative; min-height: 260px; background: #020309; border-right: 1px solid var(--line); }
+.sheet-canvas canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+.sheet-body { padding: 20px; display: grid; gap: 12px; align-content: start; min-width: 0; }
+.sheet-body h3 { margin: 0; font-weight: 400; font-size: 1.45rem; text-wrap: balance; }
+.sheet-body > p { margin: 0; color: var(--ink-soft); line-height: 1.55; }
+.x { position: absolute; top: 10px; right: 10px; z-index: 2; }
+.sheet-wrap { position: relative; }
+.toast { position: fixed; left: 50%; bottom: calc(24px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: rgba(4,6,12,.95); border: 1px solid var(--amber); color: var(--ink); padding: 10px 16px; border-radius: 999px; font-size: .82rem; z-index: 30; animation: rise .3s both; max-width: calc(100% - 32px); }
+
+@media (max-width: 860px) {
+  .orrery, .console, .hero { grid-template-columns: minmax(0, 1fr); }
+  .orrery-side { border-left: 0; border-top: 1px solid var(--line); }
+  .radar-wrap { border-right: 0; border-bottom: 1px solid var(--line); }
+  .board { max-height: none; }
+  .sheet { grid-template-columns: minmax(0, 1fr); }
+  .sheet-canvas { min-height: 200px; border-right: 0; border-bottom: 1px solid var(--line); }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+}
+</style>
+
+<div class="wrap">
+  <header>
+    <span class="eyebrow">Beyond Earth · Space events · prototype</span>
+    <h1>Three ways to open Space Events</h1>
+    <p>Each concept is live and uses the site's real roster: 20 events and the 4 still in development. Switch between them, then click any event to open its card.</p>
+    <div class="tabs" role="tablist" aria-label="Concepts">
+      <button class="tab" role="tab" id="tab-orrery" aria-controls="pane-orrery" aria-selected="true"><b>A</b>Orrery map</button>
+      <button class="tab" role="tab" id="tab-console" aria-controls="pane-console" aria-selected="false"><b>B</b>Mission control</button>
+      <button class="tab" role="tab" id="tab-carousel" aria-controls="pane-carousel" aria-selected="false"><b>C</b>Cosmic carousel</button>
+    </div>
+  </header>
+
+  <section class="pane" id="pane-orrery" role="tabpanel" aria-labelledby="tab-orrery">
+    <div class="pane-head">
+      <h2>Every event on the world it happens on</h2>
+      <div class="chips" id="orrery-chips"></div>
+    </div>
+    <div class="orrery">
+      <div class="orrery-stage" id="orrery-stage">
+        <canvas id="orrery-canvas" aria-label="Animated map of the Solar System with a beacon for each space event"></canvas>
+        <div class="tip" id="orrery-tip"></div>
+      </div>
+      <aside class="orrery-side">
+        <span class="eyebrow">How to read it</span>
+        <p class="legend-note">Each pulsing beacon is an event, coloured by what kind of physics it is. Moons' events sit beside their planet. The three interstellar visitors fly their passes through the middle; supernova and kilonova sit on the star ring outside.</p>
+        <span class="eyebrow">In development</span>
+        <ul class="soon-list" id="orrery-soon"></ul>
+      </aside>
+    </div>
+  </section>
+
+  <section class="pane" id="pane-console" role="tabpanel" aria-labelledby="tab-console" hidden>
+    <div class="console">
+      <div class="radar-wrap">
+        <div class="status-bar"><span class="live">Live</span><span id="utc">UTC --:--:--</span><span>20 tracked · 4 offline</span></div>
+        <div class="radar"><canvas id="radar-canvas" aria-label="Radar sweep with a blip for each space event"></canvas></div>
+        <div class="ticker" id="ticker" aria-live="off"></div>
+      </div>
+      <div class="board" id="board"></div>
+    </div>
+  </section>
+
+  <section class="pane" id="pane-carousel" role="tabpanel" aria-labelledby="tab-carousel" hidden>
+    <div class="carousel">
+      <div class="hero">
+        <div class="hero-canvas"><canvas id="hero-canvas" aria-label="Animated preview of the selected event"></canvas></div>
+        <div class="hero-text" id="hero-text"></div>
+      </div>
+      <div class="ring-track" id="ring-track"><div class="ring" id="ring"></div></div>
+      <div class="car-ctl">
+        <button class="round" id="prev" aria-label="Previous event">‹</button>
+        <span id="car-count">01 / 24</span>
+        <button class="round" id="next" aria-label="Next event">›</button>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script>
+const FAMILY = {
+  solar: "Solar", planetary: "Planetary atmosphere", smallBody: "Small body", impact: "Impact",
+  ring: "Ring", surface: "Surface activity", alignment: "Alignment", deepSky: "Deep sky", recorded: "Interstellar visitor",
+};
+const KIND = { transient: "One-off", recurring: "Recurring", ongoing: "Ongoing", recorded: "Recorded" };
+/* signal: how often it happens, 1 (once / centuries) .. 5 (all the time). */
+const EVENTS = [
+  { id: "solar-cme", body: "Sun", title: "Coronal mass ejection", kind: "transient", family: "solar", signal: 5, often: "Several a day at solar maximum", detail: "A billion tonnes of plasma leaving the corona at up to 3,000 km/s." , freq: "Several a day at solar maximum, about one every five days at minimum, on an eleven-year cycle." },
+  { id: "sungrazer", body: "Sun", title: "Sungrazing comet", kind: "transient", family: "smallBody", signal: 4, often: "One every ~3 days", detail: "A comet dives to within a couple of solar radii and does not come out.", freq: "SOHO finds a Kreutz sungrazer on average every three days; over 4,000 comets found in total." },
+  { id: "mercury-sodium-tail", body: "Mercury", title: "Sodium tail", kind: "ongoing", family: "planetary", signal: 4, often: "Every 88-day orbit", detail: "Mercury streams a comet-like tail of sodium about 24 million km away from the Sun.", freq: "Every orbit, 88 days, peaking about 16 days either side of perihelion." },
+  { id: "meteor-shower", body: "Earth", title: "Meteor shower", kind: "recurring", family: "smallBody", signal: 4, often: "~12 major showers a year", detail: "Earth crosses a comet's debris trail, as it does on the same dates each year.", freq: "About a dozen major showers a year on fixed dates: Perseids 12–13 August, Geminids 13–14 December." },
+  { id: "solar-eclipse", body: "Earth", title: "Solar eclipse", kind: "recurring", family: "alignment", signal: 4, often: "2–5 a year", detail: "The Moon's shadow lands on Earth and races across it.", freq: "Two to five solar eclipses a year; any one place waits about 375 years for a total one." },
+  { id: "lunar-impact-flash", body: "Moon", parent: "Earth", title: "Lunar impact flash", kind: "transient", family: "impact", signal: 5, often: "~0.7 per hour watched", detail: "Gravel-sized meteoroids hit the surface at full speed and flash.", freq: "About 0.68 validated flashes per hour of observation (NELIOTA, 192 in 283 hours)." },
+  { id: "mars-dust-storm", body: "Mars", title: "Global dust storm", kind: "recurring", family: "planetary", signal: 2, often: "Every ~5½ years", detail: "A regional storm fails to die and wraps the entire planet.", freq: "Once every three Mars years on average, about 5½ Earth years." },
+  { id: "jupiter-impact", body: "Jupiter", title: "Impact swarm", kind: "transient", family: "impact", signal: 4, often: "Tens a year", detail: "Metre-scale asteroids fall in from every direction and detonate in Jupiter's upper atmosphere.", freq: "Tens of strikes a year; amateurs catch one or two of the flashes." },
+  { id: "io-eruption", body: "Io", parent: "Jupiter", title: "Volcanic plume", kind: "ongoing", family: "surface", signal: 5, often: "Always erupting", detail: "Sulphur thrown 300 km above the most volcanic world in the Solar System.", freq: "Continuous: about 400 active volcanoes, something erupting at every moment." },
+  { id: "saturn-impact", body: "Saturn", title: "Impact swarm", kind: "transient", family: "impact", signal: 3, often: "A fifth of Jupiter's rate", detail: "Saturn takes its own share of the same debris, arriving on unrelated paths.", freq: "Perhaps a fifth of Jupiter's rate: further out, smaller gravitational reach." },
+  { id: "saturn-white-spot", body: "Saturn", title: "Great White Spot", kind: "recurring", family: "planetary", signal: 1, often: "Every ~30 years", detail: "A storm erupts and spreads along its latitude until it wraps the planet.", freq: "Roughly once per Saturnian year, every 30 Earth years. The last was 2010." },
+  { id: "ring-spokes", body: "Saturn", title: "Ring spokes", kind: "recurring", family: "ring", signal: 2, often: "Each equinox, ~15 years", detail: "Radial smears thousands of kilometres long form across the B ring and shear away.", freq: "Around Saturn's equinoxes, roughly every 15 years. May 2025 began spoke season." },
+  { id: "enceladus-plumes", body: "Enceladus", parent: "Saturn", title: "Ocean venting to space", kind: "ongoing", family: "surface", signal: 5, often: "Continuous", detail: "Over a hundred jets of salty water ice leaving the south pole.", freq: "Continuous, and strongest when tides pull the fractures open." },
+  { id: "uranus-storms", body: "Uranus", title: "Bright storm outbreak", kind: "recurring", family: "planetary", signal: 3, often: "Seasonal", detail: "Methane-ice cloud tops erupt across the northern hemisphere.", freq: "Climbing since the 2007 equinox; Keck counted eight large storms in one night in 2014." },
+  { id: "triton-geysers", body: "Triton", parent: "Neptune", title: "Nitrogen geysers", kind: "ongoing", family: "surface", signal: 5, often: "Vents run ~a year", detail: "Dark plumes rise 8 km, bend over and stream 150 km downwind.", freq: "Vents can run for about a year; Voyager 2 caught at least two erupting in 1989." },
+  { id: "oumuamua-passage", body: "ʻOumuamua", title: "ʻOumuamua passes through", kind: "recorded", family: "recorded", signal: 1, often: "Once, 2017", detail: "The first object ever seen from another star: a replay of its 2017 pass on its real path.", freq: "Once. It came in from the direction of Vega and is not coming back." },
+  { id: "borisov-passage", body: "2I/Borisov", title: "2I/Borisov passes through", kind: "recorded", family: "recorded", signal: 1, often: "Once, 2019", detail: "The first comet from another star: a replay of its 2019–2020 pass.", freq: "Once. The second interstellar object found." },
+  { id: "atlas-3i-passage", body: "3I/ATLAS", title: "3I/ATLAS passes through", kind: "recorded", family: "recorded", signal: 1, often: "Once, 2025", detail: "The fastest visitor ever recorded: a replay of its 2025–2026 pass.", freq: "Once. The third interstellar object, seen up close by spacecraft at Mars." },
+  { id: "supernova", body: "Deep space", title: "Supernova", kind: "transient", family: "deepSky", signal: 1, often: "~2 per century", detail: "A massive star collapses and detonates, lighting up the dust around it for months.", freq: "About two per century in the Milky Way; the last seen by eye was probably in 1680." },
+  { id: "kilonova", body: "Deep space", title: "Kilonova", kind: "transient", family: "deepSky", signal: 1, often: "Seen once", detail: "Two neutron stars merge and throw off debris that makes gold and platinum in seconds.", freq: "Caught once: GW170817, 17 August 2017, 130 million light-years away." },
+];
+const SOON = [
+  { title: "How the Solar System formed", place: "The early Solar System" },
+  { title: "The solar wind", place: "The Sun · out to the heliopause" },
+  { title: "Magnetospheres", place: "Mercury · Earth · the giants · Ganymede" },
+  { title: "Why there are seasons", place: "Every planet" },
+];
+const css = getComputedStyle(document.documentElement);
+const colour = (f) => css.getPropertyValue(`--f-${f}`).trim();
+const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+const place = (e) => e.parent ? `${e.body} · ${e.parent}` : e.body;
+
+/* ---------- canvas helpers ---------- */
+function fitCanvas(canvas) {
+  const r = canvas.getBoundingClientRect();
+  const dpr = Math.min(2, devicePixelRatio || 1);
+  const w = Math.max(1, Math.round(r.width * dpr)), h = Math.max(1, Math.round(r.height * dpr));
+  if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
+  return { w: r.width, h: r.height, dpr };
+}
+const rand = (s) => { const x = Math.sin(s * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
+function stars(ctx, w, h, n, t, seed = 1) {
+  for (let i = 0; i < n; i++) {
+    const x = rand(i + seed) * w, y = rand(i * 3.7 + seed) * h;
+    const a = 0.25 + 0.5 * rand(i * 9.1 + seed) * (0.7 + 0.3 * Math.sin(t * 1.5 + i));
+    ctx.fillStyle = `rgba(230,236,255,${a})`;
+    ctx.fillRect(x, y, rand(i * 2.3) > 0.92 ? 1.6 : 1, rand(i * 2.3) > 0.92 ? 1.6 : 1);
+  }
+}
+function glow(ctx, x, y, r, c, a = 1) {
+  if (!(r > 0)) return;
+  const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+  g.addColorStop(0, c); g.addColorStop(1, "rgba(0,0,0,0)");
+  ctx.globalAlpha = a; ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = 1;
+}
+function disc(ctx, x, y, r, inner, outer) {
+  if (!(r > 0)) return;
+  const g = ctx.createRadialGradient(x - r * 0.35, y - r * 0.35, r * 0.1, x, y, r);
+  g.addColorStop(0, inner); g.addColorStop(1, outer);
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+}
+
+/* One animated vignette per event: a small scene of what the event is. */
+function drawEvent(ctx, w, h, t, ev) {
+  ctx.fillStyle = "#020309"; ctx.fillRect(0, 0, w, h);
+  stars(ctx, w, h, Math.round(w * h / 900), t, ev.id.length);
+  const c = colour(ev.family), m = Math.min(w, h);
+  const id = ev.id;
+  if (id === "solar-cme" || id === "sungrazer") {
+    const sx = w * 0.18, sy = h * 0.55, R = m * 0.42;
+    glow(ctx, sx, sy, R * 2.1, "rgba(255,170,70,.45)");
+    disc(ctx, sx, sy, R, "#fff1c4", "#ff8a1f");
+    if (id === "solar-cme") {
+      const p = (t * 0.35) % 1;
+      ctx.strokeStyle = `rgba(255,190,120,${1 - p})`; ctx.lineWidth = 2 + 6 * (1 - p);
+      ctx.beginPath(); ctx.ellipse(sx + R + p * w * 0.55, sy - p * h * 0.15, R * 0.25 + p * m * 0.55, R * 0.18 + p * m * 0.42, -0.3, 0, Math.PI * 2); ctx.stroke();
+      for (let i = 0; i < 40; i++) {
+        const a = rand(i) * Math.PI - Math.PI / 2, d = R + p * w * 0.6 * rand(i + 5);
+        ctx.fillStyle = `rgba(255,220,170,${(1 - p) * 0.8})`; ctx.fillRect(sx + Math.cos(a) * d, sy + Math.sin(a) * d, 2, 2);
+      }
+    } else {
+      const p = (t * 0.25) % 1, x = w * (1.05 - p * 0.75), y = h * (0.05 + p * 0.45);
+      if (p < 0.85) {
+        const tail = ctx.createLinearGradient(x, y, x + w * 0.35, y - h * 0.25);
+        tail.addColorStop(0, "rgba(180,225,255,.9)"); tail.addColorStop(1, "rgba(180,225,255,0)");
+        ctx.strokeStyle = tail; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + w * 0.35, y - h * 0.25); ctx.stroke();
+        glow(ctx, x, y, 10, "rgba(220,240,255,1)");
+      } else glow(ctx, sx + R, sy - R * 0.4, m * 0.25 * (1 - (p - 0.85) / 0.15), "rgba(255,255,230,.9)");
+    }
+  } else if (["jupiter-impact", "saturn-impact", "lunar-impact-flash"].includes(id)) {
+    const cx = w * 0.5, cy = h * 1.9, R = h * 1.55;
+    const body = id === "jupiter-impact" ? ["#e9cfa6", "#7a4a26"] : id === "saturn-impact" ? ["#f1e2b8", "#8a6f3e"] : ["#cfcfcf", "#4a4a4a"];
+    disc(ctx, cx, cy, R, body[0], body[1]);
+    if (id !== "lunar-impact-flash") for (let b = 0; b < 7; b++) { ctx.strokeStyle = `rgba(90,50,20,${0.15 + 0.1 * (b % 2)})`; ctx.lineWidth = 6; ctx.beginPath(); ctx.arc(cx, cy, Math.max(1, R - 14 - b * 16), Math.PI * 1.1, Math.PI * 1.9); ctx.stroke(); }
+    for (let i = 0; i < 4; i++) {
+      const p = (t * 0.6 + i * 0.27) % 1, a = Math.PI * (1.2 + 0.6 * rand(i + Math.floor(t * 0.6 + i * 0.27)));
+      const x = cx + Math.cos(a) * (R - 6), y = cy + Math.sin(a) * (R - 6);
+      if (p < 0.5) { ctx.strokeStyle = `rgba(255,220,180,${0.8 - p})`; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(x - 60 * (0.5 - p) * 2, y - 80 * (0.5 - p) * 2); ctx.lineTo(x - 10 * (0.5 - p), y - 14 * (0.5 - p)); ctx.stroke(); }
+      else glow(ctx, x, y, 6 + 40 * (1 - p) * 2 * (p - 0.5) * 4, `rgba(255,${id === "lunar-impact-flash" ? 255 : 190},140,1)`, 1 - (p - 0.5) * 2);
+    }
+  } else if (["io-eruption", "enceladus-plumes", "triton-geysers"].includes(id)) {
+    const cx = w * 0.5, cy = h * 1.7, R = h * 1.2;
+    const body = id === "io-eruption" ? ["#f3e07a", "#9a6a1c"] : id === "enceladus-plumes" ? ["#f4fbff", "#8aa3b8"] : ["#f2d9d1", "#8a6f72"];
+    disc(ctx, cx, cy, R, body[0], body[1]);
+    const n = id === "enceladus-plumes" ? 4 : id === "io-eruption" ? 2 : 2;
+    for (let v = 0; v < n; v++) {
+      const vx = cx + (v - (n - 1) / 2) * w * 0.18, vy = cy - R + 4 + Math.abs(v - (n - 1) / 2) * 6;
+      for (let i = 0; i < 70; i++) {
+        const life = (t * 0.5 + rand(i + v * 99)) % 1, spread = (rand(i * 2 + v) - 0.5);
+        const height = h * (id === "io-eruption" ? 0.75 : id === "enceladus-plumes" ? 0.7 : 0.35);
+        let x = vx + spread * life * w * (id === "io-eruption" ? 0.22 : 0.08), y = vy - Math.sin(life * Math.PI * (id === "io-eruption" ? 0.95 : 0.6)) * height;
+        if (id === "triton-geysers") { x = vx + life * life * w * 0.35; y = vy - Math.min(life * 3, 1) * height; }
+        const col = id === "io-eruption" ? `rgba(255,${200 + 40 * rand(i)},120,` : id === "enceladus-plumes" ? "rgba(210,240,255," : "rgba(60,50,55,";
+        ctx.fillStyle = col + (1 - life) * 0.9 + ")"; ctx.fillRect(x, y, 1.8, 1.8);
+      }
+    }
+  } else if (id === "meteor-shower") {
+    const cx = w * 0.5, cy = h * 2.2, R = h * 1.6;
+    glow(ctx, cx, cy - R, w * 0.6, "rgba(90,150,255,.35)");
+    disc(ctx, cx, cy, R, "#2a6fd6", "#071a3e");
+    for (let i = 0; i < 9; i++) {
+      const p = (t * 0.7 + rand(i)) % 1, x0 = w * (0.1 + rand(i + 3) * 0.9), y0 = h * 0.05;
+      const x = x0 - p * w * 0.3, y = y0 + p * h * 0.55;
+      const g = ctx.createLinearGradient(x, y, x + 40, y - 70); g.addColorStop(0, `rgba(255,250,230,${1 - p})`); g.addColorStop(1, "rgba(255,250,230,0)");
+      ctx.strokeStyle = g; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + 40, y - 70); ctx.stroke();
+    }
+  } else if (id === "solar-eclipse") {
+    const cx = w * 0.5, cy = h * 0.5, R = m * 0.26, p = (Math.sin(t * 0.5) + 1) / 2, cover = 1 - Math.abs(p - 0.5) * 2;
+    glow(ctx, cx, cy, R * (2 + 1.4 * cover), `rgba(240,240,255,${0.15 + 0.55 * cover})`);
+    disc(ctx, cx, cy, R, "#fff6d8", "#ffb347");
+    ctx.fillStyle = "#020309"; ctx.beginPath(); ctx.arc(cx + (p - 0.5) * R * 4.4, cy + (p - 0.5) * R * 0.4, R * 1.02, 0, Math.PI * 2); ctx.fill();
+  } else if (["mars-dust-storm", "saturn-white-spot", "uranus-storms"].includes(id)) {
+    const cx = w * 0.5, cy = h * 0.5, R = m * 0.38;
+    const pal = id === "mars-dust-storm" ? ["#e28a55", "#5a2412", "rgba(240,190,130,"] : id === "saturn-white-spot" ? ["#f1e2b8", "#7a6236", "rgba(255,255,245,"] : ["#c8f2f6", "#3f8a9a", "rgba(255,255,255,"];
+    disc(ctx, cx, cy, R, pal[0], pal[1]);
+    ctx.save(); ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2); ctx.clip();
+    const grow = id === "mars-dust-storm" ? (t * 0.15) % 1 : (t * 0.2) % 1;
+    for (let i = 0; i < 160; i++) {
+      const lat = id === "mars-dust-storm" ? (rand(i) - 0.5) * 2 * grow : (id === "saturn-white-spot" ? 0.35 : -0.45) + (rand(i) - 0.5) * 0.22;
+      const lon = (rand(i + 7) * 2 - 1) * (id === "mars-dust-storm" ? 1 : grow) + t * 0.05;
+      const x = cx + Math.sin(lon * 1.5) * R * Math.cos(Math.asin(Math.max(-1, Math.min(1, lat)))), y = cy - lat * R;
+      ctx.fillStyle = pal[2] + (0.25 + 0.4 * rand(i + 2)) + ")"; ctx.beginPath(); ctx.arc(x, y, 3 + 5 * rand(i + 4), 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.restore();
+  } else if (id === "ring-spokes") {
+    const cx = w * 0.5, cy = h * 0.55, R = m * 0.24;
+    ctx.save(); ctx.translate(cx, cy); ctx.scale(1, 0.32);
+    for (let r = 1.35; r < 2.3; r += 0.03) { ctx.strokeStyle = `rgba(240,225,180,${0.12 + 0.18 * rand(r * 50)})`; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.arc(0, 0, R * r, 0, Math.PI * 2); ctx.stroke(); }
+    for (let i = 0; i < 6; i++) {
+      const a = t * 0.25 + i * 1.05, life = (Math.sin(t * 0.8 + i) + 1) / 2;
+      ctx.strokeStyle = `rgba(30,24,20,${0.55 * life})`; ctx.lineWidth = 9; ctx.beginPath();
+      ctx.moveTo(Math.cos(a) * R * 1.6, Math.sin(a) * R * 1.6); ctx.lineTo(Math.cos(a + 0.12) * R * 2.05, Math.sin(a + 0.12) * R * 2.05); ctx.stroke();
+    }
+    ctx.restore();
+    disc(ctx, cx, cy, R, "#f1e2b8", "#7a6236");
+    ctx.save(); ctx.translate(cx, cy); ctx.scale(1, 0.32); ctx.beginPath(); ctx.rect(-R * 2.4, 0, R * 4.8, R * 3); ctx.clip();
+    for (let r = 1.35; r < 2.3; r += 0.03) { ctx.strokeStyle = `rgba(240,225,180,${0.12 + 0.18 * rand(r * 50)})`; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.arc(0, 0, R * r, 0, Math.PI); ctx.stroke(); }
+    ctx.restore();
+  } else if (id === "mercury-sodium-tail") {
+    const cx = w * 0.28, cy = h * 0.5, R = m * 0.13;
+    glow(ctx, -w * 0.1, cy, w * 0.5, "rgba(255,180,80,.35)");
+    for (let i = 0; i < 200; i++) {
+      const p = (t * 0.25 + rand(i)) % 1, x = cx + p * w * 0.85, y = cy + (rand(i + 3) - 0.5) * (R * 1.2 + p * h * 0.5);
+      ctx.fillStyle = `rgba(255,170,60,${(1 - p) * 0.6})`; ctx.fillRect(x, y, 2, 2);
+    }
+    disc(ctx, cx, cy, R, "#cfc6bc", "#4d4741");
+  } else if (id === "supernova" || id === "kilonova") {
+    const cx = w * 0.5, cy = h * 0.5, p = (t * 0.22) % 1, c2 = id === "supernova" ? "255,200,240" : "190,170,255";
+    if (id === "kilonova" && p < 0.35) {
+      const a = t * 12 * (0.3 + p * 4), r = m * 0.12 * (1 - p / 0.35);
+      glow(ctx, cx + Math.cos(a) * r, cy + Math.sin(a) * r, 16, "rgba(220,230,255,1)");
+      glow(ctx, cx - Math.cos(a) * r, cy - Math.sin(a) * r, 16, "rgba(220,230,255,1)");
+    } else {
+      const q = id === "kilonova" ? (p - 0.35) / 0.65 : p;
+      glow(ctx, cx, cy, m * (0.15 + q * 0.6), `rgba(${c2},${1 - q})`);
+      ctx.strokeStyle = `rgba(${c2},${(1 - q) * 0.8})`; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(cx, cy, m * q * 0.55, 0, Math.PI * 2); ctx.stroke();
+      glow(ctx, cx, cy, 10 + 24 * (1 - q), "rgba(255,255,255,1)");
+    }
+  } else if (ev.family === "recorded") {
+    const sx = w * 0.42, sy = h * 0.58;
+    glow(ctx, sx, sy, m * 0.25, "rgba(255,190,110,.5)"); disc(ctx, sx, sy, m * 0.05, "#fff1c4", "#ff9a3a");
+    ctx.strokeStyle = "rgba(127,227,224,.35)"; ctx.setLineDash([4, 6]); ctx.lineWidth = 1.2; ctx.beginPath();
+    const path = (u) => [sx + Math.sinh(u) * w * 0.32, sy - (Math.cosh(u) - 1.6) * h * 0.22 - h * 0.08];
+    for (let u = -2; u <= 2; u += 0.05) { const [x, y] = path(u); u === -2 ? ctx.moveTo(x, y) : ctx.lineTo(x, y); }
+    ctx.stroke(); ctx.setLineDash([]);
+    const [x, y] = path(((t * 0.3) % 1) * 4 - 2);
+    glow(ctx, x, y, 14, "rgba(127,227,224,1)");
+  }
+  ctx.globalAlpha = 1;
+}
+
+/* A shared loop: each registered drawer runs only while its canvas is visible. */
+const drawers = new Set();
+function loop(now) {
+  const t = reduced ? 2.2 : now / 1000;
+  /* One drawing failing must not stop the others or the loop. */
+  drawers.forEach((d) => { if (d.canvas.offsetParent !== null) { try { d.draw(t); } catch (err) { console.warn(err); } } });
+  requestAnimationFrame(loop);
+}
+function vignette(canvas, getEvent) {
+  const ctx = canvas.getContext("2d");
+  const d = { canvas, draw(t) { const { w, h, dpr } = fitCanvas(canvas); ctx.setTransform(dpr, 0, 0, dpr, 0, 0); const ev = getEvent(); if (ev) drawEvent(ctx, w, h, t, ev); } };
+  drawers.add(d); return d;
+}
+
+/* ---------- event card (shared by all three concepts) ---------- */
+let sheetDrawer = null;
+function openSheet(ev) {
+  closeSheet();
+  const bg = document.createElement("div");
+  bg.className = "sheet-bg"; bg.style.setProperty("--c", colour(ev.family));
+  bg.innerHTML = `
+    <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-title">
+      <div class="sheet-canvas"><canvas></canvas></div>
+      <div class="sheet-body sheet-wrap">
+        <button class="round x" aria-label="Close">×</button>
+        <span class="eyebrow">${place(ev)}</span>
+        <h3 id="sheet-title">${ev.title}</h3>
+        <div class="tags"><span class="tag" style="--c:${colour(ev.family)}">${FAMILY[ev.family]}</span><span class="tag" style="--c:var(--ink-soft)">${KIND[ev.kind]}</span></div>
+        <p>${ev.detail}</p>
+        <dl class="facts"><div><dt>How often</dt><dd>${ev.freq}</dd></div></dl>
+        <button class="go" id="go">Go watch it</button>
+      </div>
+    </div>`;
+  document.body.append(bg);
+  sheetDrawer = vignette(bg.querySelector("canvas"), () => ev);
+  bg.addEventListener("click", (e) => { if (e.target === bg || e.target.closest(".x")) closeSheet(); });
+  bg.querySelector("#go").addEventListener("click", () => { closeSheet(); toast(`In the site: the camera flies to ${ev.parent ? ev.body : ev.body === "Deep space" ? "the sky" : ev.body}, counts down 5 s, then plays “${ev.title}”.`); });
+  bg.querySelector("#go").focus({ preventScroll: true });
+}
+function closeSheet() {
+  const bg = document.querySelector(".sheet-bg");
+  if (sheetDrawer) { drawers.delete(sheetDrawer); sheetDrawer = null; }
+  bg?.remove();
+}
+addEventListener("keydown", (e) => { if (e.key === "Escape") closeSheet(); });
+function toast(text) {
+  document.querySelector(".toast")?.remove();
+  const n = document.createElement("div"); n.className = "toast"; n.setAttribute("role", "status"); n.textContent = text;
+  document.body.append(n); setTimeout(() => n.remove(), 4200);
+}
+
+/* ---------- tabs ---------- */
+const tabs = [...document.querySelectorAll(".tab")];
+function select(tab) {
+  tabs.forEach((t) => { const on = t === tab; t.setAttribute("aria-selected", on); document.getElementById(t.getAttribute("aria-controls")).hidden = !on; });
+  if (tab.id === "tab-console") bootConsole();
+  try { localStorage.setItem("se-concept", tab.id); } catch {}
+}
+tabs.forEach((t) => t.addEventListener("click", () => select(t)));
+
+/* ---------- Concept A: orrery ---------- */
+(function orrery() {
+  const canvas = document.getElementById("orrery-canvas"), ctx = canvas.getContext("2d"), tip = document.getElementById("orrery-tip");
+  const ORBITS = [
+    { name: "Mercury", r: 0.13, p: 3, size: 3, col: "#b9b0a6" }, { name: "Venus", r: 0.19, p: 5, size: 4.5, col: "#f1e2c4" },
+    { name: "Earth", r: 0.255, p: 7, size: 4.8, col: "#5b9cff" }, { name: "Mars", r: 0.32, p: 11, size: 3.6, col: "#e27a4a" },
+    { name: "Jupiter", r: 0.45, p: 22, size: 9, col: "#e3c49a" }, { name: "Saturn", r: 0.57, p: 34, size: 8, col: "#efdcaa", ring: true },
+    { name: "Uranus", r: 0.67, p: 50, size: 6, col: "#a8e6ee" }, { name: "Neptune", r: 0.76, p: 70, size: 6, col: "#5f86ff" },
+  ];
+  const chipsEl = document.getElementById("orrery-chips");
+  const families = [...new Set(EVENTS.map((e) => e.family))];
+  const active = new Set(families);
+  families.forEach((f) => {
+    const b = document.createElement("button"); b.className = "chip"; b.style.setProperty("--c", colour(f));
+    b.setAttribute("aria-pressed", "true"); b.innerHTML = `<i></i>${FAMILY[f]}`;
+    b.onclick = () => { active.has(f) ? active.delete(f) : active.add(f); b.setAttribute("aria-pressed", active.has(f)); };
+    chipsEl.append(b);
+  });
+  document.getElementById("orrery-soon").innerHTML = SOON.map((s) => `<li><span>${s.place}</span>${s.title}</li>`).join("");
+  let beacons = [], hover = null, mouse = null;
+  function draw(t) {
+    const { w, h, dpr } = fitCanvas(canvas); ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, w, h); stars(ctx, w, h, 220, t, 4);
+    const cx = w / 2, cy = h / 2, S = Math.min(w, h / 0.78) * 0.62, tilt = 0.62;
+    const pos = (r, a) => [cx + Math.cos(a) * r * S, cy + Math.sin(a) * r * S * tilt];
+    /* star ring for deep-sky events */
+    ctx.strokeStyle = "rgba(255,143,216,.18)"; ctx.setLineDash([2, 6]); ctx.beginPath(); ctx.ellipse(cx, cy, 0.86 * S, 0.86 * S * tilt, 0, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
+    const intro = Math.min(1, t / 2.2);
+    ORBITS.forEach((o, i) => {
+      ctx.strokeStyle = "rgba(206,216,234,.13)"; ctx.lineWidth = 1; ctx.beginPath();
+      ctx.ellipse(cx, cy, o.r * S, o.r * S * tilt, 0, 0, Math.PI * 2 * Math.min(1, Math.max(0, intro * 1.6 - i * 0.08))); ctx.stroke();
+    });
+    glow(ctx, cx, cy, S * 0.12, "rgba(255,170,70,.55)"); disc(ctx, cx, cy, S * 0.035, "#fff2c6", "#ff8f2a");
+    const where = { Sun: [cx, cy] };
+    ORBITS.forEach((o) => {
+      const a = t * (2 * Math.PI) / (o.p * 6) + o.r * 20, [x, y] = pos(o.r, a);
+      where[o.name] = [x, y];
+      if (o.ring) { ctx.strokeStyle = "rgba(240,225,180,.55)"; ctx.lineWidth = 1.4; ctx.beginPath(); ctx.ellipse(x, y, o.size * 2, o.size * 0.7, -0.2, 0, Math.PI * 2); ctx.stroke(); }
+      disc(ctx, x, y, o.size, "#fff", o.col);
+      ctx.fillStyle = "rgba(206,216,234,.45)"; ctx.font = "10px ui-monospace, monospace"; ctx.fillText(o.name.toUpperCase(), x + o.size + 5, y + 3);
+    });
+    /* visitors: hyperbolic passes */
+    const visitors = EVENTS.filter((e) => e.family === "recorded");
+    visitors.forEach((v, i) => {
+      const rot = 0.6 + i * 2.1, q = 0.06 + i * 0.05;
+      const pt = (u) => { const x = (Math.cosh(u) - 1) * -0.25 + q, y = Math.sinh(u) * 0.3; return [cx + (x * Math.cos(rot) - y * Math.sin(rot)) * S, cy + (x * Math.sin(rot) + y * Math.cos(rot)) * S * tilt]; };
+      ctx.strokeStyle = "rgba(127,227,224,.22)"; ctx.setLineDash([3, 5]); ctx.beginPath();
+      for (let u = -2.2; u <= 2.2; u += 0.05) { const [x, y] = pt(u); u === -2.2 ? ctx.moveTo(x, y) : ctx.lineTo(x, y); } ctx.stroke(); ctx.setLineDash([]);
+      where[v.id] = pt(((t * 0.05 + i * 0.33) % 1) * 4.4 - 2.2);
+    });
+    /* beacons */
+    const byBody = {};
+    beacons = EVENTS.map((e) => {
+      let base;
+      if (e.family === "recorded") base = where[e.id];
+      else if (e.body === "Deep space") base = pos(0.86, e.id === "supernova" ? -2.3 : -0.75);
+      else base = where[e.parent ?? e.body];
+      const key = e.parent ?? e.body, k = (byBody[key] = (byBody[key] ?? -1) + 1);
+      const off = e.family === "recorded" || e.body === "Deep space" ? [0, 0] : [Math.cos(k * 2.1 - 1.2) * (14 + k * 3), Math.sin(k * 2.1 - 1.2) * (12 + k * 3) - 4];
+      return { e, x: base[0] + off[0], y: base[1] + off[1], bx: base[0], by: base[1] };
+    });
+    beacons.forEach((b, i) => {
+      const on = active.has(b.e.family), c = colour(b.e.family), pulse = (t * 0.8 + i * 0.13) % 1;
+      if (!on) { ctx.fillStyle = "rgba(206,216,234,.18)"; ctx.beginPath(); ctx.arc(b.x, b.y, 2, 0, Math.PI * 2); ctx.fill(); return; }
+      if (b.x !== b.bx || b.y !== b.by) { ctx.strokeStyle = "rgba(206,216,234,.2)"; ctx.beginPath(); ctx.moveTo(b.bx, b.by); ctx.lineTo(b.x, b.y); ctx.stroke(); }
+      ctx.strokeStyle = c; ctx.globalAlpha = 1 - pulse; ctx.lineWidth = 1.4; ctx.beginPath(); ctx.arc(b.x, b.y, 4 + pulse * 14, 0, Math.PI * 2); ctx.stroke(); ctx.globalAlpha = 1;
+      glow(ctx, b.x, b.y, hover === b ? 18 : 10, c);
+      ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.arc(b.x, b.y, hover === b ? 3.4 : 2.4, 0, Math.PI * 2); ctx.fill();
+    });
+    if (mouse) pick(mouse.x, mouse.y);
+  }
+  function pick(x, y) {
+    let best = null, bd = 18;
+    beacons.forEach((b) => { if (!active.has(b.e.family)) return; const d = Math.hypot(b.x - x, b.y - y); if (d < bd) { bd = d; best = b; } });
+    hover = best; canvas.style.cursor = best ? "pointer" : "crosshair";
+    if (best) { tip.innerHTML = `<small>${place(best.e)} · ${KIND[best.e.kind]}</small>${best.e.title}`; tip.style.left = best.x + "px"; tip.style.top = best.y + "px"; tip.classList.add("on"); }
+    else tip.classList.remove("on");
+  }
+  canvas.addEventListener("pointermove", (e) => { const r = canvas.getBoundingClientRect(); mouse = { x: e.clientX - r.left, y: e.clientY - r.top }; });
+  canvas.addEventListener("pointerleave", () => { mouse = null; hover = null; tip.classList.remove("on"); });
+  canvas.addEventListener("click", (e) => { const r = canvas.getBoundingClientRect(); pick(e.clientX - r.left, e.clientY - r.top); if (hover) openSheet(hover.e); });
+  drawers.add({ canvas, draw });
+})();
+
+/* ---------- Concept B: mission control ---------- */
+let consoleBooted = false;
+function bootConsole() {
+  if (consoleBooted) return; consoleBooted = true;
+  const board = document.getElementById("board"), ticker = document.getElementById("ticker");
+  const STATE = { ongoing: "Active", recurring: "Scheduled", transient: "Standby", recorded: "Archive" };
+  board.innerHTML = `<div class="board-label">Tracked events · signal = how often it happens</div>` + EVENTS.map((e, i) => `
+    <button class="row" data-id="${e.id}" style="--c:${colour(e.family)};--i:${i}">
+      <span class="stripe"></span>
+      <span class="name"><strong>${e.title}</strong><span>${place(e)} · ${e.often}</span></span>
+      <span class="signal"><span class="bars">${[1, 2, 3, 4, 5].map((k) => `<i class="${k <= e.signal ? "on" : ""}" style="height:${4 + k * 2.4}px;--k:${k}"></i>`).join("")}</span><span class="state">${STATE[e.kind]}</span></span>
+    </button>`).join("") + `<div class="board-label">Offline · in development</div>` + SOON.map((s, i) => `
+    <div class="row off" style="--c:var(--ink-faint);--i:${EVENTS.length + i}"><span class="stripe"></span><span class="name"><strong>${s.title}</strong><span>${s.place}</span></span><span class="signal"><span class="state">Offline</span></span></div>`).join("");
+  board.addEventListener("click", (e) => { const r = e.target.closest(".row[data-id]"); if (r) openSheet(EVENTS.find((x) => x.id === r.dataset.id)); });
+  const lines = [];
+  const log = (s) => { lines.push(s); if (lines.length > 6) lines.shift(); ticker.innerHTML = lines.map((l) => `<div>${l}</div>`).join(""); };
+  ["> boot event control v0.1", "> link: solar system scene ... ok", `> tracking ${EVENTS.length} events · ${SOON.length} offline`].forEach((l, i) => setTimeout(() => log(l), 300 + i * 450));
+  const canvas = document.getElementById("radar-canvas"), ctx = canvas.getContext("2d");
+  const fams = [...new Set(EVENTS.map((e) => e.family))];
+  const blips = EVENTS.map((e, i) => {
+    const sector = fams.indexOf(e.family), within = EVENTS.filter((x) => x.family === e.family).indexOf(e);
+    return { e, a: (sector / fams.length) * Math.PI * 2 + 0.2 + within * 0.28, r: 0.2 + (5 - e.signal) * 0.16 + rand(i) * 0.08, lit: 0 };
+  });
+  let prev = 0, hover = null, mouse = null;
+  function draw(t) {
+    const { w, h, dpr } = fitCanvas(canvas); ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const cx = w / 2, cy = h / 2, R = Math.min(w, h) / 2 - 6;
+    if (R < 20) return;
+    ctx.fillStyle = "#03070b"; ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = "rgba(159,240,196,.16)"; ctx.lineWidth = 1;
+    for (let k = 1; k <= 4; k++) { ctx.beginPath(); ctx.arc(cx, cy, R * k / 4, 0, Math.PI * 2); ctx.stroke(); }
+    for (let k = 0; k < 12; k++) { const a = k * Math.PI / 6; ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx + Math.cos(a) * R, cy + Math.sin(a) * R); ctx.stroke(); }
+    ctx.fillStyle = "rgba(159,240,196,.5)"; ctx.font = "9px ui-monospace, monospace";
+    ["DAILY", "YEARLY", "DECADES", "ONCE"].forEach((s, k) => ctx.fillText(s, cx + 4, cy - R * (0.25 + k * 0.2) + 10));
+    const sweep = (t * 0.9) % (Math.PI * 2);
+    const g = ctx.createConicGradient ? ctx.createConicGradient(sweep - 0.9, cx, cy) : null;
+    if (g) { g.addColorStop(0, "rgba(159,240,196,0)"); g.addColorStop(0.143, "rgba(159,240,196,.28)"); g.addColorStop(0.1431, "rgba(159,240,196,0)"); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2); ctx.fill(); }
+    ctx.strokeStyle = "rgba(159,240,196,.8)"; ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx + Math.cos(sweep) * R, cy + Math.sin(sweep) * R); ctx.stroke();
+    blips.forEach((b) => {
+      const a = ((b.a % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
+      const crossed = prev <= sweep ? (a > prev && a <= sweep) : (a > prev || a <= sweep);
+      if (crossed) {
+        b.lit = 1;
+        if (consoleBooted && !reduced && t > 2) {
+          log(`> ${b.e.title.toLowerCase()} · ${place(b.e).toLowerCase()} · signal ${b.e.signal}/5`);
+          const row = board.querySelector(`[data-id="${b.e.id}"]`); if (row) { row.classList.remove("ping"); void row.offsetWidth; row.classList.add("ping"); }
+        }
+      }
+      b.lit = Math.max(0.18, b.lit - 0.008);
+      const x = cx + Math.cos(b.a) * b.r * R, y = cy + Math.sin(b.a) * b.r * R; b.x = x; b.y = y;
+      const c = colour(b.e.family);
+      glow(ctx, x, y, 8 + 16 * b.lit, c, Math.min(1, b.lit + (hover === b ? 0.6 : 0)));
+      ctx.fillStyle = c; ctx.globalAlpha = 0.5 + 0.5 * b.lit; ctx.beginPath(); ctx.arc(x, y, hover === b ? 4 : 2.6, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = 1;
+      if (hover === b) { ctx.fillStyle = "rgba(255,246,232,.95)"; ctx.font = "11px ui-monospace, monospace"; ctx.fillText(b.e.title, x + 8, y - 8); }
+    });
+    prev = sweep;
+    if (mouse) { let best = null, bd = 16; blips.forEach((b) => { const d = Math.hypot(b.x - mouse.x, b.y - mouse.y); if (d < bd) { bd = d; best = b; } }); hover = best; canvas.style.cursor = best ? "pointer" : "crosshair"; }
+    document.getElementById("utc").textContent = "UTC " + new Date().toISOString().slice(11, 19);
+  }
+  canvas.addEventListener("pointermove", (e) => { const r = canvas.getBoundingClientRect(); mouse = { x: e.clientX - r.left, y: e.clientY - r.top }; });
+  canvas.addEventListener("pointerleave", () => { mouse = null; hover = null; });
+  canvas.addEventListener("click", () => { if (hover) openSheet(hover.e); });
+  drawers.add({ canvas, draw });
+}
+
+/* ---------- Concept C: carousel ---------- */
+(function carousel() {
+  const items = [...EVENTS, ...SOON.map((s) => ({ ...s, soon: true, family: "soon" }))];
+  const ring = document.getElementById("ring"), text = document.getElementById("hero-text"), count = document.getElementById("car-count");
+  const N = items.length, step = 360 / N;
+  let idx = 0, auto = !reduced, last = 0;
+  /* 24 cards of 150 px with 20 px between them: the ring's circumference. */
+  const radius = () => Math.round((N * 170) / (2 * Math.PI));
+  ring.innerHTML = items.map((e, i) => `
+    <button class="card ${e.soon ? "soon" : ""}" data-i="${i}" style="--c:${e.soon ? "var(--ink-faint)" : colour(e.family)}" aria-label="${e.title}">
+      ${e.soon ? `<canvas aria-hidden="true"></canvas>` : `<canvas aria-hidden="true"></canvas>`}
+      <strong>${e.title}</strong><span>${e.soon ? "Coming soon" : place(e)}</span>
+    </button>`).join("");
+  const cards = [...ring.children];
+  cards.forEach((card, i) => {
+    const e = items[i];
+    if (!e.soon) { vignette(card.querySelector("canvas"), () => e); return; }
+    /* Coming soon: a still placeholder, drawn once it has a size. */
+    const c = card.querySelector("canvas");
+    requestAnimationFrame(() => { const x = c.getContext("2d"), { w, h, dpr } = fitCanvas(c); x.setTransform(dpr, 0, 0, dpr, 0, 0); x.fillStyle = "#020309"; x.fillRect(0, 0, w, h); stars(x, w, h, 30, 0, i); x.strokeStyle = "rgba(206,216,234,.25)"; x.setLineDash([3, 4]); x.strokeRect(6.5, 6.5, w - 13, h - 13); x.fillStyle = "rgba(206,216,234,.45)"; x.font = "9px ui-monospace, monospace"; x.fillText("IN DEVELOPMENT", 12, h - 12); });
+  });
+  vignette(document.getElementById("hero-canvas"), () => (items[idx].soon ? null : items[idx]));
+  function layout() { const r = radius(); cards.forEach((c, i) => { c.style.transform = `rotateY(${i * step}deg) translateZ(${r}px)`; }); show(); }
+  function show() {
+    const r = radius();
+    ring.style.transform = `translateZ(${-r}px) rotateY(${-idx * step}deg)`;
+    cards.forEach((c, i) => { const d = Math.min(Math.abs(i - idx), N - Math.abs(i - idx)); c.classList.toggle("active", i === idx); c.style.opacity = d > 4 ? 0 : 1 - d * 0.16; c.tabIndex = d > 4 ? -1 : 0; });
+    const e = items[idx];
+    count.textContent = `${String(idx + 1).padStart(2, "0")} / ${N}`;
+    text.innerHTML = e.soon
+      ? `<div class="hero-swap" style="display:grid;gap:10px"><span class="eyebrow">${e.place}</span><h3>${e.title}</h3><p>In development. It will open here when it is ready.</p></div>`
+      : `<div class="hero-swap" style="display:grid;gap:10px"><span class="eyebrow">${place(e)}</span><h3>${e.title}</h3>
+         <div class="tags"><span class="tag" style="--c:${colour(e.family)}">${FAMILY[e.family]}</span><span class="tag" style="--c:var(--ink-soft)">${KIND[e.kind]} · ${e.often}</span></div>
+         <p>${e.detail}</p><button class="go" data-go>Go watch it</button></div>`;
+    if (e.soon) { const c = document.getElementById("hero-canvas"), x = c.getContext("2d"); const { w, h, dpr } = fitCanvas(c); x.setTransform(dpr, 0, 0, dpr, 0, 0); x.fillStyle = "#020309"; x.fillRect(0, 0, w, h); x.fillStyle = "rgba(206,216,234,.4)"; x.font = "12px ui-monospace, monospace"; x.fillText("IN DEVELOPMENT", 18, h - 18); }
+  }
+  const go = (n) => { idx = (idx + n + N) % N; show(); };
+  document.getElementById("prev").onclick = () => { auto = false; go(-1); };
+  document.getElementById("next").onclick = () => { auto = false; go(1); };
+  ring.addEventListener("click", (e) => { const c = e.target.closest(".card"); if (!c) return; auto = false; const i = +c.dataset.i; if (i === idx && !items[i].soon) openSheet(items[i]); else { idx = i; show(); } });
+  text.addEventListener("click", (e) => { if (e.target.closest("[data-go]")) openSheet(items[idx]); });
+  document.getElementById("pane-carousel").addEventListener("keydown", (e) => { if (e.key === "ArrowRight") { auto = false; go(1); } if (e.key === "ArrowLeft") { auto = false; go(-1); } });
+  let sx = null; const track = document.getElementById("ring-track");
+  track.addEventListener("pointerdown", (e) => { sx = e.clientX; });
+  track.addEventListener("pointerup", (e) => { if (sx !== null && Math.abs(e.clientX - sx) > 40) { auto = false; go(e.clientX < sx ? 1 : -1); } sx = null; });
+  setInterval(() => { if (auto && !document.getElementById("pane-carousel").hidden && !document.querySelector(".sheet-bg")) go(1); }, 6000);
+  addEventListener("resize", layout); layout();
+})();
+
+/* Remember the last concept looked at (this browser only). */
+try { const s = localStorage.getItem("se-concept"); if (s && document.getElementById(s)) select(document.getElementById(s)); } catch {}
+requestAnimationFrame(loop);
+</script>

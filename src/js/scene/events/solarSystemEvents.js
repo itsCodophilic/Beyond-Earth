@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { INTERSTELLAR_EVENTS } from "./interstellarPassages.js";
+import { PROCESS_EVENTS } from "./systemProcesses.js";
 
 /**
  * Things that actually happen out there, staged on a timer.
@@ -8037,6 +8038,10 @@ const EVENT_FAMILIES = Object.freeze({
   surface: "Surface and interior activity",
   alignment: "Orbital alignment",
   deepSky: "Deep sky, beyond the Solar System",
+  /* Round 43: the four that were "coming soon" (systemProcesses.js). */
+  origins: "Formation of the Solar System",
+  fields: "Magnetic fields and plasma",
+  orbit: "Orbit and spin",
 });
 
 const EVENTS = [
@@ -8433,6 +8438,8 @@ const EVENTS = [
   },
   // Recorded events: the interstellar visitors (interstellarPassages.js).
   ...INTERSTELLAR_EVENTS,
+  // Round 43: formation, the solar wind, a magnetosphere, the seasons.
+  ...PROCESS_EVENTS,
 ];
 
 /**
@@ -8476,13 +8483,28 @@ export function createSolarSystemEvents({
    * after this system is.
    */
   getSkyClutter = () => [],
+  /*
+   * Round 43. A stage caption for events told in steps (shown on the event
+   * card), and a veil that hides the rest of the system -- "system" for
+   * everything but the Sun, or a list of objects -- while an event's picture
+   * would be contradicted by it. Both are cleared whenever an event stops.
+   */
+  setStage = null,
+  setVeil = null,
+  /* Round 44: an event that moves the camera in or out (the solar wind). */
+  setZoom = null,
 } = {}) {
   let active = null;
   let paused = false;
   let lastPlayedId = null;
   const listeners = new Set();
   const viewCounts = new Map(EVENTS.map((event) => [event.id, 0]));
-  const skyApi = { setSkyHighlight: (value) => setSkyHighlight?.(value) };
+  const skyApi = {
+    setSkyHighlight: (value) => setSkyHighlight?.(value),
+    setStage: (stage) => setStage?.(stage),
+    setVeil: (what) => setVeil?.(what),
+    setZoom: (zoom) => setZoom?.(zoom),
+  };
 
   function isOnScreen(body) {
     if (!body) return false;
@@ -8530,6 +8552,8 @@ export function createSolarSystemEvents({
      * highlight is not obviously a bug when you see it. It is one line.
      */
     setSkyHighlight?.(0);
+    setStage?.(null);
+    setVeil?.(null);
     active = null;
     emit();
   }
@@ -8560,6 +8584,7 @@ export function createSolarSystemEvents({
         definition.body === null ? host : host,
         camera,
         { skyRadius: getSkyRadius(), skyClutter: getSkyClutter() },
+        skyApi,
       );
       host.add(instance.group);
       active = { ...instance, definition, elapsed: 0 };

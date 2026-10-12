@@ -15,3 +15,5 @@
    it inherits its tokens from. */
 @import url("./celestial-board.css");
 @import url("./binary-system.css");
+/* Round 43: Space events as a carousel, and the event card's stage line. */
+@import url("./space-events.css");

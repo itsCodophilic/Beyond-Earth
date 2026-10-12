@@ -61,12 +61,14 @@ function hyperbolicAnomaly(M, e) {
 }
 
 /** A label that keeps its size on screen whatever the distance. */
-function textSprite(lines, { colour = "#e8f1ff", sub = "#9fb3c8", height = 0.05 } = {}) {
+export function textSprite(lines, { colour = "#e8f1ff", sub = "#9fb3c8", height = 0.05 } = {}) {
   const canvas = document.createElement("canvas");
   const ctx = canvas.getContext("2d");
-  const texture = new THREE.CanvasTexture(canvas);
+  let texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
-  const material = new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: false, depthWrite: false, sizeAttenuation: false, toneMapped: false });
+  /* fog: false (round 43): a label far from the camera faded into the
+   * scene's fog and read as a grey ghost. */
+  const material = new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: false, depthWrite: false, sizeAttenuation: false, toneMapped: false, fog: false });
   const sprite = new THREE.Sprite(material);
   sprite.renderOrder = 30;
   sprite.center.set(0, 0.5);
@@ -75,8 +77,19 @@ function textSprite(lines, { colour = "#e8f1ff", sub = "#9fb3c8", height = 0.05 
     const font = 30;
     ctx.font = `600 ${font}px ui-sans-serif, system-ui, sans-serif`;
     const width = Math.ceil(Math.max(...rows.map((r) => ctx.measureText(r).width)) + 16);
+    const tall = rows.length * (font + 8) + 8;
+    /* Round 43: a texture already on the GPU cannot change size in place
+     * (WebGL2 texture storage is fixed: "glCopySubTextureCHROMIUM: Offset
+     * overflows texture dimensions"), so a label whose text grows gets a
+     * fresh texture. */
+    if ((canvas.width !== width || canvas.height !== tall) && texture.version > 0) {
+      texture.dispose();
+      texture = new THREE.CanvasTexture(canvas);
+      texture.colorSpace = THREE.SRGBColorSpace;
+      material.map = texture;
+    }
     canvas.width = width;
-    canvas.height = rows.length * (font + 8) + 8;
+    canvas.height = tall;
     ctx.font = `600 ${font}px ui-sans-serif, system-ui, sans-serif`;
     ctx.textBaseline = "top";
     rows.forEach((row, i) => {
@@ -93,8 +106,52 @@ function textSprite(lines, { colour = "#e8f1ff", sub = "#9fb3c8", height = 0.05 
   return sprite;
 }
 
+/**
+ * Keeps labels from piling on top of one another on screen (round 44,
+ * Prompts.md: on 2I/Borisov and 3I/ATLAS "words get collapsed over here
+ * during the comet path" -- the moving date label ran over the milestone
+ * labels, and milestones a few days apart sat on each other).
+ *
+ * Each frame, in the order given (first wins its place), a label is tried
+ * at its own anchor, then one label-height down, up, two down... until its
+ * box on screen is clear of every label already placed. The anchor eases
+ * towards the chosen place so a label never jumps. Works for fixed-size
+ * (sizeAttenuation: false) sprites, whose screen height is their scale
+ * times the projection's vertical factor.
+ */
+const _p = new THREE.Vector3();
+export function declutterLabels(labels, camera) {
+  if (!camera) return;
+  const placed = [];
+  const fy = camera.projectionMatrix.elements[5];
+  const fx = camera.projectionMatrix.elements[0];
+  labels.forEach((label) => {
+    if (!label || label.material.opacity < 0.04) return;
+    label.updateWorldMatrix(true, false);
+    _p.setFromMatrixPosition(label.matrixWorld).project(camera);
+    if (_p.z > 1 || _p.z < -1) return;
+    const h = label.scale.y * fy;
+    const w = label.scale.x * fx;
+    const cx = label.center.x;
+    if (label.userData.baseCy === undefined) label.userData.baseCy = label.center.y;
+    const base = label.userData.baseCy;
+    const box = (cy) => ({
+      x0: _p.x - cx * w, x1: _p.x + (1 - cx) * w,
+      y0: _p.y - cy * h, y1: _p.y + (1 - cy) * h,
+    });
+    const clear = (b) => placed.every((q) => b.x1 < q.x0 || b.x0 > q.x1 || b.y1 < q.y0 || b.y0 > q.y1);
+    let chosen = base;
+    for (const k of [0, 1, -1, 2, -2, 3, -3]) {
+      const cy = base + k * 1.08;
+      if (clear(box(cy))) { chosen = cy; break; }
+    }
+    label.center.y += (chosen - label.center.y) * 0.25;
+    placed.push(box(chosen));
+  });
+}
+
 let glowTexture = null;
-function glow() {
+export function glow() {
   if (glowTexture) return glowTexture;
   const canvas = document.createElement("canvas");
   canvas.width = canvas.height = 64;
@@ -213,7 +270,7 @@ function passBuilder(pass) {
     return a * (e * Math.cosh(H) - 1);
   };
 
-  return function build(target) {
+  return function build(target, camera) {
     const group = new THREE.Group();
     group.name = `${pass.name} passage`;
     group.matrixAutoUpdate = false;
@@ -335,6 +392,8 @@ function passBuilder(pass) {
 
         farewell.position.copy(visitor.position);
         farewell.material.opacity = out;
+        // Round 44: milestones keep their places; the moving labels give way.
+        declutterLabels([...milestones.map((m) => m.label), dateLabel, farewell], camera);
       },
       dispose() {
         group.traverse((object) => {

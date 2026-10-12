@@ -1211,6 +1211,10 @@ import { POINTER_PROXY_LAYER } from "./scene/pointerProxies.js";
       <span class="solar-event-notice__eyebrow" id="solar-event-eyebrow">Happening now</span>
       <strong class="solar-event-notice__title" id="solar-event-title"></strong>
       <span class="solar-event-notice__detail" id="solar-event-detail"></span>
+      <span class="solar-event-notice__stage" id="solar-event-stage" hidden>
+        <span class="solar-event-notice__stage-label" id="solar-event-stage-label"></span>
+        <span class="solar-event-notice__stage-text" id="solar-event-stage-text"></span>
+      </span>
       <span class="solar-event-notice__note" id="solar-event-note"></span>
     `;
     document.body.append(solarEventNotice);
@@ -1219,6 +1223,23 @@ import { POINTER_PROXY_LAYER } from "./scene/pointerProxies.js";
   const solarEventTitle = solarEventNotice.querySelector("#solar-event-title");
   const solarEventDetail = solarEventNotice.querySelector("#solar-event-detail");
   const solarEventNote = solarEventNotice.querySelector("#solar-event-note");
+  /* Round 43: the step an event told in steps is on (formation, the solar
+   * wind, the magnetosphere, the seasons). Replaces the summary line while
+   * it is up; the summary comes back when it clears. */
+  const solarEventStage = solarEventNotice.querySelector("#solar-event-stage");
+  const solarEventStageLabel = solarEventNotice.querySelector("#solar-event-stage-label");
+  const solarEventStageText = solarEventNotice.querySelector("#solar-event-stage-text");
+  function setSolarEventStage(stage) {
+    if (!solarEventStage) return;
+    solarEventStage.hidden = !stage;
+    solarEventDetail.hidden = Boolean(stage);
+    if (!stage) return;
+    solarEventStageLabel.textContent = stage.label ?? "";
+    solarEventStageText.textContent = stage.text ?? "";
+    solarEventStage.classList.remove("is-new");
+    void solarEventStage.offsetWidth;
+    solarEventStage.classList.add("is-new");
+  }
   let solarEventNoticeTimer = null;
   let solarEventCountdownTimer = null;
   let solarEventStartTimer = null;
@@ -1480,6 +1501,8 @@ import { POINTER_PROXY_LAYER } from "./scene/pointerProxies.js";
    * knows what they are about to see before they see it. Announcing the count
    * is what turns the pause from dead air into anticipation.
    */
+  /* Set further down (the events panel's reset, round 44); a no-op until then. */
+  var eventsChoseSomething = () => {};
   function presentSolarEvent(id) {
     const definition = solarSystemEvents.list().find((event) => event.id === id);
     if (!definition) return false;
@@ -1497,6 +1520,8 @@ import { POINTER_PROXY_LAYER } from "./scene/pointerProxies.js";
     solarSystemEvents.stop();
     solarEventCurrentId = id;
     solarEventPhase = "waiting";
+    /* Round 44: choosing an event is a journey, not "nothing chosen". */
+    eventsChoseSomething();
 
     /*
      * Travel, but only if travelling is needed.
@@ -2237,7 +2262,9 @@ composeSolarEventShot(
      * Jupiter in frame (interstellarPassages.js) -- 29 for 3I/ATLAS, about
      * 5,200 units from the Sun. The camera's own limit,
      * MAX_CINEMATIC_CAMERA_DISTANCE (11,500), still applies after this. */
-    focusZoomTarget = THREE.MathUtils.clamp(Number(shotZoom) || 1, 0.5, 30);
+    /* Round 43: up to 60 -- the formation and the solar wind frame the
+     * whole system out to the drawn heliosphere (~2,300-3,400 units). */
+    focusZoomTarget = THREE.MathUtils.clamp(Number(shotZoom) || 1, 0.5, 60);
   }
   // Null in ordinary inspection; set to the parent of the complete catalogue
   // atlas while its alternate system-wide shot is active.
@@ -3037,6 +3064,10 @@ composeSolarEventShot(
   skyEventAnchor.frustumCulled = false;
   world.add(skyEventAnchor);
 
+  const eventVeil = { objects: [], saved: new Map() };
+  function applyEventVeil() {
+    eventVeil.objects.forEach((object) => { object.visible = false; });
+  }
   const solarSystemEvents = createSolarSystemEvents({
     camera,
     findBody: solarSystemEventBodies,
@@ -3061,7 +3092,49 @@ composeSolarEventShot(
      * same reason the two above are.
      */
     getSkyClutter: () => spaceEnvironment?.listSkyClutter() ?? [],
+    /* Round 43: the stage caption on the card, and the veil. */
+    setStage: (stage) => setSolarEventStage(stage),
+    setVeil: (what) => setEventVeil(what),
+    /* Round 44: the solar wind starts close on the Sun and pulls out. Only
+     * while an event is running on the focused body; the camera eases to
+     * it like any other zoom. */
+    setZoom: (zoom) => {
+      if (zoom == null || !focusedBody || !isSolarEventStaging()) return;
+      focusZoomTarget = THREE.MathUtils.clamp(zoom, 0.5, Math.min(60, getFocusedMaximumZoom(focusedBody)));
+    },
   });
+
+  /*
+   * Round 43: the veil. "system" hides everything in the world but the Sun
+   * (and the sky-event anchor), plus the orbit lines -- for the formation,
+   * where today's planets have not formed yet, and the seasons, where a
+   * second Earth would sit beside the diagram one. A list hides just those
+   * objects (the Moon, inside the true-scale magnetosphere). Each object's
+   * own visibility is put back exactly as it was when the veil lifts.
+   */
+  function setEventVeil(what) {
+    eventVeil.saved.forEach((visible, object) => { object.visible = visible; });
+    eventVeil.saved.clear();
+    eventVeil.objects = [];
+    setGuideSuppression("event-veil", false);
+    if (!what) return;
+    if (what === "system") {
+      world.children.forEach((child) => {
+        if (child === skyEventAnchor) return;
+        let isSun = false;
+        child.traverse((object) => {
+          if (object.userData?.name === "Sun" || object.isLight) isSun = true;
+        });
+        if (!isSun) eventVeil.objects.push(child);
+      });
+      eventVeil.objects.push(orbitRoot);
+      setGuideSuppression("event-veil", true);
+    } else if (Array.isArray(what)) {
+      eventVeil.objects = what.filter(Boolean);
+    }
+    eventVeil.objects.forEach((object) => eventVeil.saved.set(object, object.visible));
+    applyEventVeil();
+  }
 
   /*
    * The card's tail end.
@@ -3631,7 +3704,39 @@ composeSolarEventShot(
     boardResetPending = true;
     travelSinceBoardOpen = false;
   }
-  addEventListener("beyond-earth:travel-to-body", () => { travelSinceBoardOpen = true; }, { capture: true });
+  addEventListener("beyond-earth:travel-to-body", () => { travelSinceBoardOpen = true; travelSinceEventsOpen = true; }, { capture: true });
+  /*
+   * Round 44 (Prompts.md: "when Space Events are clicked and the dashboard
+   * appears, just like in All Bodies we reset, do the same thing for the
+   * space events"). The board's rule, for the events panel: opening it
+   * clears the notes and their layers and the Back history; closing it
+   * without choosing anything zooms all the way out to the Solar System.
+   * Choosing an event (or "Fly to ... first") travels from where the camera
+   * is, with nothing to go back to.
+   */
+  let eventsResetPending = false;
+  let travelSinceEventsOpen = false;
+  eventsChoseSomething = () => { travelSinceEventsOpen = true; };
+  addEventListener("beyond-earth:events-dashboard-state", (event) => {
+    if (event.detail?.open) {
+      sceneLayerChips.hideAll();
+      focusNavigationHistory.length = 0;
+      eventsResetPending = true;
+      travelSinceEventsOpen = false;
+      return;
+    }
+    if (!eventsResetPending) return;
+    setTimeout(() => {
+      if (travelSinceEventsOpen || isEventsDashboardOpen || isSolarEventStaging()) return;
+      eventsResetPending = false;
+      if (focusedBody) {
+        focusNavigationHistory.length = 0;
+        focusBody(null);
+      } else if (hasExploredFreeSpace) {
+        resetFreeExploration();
+      }
+    }, 320);
+  });
   addEventListener("beyond-earth:show-in-scene", () => { travelSinceBoardOpen = true; }, { capture: true });
   addEventListener("beyond-earth:board-state", (event) => {
     if (event.detail?.open || !boardResetPending) return;
@@ -10157,6 +10262,9 @@ composeSolarEventShot(
      * Putting it here means nothing runs after it except the render.
      */
     if (solarEventHiddenGuides.length) enforceSolarEventGuideHiding();
+    /* Round 43: an event that hides the rest of the system, asserted last
+     * for the same reason. */
+    if (eventVeil.objects.length) applyEventVeil();
     renderer.render(scene, camera);
     trace("system");
     performanceHud.update(frameTime);
