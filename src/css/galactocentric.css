@@ -1,0 +1,161 @@
+/* ================================================== galactocentric view
+   Round 45 (scene/galactocentricView.js). A caption panel along the bottom
+   with the three steps as tabs, and -- for steps 2 and 3, which draw their
+   own scene -- a full-screen layer that takes the drag and the wheel. */
+
+.galacto-stage {
+  position: fixed;
+  inset: 0;
+  z-index: 11;
+  cursor: grab;
+  touch-action: none;
+}
+
+.galacto-stage:active { cursor: grabbing; }
+.galacto-stage[hidden] { display: none; }
+
+.galacto-chrome {
+  position: fixed;
+  left: 50%;
+  bottom: calc(clamp(12px, 2.4vh, 22px) + env(safe-area-inset-bottom, 0px));
+  z-index: 13;
+  transform: translateX(-50%);
+  /* Round 46: smaller, so the scene shows round it. */
+  width: min(520px, calc(100vw - 24px));
+  max-height: min(46vh, 340px);
+  overflow-y: auto;
+  display: grid;
+  gap: 6px;
+  padding: 10px 14px 10px;
+  border: 1px solid rgba(206, 216, 234, 0.14);
+  border-top: 1px solid var(--cin-amber);
+  border-radius: 12px;
+  background: linear-gradient(180deg, rgba(5, 8, 16, 0.86), rgba(3, 5, 11, 0.8));
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  color: var(--cin-ink);
+  animation: galacto-in 480ms cubic-bezier(0.16, 0.84, 0.3, 1) both;
+}
+
+.galacto-chrome[hidden] { display: none; }
+
+@keyframes galacto-in { from { transform: translate(-50%, 14px); } }
+
+.galacto-chrome__head { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+
+.galacto-chrome__eyebrow {
+  font-family: var(--cin-mono);
+  font-size: 0.56rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--cin-amber);
+}
+
+.galacto-chrome__close {
+  width: 30px;
+  height: 30px;
+  border: 1px solid rgba(206, 216, 234, 0.3);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--cin-ink);
+  cursor: pointer;
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.galacto-chrome__close:hover,
+.galacto-chrome__close:focus-visible { border-color: var(--cin-amber); color: var(--cin-amber); outline: none; }
+
+.galacto-chrome__tabs { display: flex; flex-wrap: wrap; gap: 6px; }
+
+.galacto-chrome__tab {
+  padding: 6px 11px;
+  border: 1px solid rgba(206, 216, 234, 0.18);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--cin-ink-soft);
+  font: inherit;
+  font-family: var(--cin-mono);
+  font-size: 0.6rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.galacto-chrome__tab:hover { color: var(--cin-ink); border-color: rgba(206, 216, 234, 0.4); }
+.galacto-chrome__tab[aria-selected="true"] { background: rgba(255, 196, 130, 0.92); border-color: var(--cin-amber); color: #05070d; }
+.galacto-chrome__tab:focus-visible { outline: 2px solid var(--cin-amber); outline-offset: 2px; }
+
+.galacto-chrome__title { margin: 2px 0 0; font-size: 0.98rem; font-weight: 300; letter-spacing: 0.02em; }
+.galacto-chrome__text { margin: 0; font-size: 0.76rem; font-weight: 300; line-height: 1.5; color: var(--cin-ink-soft); }
+.galacto-chrome__odo {
+  margin: 0;
+  font-family: var(--cin-mono);
+  font-size: 0.58rem;
+  letter-spacing: 0.06em;
+  line-height: 1.5;
+  color: var(--cin-amber);
+  font-variant-numeric: tabular-nums;
+}
+
+.galacto-chrome__more summary {
+  cursor: pointer;
+  font-family: var(--cin-mono);
+  font-size: 0.54rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--cin-ink-faint);
+}
+
+.galacto-chrome__more p {
+  margin: 6px 0 0;
+  font-size: 0.72rem;
+  line-height: 1.5;
+  color: var(--cin-ink-soft);
+}
+
+/* Step 3's clock: now to the first close pass. */
+.galacto-chrome__timeline { display: grid; gap: 4px; }
+.galacto-chrome__timeline[hidden] { display: none; }
+.galacto-chrome__bar { height: 4px; border-radius: 4px; background: rgba(206, 216, 234, 0.14); overflow: hidden; }
+.galacto-chrome__fill { display: block; height: 100%; width: 0; background: linear-gradient(90deg, rgba(255, 196, 130, 0.6), var(--cin-amber)); }
+.galacto-chrome__marks {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-family: var(--cin-mono);
+  font-size: 0.52rem;
+  letter-spacing: 0.08em;
+  color: var(--cin-ink-faint);
+  font-variant-numeric: tabular-nums;
+}
+.galacto-chrome__now { color: var(--cin-ink); }
+
+/* Round 46: while the view is on, the rest of the top bar is off -- it is
+   switched off from the same switch, or Escape. */
+body.is-galactocentric .hud-control:not(.galacto-toggle),
+body.is-galactocentric .brand {
+  pointer-events: none !important;
+  opacity: 0.32 !important;
+}
+
+/* The Solar System's own captions step aside while the view is on. */
+body.is-galactocentric .solar-event-notice,
+body.is-galactocentric .celestial-selection-card,
+body.is-galacto-far .distance-cinematic-layer,
+body.is-galacto-far .progress,
+body.is-galacto-far .scene-layers {
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .galacto-chrome { animation: none; }
+}
+
+/* Short screens: keep the tabs, the title and the counter. */
+@media (max-height: 560px) {
+  .galacto-chrome__text,
+  .galacto-chrome__more { display: none; }
+}

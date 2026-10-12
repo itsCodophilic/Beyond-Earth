@@ -13,6 +13,11 @@
     <!-- <link rel="preconnect" href="https://unpkg.com" />
     <link rel="preconnect" href="https://threejs.org" /> -->
     <!-- Main stylesheet for page layout, HUD, and effects. -->
+    <!-- Round 47: Jost for the intro's title card (thin, geometric: its O is
+         a true circle, so the dot sits in its centre). -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Jost:wght@200;300&display=swap" />
     <link rel="stylesheet" href="./src/css/styles.css" />
   </head>
   <body>
@@ -134,6 +139,26 @@
               <span class="mode-switch__knob"></span>
             </span>
             <span class="hud-control__label mode-switch__label">Switch to Space Mode</span>
+          </button>
+
+          <!--
+            Round 45: the Galactocentric view -- the same switch shape as
+            space mode. On, the frame of reference becomes the Milky Way's:
+            the Sun and planets fly on corkscrew paths, then the Sun's orbit
+            round the galaxy, then the Local Group (scene/galactocentricView.js).
+          -->
+          <button
+            class="hud-control mode-switch galacto-toggle"
+            id="galacto-toggle"
+            type="button"
+            role="switch"
+            aria-checked="false"
+            title="See how the Sun and planets travel through the Milky Way"
+          >
+            <span class="mode-switch__track" aria-hidden="true">
+              <span class="mode-switch__knob"></span>
+            </span>
+            <span class="hud-control__label mode-switch__label">Galactocentric View</span>
           </button>
 
           <!--

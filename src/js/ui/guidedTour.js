@@ -226,7 +226,7 @@ const STEPS = [
     unlocks: "events",
     veil: "soft",
     anchor: "#space-events-trigger",
-    done: "Seventeen of them, each on the world it belongs to.",
+    done: "Twenty-four of them, each on the world it belongs to.",
   },
   {
     id: "spacemode",
@@ -240,6 +240,24 @@ const STEPS = [
     veil: "soft",
     anchor: "#space-mode-toggle",
     done: "Two ways of looking at the same scene.",
+  },
+  {
+    /*
+     * Round 46 (Prompts.md: "the Galactic view should be part of the
+     * tour"). After space mode, because it is the other switch in that row
+     * and the other way of seeing the same scene.
+     */
+    id: "galacto",
+    title: "See it all from the Milky Way",
+    body: "Everything here is also flying round the Milky Way — the Sun at about 230 km/s, carrying the planets with it. This switch changes the point of view from the Sun to the galaxy, in two steps: the Sun moving, with the planets following it in spirals, and the Sun's 230-million-year lap round the Milky Way.",
+    hint: "Click the switch, try both steps, then switch it off.",
+    gesture: "click",
+    target: "#galacto-toggle",
+    clicks: "none",
+    unlocks: "galacto",
+    veil: "soft",
+    anchor: "#galacto-toggle",
+    done: "The same Solar System, seen from the galaxy.",
   },
   {
     id: "systemreturn",
@@ -542,6 +560,11 @@ function beginGuidedTour() {
    */
   const onBoardState = (event) => {
     const step = STEPS[index];
+    /* Round 46: Space Dictionary's spotlight is drawn over the board, so it
+     * has to be measured once the board has opened and settled. */
+    if (!finished && step?.id === "decoded" && event.detail?.open) {
+      [120, 480, 900].forEach((ms) => setTimeout(() => { if (!finished && STEPS[index] === step) place(step); }, ms));
+    }
     if (finished || !step?.stayOpen || !satisfied || event.detail?.open) return;
     cancelAutoAdvance();
     autoAdvanceTimer = setTimeout(() => {

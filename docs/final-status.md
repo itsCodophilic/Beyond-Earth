@@ -994,3 +994,102 @@ Sources are listed above the `TIMELINE` table in `spaceEventsDashboard.js`. Thes
    - **Clock:** days = 0.594 (e^(7.2p) − 1), so the first quarter of the event is the first ~3 days and the end is ~800 days.
    - **Camera:** the event moves it (new `api.setZoom`, honoured only while an event runs on the focused body): close on the Sun (3.6×), out through the planets (15×), then to the heliopause (54×).
    - **Captions:** they say plainly that the wind does not slow on the way out; it coasts and thins until the termination shock.
+
+## Part 27 — Seasons ellipse; the Galactocentric View (round 45, Prompts.md)
+### Seasons: the orbit drawn elongated
+- **What changed:** the owner asked for an orbit with one side close and one side far. Drawn true (e = 0.0167) the shape cannot be seen, so the orbit is now drawn **exaggerated about 27×** (e = 0.45). That puts the Sun well off-centre, with the near side close and the far side far, the way textbooks draw it.
+- **Honesty:**
+  - The true orbit stays as a faint ring, and the label says the shape is exaggerated.
+  - A dashed long axis runs through the Sun.
+  - The closest point (~3 January, northern winter) and the farthest (~4 July, northern summer) are labelled from the start.
+  - Labels are decluttered.
+
+### The Galactocentric View (major feature; the owner chose the name, all three scales and a top-bar switch)
+- **Where:** a new **Galactocentric View** switch in the top bar (`index.html`, `#galacto-toggle`).
+- **Module:** `scene/galactocentricView.js`, styled in `css/galactocentric.css`, wired up in `main.js`.
+- **The panel:** along the bottom, with three steps as tabs. Escape, ×, or the switch returns to the Solar System.
+  1. **The Solar System in motion** (in the scene).
+     - **Camera:** it goes to the Sun and stands side-on to its direction of travel (towards Cygnus: ecliptic longitude 347.3°, latitude +59.6°, so the planets' plane is tipped ~60°).
+     - **Motion:** the Solar System runs 10× faster. Every planet leaves a trail that drifts back as the Sun flies on, so the trails become corkscrews.
+     - **Speed:** shown about 20× slower than real (the label says so). At the real 7.7:1 ratio, a turn never fits on screen.
+  2. **Round the Milky Way** (its own scene).
+     - **The galaxy:** a painted four-armed disc with 22,000 stars that turn on a flat rotation curve, and the Galactic Centre (Sgr A*).
+     - **The Sun:** it goes round the 8.2 kpc orbit, one galactic year (~230 Myr) every 30 s, bobbing 80 pc every 66 Myr (drawn 10× taller). It shows a running clock in millions of years and galactic years. Drag to turn, wheel to zoom.
+  3. **The Milky Way moves too** (its own scene).
+     - **Galaxies:** the Milky Way with the Magellanic Clouds, and Andromeda (77° inclined) with M33.
+     - **Approach:** they close at 110 km/s (time runs a billion years per 10 s, looping after 4 billion), with a running clock and distance. The panel says there is an even chance of a merger within 10 billion years (Sawala et al. 2025).
+     - **Group motion:** an arrow shows the Local Group's ~620 km/s against the cosmic microwave background, towards Hydra–Centaurus. Galaxies are drawn 4× larger than their separation.
+- **Sources:** listed in the module header — NASA (230 km/s), GRAVITY 2019 (8.178 kpc), Frisch 1998 (66 Myr, 80 pc), Bennett & Bovy 2019 (20 pc), Sawala et al. 2025 (Nature Astronomy), the CMB dipole.
+- **Cost:**
+  - **Off:** nothing.
+  - **Step 1:** nine trail lines.
+  - **Steps 2 and 3:** a small scene drawn *instead of* the Solar System.
+
+## Part 28 — Round 46 (Prompts.md)
+1. **The Galactocentric View is in the tour.**
+   - **The step:** a new step, "See it all from the Milky Way", after Space Mode. It unlocks only the Galactocentric switch.
+   - **Leaving the step:** the view is switched off when the tour moves on.
+   - **Step count:** the events step now says twenty-four.
+2. **Space Dictionary in the tour:** while the board is open, the step brings back the spotlight. Its ring sits on the Space Dictionary button and its outer shadow darkens everything else, as the veil does on other steps. It is re-measured once the board has opened.
+3. **Nothing in space can be clicked while the view is on.**
+   - **Pointer input:** a full-screen layer takes every pointer in all three steps. In step 1 it hands drags and the wheel to the Solar System camera, so the scene can still be turned and zoomed.
+   - **Top bar:** every other control is disabled, and so is the wordmark.
+4. **A smaller panel:**
+   - **Size:** up to 520 px wide, at most 46% of the screen height, and translucent.
+   - **Content:** short copy, with the detail folded under "More".
+   - **Short screens:** keep only the tabs, the title and the counter.
+5. **Step 1 shows real motion.**
+   - **Streaming stars:** streaks flow past along the direction of travel in two layers, the far one slower for depth.
+   - **Live counter:** the distance travelled since the view was switched on, at the real 230 km/s.
+   - **Corkscrews:** the trails remain.
+6. **Step 3, simpler.**
+   - **Removed:** the arrow and the Local Group labels.
+   - **Now:** the Milky Way ("you are here") and Andromeda, a dotted line between them with the distance written on it, and a timeline in the panel from now to the first close pass (+4.5 billion years).
+   - **Approach:** 110 km/s, speeding up (van der Marel et al. 2012). The panel adds the 2025 even-chance caveat.
+   - **Group motion:** shown only by distant galaxies drifting past behind, and said in one line under "More".
+7. **The intro's title card.**
+   - **The log:** now headed "System initialisation · Heliocentric frame", without the name.
+   - **The title:** after the log, BEYOND EARTH rises from the bottom of the screen to its middle like a film title, letter by letter. The O fills with light and the other letters fade.
+   - **The fall:** the light gathers to a point and drops slowly off the bottom. The gate's point of light then descends from the top as before, so it reads as one fall across a cut.
+   - **How it runs:** CSS only, cued by classes, so there is no per-frame work. Reduced motion shortens it.
+
+## Part 29 — Round 47 (Prompts.md)
+1. **The third Galactocentric step (Andromeda / Local Group) is removed.** Two steps remain, and the tour text was updated to match.
+2. **Step 1 reworked: "The Sun is moving".**
+   - **Copy:** simpler wording.
+   - **Streaks removed:** the falling streaks (which read as rain) are gone.
+   - **The Sun's tail:** a chain of glows flows back from the Sun along its path, scrolling continuously, so the Sun is the thing seen moving.
+   - **The sky:** the scene's own sky is set aside during the step. A star sphere centred on the camera turns about the camera's right-hand axis (0.045 rad/s), so the whole background slides downwards in an endless loop while the Sun heads upwards. The sky comes back on leaving the step.
+   - **Kept:** the corkscrew trails and the live distance counter.
+3. **Intro title card reworked.**
+   - **Timing:** the title now starts after six log lines, so it rises while the universe is still being built.
+   - **The rise:** BEYOND EARTH rises slowly (4.8 s) from the bottom, all letters together. It is solid (no blur), huge (up to 14rem) and thin: Jost 200 from Google Fonts, linked in `index.html`, falling back to the system sans.
+   - **The O:** not filled. It has a single dot at its centre.
+   - **The zoom:** after a second, the view zooms into the O about that dot until the dot is the gate's 6 px point of light. The letters and the O's ring fade as they go past the edges.
+   - **The fall:** that point falls slowly off the bottom, and the gate's point descends from the top as before.
+   - **How it runs:** CSS transitions plus one inline transform, so there is no per-frame work.
+
+## Part 30 — Round 48: intro pacing, the O's dot, the camera drift
+- **The log runs in full again.** The title waits for every line (25+) instead of starting after six.
+- **Timing variables:** the timings live at the top of `src/js/ui/introSequence.js`, in seconds (larger is slower). Defaults:
+
+  | Variable | Default | What it times |
+  |---|---|---|
+  | `riseSeconds` | 10 | BEYOND EARTH rising |
+  | `holdSeconds` | 1.5 | the word at rest |
+  | `approachSeconds` | 5 | the camera drifting towards the O |
+  | `diveSeconds` | 5 | diving into the dot |
+  | `fallSeconds` | 3 | the particle falling |
+
+- **The dot is at the O's true centre.** It is measured from the glyph's own ink box (canvas `measureText` from a zero-size baseline probe), in the font actually in use. Before, it used the letter's line box and sat high. Checked: the dot lands at the ink centre to under a pixel.
+- **The camera move is two beats.**
+  1. **Drift:** the whole word slides so the O comes to the middle of the screen, while the view closes in (2.2×), with an ease-in-out.
+  2. **Dive:** an accelerating zoom about the dot until it is the gate's 6 px particle. The other letters fade first, then the O's ring.
+- **Then:** the particle falls, and the gate's point of light descends from the top.
+
+## Part 31 — Round 49: diving through the O
+- **The O no longer just disappears.** During the dive, its ring keeps growing, slowly at first and then faster, so the view passes into the O on the way to the particle.
+- **The fade comes last.** The ring fades only in the last third of the dive, as it sweeps past the edges of the screen, and is gone as we arrive at the particle. The other letters still fade early.
+- **The particle is its own element from the dive on.** It takes over the dot at the same spot, so the word can zoom far past the screen while the particle grows only to the gate's 6 px. Its halo comes up as we arrive, and then it falls as before.
+- **New variable:** `TITLE_RING_GROWTH`, at the top of `src/js/ui/introSequence.js`, default 8. It sets how much the ring grows during the dive, on top of the drift's 2.2×; 8 brings the ring to about twice the screen width as it fades (a design choice). A bigger value makes the ring rush past sooner; a smaller one keeps it in view longer. The dive's length is still `diveSeconds`.
+- **Checked** in the fast harness: the ring's width over the dive went 303 → 408 → 722 → 1200 → 1778 px, its opacity stayed 1 until about 60% of the way through, and the particle held at 6 px.

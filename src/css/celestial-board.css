@@ -1547,3 +1547,20 @@ body.is-board-open:has(.cdec) .tour[data-step="decoded"] .tour__body { display: 
 /* Flying waits until the tour is over -- the buttons say so by looking it. */
 body.is-tour-open .cmoons__fly,
 body.is-tour-open .cboard__result { opacity: 0.45; }
+
+/*
+ * Round 46 (Prompts.md: "when displaying Space Dictionary the background
+ * gets light black just like the other tour steps, and the Space Dictionary
+ * button gets highlighted"). On that step, until the dictionary itself is
+ * open, the spotlight comes back over the board: its ring sits on the
+ * button and its outer shadow darkens everything else, as the veil does on
+ * the other steps. The veil itself stays off -- it would cover the button.
+ */
+body.is-board-open:not(:has(.cdec)) .tour[data-step="decoded"] .tour__spotlight {
+  opacity: 1 !important;
+  border-radius: 999px;
+  box-shadow:
+    0 0 0 3px rgba(255, 196, 130, 0.35),
+    0 0 34px rgba(255, 196, 130, 0.5),
+    0 0 0 100vmax rgba(2, 3, 8, 0.62);
+}

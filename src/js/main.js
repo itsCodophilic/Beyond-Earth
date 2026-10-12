@@ -69,6 +69,7 @@ import { loadNearEarthSwarm, updateNearEarthSwarm, spotlightFamily, pinRockByNam
 import { createCometPlacementChip } from './ui/cometPlacementChip.js';
 import { createUltravioletView, ULTRAVIOLET_PLANETS, auroraViewDirection, ultravioletFramingRadii } from './scene/ultravioletView.js';
 import { setVenusRadar, isVenusRadarOn } from './scene/venusRadarView.js';
+import { createGalactocentricView, GALACTIC_DIRECTION } from './scene/galactocentricView.js';
 import { attachExtraAurorae, updateExtraAurorae, bodyRadius as auroraBodyRadius } from './graphics/extraAurorae.js';
 /* Final round: the population highlights and the notes for layers switched
  * on. (Round 38: the spacecraft were removed -- the site draws only what
@@ -210,6 +211,9 @@ const JOURNEY_UI_SELECTOR = [
   ".distance-cinematic-layer",
   ".system-return-button",
   ".comet-placement",
+  ".galacto-chrome",
+  ".galacto-stage",
+  ".galacto-toggle",
 ].join(", ");
 import { createIntroSequence } from './ui/introSequence.js';
 import { createCosmicIntro } from './scene/space/cosmicIntro.js';
@@ -2386,6 +2390,8 @@ composeSolarEventShot(
     // points at it; it opens once "Start exploring" is pressed.
     about: "#about-experience-trigger",
     spacemode: "#space-mode-toggle",
+    /* Round 46: the Galactocentric view has its own tour step. */
+    galacto: "#galacto-toggle",
     systemreturn: "#system-return-button",
     /*
      * Escape is deliberately absent.
@@ -3219,6 +3225,74 @@ composeSolarEventShot(
     setTimeout(() => replayGuidedTour(), 700);
   });
 
+  /*
+   * Round 45: the Galactocentric view (scene/galactocentricView.js), from
+   * its switch in the top bar. Step 1 happens in this scene: the camera
+   * goes to the Sun and stands side-on to its direction of travel, far
+   * enough out to see the inner planets' corkscrews. Steps 2 and 3 draw
+   * their own scenes.
+   */
+  const galactoToggle = document.querySelector("#galacto-toggle");
+  const findSunBody = () => {
+    let found = null;
+    world.traverse((o) => { if (!found && o.isMesh && o.userData?.name === "Sun") found = o; });
+    return found;
+  };
+  /* var, not const: the frame loop reads it and may start before this line
+   * runs; a const would throw there (the TDZ), a var reads undefined. */
+  var galactocentric = createGalactocentricView({
+    getPlanets: () => planets,
+    getSun: findSunBody,
+    getCamera: () => camera,
+    /* Round 47: step 1 sets the scene's sky aside and draws its own,
+     * sliding one. Deferred: the environment is built further down. */
+    getSky: () => {
+      try { return spaceEnvironment?.root ?? null; } catch { return null; }
+    },
+    /* Round 46: in step 1 the view's layer takes every pointer (nothing in
+     * space can be clicked) and hands drags and the wheel back here. */
+    onRotate: (dx, dy) => {
+      targetYaw -= dx * 0.006;
+      targetPitch = wrapAngle(targetPitch - dy * 0.004);
+    },
+    onZoom: (dy) => {
+      if (!focusedBody) return;
+      focusZoomTarget = THREE.MathUtils.clamp(
+        focusZoomTarget * Math.exp(dy * 0.0012),
+        getFocusedMinimumZoom(focusedBody),
+        getFocusedMaximumZoom(focusedBody),
+      );
+    },
+    onScaleChange: (step) => {
+      if (step !== 1) return;
+      const sunBody = findSunBody();
+      if (!sunBody) return;
+      if (focusedBody !== sunBody) {
+        focusNavigationHistory.length = 0;
+        focusBody(sunBody);
+      }
+      frameAroundFocused("Sun", smallBodyAuToScene(2.4) * 1.5, 0.12);
+      /* Side-on to the direction of travel: the camera's horizontal offset
+       * (sin yaw, cos yaw) at right angles to the motion's. */
+      const side = Math.atan2(-GALACTIC_DIRECTION.z, GALACTIC_DIRECTION.x);
+      targetYaw = side + Math.round((yaw - side) / (Math.PI * 2)) * Math.PI * 2;
+    },
+    onExit: () => {
+      galactoToggle?.setAttribute("aria-checked", "false");
+      galactoToggle?.classList.remove("is-on");
+    },
+  });
+  scene.add(galactocentric.trailRoot);
+  galactoToggle?.addEventListener("click", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    spaceEventsDashboard?.close?.();
+    const on = galactocentric.toggle();
+    galactoToggle.setAttribute("aria-checked", String(on));
+    galactoToggle.classList.toggle("is-on", on);
+    galactoToggle.blur();
+  });
+
   const spaceEventsDashboard = createSpaceEventsDashboard({
     events: solarSystemEvents,
     trigger: document.querySelector("#space-events-trigger"),
@@ -3768,6 +3842,7 @@ composeSolarEventShot(
      * block runs before this object exists and `const` is not hoisted.
      */
     window.__events = solarSystemEvents;
+    window.__galacto = galactocentric;
     /*
      * The staged route, as distinct from `__events.trigger`.
      *
@@ -8841,6 +8916,7 @@ composeSolarEventShot(
     // lives on it.
     if (step !== "board" && step !== "decoded") celestialBoard?.close();
     if (step !== "spacemode" && spaceModeActive) setSpaceMode(false);
+    if (step !== "galacto" && galactocentric?.active) galactocentric.exit();
     if (step !== "distance") closeDistanceInfoPopover();
     tourSuppressesHover = (event.detail?.veil ?? "full") !== "clear";
     if (tourClickMode !== "all" || tourSuppressesHover) {
@@ -9719,7 +9795,12 @@ composeSolarEventShot(
     const hoveredBodySlowsWholeScene = Boolean(
       hoveredCelestialBody && !isAsteroidBody(hoveredCelestialBody),
     );
-    const motionScale = hoveredPlanetOrbit
+    /* Round 45: the Galactocentric view's first step runs the Solar System
+     * quickly (even with the Sun focused) so the corkscrews form. */
+    const galactoBoost = galactocentric?.motionBoost ?? 0;
+    const motionScale = galactoBoost
+      ? galactoBoost
+      : hoveredPlanetOrbit
       ? 0
       : focusExitTransition
         ? 0.02
@@ -10203,6 +10284,7 @@ composeSolarEventShot(
     skyEventAnchor.position.copy(camera.position);
     solarSystemEvents.setPaused(!isPageVisible || Boolean(cosmicIntro) || cosmicIntroPending);
     solarSystemEvents.update(deltaTime);
+    galactocentric?.update(deltaTime);
 
     spaceEnvironment.setJourneyProgress(getEnvironmentJourneyProgress());
     spaceEnvironment.setPaused(!isPageVisible || isInformationOverlayOpen());
@@ -10265,7 +10347,9 @@ composeSolarEventShot(
     /* Round 43: an event that hides the rest of the system, asserted last
      * for the same reason. */
     if (eventVeil.objects.length) applyEventVeil();
-    renderer.render(scene, camera);
+    /* Round 45: the Galactocentric view's galaxy and Local Group steps draw
+     * their own scene instead of the Solar System. */
+    if (!galactocentric?.render(renderer)) renderer.render(scene, camera);
     trace("system");
     performanceHud.update(frameTime);
 

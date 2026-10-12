@@ -1126,3 +1126,147 @@ body.is-cosmic-intro::-webkit-scrollbar { width: 0; height: 0; }
 @media (prefers-reduced-motion: reduce) {
   .cosmic-distance { transition: none; }
 }
+
+/* ===================================================== the title card
+   Round 46, reworked round 47 (Prompts.md). BEYOND EARTH rises slowly from
+   the bottom of the screen -- every letter together, huge, thin and solid
+   -- while the universe is still being built behind it. The O carries a
+   single dot at its centre. The view then zooms into the O, about that
+   dot, until the dot is the gate's 6 px point of light; that point falls
+   slowly off the bottom of the screen, and the gate's point descends from
+   the top (intro-descend): one fall across a cut. Cued by classes and one
+   inline transform from introSequence.js (playTitle). The face is Jost
+   (Google Fonts, index.html): geometric, so its O is a true circle and the
+   dot sits in its centre; system sans as the fallback. */
+
+.intro__marquee {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.intro__marquee-inner {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0 0.38em;
+  font-family: "Jost", "Futura", "Avenir Next", system-ui, sans-serif;
+  font-size: clamp(3rem, 12.5vw, 14rem);
+  font-weight: 200;
+  letter-spacing: 0.07em;
+  line-height: 1;
+  color: #fff3e4;
+  transform: translateY(78vh);
+  opacity: 0;
+  transition-property: transform, opacity;
+  transition-timing-function: cubic-bezier(0.45, 0, 0.25, 1);
+  will-change: transform;
+}
+
+/* The rise: slow, all letters as one. */
+/* Duration from TITLE_TIMING.riseSeconds (introSequence.js), via --rise. */
+.intro__marquee.is-rising .intro__marquee-inner {
+  animation: intro-title-rise var(--rise, 10000ms) cubic-bezier(0.2, 0.62, 0.25, 1) both;
+}
+
+/* Risen: the animation hands over to the inline transform the camera
+   move transitions from. */
+.intro__marquee.is-risen .intro__marquee-inner {
+  animation: none;
+  transform: none;
+  opacity: 1;
+}
+
+@keyframes intro-title-rise {
+  0%   { transform: translateY(78vh); opacity: 0; }
+  30%  { opacity: 1; }
+  100% { transform: translateY(0); opacity: 1; }
+}
+
+.intro__word { display: inline-flex; white-space: nowrap; }
+.intro__letter { display: inline-block; }
+.intro__o { position: relative; }
+.intro__ink,
+.intro__o-glyph { display: inline-block; transition: opacity 1600ms ease; }
+
+/* The dot in the O's centre (placed in px by introSequence.js): tiny at
+   title size, so the dive can bring it to the gate's 6 px. */
+.intro__o-dot {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 0.014em;
+  height: 0.014em;
+  min-width: 1.5px;
+  min-height: 1.5px;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  background: #fff6e8;
+  box-shadow: 0 0 0.03em 0.006em rgba(255, 226, 178, 0.95), 0 0 0.09em 0.02em rgba(255, 186, 112, 0.45);
+}
+
+/* As the dive goes in, the other letters fall away first, then the O's
+   ring, leaving only its dot. */
+/* The dive: the other letters go early; the O's ring stays and grows, and
+   fades only at the end (its timing is set inline by introSequence.js). */
+.intro__marquee.is-diving .intro__ink { opacity: 0; }
+.intro__marquee.is-diving .intro__o-glyph { opacity: 0; }
+
+/* A zero-size box on the O's baseline, where its pen starts: the point
+   introSequence.js measures the O's ink box from to centre the dot. */
+.intro__probe {
+  display: inline-block;
+  width: 0;
+  height: 0;
+  vertical-align: baseline;
+}
+
+/* The particle: takes over from the O's dot at the start of the dive and
+   grows to the gate's core, exactly (6 px), its halo coming up as we
+   arrive; then it falls. */
+.intro__point {
+  position: fixed;
+  width: 6px;
+  height: 6px;
+  margin: -3px 0 0 -3px;
+  border-radius: 50%;
+  background: #fff6e8;
+  box-shadow: 0 0 2px 0.5px rgba(255, 226, 178, 0.95);
+  pointer-events: none;
+  z-index: 2;
+}
+.intro__point::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  box-shadow:
+    0 0 12px 2px rgba(255, 226, 178, 0.95),
+    0 0 34px 8px rgba(255, 186, 112, 0.5),
+    0 0 92px 26px rgba(255, 138, 72, 0.18);
+  opacity: 0;
+  transition: opacity var(--glow, 5000ms) cubic-bezier(0.7, 0, 0.9, 0.6);
+}
+.intro__point.is-glowing::before { opacity: 1; }
+.intro__point.is-falling {
+  animation: intro-title-drop 3000ms cubic-bezier(0.55, 0, 0.75, 0.6) both;
+}
+
+@keyframes intro-title-drop {
+  0%   { transform: translateY(0); opacity: 1; }
+  85%  { opacity: 1; }
+  100% { transform: translateY(62vh); opacity: 0; }
+}
+
+.intro__sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+}
+
+

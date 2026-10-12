@@ -52,6 +52,40 @@ const STEP_LABELS = {
 // clock they did not start.
 const MINIMUM_LINE_SPACING_MS = 400;
 
+const LOG_RETIRE_MS = 700;
+
+/*
+ * ===== THE TITLE CARD'S TIMING. Change these to set the pace. =====
+ *
+ * Round 48 (the owner: "make it very very slow while coming up ... give me
+ * a variable I can change ... slowly the camera is driven towards the
+ * letter O, then I dive into it ... give me a variable to set the
+ * slowness"). All in seconds. Larger is slower.
+ *
+ *   riseSeconds      BEYOND EARTH rising from the bottom of the screen
+ *   holdSeconds      the word at rest before the camera starts to move
+ *   approachSeconds  the camera drifting towards the O: the O slides to
+ *                    the middle of the screen while the view closes in
+ *   diveSeconds      diving into the O until its dot is the size of the
+ *                    next screen's particle
+ *   fallSeconds      that particle falling off the bottom of the screen
+ */
+/*
+ * How much bigger the O's ring grows during the dive, on top of the drift's
+ * 2.2x. 8 opens the ring to about twice the screen's width as it fades -- the
+ * feeling of passing through the O. Bigger = the ring rushes past faster;
+ * smaller = it stays in view longer. (Design choice, round 49.)
+ */
+export const TITLE_RING_GROWTH = 8;
+
+export const TITLE_TIMING = {
+  riseSeconds: 10,
+  holdSeconds: 1.5,
+  approachSeconds: 5,
+  diveSeconds: 5,
+  fallSeconds: 3,
+};
+
 export function createIntroSequence({ root } = {}) {
   const container = root ?? document.querySelector("#loader");
   if (!container) {
@@ -74,9 +108,10 @@ export function createIntroSequence({ root } = {}) {
     <p class="intro__title"></p>
     <p class="intro__subtitle"></p>
   `;
-  header.querySelector(".intro__title").textContent = "Beyond Earth";
-  header.querySelector(".intro__subtitle").textContent =
-    "System initialisation · heliocentric frame";
+  /* Round 46 (Prompts.md): the name is no longer here -- it arrives after
+   * the log, full screen. The log is headed by what it is doing. */
+  header.querySelector(".intro__title").textContent = "System initialisation";
+  header.querySelector(".intro__subtitle").textContent = "Heliocentric frame";
 
   const log = document.createElement("div");
   log.className = "intro__log";
@@ -267,7 +302,11 @@ export function createIntroSequence({ root } = {}) {
     const text = overrideText ?? STEP_LABELS[key] ?? key;
     queue = queue.then(() => new Promise((resolve) => {
       const wait = Math.max(0, MINIMUM_LINE_SPACING_MS - (performance.now() - lastLineAt));
-      const emit = () => { lastLineAt = performance.now(); appendLine(text); resolve(); };
+      const emit = () => {
+        lastLineAt = performance.now();
+        appendLine(text);
+        resolve();
+      };
       if (wait <= 0) emit(); else setTimeout(emit, wait);
     }));
     return queue;
@@ -287,9 +326,9 @@ export function createIntroSequence({ root } = {}) {
    * rest do the halo, the breathing and the invitation appear.
    */
   function ready() {
-    return queue.then(() => new Promise((resolve) => {
-      const LOG_RETIRE_MS = 700;
-      const BLACKOUT_MS = 1500;
+    return queue.then(() => startTitle()).then(() => new Promise((resolve) => {
+      // Shorter since round 46: the title card is now the held beat.
+      const BLACKOUT_MS = 500;
       const DESCENT_MS = 6200;
 
       // Bind before anything is cued, so the descent cannot finish before we
@@ -356,20 +395,185 @@ export function createIntroSequence({ root } = {}) {
       };
       button.addEventListener("click", begin);
 
-      log.classList.add("is-retiring");
-      header.classList.add("is-retiring");
+      // A held beat of pure black before anything arrives.
+      setTimeout(() => {
+        gate.classList.add("is-live");
+        // Safety net: if animationend never reports -- reduced motion, or the
+        // tab backgrounded mid-descent -- the gate must still open.
+        setTimeout(() => arrive(null), DESCENT_MS + 1200);
+      }, BLACKOUT_MS);
+    }));
+  }
 
+  /*
+   * The log retires and the title plays, once, after every log line has
+   * been shown (round 48: the owner wants the whole log, 25+ lines, first).
+   */
+  let titlePromise = null;
+  function startTitle() {
+    if (titlePromise) return titlePromise;
+    log.classList.add("is-retiring");
+    header.classList.add("is-retiring");
+    titlePromise = new Promise((resolve) => {
       setTimeout(() => {
         stage.hidden = true;
-
-        // A held beat of pure black before anything arrives.
-        setTimeout(() => {
-          gate.classList.add("is-live");
-          // Safety net: if animationend never reports -- reduced motion, or the
-          // tab backgrounded mid-descent -- the gate must still open.
-          setTimeout(() => arrive(null), DESCENT_MS + 1200);
-        }, BLACKOUT_MS);
+        playTitle().then(resolve);
       }, LOG_RETIRE_MS);
+    });
+    return titlePromise;
+  }
+
+  /*
+   * The title card (round 46; reworked rounds 47 and 48 from Prompts.md):
+   *   1  BEYOND EARTH rises very slowly from the bottom of the screen,
+   *      every letter together, huge and thin, solid from the start;
+   *   2  the O carries a single dot at the exact centre of the drawn
+   *      letter -- measured from the glyph's own ink box, not the letter's
+   *      line box, which put it high (round 48: "near the centre, not in
+   *      the centre");
+   *   3  the camera drifts towards the O: the whole word slides so the O
+   *      comes to the middle of the screen while the view closes in;
+   *   4  then dives into the O until its dot is the next screen's 6 px
+   *      particle; the letters pass out of the frame as it does;
+   *   5  the particle falls slowly off the bottom, and the gate's point of
+   *      light descends from the top.
+   * Timings: TITLE_TIMING, above. CSS transitions do the moving (cued
+   * here), so the frames are the compositor's, not this script's.
+   */
+  function playTitle() {
+    const reduced = typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const k = reduced ? 0.3 : 1;
+    const T = Object.fromEntries(Object.entries(TITLE_TIMING).map(([key, v]) => [key, Math.max(0.1, Number(v) || 0.1) * 1000 * k]));
+    const marquee = document.createElement("div");
+    marquee.className = "intro__marquee";
+    marquee.setAttribute("aria-hidden", "true");
+    const inner = document.createElement("div");
+    inner.className = "intro__marquee-inner";
+    marquee.append(inner);
+    let oLetter = null;
+    const word = (text) => {
+      const w = document.createElement("span");
+      w.className = "intro__word";
+      [...text].forEach((ch) => {
+        const letter = document.createElement("span");
+        letter.className = ch === "O" ? "intro__letter intro__o" : "intro__letter";
+        if (ch === "O" && !oLetter) {
+          oLetter = letter;
+          letter.innerHTML = '<span class="intro__probe"></span><span class="intro__o-glyph">O</span><span class="intro__o-dot"></span>';
+        } else {
+          const ink = document.createElement("span");
+          ink.className = "intro__ink";
+          ink.textContent = ch;
+          letter.append(ink);
+        }
+        w.append(letter);
+      });
+      return w;
+    };
+    inner.append(word("BEYOND"), word("EARTH"));
+    inner.style.setProperty("--rise", `${T.riseSeconds}ms`);
+    container.append(marquee);
+    const said = document.createElement("p");
+    said.className = "intro__sr";
+    said.textContent = "Beyond Earth";
+    container.append(said);
+    const dot = oLetter.querySelector(".intro__o-dot");
+    const probe = oLetter.querySelector(".intro__probe");
+    const glyph = oLetter.querySelector(".intro__o-glyph");
+    /* The particle: from the dive on, the dot is this element, at a fixed
+     * place on the screen, sized independently of the word. */
+    const point = document.createElement("span");
+    point.className = "intro__point";
+    // How far the word zooms in the dive (see TITLE_RING_GROWTH).
+    const DIVE_SCALE = 2.2 * Math.max(1, Number(TITLE_RING_GROWTH) || 1);
+
+    /*
+     * The dot at the O's true centre. The probe is a zero-size box sitting
+     * on the baseline where the O's pen starts; the canvas reports the O's
+     * ink box relative to that point, in the font actually in use.
+     */
+    const centreDot = () => {
+      const style = getComputedStyle(glyph);
+      const ctx = document.createElement("canvas").getContext("2d");
+      ctx.font = `${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
+      const m = ctx.measureText("O");
+      const p = probe.getBoundingClientRect();
+      const box = oLetter.getBoundingClientRect();
+      const x = p.left - box.left + (m.actualBoundingBoxRight - m.actualBoundingBoxLeft) / 2;
+      const y = p.top - box.top - (m.actualBoundingBoxAscent - m.actualBoundingBoxDescent) / 2;
+      dot.style.left = `${x}px`;
+      dot.style.top = `${y}px`;
+    };
+    const fontReady = document.fonts?.load
+      ? document.fonts.load(`200 100px "Jost"`).catch(() => null)
+      : Promise.resolve();
+
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    return fontReady.then(() => new Promise((resolve) => {
+      centreDot();
+      requestAnimationFrame(() => requestAnimationFrame(() => marquee.classList.add("is-rising")));
+      wait(T.riseSeconds + T.holdSeconds).then(() => {
+        centreDot();
+        // Freeze the risen position as the starting point of the camera move.
+        marquee.classList.add("is-risen");
+        const d = dot.getBoundingClientRect();
+        const box = inner.getBoundingClientRect();
+        const ox = d.left + d.width / 2 - box.left;
+        const oy = d.top + d.height / 2 - box.top;
+        // The O to the middle of the screen: how far the word must slide.
+        const dx = innerWidth / 2 - (d.left + d.width / 2);
+        const dy = innerHeight / 2 - (d.top + d.height / 2);
+        const midScale = 2.2;
+        inner.style.transformOrigin = `${ox}px ${oy}px`;
+        // 3 -- the drift towards the O.
+        inner.style.transition = `transform ${T.approachSeconds}ms cubic-bezier(0.45, 0, 0.3, 1)`;
+        requestAnimationFrame(() => {
+          inner.style.transform = `translate(${dx}px, ${dy}px) scale(${midScale})`;
+        });
+        return wait(T.approachSeconds).then(() => {
+          /*
+           * 4 -- the dive (round 49: "the O's rings get bigger and bigger,
+           * slowly, as we dive into the O towards the particle, and only
+           * fade once we are at the particle"). The word keeps zooming --
+           * far past the edges of the screen, so the O's ring opens round
+           * the viewer -- while the dot is handed to its own element at the
+           * same spot, which grows only to the gate's 6 px. The other
+           * letters go early; the ring stays until the last third.
+           */
+          const d = dot.getBoundingClientRect();
+          point.style.left = `${d.left + d.width / 2}px`;
+          point.style.top = `${d.top + d.height / 2}px`;
+          point.style.transition = "none";
+          point.style.transform = `scale(${(d.width / 6).toFixed(3)})`;
+          point.style.setProperty("--glow", `${T.diveSeconds}ms`);
+          container.append(point);
+          dot.style.visibility = "hidden";
+          marquee.classList.add("is-diving");
+          document.querySelectorAll(".intro__ink").forEach((ink) => {
+            ink.style.transition = `opacity ${Math.round(T.diveSeconds * 0.35)}ms ease`;
+          });
+          glyph.style.transition = `opacity ${Math.round(T.diveSeconds * 0.38)}ms ease-in ${Math.round(T.diveSeconds * 0.62)}ms`;
+          inner.style.transition = `transform ${T.diveSeconds}ms cubic-bezier(0.5, 0, 0.9, 0.55)`;
+          requestAnimationFrame(() => {
+            inner.style.transform = `translate(${dx}px, ${dy}px) scale(${DIVE_SCALE})`;
+            point.style.transition = `transform ${T.diveSeconds}ms cubic-bezier(0.5, 0, 0.9, 0.55)`;
+            point.style.transform = "scale(1)";
+            point.classList.add("is-glowing");
+          });
+          return wait(T.diveSeconds + 80);
+        });
+      }).then(() => {
+        // 5 -- the particle falls.
+        marquee.remove();
+        point.style.transition = "none";
+        point.style.animationDuration = `${T.fallSeconds}ms`;
+        point.classList.add("is-falling");
+        return wait(T.fallSeconds + 100).then(() => {
+          point.remove();
+          said.remove();
+          resolve();
+        });
+      });
     }));
   }
 

@@ -1,8 +1,0 @@
-Improvements
-
-1. Why there are season, here the size of earth is almost shown as same size of Sun buddy we have to make that view realistic, in practically descrease size of earth because in front of sun, the orbital path is elongated elipitical its look like symmetrical elliptical buddy, during the farthest side which is the elongated elliptical path, we see winter right?
-2. Animation are beatutifully presented, for event 2I/Borisov and 3I/ATLAS passes through
- passes through but words get's collapased over here during the commet path
-3. In the caraousel when i am at 24 and if i pressed next the number appears 1 but the animation of caraousel takes me backawards to the 1, it should not break the flowing loop
-4. Even in case when Space Events are clicked and dashboard appears, just like in All Bodies we reset do the same thing for the space events when it is being clicked
-5. Improvement in solar winds space event buddy current one looks like it is sending out all scattered lights but they aren't like that those are winds, a gaseous type also the the linings which you drew weren't real see we have to build a real one buddy so do proper research how to present it out, ideallg in this seen we have to start out focus camera on sun how it leases the winds huge and then slowing slowing as winds comes out then our camera does so goes out far from sun and these winds are something not scattered it is a streaming flow , a gaseous type maybe more desiing of winds you will get on internet buddy

@@ -1284,21 +1284,44 @@ function buildSeasons(host, camera, options, api) {
    * Drawn true, it is indistinguishable from a circle -- which is the
    * point. */
   const ECC = 0.0167;
+  /* Round 45 (Prompts.md: "the orbital path shown should be elliptically
+   * elongated ... one side of the ellipse is close and one side is far").
+   * Drawn true, the ellipse cannot be seen, so its shape is exaggerated
+   * about 27 times (e 0.45: the Sun well off-centre, the near side close
+   * and the far side far), the way textbooks draw it, and the label says
+   * so. The true orbit stays drawn faintly beside it. Perihelion is still
+   * where it really is -- early January, northern winter. */
+  const ECC_SHOWN = 0.45;
   const PERI = 102.94;
-  const rAt = (Ldeg) => (R * (1 - ECC * ECC)) / (1 + ECC * Math.cos(((Ldeg - PERI) * Math.PI) / 180));
-
-  const orbit = ring(1, 0xcfe0ff);
-  {
-    const positions = orbit.geometry.attributes.position;
+  const ellipseAt = (e, Ldeg) => (R * (1 - e * e)) / (1 + e * Math.cos(((Ldeg - PERI) * Math.PI) / 180));
+  const rAt = (Ldeg) => ellipseAt(ECC_SHOWN, Ldeg);
+  const traceOrbit = (line, e) => {
+    const positions = line.geometry.attributes.position;
     for (let i = 0; i < positions.count; i += 1) {
       const L = (i / (positions.count - 1)) * 360;
-      const r = rAt(L);
+      const r = ellipseAt(e, L);
       positions.setXYZ(i, r * Math.cos((L * Math.PI) / 180), 0, r * Math.sin((L * Math.PI) / 180));
     }
     positions.needsUpdate = true;
-  }
-  const orbitLabel = label(["Earth's orbit · almost a circle", "147.1 to 152.1 million km from the Sun"], { colour: "#dfe9ff", height: 0.026 });
-  orbitLabel.position.copy(new THREE.Vector3(Math.cos(3.9), 0, Math.sin(3.9)).multiplyScalar(R * 0.8));
+  };
+  const orbit = ring(1, 0xcfe0ff);
+  traceOrbit(orbit, ECC_SHOWN);
+  const trueOrbit = ring(1, 0x8fa6c8);
+  traceOrbit(trueOrbit, ECC);
+  group.add(trueOrbit);
+  // The two ends of the long axis, joined through the Sun.
+  const axisLine = new THREE.Line(
+    new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(Math.cos((PERI * Math.PI) / 180), 0, Math.sin((PERI * Math.PI) / 180)).multiplyScalar(rAt(PERI)),
+      new THREE.Vector3(Math.cos(((PERI + 180) * Math.PI) / 180), 0, Math.sin(((PERI + 180) * Math.PI) / 180)).multiplyScalar(rAt(PERI + 180)),
+    ]),
+    new THREE.LineDashedMaterial({ color: 0xffd27a, dashSize: 10, gapSize: 10, transparent: true, opacity: 0, depthWrite: false, toneMapped: false, fog: false }),
+  );
+  axisLine.computeLineDistances();
+  axisLine.raycast = () => {};
+  group.add(axisLine);
+  const orbitLabel = label(["Earth's orbit · shape exaggerated about 27×", "the real one (faint ring) is almost a circle: 147.1 to 152.1 million km"], { colour: "#dfe9ff", height: 0.026 });
+  orbitLabel.position.copy(new THREE.Vector3(Math.cos(((PERI + 180) * Math.PI) / 180), 0, Math.sin(((PERI + 180) * Math.PI) / 180)).multiplyScalar(rAt(PERI + 180) * 0.62));
   orbitLabel.center.set(0.5, 0.5);
   group.add(orbitLabel);
   const sizeLabel = label(["Earth drawn far larger than true size", "(about 1/109 of the Sun across)"], { colour: "#cfd8e8", height: 0.022 });
@@ -1341,14 +1364,16 @@ function buildSeasons(host, camera, options, api) {
     { L: 270, lines: ["June solstice · 21 June", "north leans towards the Sun"] },
     { L: 0, lines: ["September equinox · 22–23 September", "day and night about equal"] },
     { L: 90, lines: ["December solstice · 21 December", "south leans towards the Sun"] },
-    { L: 102.9, lines: ["Closest to the Sun · ~3 January", "147.1 million km — northern winter"], inner: true, from: 0.66 },
-    { L: 282.9, lines: ["Farthest · ~4 July", "152.1 million km — northern summer"], inner: true, from: 0.66 },
+    { L: 102.9, lines: ["Closest to the Sun · ~3 January", "147.1 million km — northern winter"], inner: true, from: 0.03 },
+    { L: 282.9, lines: ["Farthest from the Sun · ~4 July", "152.1 million km — northern summer"], inner: true, from: 0.03 },
   ].map((m) => {
     const dot = glowSprite(m.inner ? 0xffd27a : 0xcfe0ff, 0.012, { attenuate: false });
     dot.position.copy(at(m.L));
     const tag = label(m.lines, { colour: m.inner ? "#ffe3b0" : "#e8f1ff", height: 0.026 });
-    tag.position.copy(at(m.L, m.inner ? 0.72 : 1.12));
-    if (m.inner) tag.center.set(0.5, 0.5);
+    /* Outside the ellipse; the closest-point label below the solstice
+     * label it sits near (round 45). */
+    tag.position.copy(at(m.L, 1.14));
+    if (m.inner) tag.center.set(0.5, -0.4);
     group.add(dot, tag);
     return { ...m, dot, tag };
   });
@@ -1385,7 +1410,9 @@ function buildSeasons(host, camera, options, api) {
       globeMaterial.uniforms.uOpacity.value = fade;
       axis.material.opacity = 0.85 * fade;
       north.material.opacity = fade;
-      orbit.material.opacity = 0.35 * fade;
+      orbit.material.opacity = 0.5 * fade;
+      trueOrbit.material.opacity = 0.16 * fade;
+      axisLine.material.opacity = 0.35 * fade;
       sunRay.geometry.attributes.position.setXYZ(1, position.x, position.y, position.z);
       sunRay.geometry.attributes.position.needsUpdate = true;
       sunRay.computeLineDistances();
@@ -1396,6 +1423,8 @@ function buildSeasons(host, camera, options, api) {
         m.dot.material.opacity = shown;
         m.tag.material.opacity = shown * 0.95;
       });
+      // Round 45: the solstices sit next to the closest and farthest points.
+      declutterLabels([...markers.map((m) => m.tag), orbitLabel], camera);
 
       // The sub-solar latitude and the date.
       const lambda = (((L - 180) % 360) + 360) % 360;
@@ -1489,10 +1518,10 @@ export const PROCESS_EVENTS = [
     frequency: "Every orbit: four seasons a year on Earth, about twice as long on Mars, 21 years each on Uranus",
     cause: "Earth's axis is tipped 23.4° and stays pointed the same way in space. For half the year the north leans towards the Sun and gets higher, longer, more direct sunlight; for the other half the south does.",
     note: "Earth is closest to the Sun in early January — during northern winter — which is the quickest proof that distance is not what makes the seasons.",
-    accuracy: "A diagram Earth on the scene's own orbit, enlarged so it can be read; the other planets are hidden while it runs. The tilt, the dates and the sub-solar latitude are the real ones.",
+    accuracy: "A diagram: Earth is enlarged so it can be seen, and the orbit's ellipse is exaggerated about 27 times so its shape shows (the true orbit, drawn faintly, is almost a circle). The other planets are hidden while it runs. The tilt, the dates, the closest and farthest points and the sub-solar latitude are the real ones.",
     /* Steeper (round 44): from 0.62 rad the near-circle read as a long
      * ellipse, foreshortened by the low angle. */
-    shotZoom: 7.5,
+    shotZoom: 9.5,
     shotPitch: 1.1,
     build: (host, camera, options, api) => buildSeasons(host, camera, options, api),
   },
