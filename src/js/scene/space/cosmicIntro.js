@@ -6241,5 +6241,11 @@ export function createCosmicIntro({ pixelRatio } = {}) {
     schedule();
   }
 
-  return { scene, camera, update, resize, dispose, get durationMs() { return phaseTotal(); } };
+  return {
+    scene, camera, update, resize, dispose,
+    get durationMs() { return phaseTotal(); },
+    // Round 62: main.js paces the journey by its music and needs to know
+    // where the sequence is.
+    get elapsedMs() { return elapsed; },
+  };
 }

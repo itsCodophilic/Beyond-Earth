@@ -168,9 +168,13 @@
   flex: 0 0 auto;
   margin: 0;
   padding: 0.28rem 0;
-  animation: intro-line-fall 1250ms cubic-bezier(0.17, 0.72, 0.24, 1) both;
-  will-change: transform, opacity;
+  /* Round 58: the entrance is a Web Animation booked by introSequence.js at
+     an absolute moment (the same keyframes as intro-line-fall below), so a
+     line is invisible until its moment whatever the page is doing. */
+  opacity: 0;
 }
+/* Waiting to be booked: kept out of the way entirely. */
+.intro__line.is-waiting { visibility: hidden; }
 
 .intro__line-body {
   display: grid;
@@ -198,7 +202,7 @@
   box-shadow: 0 0 10px rgba(255, 208, 150, 0.95);
   vertical-align: 0.1em;
 }
-.intro__live { animation: intro-spark 1600ms ease-in-out infinite; }
+.intro__live { animation: intro-blink 1600ms ease-in-out infinite; }
 
 @keyframes intro-line-fall {
   0% {
@@ -210,7 +214,9 @@
   100% { opacity: 1; transform: none; }
 }
 
-@keyframes intro-spark {
+/* Was a second "intro-spark", which the spiral's own intro-spark (below)
+   silently replaced -- so the live marker never blinked. Renamed, round 54. */
+@keyframes intro-blink {
   0%, 100% { opacity: 1; }
   50%      { opacity: 0.28; }
 }
@@ -718,7 +724,6 @@ body.is-cosmic-intro .body-connector {
 @media (prefers-reduced-motion: reduce) {
   .intro::before,
   .intro::after { animation: none; height: 8vh; }
-  .intro__line,
   .intro__header { animation-duration: 300ms; }
   .intro__singularity { animation-duration: 900ms; }
   .intro__spiral,
@@ -1179,7 +1184,10 @@ body.is-cosmic-intro::-webkit-scrollbar { width: 0; height: 0; }
 /* The rise: slow, all letters as one. */
 /* Duration from TITLE_TIMING.riseSeconds (introSequence.js), via --rise. */
 .intro__marquee.is-rising .intro__marquee-inner {
-  animation: intro-title-rise var(--rise, 10000ms) cubic-bezier(0.2, 0.62, 0.25, 1) both;
+  /* Round 55: an even rise that comes to rest at the very end (36% of the
+     way at 3 s, 72% at 5 s, 92% at 7 s, 99% at 9 s), so the word reaches
+     the centre on the title sound's peak. It used to be 90% there by 5 s. */
+  animation: intro-title-rise var(--rise, 10000ms) cubic-bezier(0.35, 0.1, 0.35, 1) both;
 }
 
 /* Risen: the animation hands over to the inline transform the camera
@@ -1280,3 +1288,111 @@ body.is-cosmic-intro::-webkit-scrollbar { width: 0; height: 0; }
 }
 
 
+
+/* ------------------------------------------------ round 54: begin + sound */
+
+/*
+ * "Begin": the visit's first, quiet choice. A browser plays no sound until
+ * the visitor clicks, so this click is what lets the log tick. Same voice as
+ * the rest of the intro: thin, wide-spaced capitals and one point of light.
+ */
+.intro__begin {
+  position: relative;
+  z-index: 3;
+  display: grid;
+  justify-items: center;
+  gap: 1.1rem;
+  text-align: center;
+  animation: intro-begin-in 1600ms cubic-bezier(0.16, 0.84, 0.3, 1) both;
+  transition: opacity 650ms ease, transform 650ms ease;
+}
+.intro__begin.is-leaving { opacity: 0; transform: translateY(-10px); }
+
+@keyframes intro-begin-in {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: none; }
+}
+
+.intro__begin-go {
+  display: inline-flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.9rem 1.6rem 0.9rem 1.3rem;
+  border: 1px solid rgba(255, 214, 168, 0.28);
+  border-radius: 999px;
+  background: rgba(255, 196, 130, 0.04);
+  color: rgba(255, 241, 224, 0.94);
+  font: 300 1.05rem/1 "Jost", system-ui, sans-serif;
+  letter-spacing: 0.5em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: border-color 300ms ease, background 300ms ease, letter-spacing 500ms ease;
+}
+.intro__begin-word { margin-right: -0.5em; /* the tracking's trailing gap */ }
+.intro__begin-go:hover,
+.intro__begin-go:focus-visible {
+  border-color: rgba(255, 214, 168, 0.7);
+  background: rgba(255, 196, 130, 0.1);
+  letter-spacing: 0.56em;
+  outline: none;
+}
+.intro__begin-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #fff6e8;
+  box-shadow: 0 0 10px 2px rgba(255, 226, 178, 0.9), 0 0 26px 6px rgba(255, 186, 112, 0.35);
+  animation: intro-blink 2400ms ease-in-out infinite;
+}
+
+.intro__begin-note {
+  margin: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.62rem;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: rgba(232, 224, 214, 0.5);
+}
+
+.intro__begin-quiet {
+  padding: 0.4rem 0.6rem;
+  border: 0;
+  background: none;
+  color: rgba(232, 224, 214, 0.38);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.58rem;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  text-decoration: underline;
+  text-underline-offset: 0.4em;
+  text-decoration-color: rgba(232, 224, 214, 0.18);
+  cursor: pointer;
+}
+.intro__begin-quiet:hover,
+.intro__begin-quiet:focus-visible { color: rgba(232, 224, 214, 0.75); outline: none; }
+
+/* Sound on/off while the intro plays: small, in the bottom-right corner,
+   above the letterbox. */
+.intro__sound {
+  position: absolute;
+  right: clamp(16px, 4vw, 44px);
+  bottom: calc(8vh + 14px);
+  z-index: 4;
+  padding: 0.4rem 0.6rem;
+  border: 1px solid rgba(255, 214, 168, 0.16);
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.3);
+  color: rgba(232, 224, 214, 0.5);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.56rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 900ms ease, color 240ms ease, border-color 240ms ease;
+}
+.intro__sound.is-shown { opacity: 1; }
+.intro__sound:hover,
+.intro__sound:focus-visible { color: rgba(255, 241, 224, 0.9); border-color: rgba(255, 214, 168, 0.5); outline: none; }
+.intro.is-detonating .intro__sound,
+.intro.is-landing .intro__sound { opacity: 0; }

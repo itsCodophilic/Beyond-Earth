@@ -216,7 +216,8 @@ const JOURNEY_UI_SELECTOR = [
   ".galacto-toggle",
 ].join(", ");
 import { createIntroSequence } from './ui/introSequence.js';
-import { createCosmicIntro } from './scene/space/cosmicIntro.js';
+import { createSoundscape, SOUND_CUES } from './audio/soundscape.js';
+import { createCosmicIntro, INTRO_TIMING } from './scene/space/cosmicIntro.js';
 import { POINTER_PROXY_LAYER } from "./scene/pointerProxies.js";
 
 // An async immediately-invoked function lets us await texture loading while
@@ -250,7 +251,113 @@ import { POINTER_PROXY_LAYER } from "./scene/pointerProxies.js";
   const canvas = document.querySelector("#universe");
   const loader = document.querySelector("#loader");
   // Built before any construction begins so its first line lands immediately.
-  const intro = createIntroSequence({ root: loader });
+  /*
+   * Round 54: the sound. One soundscape for the visit; the intro asks the
+   * visitor to begin (the click that lets the browser play audio), books a
+   * tick on every log line, and plays the other cues on their moments as
+   * their files arrive (see SOUND_CUES and docs/music-prompts.md).
+   */
+  const sound = createSoundscape();
+  sound.preload(Object.keys(SOUND_CUES));
+  let journeyMusic = null;
+  /*
+   * Round 62: the journey paced by its music ("make the travelling slow,
+   * but use as much of the song as possible").
+   *
+   * The Big Bang and "Where It Stopped" (the first 20 s) run at their own
+   * pace, with 6b's settle and then 6c under them. From the Multiverse on,
+   * the song plays and the pictures *follow the song's clock*, slowed to
+   * JOURNEY_PACE of their designed speed, so they can never drift from it.
+   *
+   * JOURNEY_PACE = 0.5537 is solved so the acts land on the song (the edit,
+   * in seconds from its start at the Multiverse): "Our Star" begins on the
+   * final swell at 122.0 s; that puts "Our Universe" at 13.6 s (just after
+   * the bass enters), "Laniakea" at 57.0 s (the climax begins), "The Milky
+   * Way" at 78.7 s (inside it), "The Orion Arm" at 100.3 s (the breakdown)
+   * and the arrival at 136.5 s, as the song fades. Solved with the 2 s
+   * ease-in below:
+   *   68000 - (1 - k) * 1000 = 122000 * k  ->  k = 67000 / 121000.
+   * Every act takes 1 / 0.5537 = 1.8x as long (captions 7.2 s a line);
+   * the whole opening goes from 97.5 s to about 159 s.
+   */
+  const JOURNEY_PACE = 67000 / 121000;
+  // The pictures ease from full speed down to JOURNEY_PACE over this long.
+  const JOURNEY_EASE_MS = 2000;
+  const JOURNEY_SONG_FROM_MS = INTRO_TIMING.inflation + INTRO_TIMING.condense;
+  /*
+   * Round 63: no gap after the burst. 6c's hold is started at the white's
+   * peak (see intro.ready() below) and sustains until "Where It Stopped"
+   * has been on screen for 7 s; then it crossfades (1.5 s) into 6c's
+   * settle, which carries on under the song's start at the Multiverse 1 s
+   * later. The song's own opening is a quiet piano (about -30 dB until the
+   * bass enters at 12 s), so it is lifted to 2x at its start, easing back
+   * to its own level by 12 s (SOUND_CUES.journey.envelope).
+   * Measured on a mix of the real files (0.5 s windows): from the hold's
+   * -18 dB the level eases to -23...-28 dB through the hand-off and back up
+   * as the bass enters -- no hole. (Released 2 s earlier and unlifted, the
+   * first try left a 1 s hole at -44 dB.)
+   */
+  const JOURNEY_SETTLE_RELEASE_MS = INTRO_TIMING.inflation + 7000;
+  let settleHold = null;
+  let journeySettleReleased = false;
+  let journeySongClockMs = 0; // stands in for the song's clock if it has none
+  // Song time -> journey time from the Multiverse: speed 1 easing to k.
+  const pacedJourneyMs = (songMs) => {
+    const k = JOURNEY_PACE;
+    const r = JOURNEY_EASE_MS;
+    if (songMs < r) return k * songMs + (1 - k) * (songMs - (songMs * songMs) / (2 * r));
+    return k * songMs + (1 - k) * (r / 2);
+  };
+  /*
+   * How far to move the opening this frame. Before the Multiverse: the
+   * frame time, as always; on reaching it, the song starts; after it, as far
+   * as the song says the pictures should be (at most a quarter second a
+   * frame, so a stall catches up quickly but never in one jump).
+   */
+  function journeyStep(frameSeconds) {
+    const elapsed = cosmicIntro.elapsedMs;
+    if (settleHold && !journeySettleReleased && elapsed >= JOURNEY_SETTLE_RELEASE_MS) {
+      journeySettleReleased = true;
+      settleHold.stop(1500);
+      sound.play("settleTail", { fadeInMs: 1500 });
+    }
+    if (elapsed < JOURNEY_SONG_FROM_MS) {
+      if (elapsed + frameSeconds * 1000 < JOURNEY_SONG_FROM_MS) return frameSeconds;
+      // Land exactly on the Multiverse, and start the song with it.
+      journeyMusic = sound.play("journey");
+      journeySongClockMs = 0;
+      return (JOURNEY_SONG_FROM_MS - elapsed) / 1000;
+    }
+    let songMs;
+    const heard = journeyMusic?.position?.();
+    if (heard != null) {
+      songMs = heard * 1000;
+    } else if (journeyMusic?.state === "pending") {
+      return 0; // the song is a moment from starting: hold for it
+    } else {
+      journeySongClockMs += frameSeconds * 1000; // no song: keep the pace
+      songMs = journeySongClockMs;
+    }
+    const target = JOURNEY_SONG_FROM_MS + pacedJourneyMs(songMs);
+    return Math.min(0.25, Math.max(0, (target - elapsed) / 1000));
+  }
+  const intro = createIntroSequence({ root: loader, sound });
+  const soundToggleButton = document.querySelector("#sound-toggle");
+  if (soundToggleButton) {
+    const renderSoundToggle = (on) => {
+      soundToggleButton.setAttribute("aria-pressed", String(on));
+      soundToggleButton.classList.toggle("is-off", !on);
+      const label = soundToggleButton.querySelector(".sound-toggle__label");
+      if (label) label.textContent = on ? "Sound on" : "Sound off";
+      soundToggleButton.setAttribute("aria-label", on ? "Turn sound off" : "Turn sound on");
+    };
+    renderSoundToggle(sound.isEnabled());
+    sound.onChange(renderSoundToggle);
+    soundToggleButton.addEventListener("click", () => {
+      sound.unlock();
+      sound.toggle();
+    });
+  }
   intro.step("boot");
   intro.step("ephemeris");
   const progressBar = document.querySelector("#progress-bar");
@@ -2641,7 +2748,7 @@ composeSolarEventShot(
    * waiting for the whole loop (about 1-2 s of solid work). The intro books
    * the lines onto its beat on the compositor (introSequence.js), so lines
    * already in hand keep arriving while the next world is built. Costs a
-   * frame per world, which the log's own pacing (0.4 s a line) hides.
+   * frame per world, which the log's own pacing (0.5 s a line) hides.
    */
   for (const config of PLANET_CONFIGS) {
     await yieldPastPaint();
@@ -9685,7 +9792,7 @@ composeSolarEventShot(
           introSeekSeconds = 0;
           for (let i = 0; i < steps; i += 1) cosmicIntro.update(1 / 60);
         }
-        progress = cosmicIntro.update(introHold ? 0 : introDelta);
+        progress = cosmicIntro.update(introHold ? 0 : journeyStep(introDelta));
         renderer.render(cosmicIntro.scene, cosmicIntro.camera);
         trace("intro");
         if (cosmicIntroBlackout) {
@@ -10523,6 +10630,11 @@ composeSolarEventShot(
   /** Hand-off from the burst into the solar system. */
   function completeCosmicIntro() {
     settleLandingView();
+    // The journey's music bows out with the journey (if it runs longer).
+    journeyMusic?.stop(2500);
+    journeyMusic = null;
+    settleHold?.stop(800);
+    settleHold = null;
     /*
      * A short white veil across the join.
      *
@@ -10621,6 +10733,11 @@ composeSolarEventShot(
        */
       document.body.classList.add("is-cosmic-intro");
       cosmicIntroPending = true;
+      // Music 6c's hold: begins 0.3 s after the white's peak (this moment),
+      // its swell rising under 6b's settle, and holds until released by
+      // journeyStep() -- so the sound never drops out, however long the
+      // journey below takes to build (round 63).
+      settleHold = sound.playAt("settleHold", performance.now() + 300);
       trace("CLICK/blank");
       try {
         renderer.setRenderTarget(null);
@@ -10670,6 +10787,10 @@ composeSolarEventShot(
        */
       try {
         cosmicIntro = createCosmicIntro({ pixelRatio: cinematicPixelRatio });
+        // Music 6c and 7 are started by journeyStep() as the opening reaches
+        // their moments (round 62).
+        journeySettleReleased = false;
+        journeySongClockMs = 0;
       } catch (error) {
         console.error("[BeyondEarth] opening sequence could not be built", error);
         cosmicIntroBlackout?.remove();
@@ -10793,6 +10914,10 @@ composeSolarEventShot(
   intro.step("compile");
   // Round 50: let the booked lines reach the screen before the compile's
   // long block, so the compositor can keep the log moving through it.
+  // Round 58: two painted frames -- the intro puts a line in the page on
+  // one frame and books its moment on the next, and both must happen
+  // before the block.
+  await yieldPastPaint();
   await yieldPastPaint();
   performance.mark("BE:precompile-start");
   scene.updateMatrixWorld(true);

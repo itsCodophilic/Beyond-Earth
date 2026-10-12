@@ -4065,3 +4065,34 @@ body.is-ultraviolet-view .uv-view { cursor: auto; }
   background: radial-gradient(circle, #fff3e4 0 22%, #f59e3b 45%, rgba(214, 110, 30, 0) 72%);
   box-shadow: 0 0 10px rgba(245, 158, 59, 0.8);
 }
+
+/* Round 54: the sound switch in the control row. Three bars sway while
+   sound is on and lie flat when it is off. */
+.sound-toggle__bars {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 2px;
+  width: 11px;
+  height: 10px;
+}
+.sound-toggle__bars i {
+  flex: 1;
+  height: 100%;
+  background: currentColor;
+  border-radius: 1px;
+  transform-origin: bottom;
+  animation: sound-bars 1100ms ease-in-out infinite;
+}
+.sound-toggle__bars i:nth-child(2) { animation-delay: -380ms; }
+.sound-toggle__bars i:nth-child(3) { animation-delay: -760ms; }
+.sound-toggle.is-off .sound-toggle__bars i {
+  animation: none;
+  transform: scaleY(0.22);
+}
+@keyframes sound-bars {
+  0%, 100% { transform: scaleY(0.35); }
+  50%      { transform: scaleY(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sound-toggle__bars i { animation: none; transform: scaleY(0.7); }
+}

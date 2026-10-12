@@ -1103,3 +1103,195 @@ Sources are listed above the `TIMELINE` table in `spaceEventsDashboard.js`. Thes
 - **The log is a fixed window.** Lines fill from the top, below the faded edge. Once the window is full, the track glides up, so old lines drift out through the fade instead of jumping.
 - **main.js:** a paint-yield (`yieldPastPaint`) runs before each world is built and before the shader compile. Each booked line reaches the screen before the next long block. This costs about one frame per world, which the log's pacing hides.
 - **Checked** in headless Chromium: all 35 lines were booked exactly 0.4 s apart, in order, straight through the 2.6 s block after Varuna (headless timing) and the compile. The log glides as it fills, the title card follows, and there were no errors. Compositor smoothness itself can't be filmed headless.
+
+## Part 33 — Round 54: sound, starting with the log's tick
+- **New: `src/js/audio/soundscape.js`.** It runs one Web Audio graph for the whole visit, with every sound going through a master gain.
+  - Sounds are booked on the audio clock rather than started by timers, so they land on time even while the main thread is busy building.
+  - `SOUND_CUES` lists the seven cues from `docs/music-prompts.md`. A cue with no file yet is `null` and stays silent, so each sound goes live as soon as its file name is added.
+  - Each cue records measured `start`/`accent` points and a `gain`.
+  - The on/off choice is remembered between visits (localStorage, guarded).
+- **A "Begin" screen opens the visit.** Browsers play no sound before a click, and the log ticks before any other click.
+  - The screen offers **Begin**, with a note "Sound on · best with headphones", and **Begin without sound**.
+  - The universe keeps building behind it. The log starts on the click, its lines booked from that moment and never before their milestone.
+  - The log waits until the tick is decoded, so the first line has its tick.
+- **The tick (`public/audio/tick.mp3`, from Suno).** It is 0.48 s long. Measured with ffmpeg at 5 ms resolution: two faint pre-clicks, the main hit at 0.09 s (−3 dBFS), and a tail below −40 dBFS by about 0.34 s.
+  - One tick is booked for every log line. Its main hit lands 120 ms after the line starts falling in (`TICK_ON_LINE_MS`), as the line becomes visible.
+  - The last line, "Universe stable", plays the same tick a fifth higher until a real `tickFinal` file exists.
+- **The log is on the beat: 500 ms a line (was 400).** That is one line per beat at 120 BPM, the journey's tempo, and the tick rings out fully between lines. `LINE_SPACING_MS` sets the pace. The 35 lines now take about 17.5 s.
+- **The other cues are wired to their moments and are silent until their files exist:**
+  - title rise: when the word starts rising;
+  - focus: when the drift towards the O starts;
+  - fall: when the particle falls;
+  - ripple loop: when the particle settles, until the click;
+  - wind-up: on the click;
+  - boom: exactly 5.3 s after the click, on the detonation;
+  - journey: on the opening's first frame, fading out when the journey ends.
+- **Sound on/off controls.** During the intro there is a small "Sound on/off" pill at the bottom right. In the app there is a **Sound** switch in the control row: three bars that sway while sound is on and lie flat when it is off, glyph-only on narrow screens.
+- **Fixed on the way:** `intro.css` defined `@keyframes intro-spark` twice, and the spiral's version silently replaced the blink, so the log's live marker never blinked. The blink is now `intro-blink`.
+- **Checked** in headless Chromium: the Begin screen renders. After the click, all 35 ticks were booked exactly one per line, 500 ms apart, each starting 11–28 ms after its line, which matches the intended 30 ms lead-in within measurement jitter. The last tick is pitched a fifth up, the controls read "Sound on", and there were no page errors.
+
+## Part 34 — Round 55: the title sound and the O's tone
+- **Music 2, `public/audio/riser-2.mp3`** (Suno, 11.44 s). Played forwards, it is a short swell into a braam hit at 1.9 s with a 9 s fading tail: loud at the start, the opposite of the brief ("low at first, loud when BEYOND EARTH is at the centre").
+  - **It is played backwards** (`reverse: true`). The tail becomes a 9.5 s crescendo from −43 dBFS up to the hit, now at 9.545 s (measured on the reversed samples), followed by the original swell decaying over about 1.9 s.
+  - It is booked so the peak lands the moment the word comes to rest, which is the end of `riseSeconds`. If the rise is set shorter than the build-up, the sound starts part-way in, so the peak still lands on time.
+  - To hear it forwards, set `reverse: false` and `accent: 1.9` in `SOUND_CUES`.
+- **The rise is now even.** The easing changed from `cubic-bezier(0.2, 0.62, 0.25, 1)` (90% of the way by 5 s) to `cubic-bezier(0.35, 0.1, 0.35, 1)`: 36% at 3 s, 72% at 5 s, 92% at 7 s and 99% at 9 s. The word visibly travels the whole time and reaches the centre on the peak.
+- **Music 3, `public/audio/O-1.1-Slow-0.5x.mp3`** (the 0.5× take, 12.68 s). It was chosen over the 6.4 s normal take, whose whole arc is too short for the 10 s move. Measured in 0.25 s windows:
+  - a click at 0 s, skipped (`start: 0.25`);
+  - a slow rise (−40 → −21 dB RMS) under the 5 s drift;
+  - a loud, bright plateau under the 5 s dive;
+  - its fall exactly where we reach the particle. There it is ended on the audio clock with a 250 ms fade.
+  - It plays at gain 0.45 because the plateau peaks near 0 dBFS and it is meant to be a soft tone.
+- **The player gained:** reversed playback (cached per file), `alignLate` (start part-way in so an accent still lands on time) and `until`/`fadeOutMs` (an end booked on the audio clock).
+- **Checked** in a harness with the real timings:
+  - The rise started at 4614 ms, and the title sound was booked at 5069 ms, so its peak lands at 14 614 ms: exactly the end of the 10 s rise.
+  - The focus tone started with the drift at 16 063 ms (offset 0.25 s) and was stopped at 26 082 ms, 19 ms after the dive's end.
+  - No errors.
+
+## Part 35 — Round 56: the fall
+- **Music 4, `public/audio/Falling-3.mp3`** (Suno, 10.01 s), under the 9.8 s fall: the particle drops for 3.0 s, the screen is dark for 0.6 s, and the point of light descends from the top for 6.2 s.
+- **Measured** in 0.25 s windows:
+  - a click at 0 s, skipped (`start: 0.25`);
+  - a swell to about −15 dB RMS by 1.75 s, held to 5.5 s;
+  - a long decay: −30 dB at 8 s, −45 dB at 9 s, silent by 9.75 s;
+  - its pitch steps down from about 588 Hz to about 220 Hz around 6 s.
+- **How it fits:** started 0.25 s in when the particle starts to fall, it fades out just as the point of light settles at the centre (9.8 s), so it plays whole, with no cut. Gain 0.6: it peaks at −6.2 dBFS and is meant to be soft.
+
+## Part 36 — Round 57: the waiting loop, unbroken from the fall
+- **Music 5, `public/audio/ripple-4.mp3`** (Suno, 11.20 s). Measured at 10 ms resolution:
+  - 0–2.8 s: a steady low tone (about −19 dB RMS, fundamental ~74 Hz, a low D);
+  - then four double beats, with first hits at 2.865, 4.95, 7.05 and 9.13 s, each followed by a second hit about 0.3 s later. That is one every ~2.09 s, half a breath of the particle (4.2 s);
+  - then a fade from 9.5 s.
+- **No break after the fall (the owner's ask).** The loop is booked when the particle starts to fall, not when it lands.
+  - Its opening tone fades in over 2 s under the fall's fading tail.
+  - Its first beat lands the moment the point of light settles: fall + 0.1 s + `BLACKOUT_MS` + `DESCENT_MS` after the fall begins. `BLACKOUT_MS` and `DESCENT_MS` are now module constants for this.
+- **Then only the beats repeat, until the click.** The loop region is 2.80–7.00 s: two beats, exactly one breath (4.2 s) long, with both ends in the tone before a beat.
+  - The player bakes the seam away (`loopFade`): the loop's last 0.3 s is blended, with an equal-power curve, into the 0.3 s before `loopStart`.
+  - Offline, the jump at the wrap measured 0.0057, smaller than the file's own largest sample-to-sample step there (0.0084), so the seam is inaudible.
+  - On the click it fades out over 0.3 s, into the wind-up.
+- **Checked** in a harness: the fall started at 6842 ms, and the loop was booked at 13 777 ms with loop 2.8–7 s, so its first beat falls at 16 642 ms. The gate reported arrival at 16 681 ms (the class lands a frame or two after the animation ends). The loop stopped on the click, and there were no errors.
+
+## Part 37 — Round 58: ticks, lines and glides on one clock
+- **Reported:**
+  - ticks sometimes came before their lines;
+  - the newest line's highlight vanished;
+  - the log stuck low and didn't glide up until the last line;
+  - it felt laggy.
+- **Cause:** the ticks were booked on the audio clock, which keeps time whatever the page is doing. The lines, their glide and the dimming used *delays*, which only start counting once the browser draws the frame. When a block of building held a frame up, that batch's visuals slid later by the length of the block while its ticks stayed put. Glides and dims from different batches then overlapped out of order: the log stuck, then jumped, and the highlight was dimmed before the next line arrived.
+- **Fix: one absolute clock** (`introSequence.js`). Every animation is booked by `startTime` on the page clock, the same clock the ticks use:
+  - each line's entrance, now a Web Animation with the same keyframes and per-keyframe easing as before;
+  - the log's glide;
+  - the previous line's dimming and its live marker.
+
+  Booking takes two frames. On frame A the lines go into the page, hidden. On frame B, once A has been drawn, everything is booked at least 200 ms ahead (`BOOK_LEAD_MS`), so the bookings reach the compositor before their moment. If a block delays drawing, nothing drifts: each piece is simply where it should be at that moment.
+- **Other changes:**
+  - The 50 ms timer fallback for flushing is gone: it could flush just before a block. A timer is used only when the tab is hidden.
+  - Lines no longer each carry `will-change`.
+  - `main.js` now yields two painted frames before the shader compile, so the last lines are placed and booked before that long block.
+- **Checked:**
+  - **Harness with simulated building blocks** (0.9–2.5 s), Begin clicked early: all 25 ticks fell within 8 ms of their lines, the lines were exactly 500 ms apart (one 1.3 s wait where the backlog ran dry during a block), and the 13 glides went in order, 500 ms apart, ending at −310 px.
+  - **The real app:** 35 lines and 35 ticks, every tick exactly on its line (0 ms), and no errors.
+
+## Part 38 — Round 59: the wind-up (6a)
+- **`public/audio/6a.mp3`** (Suno, 5.09 s). Measured with 0.1 s loudness, plus the spectrum and stereo every 0.25 s:
+
+  | Time in the file | What it is |
+  |---|---|
+  | 0.0–0.3 s | a bright sparkle (~10 kHz) |
+  | 0.4–0.6 s | a deep "whomp" (40–64 Hz, peaks +2 dBFS) |
+  | 0.7–1.5 s | a wide low swirl (left/right correlation down to −0.5) |
+  | 1.5–2.6 s | a rising, brightening whoosh: the spin-up, loudest at 2.6 s |
+  | 2.7–3.7 s | darker and falling: the pull-in |
+  | 4.0–4.5 s | a thin held tone at ~588 Hz: the charge |
+  | 4.55 s | cut to silence, with a small blip at 5.0 s |
+- **Synced by speed.** At 0.9× (`rate: 0.9`, 1.8 semitones lower) each part lands on its beat on the page, which are wind-up to 3.2 s, collapse to 4.6 s and charge to 5.3 s:
+  - the spin-up peak at 2.9 s;
+  - the pull-in over 3.0–4.1 s;
+  - the charge tone over 4.4–5.0 s;
+  - the cut at 5.06 s, leaving a breath of silence before the expansion at 5.3 s.
+- **Ending:** the intro ends it on the audio clock at 5.25 s with an 80 ms fade, which drops the trailing blip.
+- **Player:** gained `rate`, the playback speed per cue.
+
+## Part 39 — Round 60: the wind-up is now 6a-1
+- **`public/audio/6a-1.mp3`** (Suno, 4.81 s) replaces `6a.mp3`, which is deleted at the owner's request. Measured:
+
+  | Time in the file | What it is |
+  |---|---|
+  | 0.1–0.6 s | a quiet spark, a thin glint at ~1.99 kHz |
+  | 0.6–1.0 s | a fast swell (a swell, not a hit) into a deep swirl at 40–56 Hz, peak −2.2 dBFS at 1.03 s |
+  | 1.0–2.0 s | the spin-up: brightening (300 Hz → 1 kHz) and widening (left/right correlation down to −0.58) |
+  | 2.4–3.3 s | a second, darker surge |
+  | 3.4–4.8 s | a long fall away (−16 → −36 dB) over a faint ~660 Hz glint |
+- **Synced at 0.95×.** The surge ends at 3.5 s, near the end of the wind-up (3.2 s). The fall away runs 3.6–5.06 s, under the collapse and charge. The expansion follows at 5.3 s.
+- **Ending:** the intro fades its last 0.2 s, ending at 5.05 s. That covers the file's abrupt last sample, which was at −30 dB.
+
+## Part 40 — Round 61: the expansion (6b), on the white
+- **`public/audio/6b.mp3`** (Suno, 13.09 s). Measured with 0.1 s loudness plus a 50 ms spectrum around the burst:
+  - a long slow build, from −56 dB at 0.6 s to −11 dB by 4.8 s;
+  - then the burst: the highs (above 3 kHz) climb 30 dB from 4.95 s to a bright crest at 5.70–5.75 s;
+  - a deep, loud body from 5.80 s to about 6.4 s (peaks +2.9 dBFS);
+  - then a long settle: −30 dB at 9 s, −45 dB at 10.3 s, silent by 12.5 s.
+- **Synced to the white.** On the page the blowout starts at the end of the collapse (click + 4.6 s), peaks 0.7 s later (click + 5.3 s), and the journey takes over at the peak.
+  - Only the burst is used (`start: 5.05`, where its brightening begins).
+  - It is booked so its crest (`accent: 5.75`) lands on the white's peak, so its swell rises with the white. It has a 250 ms fade-in.
+  - Its settle carries on under the journey's first seconds. The slow build is left out, because the wind-up already fills that time.
+- **A limiter on the master output.** Several Suno files peak above 0 dBFS, and cues overlap at the hand-offs. A `DynamicsCompressor` (−3 dBFS threshold, 20:1, 3 ms attack) catches only those peaks.
+- **Checked** in a harness:
+
+  | Event | Time (ms) | From the click |
+  |---|---|---|
+  | click | 16 105 | — |
+  | wind-up started | 16 102 | at the click |
+  | waiting loop faded | — | 0.3 s |
+  | 6b started (offset 5.05 s) | 20 709 | 4.60 s |
+  | 6b's crest | 21 409 | — |
+  | white peak (`resolve()`) | 21 410 | — |
+  | wind-up ended | 21 179 | 5.07 s |
+
+  The crest lands 1 ms from the white's peak, and there were no errors.
+
+## Part 41 — Round 62: "Where It Stopped" (6c) and the journey paced by its song
+- **6c, `public/audio/6c.mp3`** (Suno, 13.21 s). It rises from −46 dB to a plateau of about −10 dB RMS at 4–6.5 s, then settles to silence by 13 s. Its notes are D, F♯ and A, a D major chord.
+  - It starts 6 s into the journey, so it swells at the end of the Big Bang, settles through "Where It Stopped" (12–20 s), and hands over to the song.
+- **The song, "The Journey"** (Suno, 224.36 s). The owner wanted as much of it as possible, with slower travel if needed.
+  - **The edit:** `public/audio/journey-edit.mp3`, 139.97 s, made with ffmpeg; the original is untouched. It cuts 44.489 → 128.917 s (84.43 s removed), joined with a 1 s equal-power crossfade.
+  - **How the cut points were found:** by searching for the best match over ±2 s around each point, using chroma (0.81), pulse (onset correlation 0.43) and loudness (1.3 dB apart). The 0.28 s pulse carries straight through the join.
+  - **What's in the edit:** the bass enters at about 12 s, the climax runs about 57–97 s, the breakdown about 98–121 s, the final swell rises at 122.0 s, and it fades from 136.2 s.
+- **The pictures follow the song's clock** (`main.js`, `journeyStep`).
+  - The first 20 s (Big Bang and "Where It Stopped") run at their own pace.
+  - On reaching the Multiverse, the song starts. From then on, the opening is moved each frame to where the song says it should be: `JOURNEY_SONG_FROM_MS + pacedJourneyMs(song position)`. At most 0.25 s is caught up per frame.
+  - The song position is taken as heard, with output latency subtracted. If there's no song (no file or no audio context), the same pacing runs off frame time instead.
+- **The pace.** `JOURNEY_PACE = 67000/121000 ≈ 0.554`, easing in from full speed over 2 s. It is solved so "Our Star" begins on the final swell (122.0 s). The other acts then land at these points in the song:
+
+  | Act | Song time | Where in the song |
+  |---|---|---|
+  | Our Universe | 13.6 s | just after the bass enters |
+  | Laniakea | 57.0 s | the climax begins |
+  | The Milky Way | 78.7 s | inside the climax |
+  | The Orion Arm | 100.3 s | the breakdown |
+  | Our Star | 122.0 s | the final swell |
+  | Arrival | 136.5 s | as the song fades |
+
+  Every act now takes about 1.8× as long (captions about 7.2 s a line), and the whole opening runs about 160 s instead of 97.5 s.
+- **Code changes:**
+  - `cosmicIntro.js` exposes `elapsedMs`;
+  - the soundscape handle gained `state` and `position()`;
+  - new cues `settle` (6c, gain 0.6) and `journey` (gain 0.85).
+- **Checked:**
+  - In the app, seeked with `?introFrom=19.3`: 6c started, then `journey-edit.mp3` started as the Multiverse began, the Multiverse rendered with its caption, and there were no errors.
+  - The act-to-song mapping above was solved and checked numerically.
+  - Real-time pacing can't be watched headless (the renderer runs at about 0.3 fps).
+
+## Part 42 — Round 63: no gap between the burst and the song
+- **Reported:** silence between 6b and 6c.
+- **Cause:** 6b's settle is gone about 4.5 s after the white's peak. The journey starts 2–3 s after the peak, and 6c only began 6 s into it.
+- **6c now carries the sound from the burst all the way to the song**, in two parts:
+  - **`settleHold`** starts 0.3 s after the white's peak. Its swell rises under 6b's settle, then its plateau is held for as long as needed: a loop of 4.20–7.32 s, found by search (spectral match 0.87, both ends at −12.5 dB), with the seam blended over 0.5 s.
+  - **`settleTail`** (6c from 7.32 s) is crossfaded in over 1.5 s once "Where It Stopped" has been on screen for 7 s (journey 19 s), and it carries on under the song.
+- **The song's quiet opening is lifted.** The piano intro sits at about −30 dB until the bass enters at 12 s, so the song starts at 2× its gain and eases back to its own level by 12 s (`envelope: [[0, 2], [12, 1]]`, a new cue field).
+- **Measured** on a mix of the real files, from the click to 48 s, in 1 s windows: the wind-up, the burst, then a steady −18 dB bed. Through the hand-off to the song it eases to −23…−27 dB, then rises as the bass enters. There is no hole anywhere. The first attempt released 2 s earlier without the lift and left a 1 s hole at −44 dB.
+- **Checked** in the app (`?introFrom=19.3`, which seeks the journey to 19.3 s):
+  - the hold started 0.3 s after the white's peak, with a 7.32 s looped buffer;
+  - it was released on the first journey frame past 19 s, and the tail started with it;
+  - the song started at the Multiverse;
+  - no errors.

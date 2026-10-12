@@ -162,6 +162,22 @@
           </button>
 
           <!--
+            Round 54: sound on/off for the whole visit (src/js/audio/soundscape.js).
+            Three bars that sway while sound is on and lie flat when it is off;
+            the label says the state, aria-pressed carries it.
+          -->
+          <button
+            class="hud-control sound-toggle"
+            id="sound-toggle"
+            type="button"
+            aria-pressed="true"
+            title="Turn the sound on or off"
+          >
+            <span class="hud-control__glyph sound-toggle__bars" aria-hidden="true"><i></i><i></i><i></i></span>
+            <span class="hud-control__label sound-toggle__label">Sound on</span>
+          </button>
+
+          <!--
             The way out of whatever you are inspecting.
 
             It used to float over the scene at the top left, on the opposite
