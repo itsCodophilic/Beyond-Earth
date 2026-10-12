@@ -738,6 +738,11 @@ const REGION_ZONES = Object.freeze([
         range: "92.0 AU average · 35.2 to 148.9 AU",
         note: "One of the few large worlds out here that is neutral rather than red, with strong fresh-ice bands.",
         motion: "883-year orbit · no known moon" },
+      /* Round 37. */
+      { body: "Dziewanna", order: "Dwarf planet candidate", character: "Bright, red, and in step with Neptune",
+        range: "68.9 AU average · 32.5 to 105.3 AU",
+        note: "470 km across with a quarter of the light reflected, and locked in a 2:7 resonance with Neptune. Named for the Slavic goddess of the wild woods.",
+        motion: "572-year orbit · no known moon" },
       { body: "DeeDee", order: "Dwarf planet candidate", character: "The scattered disc's true reach",
         range: "109.7 AU average · 38.5 to 180.9 AU",
         note: "Formally 2014 UZ224, still with no official name. Found at 92 AU by the Dark Energy Survey; ALMA measured it at 635 km.",

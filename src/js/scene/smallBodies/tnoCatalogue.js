@@ -42,7 +42,8 @@
  * builder gives the twelve worlds already out here, so the whole family
  * keeps its real order: Gonggong > Quaoar > Orcus > Sedna > Salacia > Máni
  * > Aya > Achlys > Chiminigagua > Varda > Ixion > Uni > Goibniu > Ritona >
- * Varuna > Gǃkúnǁʼhòmdímà > 2014 UZ224 > Chaos > Xewioso > Rumina > Huya.
+ * Varuna > Gǃkúnǁʼhòmdímà > 2014 UZ224 > Chaos > Xewioso > Rumina >
+ * Dziewanna (round 37) > Huya.
  *
  * ## Framing the systems with moons
  *
@@ -815,6 +816,58 @@ export const TRANS_NEPTUNIAN_WORLDS = Object.freeze([
       roughness: "unknown",
       description:
         "One of the few large worlds out here that is grey rather than red, with strong water-ice bands in its spectrum — a third of what is seen is fresh ice. Its orbit is long and stretched, from 35 AU out to 149, and takes 883 years. Named in 2025 for the Roman goddess who watched over nursing mothers.",
+    },
+  },
+  /* Round 37 (the owner: "implement all out"): the last of the next tier
+   * in docs/populations-not-yet-built.md section 6 -- Aya (2002 AW197) was
+   * already here, Dziewanna was not. */
+  {
+    id: "dziewanna",
+    /* Round 38: surface and colour from the map supplied for it (an artist's
+     * impression -- it has never been resolved). The measured colour index
+     * stays on the record for the card; the map colours the body. */
+    colourMap: true,
+    name: "Dziewanna",
+    designation: "471143 Dziewanna (2010 EK139)",
+    classification: "Trans-Neptunian · scattered disc · 2:7 resonance",
+    detail: "Bright, red and held in step with Neptune | Herschel 2012",
+    sizeCurve: "dwarf",
+    diameterKm: 470,
+    diameterLabel: "470 +35/−10 km",
+    albedo: 0.25,
+    /* g'-r' 0.80 (Benecchi & Sheppard 2013, AJ 145, 124) -> V-R 0.58 by
+     * V-R = 0.59 (g-r) + 0.11 (Jordi et al. 2006) -- the same conversion
+     * the DeeDee record uses -> B-R about 1.48: red. */
+    chroma: chromaFromBR(brFromVR(0.58)),
+    rotationHours: 7.07,
+    rotationState: "principal-axis",
+    metalness: 0,
+    orbit: {
+      solution: "JPL SBDB orbit solution 12, epoch JD 2461200.5, queried 10 October 2026",
+      epochJD: 2461200.5,
+      aAU: 68.92799574851902,
+      e: 0.5283750054816801,
+      iDeg: 29.45781004034736,
+      nodeDeg: 346.129999558067,
+      argPeriDeg: 284.7166311339667,
+      meanAnomalyDeg: 352.1610171554431,
+      meanMotionDegPerDay: meanMotion(68.92799574851902),
+    },
+    /* 0.12 mag -> a/b >= 1.12 (Benecchi & Sheppard 2013); c = 0.9 b,
+     * scaled to the 470 km equivalent: 525 x 469 x 422. The one occultation
+     * chord, 17 May 2019, gave a longest axis of at least 504 km. */
+    shape: { ...ICY_RELIEF, lobes: ellipsoid(525, 469, 422), seed: 471143 },
+    surfaceEvidence: "Never resolved. Size and albedo from Herschel (Pál et al. 2012, A&A 541, L6). Surface from an artist's map supplied for it",
+    info: {
+      population: "Trans-Neptunian · scattered disc in Neptune's 2:7 resonance, 32.5-105.3 AU",
+      diameter: "470 +35/−10 km — Herschel, Pál et al. 2012. One occultation chord (2019) puts its longest axis at 504 km or more",
+      rotationPeriod: "7.07 ± 0.05 h — Benecchi & Sheppard 2013, from incomplete coverage",
+      orbitalSpeed: orbitLine(68.92799574851902),
+      gravity: "Density not measured — no moon has been found (Keck, 2012)",
+      surfaceEvidence: "A point of light. Red, and brighter than most of its neighbours. The surface drawn is an artist's impression",
+      roughness: "unknown",
+      description:
+        "Found in March 2010 by the Polish OGLE survey team with Scott Sheppard and Chad Trujillo, and named in 2018 for Dziewanna, the Slavic goddess of the wild woods and the hunt. Herschel measured it at about 470 kilometres, with a quarter of the sunlight bouncing back — brighter than most worlds its size out here. Its orbit is long and steep, tilted 29° and reaching from 32.5 AU out to 105, and it goes round the Sun exactly twice for every seven of Neptune's laps, which keeps the two from ever meeting. No moon has been found, so its mass is unknown.",
     },
   },
   {

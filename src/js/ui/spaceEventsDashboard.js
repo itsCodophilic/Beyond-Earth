@@ -33,6 +33,15 @@
 
 const CLOSE_KEY = "Escape";
 
+/* Round 38: planned space events, shown disabled. See the note where they
+ * are rendered. */
+const COMING_SOON = Object.freeze([
+  { place: "The early Solar System", title: "How the Solar System formed", detail: "From a collapsing cloud to a disc, the first solids 4,567 million years ago, Jupiter's early core, the rocky planets and the giants' great reshuffle." },
+  { place: "The Sun · out to the heliopause", title: "The solar wind", detail: "The Sun's stream of charged particles, fast from the poles and slow from the equator, wound into a spiral by the Sun's turning — out to where it stops." },
+  { place: "Mercury · Earth · the giants · Ganymede", title: "Magnetospheres", detail: "The magnetic shields round the worlds that have them: bow shock, wall, tail and radiation belts — invisible, so shown as they would be measured." },
+  { place: "Every planet", title: "Why there are seasons", detail: "The tilt, not the distance: how each planet's axis keeps one direction as it goes round the Sun, from Uranus on its side to Jupiter with almost none." },
+]);
+
 /** Escapes a value for use in a plain-text DOM comparison, not for HTML. */
 function normalise(value) {
   return String(value ?? "").toLowerCase();
@@ -110,6 +119,31 @@ export function createSpaceEventsDashboard({ events, trigger = null, onView = nu
     </li>
   `).join("");
 
+  /*
+   * Round 38 (Prompts.md): four things the owner has filed under space events
+   * to be built properly later -- how the Solar System formed, the solar
+   * wind, magnetospheres and why there are seasons. Their first versions
+   * (board explanations and scene layers) were taken out; what they did is
+   * kept in docs/archive/space-events-coming-soon/. Listed here, disabled,
+   * so the plan is visible.
+   */
+  const soon = `
+    <section class="events-dashboard__soon" aria-labelledby="events-dashboard-soon-title">
+      <h3 class="events-dashboard__soon-title" id="events-dashboard-soon-title">Coming soon</h3>
+      <ol class="events-dashboard__soon-list">
+        ${COMING_SOON.map((item) => `
+          <li class="events-dashboard__soon-item" aria-disabled="true">
+            <span class="events-dashboard__event-body">${item.place}</span>
+            <h4 class="events-dashboard__soon-name">${item.title} <span class="events-dashboard__soon-badge">(coming soon)</span></h4>
+            <p class="events-dashboard__event-detail">${item.detail}</p>
+            <button class="events-dashboard__play" type="button" disabled aria-disabled="true">
+              <span class="events-dashboard__play-icon" aria-hidden="true"></span>
+              <span>Coming soon</span>
+            </button>
+          </li>`).join("")}
+      </ol>
+    </section>`;
+
   panel.innerHTML = `
     <div class="events-dashboard__backdrop" data-events-dismiss></div>
     <article class="events-dashboard__sheet">
@@ -146,6 +180,8 @@ export function createSpaceEventsDashboard({ events, trigger = null, onView = nu
       </div>
 
       <ol class="events-dashboard__list">${rows}</ol>
+
+      ${soon}
 
       <p class="events-dashboard__empty" hidden>Nothing matches that. Try a world's name, or a word like <em>storm</em>, <em>impact</em> or <em>ice</em>.</p>
 

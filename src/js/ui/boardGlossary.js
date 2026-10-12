@@ -703,6 +703,21 @@ const ART = {
     return spin(10, `<ellipse cx="-9" cy="0" rx="11" ry="8.5" class="cgloss__rockbig" /><ellipse cx="10" cy="0" rx="9" ry="7" class="cgloss__rockbig" /><circle cx="-11" cy="-2" r="1.8" class="cgloss__crater" /><circle cx="12" cy="2" r="1.4" class="cgloss__crater" />`)
       + `<text x="0" y="31" class="cgloss__text is-soft">two bodies, touching at a neck</text>`;
   },
+  /* Final round: three pictures for the board's new explanations. */
+  /* Round 37. */
+  gaps() {
+    // The belt as rings with two empty lanes, and Jupiter outside.
+    const grains = scatter(90, 37, (rand) => {
+      const angle = rand() * Math.PI * 2;
+      const lanes = [[17, 21], [23, 27], [29, 32]];
+      const [r0, r1] = lanes[Math.floor(rand() * lanes.length)];
+      const r = r0 + rand() * (r1 - r0);
+      return `<circle cx="${f(Math.cos(angle) * r)}" cy="${f(Math.sin(angle) * r)}" r="${f(0.35 + rand() * 0.45)}" class="cgloss__grain" />`;
+    });
+    return sun(2.6) + spin(60, grains)
+      + spin(80, `<circle cx="-44" cy="0" r="3.6" class="cgloss__jupiter" />`)
+      + `<text x="0" y="40" class="cgloss__text is-soft">empty lanes, kept by Jupiter</text>`;
+  },
   tidallock() {
     // The face mark sits on the side towards the planet and turns with the
     // orbit: one rotation per lap.

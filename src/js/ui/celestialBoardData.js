@@ -11,6 +11,9 @@ import { KUIPER_BINARIES } from "../scene/smallBodies/binaryCatalogue.js";
 import { COMETS } from "../scene/smallBodies/cometCatalogue.js";
 import { JUPITER_TROJANS } from "../scene/smallBodies/trojanCatalogue.js";
 import { NEAR_EARTH_ODDITIES } from "../scene/smallBodies/neoCatalogue.js";
+import { NEAR_EARTH_FAMILY_ROCKS } from "../scene/smallBodies/nearEarthFamilies.js";
+import { PLANET_TROJAN_BODIES } from "../scene/smallBodies/planetTrojans.js";
+import { FAMILY_NAMESAKES } from "../scene/smallBodies/familyNamesakes.js";
 import { BELT_MAJOR_ROCKS } from "../scene/beltMajorOrbitGuides.js";
 import { hasIcyRingSystem } from "../planets/icyRings.js";
 import { JUPITER_MOON_PROFILES } from "../planets/jupiter/satellites/jovianMoonCatalog.js";
@@ -67,7 +70,9 @@ const BELT_MAJOR_ORBITS = Object.freeze({
 /* A swatch per planet-builder world -- chosen by eye from each world's own
  * surface map, for a dot on a chart. Not a measurement, and not used as one. */
 const WORLD_SWATCH = Object.freeze({
-  Sun: "#ffcf7a",
+  /* Round 38 (Prompts.md): white, as the Sun is drawn in the scene and as
+   * it really is -- sunlight is white; its "yellow" is our air. */
+  Sun: "#ffffff",
   Mercury: "#9d958c", Venus: "#e6c992", Earth: "#4f86c6", Mars: "#c46a3f",
   Jupiter: "#d9b48c", Saturn: "#e3cf9f", Uranus: "#9fd8df", Neptune: "#5078d8",
   Pluto: "#d2b597", Orcus: "#9aa0a6", Haumea: "#e8e4dc", Quaoar: "#a8735a",
@@ -180,6 +185,8 @@ const PLANET_MOONS = Object.freeze({
     .map(([parent, profiles]) => [parent, moonList(profiles)])),
 });
 
+const TROJAN_REGION = Object.freeze({ Venus: "inner", Earth: "inner", Mars: "inner", Jupiter: "giants", Uranus: "giants", Neptune: "giants" });
+
 function kindForSmallBody(record) {
   const text = `${record.classification ?? ""} ${record.info?.population ?? ""}`;
   if (/interstellar/i.test(text)) return "interstellar";
@@ -187,7 +194,8 @@ function kindForSmallBody(record) {
   if (/comet/i.test(text)) return "comet";
   if (/trans-neptunian|sednoid|kuiper/i.test(text)) return "tno";
   if (/near-earth/i.test(text)) return "nea";
-  if (/jupiter trojan/i.test(text)) return "trojan";
+  /* Round 39: every planet's Trojans, not only Jupiter's. */
+  if (/\btrojan\b/i.test(text)) return "trojan";
   return "asteroid";
 }
 
@@ -200,7 +208,8 @@ export const BODY_KINDS = Object.freeze({
   nea: "Near-Earth asteroid",
   centaur: "Centaur",
   comet: "Comet",
-  trojan: "Jupiter Trojan",
+  /* Round 39: Trojans of every planet; the row's own line says whose. */
+  trojan: "Trojan",
   interstellar: "Interstellar object",
 });
 
@@ -219,6 +228,146 @@ export const BOARD_STRUCTURES = Object.freeze([
     kind: "Orbit the Sun, shepherded by Jupiter",
     words: "trojan trojans hilda hildas lagrange l4 l5 swarm greek camp jupiter company",
   },
+  /*
+   * Final round (the owner: "do all buddy everything at once"): the
+   * populations and the mechanisms, each opening an explanation
+   * (ui/explainerView.js). Placed in the column of the place they are about.
+   * Round 38: the spacecraft were removed (only what nature made), and the
+   * formation, solar wind, magnetospheres and seasons moved to the planned
+   * space events.
+   */
+  {
+    key: "tidal-locking",
+    /* Round 38: "How it works" filter removed; listed with the moons. */
+    filters: ["moons"],
+    name: "Why one face of the Moon",
+    region: "inner",
+    meta: "Tidal locking, shown moving",
+    kind: "A mechanism, shown moving",
+    art: "tidallock",
+    words: "tidal locking locked synchronous rotation far side moon how it works mechanism",
+  },
+  {
+    key: "centaurs",
+    filters: ["icy"],
+    name: "The Centaurs · every known one",
+    region: "giants",
+    meta: "1,056 catalogued, between Jupiter and Neptune",
+    kind: "Half asteroid, half comet",
+    art: "centaur",
+    words: "centaur centaurs population swarm chiron chariklo pholus echeclus nessus asbolus hylonome bienor",
+  },
+  {
+    key: "laplace",
+    filters: ["moons"],
+    name: "Io, Europa, Ganymede · 1 : 2 : 4",
+    region: "giants",
+    meta: "The Laplace resonance, shown moving",
+    kind: "A mechanism, shown moving",
+    art: "resonance",
+    words: "laplace resonance io europa ganymede 1:2:4 galilean orbit how it works mechanism",
+  },
+  /* Round 39: Neptune's own card ("Neptune's Trojans") is replaced by
+   * the Trojans of Uranus and Neptune -- the same 42, one card, in the
+   * column they belong to (the owner: "both are same right?"). */
+  {
+    key: "outer-trojans",
+    filters: ["asteroid", "icy"],
+    name: "Trojans of Uranus & Neptune",
+    region: "giants",
+    meta: "Uranus 2 · Neptune 42 · every one a body to fly to",
+    kind: "Sharing a giant's orbit, 60° ahead or behind",
+    art: "trojan",
+    words: "trojan trojans lagrange l4 l5 neptune uranus otrera clete 2001 qr322 2008 lc18 2011 qf99 2014 yx49 swarm neptune company co-orbital",
+  },
+
+  /* Round 37: the belt's structure (the field in asteroidBelt.js is frozen,
+   * so it is shown here), and how it all formed. */
+  {
+    key: "kirkwood",
+    filters: ["asteroid"],
+    name: "Kirkwood gaps & asteroid families",
+    region: "belt",
+    meta: "861,399 numbered asteroids counted",
+    /* Round 38: labelled as what it is -- structure, not a body or group. */
+    kind: "The belt's structure · not an object",
+    art: "gaps",
+    words: "kirkwood gap gaps resonance family families vesta flora koronis eos themis hygiea eunomia nysa polana hilda belt structure meteorite",
+  },
+  /* Round 38 (Prompts.md: "could not find Heliosheath?"): the heliosheath
+   * is a hover band in the ecliptic between the termination shock and the
+   * heliopause, 85-120 AU -- easy to miss. Listed here, it flies there and
+   * opens its card. */
+  {
+    key: "heliosheath",
+    travel: "The heliosheath",
+    filters: [],
+    name: "The heliosheath",
+    region: "scattered",
+    meta: "Between the termination shock (~85-94 AU) and the heliopause (~120 AU)",
+    kind: "Where the solar wind slows · a region, not a body",
+    art: "heliosphere",
+    words: "heliosheath heliosphere termination shock heliopause solar wind voyager boundary edge",
+  },
+  /* Round 37: the rest of the co-orbital story -- Venus's, Earth's, Mars's
+   * and Uranus's Trojans, beside Neptune's (populationClouds.js). */
+  /* Round 38 (Prompts.md): the four near-Earth families, each its own
+   * view -- real rocks "as they look in space", their orbits, what they
+   * are made of, and why they are not a belt (ui/explainers/nearEarth.js).
+   * Counts: JPL SBDB, classes IEO / ATE / APO / AMO, 10 October 2026. */
+  {
+    key: "nea-atira",
+    filters: ["asteroid"],
+    name: "The Atiras · near-Earth family",
+    region: "inner",
+    meta: "38 known · wholly inside Earth's orbit · 3 drawn",
+    kind: "Rare, baked close to the Sun",
+    art: "nea",
+    words: "atira atiras ieo interior earth object near-earth neo nea family 2021 ph27 aylochaxnim vatira baked",
+  },
+  {
+    key: "nea-aten",
+    filters: ["asteroid"],
+    name: "The Atens · near-Earth family",
+    region: "inner",
+    meta: "3,472 known · a year shorter than ours · 6 drawn",
+    kind: "Small and quick; cross Earth's orbit from inside",
+    art: "nea",
+    words: "aten atens ate near-earth neo nea family apophis cruithne moshup ra-shalom hathor",
+  },
+  {
+    key: "nea-apollo",
+    filters: ["asteroid"],
+    name: "The Apollos · near-Earth family",
+    region: "inner",
+    meta: "24,249 known · the largest family · 16 drawn",
+    kind: "Every shape; about one in six a binary",
+    art: "nea",
+    words: "apollo apollos apo near-earth neo nea family bennu ryugu itokawa didymos phaethon toutatis geographos castalia icarus nereus eger toro daedalus 1989 ja binary",
+  },
+  {
+    key: "nea-amor",
+    filters: ["asteroid"],
+    name: "The Amors · near-Earth family",
+    region: "inner",
+    meta: "14,889 known · near Earth's orbit, never crossing · 7 drawn",
+    kind: "The biggest; cratered, metal and a sleeping comet",
+    art: "nea",
+    words: "amor amors amo near-earth neo nea family eros ganymed don quixote florence 1986 da ivar betulia metal",
+  },
+  {
+    /* Round 39: the inner planets' Trojans only (Uranus's and Neptune's
+     * moved to their own card in the giants column). */
+    key: "inner-trojans",
+    filters: ["asteroid"],
+    name: "Trojans of Venus, Earth & Mars",
+    region: "inner",
+    meta: "Venus 1 · Earth 2 · Mars 17 · every one a body to fly to",
+    kind: "Sharing a planet's orbit, 60° ahead or behind",
+    art: "trojan",
+    words: "trojan trojans lagrange l4 l5 eureka 2010 tk7 2020 xl5 1999 uj7 2023 fw14 2013 nd15 mars earth venus co-orbital",
+  },
+
   /* Round 6 had a "Watch a comet glow" card here, in the inner column.
    * Round 7 (the owner) took it out: the glow view now belongs to one comet
    * at a time, opened from that comet's own row ("Check out its glow"). */
@@ -308,6 +457,12 @@ export function buildCelestialBoard() {
   [
     ...SMALL_BODIES, ...MAIN_BELT_WORLDS, ...CENTAURS, ...TRANS_NEPTUNIAN_WORLDS, ...KUIPER_BINARIES,
     ...COMETS, ...JUPITER_TROJANS, ...NEAR_EARTH_ODDITIES,
+    /* Round 38: the near-Earth families' rocks. */
+    ...NEAR_EARTH_FAMILY_ROCKS,
+    /* Round 38: Venus's, Earth's, Mars's and Uranus's Trojans. */
+    ...PLANET_TROJAN_BODIES,
+    /* Round 38: the belt families' namesakes. */
+    ...FAMILY_NAMESAKES,
   ].forEach((record) => {
     /* An open orbit has a negative semi-major axis and no region: it is
      * listed by its perihelion, in "Passing through". */
@@ -322,7 +477,10 @@ export function buildCelestialBoard() {
       kind,
       aAU,
       unbound,
-      region: unbound ? "interstellar" : regionFor(aAU),
+      /* Round 39: a Trojan is listed with its planet -- Neptune's at
+       * a = 30.1-30.4 AU fell just past the giants' 30.1 AU edge, into
+       * the Plutinos. */
+      region: unbound ? "interstellar" : (kind === "trojan" && TROJAN_REGION[record.coOrbital?.planet]) || regionFor(aAU),
       diameterKm: Number(record.diameterKm) || null,
       swatch: swatchFromChroma(record.chroma),
       rings: hasIcyRingSystem(record.name),

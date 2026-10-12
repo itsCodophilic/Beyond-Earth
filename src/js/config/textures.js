@@ -10,21 +10,38 @@ const DWARF_TEXTURE_ROOT = `${import.meta.env.BASE_URL}assets/textures/dwarf`;
 
 export const TEXTURE_URLS = {
   sun: "https://threejs.org/examples/textures/lava/cloud.png",
-  mercury: `${LOCAL_TEXTURE_ROOT}/mercury-2k.jpg`,
+  // Round 41: NASA/JHUAPL/Carnegie, MESSENGER MDIS global mosaic
+  // (PIA16298), simple cylindrical, 5 km/pixel; public domain.
+  // tools/planet-textures/prepare-planet-maps.py.
+  mercury: `${LOCAL_TEXTURE_ROOT}/mercury-messenger-2k.jpg`,
   venus: `${LOCAL_TEXTURE_ROOT}/venus-surface-2k.jpg`,
   venusAtmosphere: `${LOCAL_TEXTURE_ROOT}/venus-atmosphere-2k.jpg`,
-  // NASA Blue Marble Next Generation surface with clouds removed.
-  earth: `${LOCAL_TEXTURE_ROOT}/earth-no-clouds.jpg`,
+  // Round 41: NASA Earth Observatory Blue Marble Next Generation, July
+  // 2004 (MODIS true colour, cloud-free, plain deep-blue oceans -- the
+  // earlier map had bathymetry shaded in, which read as pale turquoise
+  // seas). 4096 x 2048 from the 5400 x 2700 release; public domain.
+  // tools/planet-textures/prepare-planet-maps.py.
+  earth: `${LOCAL_TEXTURE_ROOT}/earth-bmng-july-4k.jpg`,
+  // Open water 0.8, land and ice 0.92, from that map: a soft sheen where the
+  // Sun reflects off the oceans (same script; 0.38 and 0.62 both made a glare
+  // patch larger than a continent under the scene's strong Sun).
+  earthRoughness: `${LOCAL_TEXTURE_ROOT}/earth-water-roughness-2k.png`,
   earthNormal: "https://threejs.org/examples/textures/planets/earth_normal_2048.jpg",
   // NASA GEOS-5 global cloud field on black. The custom Earth shader turns
   // brightness into soft transparency and prevents a grey veil over the globe.
   earthClouds: `${LOCAL_TEXTURE_ROOT}/earth-clouds.jpg`,
   earthLights: "https://threejs.org/examples/textures/planets/earth_lights_2048.png",
   // NASA CGI Moon Kit: LROC visible-light colour and LOLA topography.
-  moon: `${LOCAL_TEXTURE_ROOT}/moon-color-1k.jpg`,
+  // Round 41: the 2025 colour map at 2048 x 1024 (was the 2019 1k).
+  moon: `${LOCAL_TEXTURE_ROOT}/moon-color-2k.jpg`,
   moonDisplacement: `${LOCAL_TEXTURE_ROOT}/moon-displacement-1k.jpg`,
   mars: `${LOCAL_TEXTURE_ROOT}/mars-2k.jpg`,
-  jupiter: `${LOCAL_TEXTURE_ROOT}/jupiter-2k.jpg`,
+  // Round 41: NASA/JPL/SSI "Cassini's Best Maps of Jupiter" (PIA07782),
+  // the cylindrical map from Cassini's December 2000 flyby (3601 x 1801,
+  // resampled to 4096 x 2048 -- a power of two; the original size rendered
+  // blank on the owner's machine);
+  // public domain.
+  jupiter: `${LOCAL_TEXTURE_ROOT}/jupiter-cassini-map.jpg`,
   saturn: `${LOCAL_TEXTURE_ROOT}/saturn-2k.jpg`,
   saturnRing: `${LOCAL_TEXTURE_ROOT}/saturn-ring-2k.png`,
   uranus: `${LOCAL_TEXTURE_ROOT}/uranus-2k.jpg`,
@@ -80,6 +97,7 @@ export const TEXTURE_FALLBACKS = {
   earthNormal: "earth",
   earthClouds: "earth",
   earthLights: "earth",
+  earthRoughness: "earth",
   moonDisplacement: "moon",
   saturnRing: "saturn",
 };
@@ -90,5 +108,6 @@ export const OPTIONAL_TEXTURES = new Set([
   "earthLights",
   "earthClouds",
   "earthNormal",
+  "earthRoughness",
   "saturnRing",
 ]);

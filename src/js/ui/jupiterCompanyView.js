@@ -331,6 +331,15 @@ export function buildJupiterCompanyView({ closeButton }) {
   // ------------------------------------------------------------ the side
   const side = el("aside", "cmoons__side cjup__side");
   side.append(el("h3", "cmoons__side-title", "Not Jupiter's moons — in five steps"));
+  /* Round 40: the clouds are no longer drawn at rest (resonantSwarms.js:
+   * nothing this faint could be seen), so they are lit from here. The
+   * board's own `data-scene-action` route closes it and asks main.js. */
+  const lightRow = el("div", "cexp__actions cjup__light");
+  const light = el("button", "cexp__action", "Light them up in the scene");
+  light.type = "button";
+  light.dataset.sceneAction = JSON.stringify({ jupiterSwarms: true });
+  lightRow.append(light);
+  side.append(lightRow);
   const more = el("div", "csys__more");
   side.append(more);
   /*

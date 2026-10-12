@@ -32,18 +32,43 @@ export function createMoonSystem({ earth, textures, hoverTargets, quality = "hig
   const moonGeometry = new THREE.SphereGeometry(MOON_RADIUS, moonSegments, moonSegments);
   const moon = new THREE.Mesh(
     moonGeometry,
-    new THREE.MeshStandardMaterial({
+    /*
+     * Round 41: MeshPhysicalMaterial, for one setting. MeshStandardMaterial's
+     * specular reflectance is fixed at 4% for any non-metal, which under the
+     * scene's Sun is worth an albedo of ~0.04 on top of the map -- a third of
+     * the Moon's whole albedo (0.12), flat grey over everything, so even a
+     * near-black colour rendered pale (measured: colour 0.02 still gave a
+     * mid-grey disc). Regolith's specular share is part of its albedo, not
+     * extra, so it is cut to a quarter (specularIntensity 0.25, ~1%).
+     */
+    new THREE.MeshPhysicalMaterial({
+      specularIntensity: 0.25,
       map: moonTexture,
-      color: 0xffffff,
+      /*
+       * Round 41 (the owner: "Earth, Moon and Jupiter do not look realistic
+       * as per space"). At full white the LROC map (mean linear reflectance
+       * 0.32) rendered the lit Moon blown out, so the dark maria vanished.
+       * The Moon is dark -- geometric albedo 0.12, a little darker than
+       * cloud-free land on Earth (NASA Moon Fact Sheet). The 2025 LROC map's
+       * mean linear reflectance is 0.51 (prepare-planet-maps.py), so linear
+       * 0.22 brings it to ~0.11, the albedo taken literally -- with the
+       * specular floor removed (below), that renders as grey, with the maria
+       * clearly darker.
+       * Color is given in linear RGB so the number is the reflectance factor.
+       */
+      color: new THREE.Color().setRGB(0.22, 0.22, 0.22, THREE.LinearSRGBColorSpace),
       roughness: 1,
       metalness: 0,
       bumpMap: moonTopography,
       bumpScale: 0.032,
       displacementMap: moonTopography,
-      // The real lunar relief is subtle at globe scale, so it is modestly
-      // exaggerated for cinematic readability while preserving its shape.
-      displacementScale: MOON_RADIUS * 0.050,
-      displacementBias: -MOON_RADIUS * 0.025,
+      // The real lunar relief is subtle at globe scale: LOLA's full range is
+      // about 20 km on a 1,737 km radius, 1.1%. It was drawn at 5% of the
+      // radius, which made the limb visibly lumpy (round 41). Now 1.6% --
+      // still a little exaggerated, so the basins catch the light, but the
+      // edge reads as round, as it does through any telescope.
+      displacementScale: MOON_RADIUS * 0.016,
+      displacementBias: -MOON_RADIUS * 0.008,
       envMapIntensity: 0.025,
     }),
   );

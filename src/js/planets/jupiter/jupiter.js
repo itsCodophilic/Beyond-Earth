@@ -96,12 +96,21 @@ export function createJupiterSurfaceMaterial(texture) {
         value: 1,
       },
 
+      /*
+       * Round 41 (the owner: "Jupiter does not seem realistic as per space
+       * ... the surface texture design is completely different"). The real
+       * map was 58% of the colour, with a procedural band pattern laid back
+       * over 68% of that -- which drew wavy contour-map bands, a violet pole
+       * and no Great Red Spot. Now the real spacecraft map is the surface
+       * (strength 1) and the procedural layer is off (0); the uniforms stay
+       * so the old look can be compared.
+       */
       uTextureStrength: {
-        value: 0.58,
+        value: 1.0,
       },
 
       uDetailStrength: {
-        value: 0.92,
+        value: 0.0,
       },
     },
 
@@ -842,11 +851,10 @@ export function createJupiterSurfaceMaterial(texture) {
           texture2D(
             uMap,
             vec2(
-              fract(
-                vUv.x +
+              // Round 42: no fract() here. The map repeats across the seam (RepeatWrapping), and fract() made the texture coordinate jump from 1 back to 0 inside one pixel; the GPU read that jump as the whole map squeezed into a pixel and drew that column from its smallest mip level -- the thin line along the date line the owner saw.
+              vUv.x +
                 cloudTime *
-                0.0015
-              ),
+                0.0015,
               vUv.y
             )
           ).rgb;
@@ -869,9 +877,13 @@ export function createJupiterSurfaceMaterial(texture) {
           );
 
         surfaceColor *=
-          0.88 +
-          broadTurbulence * 0.24 +
-          fineClouds * 0.14;
+          mix(
+            1.0,
+            0.88 +
+            broadTurbulence * 0.24 +
+            fineClouds * 0.14,
+            uDetailStrength
+          );
 
         // Preserve Juno-inspired blue/violet/white polar cyclones after the
         // broad texture blend. Previously this treatment existed only inside
@@ -894,24 +906,42 @@ export function createJupiterSurfaceMaterial(texture) {
           mix(
             surfaceColor,
             finalPolarColor,
-            polarAmount * (0.58 + polarFilament * 0.24)
+            polarAmount * (0.58 + polarFilament * 0.24) * uDetailStrength
           );
 
         /*
          * Lighting.
+         *
+         * Round 42 (the owner: "checkout the sunlight intensity on
+         * Jupiter"). The old light added a constant 0.13 on the day side
+         * and kept 11% of full daylight on the night side, with a terminator
+         * half a hemisphere wide and a blue rim drawn whether sunlit or not,
+         * so the night side showed its bands and the day side barely
+         * darkened toward the limb. Spacecraft views (Cassini 2000, Juno
+         * 2016-) show a black night side and a strongly limb-darkened disc
+         * (Jupiter's visible-light Minnaert k is about 0.6-0.8).
+         *
+         * Now: Lambert from the Sun, wrapped by 0.06 for the haze above the
+         * clouds softening the terminator (chosen by eye, narrow next to
+         * the old -0.15..0.35), peak 1.03 so the sub-solar point is as
+         * bright as before, and 0.012 on the night side (chosen: dark like
+         * Earth's night side here, not pure black). The scene, like a
+         * camera, exposes each planet for its own daylight, so Jupiter's
+         * real 1/27 of Earth's sunlight (5.2 AU, inverse square) is not
+         * applied to its brightness.
          */
-        float diffuse =
-          max(
-            dot(
-              normal,
-              lightDirection
-            ),
-            0.0
+        float sunDot =
+          dot(
+            normal,
+            lightDirection
           );
 
-        float softDiffuse =
-          0.13 +
-          diffuse * 0.92;
+        float sunlit =
+          clamp(
+            (sunDot + 0.06) / 1.06,
+            0.0,
+            1.0
+          );
 
         float atmosphereScatter =
           pow(
@@ -926,26 +956,11 @@ export function createJupiterSurfaceMaterial(texture) {
             3.2
           );
 
-        /*
-         * Softer night-side transition than the generic planet material.
-         */
-        float terminator =
-          smoothstep(
-            -0.15,
-            0.35,
-            dot(
-              normal,
-              lightDirection
-            )
-          );
-
         surfaceColor *=
-          mix(
-            0.11,
-            softDiffuse,
-            terminator
-          );
+          0.012 +
+          sunlit * 1.02;
 
+        /* The thin bluish limb haze, only where the Sun lights it. */
         surfaceColor +=
           vec3(
             0.62,
@@ -953,7 +968,12 @@ export function createJupiterSurfaceMaterial(texture) {
             0.82
           ) *
           atmosphereScatter *
-          0.12;
+          0.12 *
+          smoothstep(
+            -0.05,
+            0.3,
+            sunDot
+          );
 
         gl_FragColor =
           vec4(
@@ -993,11 +1013,16 @@ export function createJupiterAtmosphereMaterial() {
       varying vec3 vNormalView;
       varying vec3 vViewDirection;
       varying vec3 vObjectDirection;
+      varying vec3 vWorldNormal;
+      varying vec3 vWorldPosition;
 
       void main() {
         vec4 viewPosition =
           modelViewMatrix *
           vec4(position, 1.0);
+
+        vWorldNormal = normalize(mat3(modelMatrix) * normal);
+        vWorldPosition = (modelMatrix * vec4(position, 1.0)).xyz;
 
         vNormalView =
           normalize(
@@ -1025,6 +1050,8 @@ export function createJupiterAtmosphereMaterial() {
       varying vec3 vNormalView;
       varying vec3 vViewDirection;
       varying vec3 vObjectDirection;
+      varying vec3 vWorldNormal;
+      varying vec3 vWorldPosition;
 
       void main() {
         float facing =
@@ -1071,10 +1098,29 @@ export function createJupiterAtmosphereMaterial() {
           ) *
           0.025;
 
+        /*
+         * Round 42: the glow is sunlight scattered in the upper haze, so it
+         * follows the Sun (at the world origin) and fades out over the night
+         * side; it had circled the dark limb as well. The shell is drawn
+         * back-faced: what shows is its far side just outside the disc,
+         * whose outward normal points the way that piece of limb faces.
+         * 0.06 left on the night side (chosen by eye).
+         */
+        float sunSide =
+          smoothstep(
+            -0.15,
+            0.3,
+            dot(
+              normalize(vWorldNormal),
+              normalize(-vWorldPosition)
+            )
+          );
+
         float alpha =
           fresnel *
           0.24 *
-          pulse;
+          pulse *
+          (0.06 + 0.94 * sunSide);
 
         if (alpha < 0.004) {
           discard;

@@ -436,4 +436,238 @@ export const CENTAURS = Object.freeze([
         "In December 2005 Echeclus brightened by a factor of about 400, and when the coma was resolved the brightest part of it was not centred on the nucleus. Something had come off — a fragment, on its own trajectory, outgassing harder than the body it left. Its cloud is the other thing worth knowing: it comes out *bluer than sunlight*, which means the grains blasted off it are finer than anything Chiron produces, and it sits around a rock that is itself slightly redder than Chiron's from complex carbon — the body and its own coma are opposite colours. The jets drawn here are real and are not to scale: the observed ones reach some 33,000 km, which on a body 60 km across is eleven hundred body radii. It has done it again since, in 2011 and 2016 and 2017. Escape velocity here is around 25 m/s, so anything an outburst lifts is gone. Its occultation in 2019 and 2020 did something the others in this file could not: it looked for rings and found none, to a limit that would have caught anything as substantial as Chariklo's. That matters, because it means rings around Centaurs are not simply what happens to every body of this size — they are something particular, and Chariklo and Chiron have it while Echeclus does not.",
     },
   },
+  /*
+   * Final round (the owner: "do all buddy everything at once"): the rest of
+   * the named Centaurs from `docs/populations-not-yet-built.md` -- Nessus,
+   * Asbolus, Hylonome and Bienor. Elements: JPL SBDB `sbdb.api` at full
+   * precision, queried 8 October 2026, epoch JD 2461200.5. Colours: B-R
+   * from Peixinho et al. 2012 (A&A 546, A86), Table A.1, through the same
+   * literal conversion as the others. None of the four has ever shown a
+   * coma, so all four are bare rocks.
+   */
+  {
+    id: "nessus",
+    /* Round 38 (Prompts.md: "Redesign Nessus i have attached images"):
+     * surface and colour from the image supplied (an artist's impression;
+     * Nessus has never been resolved), unwrapped by tools/dwarf-textures.
+     * The measured B-R stays on the record for the card. */
+    colourMap: true,
+    name: "Nessus",
+    designation: "7066 Nessus (1993 HA2)",
+    classification: "Centaur · one of the reddest",
+    detail: "Red as Pholus, nearly | Herschel-PACS 2014",
+    diameterKm: 57,
+    diameterLabel: "≈82 × 52 × 43 km drawn; 57 km from Herschel-PACS",
+    albedo: 0.086,
+    /* B-R 1.847 +/- 0.165 (Peixinho et al. 2012) -- the red side of the
+     * Centaur colour gap, second only to Pholus among the eight drawn. */
+    chroma: [1.353, 1.024, 0.623],
+    /* No rotation period has been measured (no lightcurve as of 2018); the
+     * builder's 6-hour reference is used and the card says so. */
+    rotationHours: null,
+    rotationState: "principal-axis",
+    metalness: 0,
+    orbit: {
+      solution: "JPL SBDB orbit solution 10, epoch JD 2461200.5, 111 observations over 1993-2009",
+      epochJD: 2461200.5,
+      aAU: 24.50511638516284,
+      e: 0.5183868586909086,
+      iDeg: 15.65459788833251,
+      nodeDeg: 31.25704516888737,
+      argPeriDeg: 170.3580626917882,
+      meanAnomalyDeg: 102.1502944814468,
+      meanMotionDegPerDay: meanMotion(24.50511638516284),
+    },
+    /* A 0.5-magnitude brightness swing seen in the 1990s says it is
+     * elongated, at least 1.58 : 1 (10^(0.5/2.5)). Drawn at exactly that,
+     * with b/c set to 1.2 (chosen), scaled to Herschel's 57 km volume. */
+    shape: {
+      lobes: ellipsoid(82.2, 52.0, 43.3),
+      neck: 1,
+      relief: 0.030,
+      grain: 0.012,
+      craterCount: 56,
+      craterMin: 0.026,
+      craterMax: 0.140,
+      craterDepth: 0.020,
+      boulders: 0,
+      seed: 7066,
+    },
+    surfaceEvidence: "Never resolved. Size and albedo from Herschel-PACS (Duffard et al. 2014, A&A 564, A92); elongation from a 0.5 mag brightness variation. Surface from an artist's impression supplied for it",
+    info: {
+      population: "Centaurs · 11.8-37.2 AU, from between Saturn and Uranus to beyond Neptune",
+      diameter: "57 km at albedo 0.086 — Herschel-PACS, Duffard et al. 2014 (Spitzer: 60 km at 0.065, Stansberry et al. 2007). Drawn elongated, at least 1.58 : 1",
+      rotationPeriod: "Not measured — no rotational lightcurve has been obtained. Drawn turning at the scene's 6-hour reference",
+      orbitalSpeed: "6.0 km/s on average · one orbit takes 121 years — from the JPL element set",
+      gravity: "Unknown; escape velocity a few tens of m/s at icy density",
+      surfaceEvidence: "A point of light. The colour is measured; the shape is the least elongation its brightness swing allows; the surface drawn is an artist's impression",
+      roughness: "unknown",
+      description:
+        "Nessus is the other red one. Its B-R colour of 1.85 puts it with Pholus on the red side of the Centaur colour gap — the unexplained split that makes Centaurs either grey or very red with almost nothing in between — and well away from Chiron, Chariklo, Asbolus, Hylonome and Bienor, which are all on the grey side. It was found by Spacewatch at Kitt Peak in April 1993, the third Centaur ever discovered, and named for the centaur Heracles killed with a poisoned arrow. Its orbit runs from between Saturn and Uranus out past Neptune and back every 121 years; Saturn controls its closest approach, and its orbit has a half-life of about 4.9 million years before a giant planet changes it completely. No coma has ever been seen on it, so the scene draws it as a bare rock. In 1990s photometry it brightened and dimmed by half a magnitude, which means an elongated body — but nobody has yet timed a full turn.",
+    },
+  },
+  {
+    id: "asbolus",
+    name: "Asbolus",
+    designation: "8405 Asbolus (1995 GO)",
+    classification: "Centaur · a fresh crater seen from Earth",
+    detail: "Hubble saw its surface change as it turned | 1998",
+    diameterKm: 85,
+    diameterLabel: "≈92 × 85 × 78 km drawn; 85 km from Herschel-PACS",
+    albedo: 0.056,
+    /* B-R 1.228 +/- 0.057 (Peixinho et al. 2012) -- grey side. */
+    chroma: [1.099, 1.007, 0.895],
+    rotationHours: 8.9351,
+    rotationState: "principal-axis",
+    metalness: 0,
+    orbit: {
+      solution: "JPL SBDB orbit solution 49, epoch JD 2461200.5, 507 observations over 1995-2025",
+      epochJD: 2461200.5,
+      aAU: 18.05538325863325,
+      e: 0.6173477845441102,
+      iDeg: 17.61794439245444,
+      nodeDeg: 6.071492125526565,
+      argPeriDeg: 290.4882833178889,
+      meanAnomalyDeg: 112.3214546365659,
+      meanMotionDegPerDay: meanMotion(18.05538325863325),
+    },
+    /* Shape not measured; a mild 1.08 : 1 : 0.92 ellipsoid (chosen) so it
+     * does not read as a sphere, scaled to Herschel's 85 km. */
+    shape: {
+      lobes: ellipsoid(91.8, 85.0, 78.2),
+      neck: 1,
+      relief: 0.030,
+      grain: 0.011,
+      craterCount: 70,
+      craterMin: 0.024,
+      craterMax: 0.150,
+      craterDepth: 0.024,
+      boulders: 0,
+      seed: 8405,
+    },
+    surfaceEvidence: "Never resolved. Size from Herschel-PACS (Duffard et al. 2014); the bright icy patch from Hubble NICMOS spectra taken as it turned (Kern et al. 2000, ApJ 542, L155). Relief borrowed from Mathilde",
+    info: {
+      population: "Centaurs · 6.9-29.2 AU, from just outside Jupiter's orbit nearly to Neptune's",
+      diameter: "85 ± 9 km at albedo 0.056 — Herschel-PACS, Duffard et al. 2014 (JPL lists 66 km at 0.13 from older work)",
+      rotationPeriod: "8.9351 h — LCDB (Warner et al. 2009)",
+      orbitalSpeed: "7.0 km/s on average · one orbit takes 77 years — from the JPL element set",
+      gravity: "Unknown; escape velocity a few tens of m/s at icy density",
+      surfaceEvidence: "A point of light — but one whose spectrum changed as it turned, which is how a crater was found on a body nobody can see",
+      roughness: "unknown",
+      description:
+        "In 1998 Hubble took spectra of Asbolus as it rotated and found that one face was different from the rest: brighter, and showing water ice the other side did not. The best reading is a fresh impact crater — less than ten million years old — that has punched through the dark, radiation-cooked crust to the clean ice underneath. It is one of the very few surface features ever detected on a body that is only ever a point of light. Asbolus was found by Spacewatch in April 1995 and named for the centaur who read omens in the flight of birds. Its orbit is one of the wildest here: from just outside Jupiter's orbit out nearly to Neptune's every 77 years, with Saturn and Neptune both pulling at it, and a half-life on that path of under a million years. No coma has ever been seen, so the scene draws it as a bare rock.",
+    },
+  },
+  {
+    id: "hylonome",
+    name: "Hylonome",
+    designation: "10370 Hylonome (1995 DW2)",
+    classification: "Centaur · on the edge of Neptune's reach",
+    detail: "Rides just inside Neptune's orbit | Spitzer + Herschel",
+    diameterKm: 74,
+    diameterLabel: "≈79 × 74 × 69 km drawn; 74 ± 16 km from Spitzer and Herschel",
+    albedo: 0.051,
+    /* B-R 1.153 +/- 0.081 (Peixinho et al. 2012) -- grey side, nearly the
+     * colour of sunlight. */
+    chroma: [1.066, 1.005, 0.930],
+    rotationHours: null,
+    rotationState: "principal-axis",
+    metalness: 0,
+    orbit: {
+      solution: "JPL SBDB orbit solution 9, epoch JD 2461200.5, 78 observations over 1995-2010",
+      epochJD: 2461200.5,
+      aAU: 24.94639898718384,
+      e: 0.2466388431178337,
+      iDeg: 4.144566098499054,
+      nodeDeg: 178.1818133924658,
+      argPeriDeg: 5.379027768059655,
+      meanAnomalyDeg: 90.24743668201118,
+      meanMotionDegPerDay: meanMotion(24.94639898718384),
+    },
+    shape: {
+      lobes: ellipsoid(79.2, 74.0, 68.8),
+      neck: 1,
+      relief: 0.026,
+      grain: 0.010,
+      craterCount: 60,
+      craterMin: 0.024,
+      craterMax: 0.130,
+      craterDepth: 0.020,
+      boulders: 0,
+      seed: 10370,
+    },
+    surfaceEvidence: "Never resolved. Size and albedo from Spitzer and Herschel thermal emission (Duffard et al. 2014). Shape not measured; relief borrowed from Mathilde",
+    info: {
+      population: "Centaurs · 18.8-31.1 AU, from Uranus's orbit to just past Neptune's",
+      diameter: "74 ± 16 km at albedo 0.051 ± 0.030 — Spitzer and Herschel, Duffard et al. 2014",
+      rotationPeriod: "Not measured. Drawn turning at the scene's 6-hour reference",
+      orbitalSpeed: "6.0 km/s on average · one orbit takes 125 years — from the JPL element set",
+      gravity: "Unknown; escape velocity a few tens of m/s at icy density",
+      surfaceEvidence: "A point of light. Size and darkness from the heat it gives off; nothing else is known",
+      roughness: "unknown",
+      description:
+        "Hylonome lives at the outer edge of the Centaur zone, on an orbit that runs from Uranus's distance out to just past Neptune's every 125 years — nearly circular by Centaur standards and almost flat to the planets. It is a Kuiper Belt object only just let in: Neptune handed it inward, and over the next few million years Uranus and Saturn will pass it further in, or throw it out. Found by David Jewitt and Jane Luu at Mauna Kea in February 1995 and named for a centaur of Greek myth, it is dark — about 5 per cent of the light falling on it comes back — and grey, nearly the colour of sunlight. No coma has ever been seen, so the scene draws it as a bare rock. It has not been caught passing in front of a star cleanly enough to measure its shape.",
+    },
+  },
+  {
+    id: "bienor",
+    name: "Bienor",
+    designation: "54598 Bienor (2000 QC243)",
+    classification: "Centaur · stretched, and perhaps two",
+    detail: "Its lightcurve is changing | occultation 11 January 2019",
+    diameterKm: 150,
+    diameterLabel: "≈278 × 125 × 97 km drawn; 150 ± 20 km area-equivalent from the 2019 occultation",
+    albedo: 0.05,
+    /* B-R 1.158 +/- 0.075 (Peixinho et al. 2012) -- grey side. */
+    chroma: [1.068, 1.005, 0.927],
+    /* 9.1719 +/- 0.0002 h (Fernández-Valenzuela et al. 2023). */
+    rotationHours: 9.1719,
+    rotationState: "principal-axis",
+    metalness: 0,
+    /* Pole from the change in its lightcurve amplitude over 2000-2016,
+     * Fernández-Valenzuela et al. 2017 (MNRAS 466, 4147): lambda 35 +/- 8,
+     * beta 50 +/- 3, ecliptic. */
+    poleEclipticDeg: { lambda: 35, beta: 50 },
+    orbit: {
+      solution: "JPL SBDB orbit solution 83, epoch JD 2461200.5, 2171 observations over 1953-2026",
+      epochJD: 2461200.5,
+      aAU: 16.60279962411079,
+      e: 0.2056400817638726,
+      iDeg: 20.71952894460205,
+      nodeDeg: 337.8122874820367,
+      argPeriDeg: 152.5796331724681,
+      meanAnomalyDeg: 351.637907370447,
+      meanMotionDegPerDay: meanMotion(16.60279962411079),
+    },
+    /* b/a = 0.45 +/- 0.05 (Fernández-Valenzuela et al. 2017); c/a = 0.35 is
+     * the Jacobi figure at that b/a (chosen, as Pholus's third axis is),
+     * scaled to the 2019 occultation's 150 km. */
+    shape: {
+      lobes: ellipsoid(277.7, 125.0, 97.2),
+      neck: 1,
+      /* Round 38 ("looks like plain"): relief and craters raised to
+       * Chariklo's level -- a 150 km primitive body keeps every crater it
+       * has ever taken. */
+      relief: 0.034,
+      grain: 0.014,
+      craterCount: 150,
+      craterMin: 0.020,
+      craterMax: 0.170,
+      craterDepth: 0.032,
+      boulders: 0,
+      seed: 54598,
+    },
+    surfaceEvidence: "Never resolved. Outline from the stellar occultation of 11 January 2019 (Fernández-Valenzuela et al. 2023, A&A 669, A112); elongation and pole from lightcurves (2017). Relief borrowed from Mathilde",
+    info: {
+      population: "Centaurs · 13.2-20.0 AU, between Saturn and Uranus",
+      diameter: "150 ± 20 km area-equivalent — occultation of 11 January 2019, Fernández-Valenzuela et al. 2023 (thermal: 181 ± 8 km). Drawn at b/a = 0.45",
+      rotationPeriod: "9.1719 ± 0.0002 h — Fernández-Valenzuela et al. 2023",
+      orbitalSpeed: "7.3 km/s on average · one orbit takes 68 years — from the JPL element set",
+      gravity: "Density ≈ 0.6 g/cm³ if its stretched shape is the one its spin allows (Fernández-Valenzuela et al. 2017)",
+      surfaceEvidence: "A point of light. Its shadow was timed from four sites in 2019; its shape and pole come from twenty years of changing lightcurves",
+      roughness: "unknown",
+      description:
+        "Bienor's brightness used to swing hugely as it turned and now barely swings at all. The swing has shrunk over twenty years because we are seeing it from a different angle as it moves round its orbit: it is a long, stretched body — less than half as wide as it is long — whose pole is slowly tipping towards us, so it no longer shows its long side and its end alternately. On 11 January 2019 it passed in front of a star and five telescopes at four sites timed its shadow, giving a size of 150 km across — about 30 km less than its heat had suggested, and one of the clues that it might really be two bodies touching or orbiting very close: a close binary would explain both. No rings were seen, though rings as faint as Chariklo's could still have been missed. It is grey, nearly the colour of sunlight, and no coma has ever been seen, so the scene draws it as a bare rock.",
+    },
+  },
 ]);

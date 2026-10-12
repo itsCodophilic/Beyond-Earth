@@ -532,6 +532,18 @@ export function createCelestialDetailsPanel() {
           </button>
         </section>
 
+        <section class="planet-details__aurora planet-details__radar" data-planet-field="radar" hidden>
+          <p class="planet-details__aurora-eyebrow" data-cosmic-text>Beneath the clouds · radar</p>
+          <h3 data-cosmic-text>What the clouds hide</h3>
+          <p data-cosmic-text>No camera working in visible light has ever seen Venus's ground from space: the sulphuric-acid clouds never part, which is why Venus is a pale cream ball. Radar goes straight through them. NASA's Magellan orbiter (1990–1994) mapped about 98% of the surface by radar: lava plains, thousands of volcanoes, and the highland "continents" Ishtar Terra and Aphrodite Terra.</p>
+          <h3 data-cosmic-text>Why it is orange</h3>
+          <p data-cosmic-text>Radar has no colour. NASA coloured its Magellan globe orange after the photographs the Soviet Venera 13 and 14 landers took on the ground in 1982, where sunlight arrives orange after passing through the clouds.</p>
+          <button type="button" class="planet-details__uv-button" data-radar-view>
+            <span class="planet-details__uv-glyph" aria-hidden="true"></span>
+            See beneath the clouds
+          </button>
+        </section>
+
         <details class="planet-details__advanced">
           <summary>
             <span>
@@ -624,11 +636,18 @@ export function createCelestialDetailsPanel() {
     size: "Size vs Earth",
     diameter: "Physical diameter",
     orbital: "Orbital period / motion",
+    rotation: "Rotation period · day length",
+    gravity: "Gravity",
+    surface: "Surface evidence",
+    advancedSummary: "Atmosphere, climate, rotation, gravity, rings, surface evidence, and story",
   });
+  const advancedLabel = (field) => layer.querySelector(`[data-planet-field="${field}"] > span`);
+  const advancedSummaryLabel = layer.querySelector(".planet-details__advanced summary small");
   const auroraSection = layer.querySelector('[data-planet-field="aurora"]');
   const auroraEyebrow = layer.querySelector("#planet-details-aurora-eyebrow");
   const auroraWhyHeading = layer.querySelector("#planet-details-aurora-why-heading");
   const auroraUvButton = auroraSection.querySelector("[data-uv-view]");
+  const radarSection = layer.querySelector('[data-planet-field="radar"]');
   const auroraFields = Object.freeze({
     how: layer.querySelector("#planet-details-aurora-how"),
     poles: layer.querySelector("#planet-details-aurora-poles"),
@@ -940,6 +959,11 @@ export function createCelestialDetailsPanel() {
     if (sizeLabel) sizeLabel.textContent = labels.size;
     if (diameterLabel) diameterLabel.textContent = labels.diameter;
     if (orbitalLabel) orbitalLabel.textContent = labels.orbital;
+    ["rotation", "gravity", "surface"].forEach((field) => {
+      const node = advancedLabel(field);
+      if (node) node.textContent = labels[field];
+    });
+    if (advancedSummaryLabel) advancedSummaryLabel.textContent = labels.advancedSummary;
     layer.classList.toggle("is-region", Boolean(details.isRegion));
     writeCoreField("mass", details.massRelative);
     writeCoreField("size", details.sizeRelative);
@@ -962,6 +986,9 @@ export function createCelestialDetailsPanel() {
      */
     Object.keys(advancedFields).forEach((key) => writeAdvancedField(key, details[key]));
     auroraSection.hidden = !details.aurora;
+    /* Round 42: Venus only -- the radar view beneath its clouds
+     * (scene/venusRadarView.js). */
+    radarSection.hidden = details.name !== "Venus";
     /* Earth's aurora is visible light: no ultraviolet view for it, and its
      * third heading says what an eye sees instead (tenth final round). */
     const visibleOnly = Boolean(details.aurora?.visible);
@@ -1150,6 +1177,14 @@ export function createCelestialDetailsPanel() {
    * takes over (main.js, scene/ultravioletView.js) -- the view is a place to
    * look, not more text, so it is not drawn inside the card.
    */
+  /* Round 42: "See beneath the clouds" (Venus), the same way. */
+  layer.addEventListener("click", (event) => {
+    if (!event.target.closest("[data-radar-view]")) return;
+    event.preventDefault();
+    hide({ restoreFocus: false });
+    window.dispatchEvent(new CustomEvent("beyond-earth:venus-radar", { detail: { on: true } }));
+  });
+
   layer.addEventListener("click", (event) => {
     const button = event.target.closest("[data-uv-view]");
     if (!button) return;

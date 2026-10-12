@@ -1330,3 +1330,120 @@ body.is-tour-open .cgloss__launch { animation: cdec-launch-turn 6s linear infini
 body.is-space-mode .comet-placement { display: none; }
 /* Round 9: a Centaur that never glows, beside its "rings" badge. */
 .cboard__glow-badge.is-never { color: var(--cb-faint); border-style: dashed; }
+
+/* Final round: notes for layers switched on in the scene (the solar wind,
+   a magnetosphere), each with its own off switch -- ui/sceneLayerChips.js.
+   Stacked under the comet placement note. */
+.scene-layers {
+  position: fixed; top: 132px; right: clamp(16px, 3vw, 44px); z-index: 12;
+  display: flex; flex-direction: column; align-items: flex-end; gap: 8px;
+  pointer-events: none;
+}
+.scene-layers__chip.comet-placement { position: static; pointer-events: auto; border-color: rgba(159, 200, 255, 0.45); }
+body.is-space-mode .scene-layers, body.is-ultraviolet-view .scene-layers { display: none; }
+
+/* Final round: the explanations' "show it in the scene" buttons. */
+.cexp__actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+.cexp__action {
+  font: inherit; font-size: 0.78rem; padding: 8px 14px; border-radius: 10px; cursor: pointer;
+  color: #cffaf0; background: rgba(159, 240, 220, 0.08); border: 1px solid rgba(159, 240, 220, 0.55);
+}
+.cexp__action:hover, .cexp__action:focus-visible { background: rgba(159, 240, 220, 0.18); outline: none; }
+
+/* Round 38: the near-Earth families' explanations -- what they are made of
+   (hover a chip, ui/explainerView.js), and the "Not a belt" note. */
+.cexp__comp { display: flex; flex-direction: column; gap: 6px; margin: 2px auto 8px; max-width: 640px; width: 100%; }
+.cexp__comp-title { font-size: 0.68rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--cb-faint, rgba(200, 212, 228, 0.7)); text-align: center; }
+.cexp__comp-chips { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
+.cexp__chip {
+  font: inherit; display: inline-flex; flex-direction: column; align-items: center; gap: 1px;
+  padding: 5px 10px; border-radius: 9px; cursor: default;
+  color: #e7edf6; background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(200, 215, 235, 0.22);
+}
+.cexp__chip-label { font-size: 0.76rem; font-weight: 600; }
+.cexp__chip-level { font-size: 0.64rem; color: rgba(200, 212, 228, 0.72); }
+.cexp__chip.is-on, .cexp__chip:hover, .cexp__chip:focus-visible { border-color: rgba(159, 240, 220, 0.7); background: rgba(159, 240, 220, 0.1); outline: none; }
+/* 3 lines' worth, so hovering a longer chip does not push the buttons down. */
+.cexp__comp-line { margin: 0; font-size: 0.78rem; line-height: 1.45; color: #d6dee9; text-align: center; min-height: 4.35em; }
+.cexp__comp-line strong { color: #cffaf0; font-weight: 600; }
+.cexp__myth {
+  margin: 0 0 12px; padding: 10px 12px; border-radius: 10px;
+  background: rgba(255, 200, 120, 0.06); border: 1px solid rgba(255, 200, 120, 0.4);
+}
+.cexp__myth-title { margin: 0 0 4px; font-size: 0.8rem; color: #ffd9a0; letter-spacing: 0.02em; }
+.cexp__myth-title::before { content: "Misconception · "; color: rgba(255, 217, 160, 0.7); font-weight: 500; }
+.cexp__myth-text { margin: 0; font-size: 0.78rem; line-height: 1.5; color: #e2e8f1; }
+
+/* Round 38 (the owner: "the button at the bottom gets hidden ... that area
+   should be scrollable"). Every explanation's left column -- and Jupiter's
+   company, which uses the same column -- scrolls when a short window cannot
+   hold the diagram, its notes and its buttons; the canvas is also sized to
+   leave room for them (explainerView.js `fit`). `flex-shrink: 0` keeps each
+   part at its own height so the column scrolls instead of squashing them. */
+.cjup .cmoons__sky.cjup__sky { overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: rgba(159, 240, 220, 0.35) transparent; }
+.cjup .cmoons__sky.cjup__sky > * { flex-shrink: 0; }
+.cexp__actions { padding-bottom: 6px; }
+
+/* Round 38, second pass: a pickable dot's name on the board's diagrams
+   (explainerView.js `pickable`). */
+.cexp__pick-tip {
+  position: absolute; transform: translate(10px, -130%); pointer-events: none; white-space: nowrap;
+  padding: 4px 8px; border-radius: 7px; font-size: 0.72rem; color: #e9f6f2;
+  background: rgba(6, 12, 18, 0.88); border: 1px solid rgba(159, 240, 220, 0.5);
+}
+
+/* Round 39: a long, searchable fly-to list on an explanation (every rock of
+   a near-Earth family) -- explainerView.js `searchList`. */
+.cexp__search { margin-top: 18px; }
+.cexp__search-input {
+  width: 100%; box-sizing: border-box; margin: 6px 0 4px; padding: 9px 12px;
+  font: inherit; font-size: 0.86rem; color: #e9f0f7;
+  background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(200, 215, 235, 0.25); border-radius: 10px;
+}
+.cexp__search-input:focus { outline: none; border-color: rgba(159, 240, 220, 0.6); }
+.cexp__search-status { margin: 2px 0 8px; }
+.cexp__search-table { display: block; width: 100%; margin: 6px 0 8px; }
+
+/* Round 39, third pass: every near-Earth asteroid in one table, over the
+   family's page (ui/nearEarthTable.js). Only the rows in view exist. */
+.neotab {
+  position: absolute; inset: 0; z-index: 20;
+  display: grid; grid-template-rows: auto auto minmax(0, 1fr) auto; gap: 10px;
+  padding: 18px clamp(16px, 3vw, 40px) 14px;
+  background: rgb(4, 5, 11);
+}
+.neotab__head { display: flex; align-items: center; gap: 20px; }
+.neotab__titles { min-width: 0; }
+.neotab__title { margin: 0; }
+.neotab__count { margin: 4px 0 0; }
+.neotab__controls { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.neotab__search { flex: 1 1 340px; max-width: 640px; margin: 0; }
+.neotab__table { display: grid; grid-template-rows: auto minmax(0, 1fr); min-height: 0; border: 1px solid rgba(140, 170, 200, 0.18); border-radius: 12px; overflow: hidden; }
+.neotab__row {
+  display: grid; align-items: center;
+  grid-template-columns: minmax(150px, 1.5fr) 0.8fr 0.7fr 1.3fr 1fr 0.8fr 0.6fr;
+  gap: 8px; width: 100%; height: 40px; padding: 0 14px; box-sizing: border-box;
+  font: inherit; font-size: 0.8rem; text-align: left; color: #dbe4ef;
+  background: transparent; border: 0; border-bottom: 1px solid rgba(140, 170, 200, 0.08);
+  border-left: 3px solid var(--fam, transparent); cursor: pointer;
+}
+.neotab__rows .neotab__row:hover, .neotab__rows .neotab__row:focus-visible { background: rgba(159, 240, 220, 0.08); outline: none; }
+.neotab__row--head { height: 38px; background: rgba(255, 255, 255, 0.035); border-left-color: transparent; cursor: default; }
+.neotab__sort {
+  font: inherit; font-size: 0.66rem; letter-spacing: 0.08em; text-transform: uppercase; text-align: left;
+  color: rgba(200, 212, 228, 0.75); background: none; border: 0; padding: 0; cursor: pointer;
+}
+.neotab__sort[aria-sort="descending"], .neotab__sort[aria-sort="ascending"] { color: #cffaf0; }
+.neotab__sort[aria-sort="descending"]::after { content: " ▾"; }
+.neotab__sort[aria-sort="ascending"]::after { content: " ▴"; }
+.neotab__cell { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.neotab__cell--name { color: #fff; font-weight: 600; }
+.neotab__viewport { overflow-y: auto; overscroll-behavior: contain; min-height: 0; scrollbar-width: thin; scrollbar-color: rgba(159, 240, 220, 0.35) transparent; }
+.neotab__spacer { position: relative; }
+.neotab__rows { position: absolute; left: 0; right: 0; top: 0; }
+.neotab__foot { margin: 0; }
+@media (max-width: 760px) {
+  .neotab__row { grid-template-columns: minmax(120px, 1.5fr) 0.9fr 1.3fr; }
+  .neotab__cell--type, .neotab__cell--range, .neotab__cell--years, .neotab__cell--rot,
+  .neotab__row--head [data-sort="type"], .neotab__row--head [data-sort="range"], .neotab__row--head [data-sort="years"], .neotab__row--head [data-sort="rot"] { display: none; }
+}

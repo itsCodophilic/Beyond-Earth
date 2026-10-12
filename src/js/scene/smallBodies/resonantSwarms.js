@@ -331,6 +331,9 @@ export function createResonantSwarms({ model, auToScene, hoverTargets = null, ma
     ringRadius: auToScene(aJ),
     baseOpacity: 0.42,
     fade: 1,
+    /* Round 40: lit from the board ("Light them up"), as well as by
+     * hovering their region. */
+    lit: false,
   };
 }
 
@@ -341,10 +344,16 @@ export function createResonantSwarms({ model, auToScene, hoverTargets = null, ma
  * and the swarms are a smudge on the Sun's doorstep that says nothing, so
  * the clouds fade while Jupiter's orbit shrinks from 90 pixels across to 30
  * and are hidden outright (no draw calls) after that. A hovered population
- * is lifted to full brightness and larger points, eased.
+ * (or all three, lit from the board) is shown, with larger points, eased;
+ * at rest none is drawn (round 40).
  */
 const FADE_FULL_PX = 90;
 const FADE_GONE_PX = 30;
+/** The board's "Light them up": all three populations, or none. */
+export function lightResonantSwarms(swarms, on) {
+  if (swarms) swarms.lit = Boolean(on);
+}
+
 export function updateResonantSwarms(swarms, camera, viewportHeight) {
   if (!swarms || !camera) return;
   const distance = Math.max(1e-3, camera.position.length());
@@ -353,14 +362,40 @@ export function updateResonantSwarms(swarms, camera, viewportHeight) {
   const t = Math.min(1, Math.max(0, (ringPixels - FADE_GONE_PX) / (FADE_FULL_PX - FADE_GONE_PX)));
   const fade = t * t * (3 - 2 * t);
   swarms.fade = fade;
+  /*
+   * Round 40, second pass (the owner: "at a very far distance ... Trojans
+   * and Hildas invisible, but when we go close to the Sun they should be
+   * a little visible"). At rest: faint while Jupiter's orbit is under 500
+   * px across (the outer system and beyond), easing in to 0.16 once it is
+   * 1,400 px or more (the inner system, near the Sun), so the two clouds
+   * and the triangle are a hint where you are among them. 500, 1,400 and
+   * the opacities are chosen by eye; was 0.42 at every distance before
+   * round 40.
+   */
+  /* Third pass (the owner: "when not lit, make them a little visible from
+   * far away too, slightly"): a floor of 0.07 from afar -- a faint haze
+   * that says where they are -- rising to 0.16 close in. Still under the
+   * far fade, so they go with Jupiter's orbit when that is a speck. */
+  const resting = fade * (0.07 + 0.09 * THREE.MathUtils.smoothstep(ringPixels, 500, 1400));
   const layers = Object.values(swarms.layers);
   for (let i = 0; i < layers.length; i += 1) {
     const layer = layers[i];
-    if (layer.hilite !== layer.hiliteTarget) {
-      layer.hilite += (layer.hiliteTarget - layer.hilite) * 0.18;
-      if (Math.abs(layer.hilite - layer.hiliteTarget) < 0.01) layer.hilite = layer.hiliteTarget;
+    const target = swarms.lit ? 1 : layer.hiliteTarget;
+    if (layer.hilite !== target) {
+      layer.hilite += (target - layer.hilite) * 0.18;
+      if (Math.abs(layer.hilite - target) < 0.01) layer.hilite = target;
     }
-    const opacity = swarms.baseOpacity * fade * (1 + 1.2 * layer.hilite);
+    /*
+     * Round 40 (the owner: "should even they be that visible?"). No: a
+     * typical Trojan is magnitude 15 or fainter even from Earth, and none of
+     * them could be seen from anywhere in this scene. So, as for the
+     * Centaurs (populationClouds.js), they are no longer bright at rest: a
+     * swarm shows fully only while its region is hovered or it is lit from
+     * the board, and otherwise only faintly, close in (`resting` above).
+     * The named Trojans and Hildas are bodies and stay. Was 0.42 at rest.
+     */
+    const lit = swarms.baseOpacity * fade * layer.hilite * (1 + 1.2 * layer.hilite);
+    const opacity = Math.max(lit, resting);
     layer.points.visible = opacity > 0.002;
     if (Math.abs(layer.material.opacity - opacity) > 0.002) layer.material.opacity = opacity;
     const size = 1.6 + 1.2 * layer.hilite;

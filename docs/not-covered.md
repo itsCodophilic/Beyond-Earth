@@ -227,6 +227,15 @@ Ganymede is the mechanism behind two events already in the roster and is
 currently invisible. Solar System formation as a historical timeline.
 Interstellar visitors.
 
+**Update, rounds 36–37:** built — magnetospheres and radiation belts (as
+labelled diagrams, captioned as giving off no visible light), seasons, tidal
+locking, the Laplace resonance, the solar wind and heliosheath, the spacecraft,
+near-Earth families, every planet's Trojans, the Kirkwood gaps and families
+(as an explanation; the 3D belt is frozen) and the formation timeline.
+Interstellar visitors are space events. Still absent: the gaps and families
+drawn in the 3D belt itself, and real surfaces for Vesta, Pallas, Hygiea and
+Psyche — all of which live in the frozen `asteroidBelt.js`.
+
 ---
 
 ## One line to take away

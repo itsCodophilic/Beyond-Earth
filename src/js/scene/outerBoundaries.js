@@ -217,6 +217,34 @@ function computeShellShapes() {
 const SHELL_SHAPES = computeShellShapes();
 
 /*
+ * Where a drawn heliosphere shell is along a direction from the Sun, in
+ * scene units: the ray from the origin through the ellipsoid each shell is
+ * drawn as (semi-axes flank, flank, semiZ, centred `centreZ` down the tail).
+ * Final round: written for the spacecraft layer and the solar wind, which
+ * round 38 removed and archived (docs/archive/space-events-coming-soon/);
+ * kept for the planned solar-wind space event. `direction` is any non-zero
+ * scene-space vector.
+ */
+export function heliosphereRadiusAlong(direction, id) {
+  const shape = SHELL_SHAPES.get(id);
+  if (!shape) return null;
+  const len = Math.hypot(direction.x, direction.y, direction.z) || 1;
+  const dx = direction.x / len;
+  const dy = direction.y / len;
+  const dz = direction.z / len;
+  const a = shape.flank;
+  const c = shape.semiZ;
+  const z0 = shape.centreZ;
+  // (t dx / a)^2 + (t dy / a)^2 + ((t dz - z0) / c)^2 = 1
+  const A = (dx * dx + dy * dy) / (a * a) + (dz * dz) / (c * c);
+  const B = (-2 * dz * z0) / (c * c);
+  const C = (z0 * z0) / (c * c) - 1;
+  const disc = B * B - 4 * A * C;
+  if (disc < 0) return null;
+  return (-B + Math.sqrt(disc)) / (2 * A);
+}
+
+/*
  * Mote counts went up with the shell. The cloud now spans 3,723 to 6,311
  * scene units rather than 2,965 to 3,465 -- roughly five times the volume --
  * and the same number of points spread through it is a thinner scattering than
@@ -403,6 +431,13 @@ function createOortMotes(count) {
   points.renderOrder = -39;
   points.frustumCulled = false;
   return points;
+}
+
+/* What a hovered id lights: itself, and for the heliosheath both of the
+ * boundaries that bracket it. */
+function litBy(id, activeId) {
+  if (id === activeId) return true;
+  return activeId === "heliosheath" && (id === "termination-shock" || id === "heliopause");
 }
 
 /* --------------------------------------------------------------- regions */
@@ -627,8 +662,13 @@ function createRegionMarkers({ group, hoverTargets }) {
      */
     const previous = index > 0 ? auToSceneRadius(REGIONS[index - 1].au) : radius * 0.94;
     const next = index < REGIONS.length - 1 ? auToSceneRadius(REGIONS[index + 1].au) : radius * 1.10;
-    const inner = Math.max(radius - (radius - previous) * 0.45, radius * 0.965);
-    const outer = Math.min(radius + (next - radius) * 0.45, radius * 1.05);
+    /* Final round: the gap between the termination shock and the
+     * heliopause now holds a third band, the heliosheath's (below), so
+     * those two give it the middle 40 per cent instead of 10. */
+    const towardIn = region.id === "heliopause" ? 0.3 : 0.45;
+    const towardOut = region.id === "termination-shock" ? 0.3 : 0.45;
+    const inner = Math.max(radius - (radius - previous) * towardIn, radius * 0.965);
+    const outer = Math.min(radius + (next - radius) * towardOut, radius * 1.05);
 
     const band = new THREE.Mesh(
       new THREE.RingGeometry(inner, outer, 200, 1),
@@ -690,9 +730,130 @@ function createRegionMarkers({ group, hoverTargets }) {
     hoverTargets?.push(band);
   });
 
+  /*
+   * Final round (the owner: "do all buddy everything at once" -- the
+   * heliosphere "finished: the solar wind and the heliosheath as their own
+   * objects"). The heliosheath is not a boundary but the space between two:
+   * the stopped, hot, slowed solar wind between the termination shock and
+   * the heliopause. It gets no ring of its own -- the two rings already
+   * bracket it -- only a band in the gap between their bands, and hovering
+   * it lights both rings and both shells, which is exactly its extent.
+   */
+  {
+    const ts = auToSceneRadius(85);
+    const hp = auToSceneRadius(120);
+    /*
+     * Round 38, second pass (Prompts.md: "when i zoomed out and i am near
+     * heliosphere region i don't see Heliosheath when hovered anywhere
+     * around it"). The scene's distance curve puts 85 AU at 2,590 units and
+     * 120 AU at 2,633: the whole heliosheath is 43 units of a 2,600-unit
+     * radius, and its band was the middle 40% of that -- 17 units, two or
+     * three pixels from where the heliosphere is in view, with the
+     * scattered disk's and the detached objects' bands on either side. It
+     * was there; it could not be found.
+     *
+     * Now (a) the band is the whole gap between the two rings, which is
+     * exactly what the heliosheath is; (b) it never gets thinner on screen
+     * than 26 px -- `updateOuterBoundaries` widens it about its middle as
+     * the camera pulls back (`fitHeliosheathBand`); and (c) where it
+     * overlaps another band it wins (`pickPriority`, read by main.js
+     * `pickRegionCandidate`). The two boundary rings stay hoverable on
+     * their outer sides, and in full whenever the camera is close enough
+     * for the gap itself to be 26 px.
+     */
+    const inner = ts;
+    const outer = hp;
+    const band = new THREE.Mesh(
+      new THREE.RingGeometry(inner, outer, 200, 1),
+      new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false, colorWrite: false, side: THREE.DoubleSide }),
+    );
+    band.name = "The heliosheath region field";
+    group.userData.heliosheathBand = band;
+    band.rotation.x = Math.PI * 0.5;
+    band.renderOrder = -90;
+    markPointerProxy(band);
+    applyShellShape(band, "termination-shock", { flat: true });
+    const sheath = HELIOSHEATH;
+    band.userData = {
+      name: sheath.name,
+      detail: sheath.detail,
+      isRegion: true,
+      isOuterBoundary: true,
+      regionId: sheath.id,
+      visualRadius: (outer - inner) * 0.5,
+      focusVisualRadius: (inner + outer) * 0.5,
+      pickPriority: 1,
+      bandMid: (inner + outer) * 0.5,
+      bandHalf: (outer - inner) * 0.5,
+      bandBuiltHalf: (outer - inner) * 0.5,
+      setHovered(active) {
+        group.userData.hiliteTarget = active ? 1 : 0;
+        if (active) group.userData.hiliteId = sheath.id;
+      },
+      info: {
+        type: sheath.type,
+        description: sheath.lede,
+        diameter: sheath.span,
+        orbitalSpeed: sheath.period,
+        sizeComparison: sheath.population,
+      },
+      region: {
+        systemName: "The heliosphere",
+        subtitle: sheath.subtitle,
+        lede: sheath.lede,
+        span: sheath.span,
+        period: sheath.period,
+        population: sheath.population,
+        labels: sheath.labels,
+        sections: sheath.sections,
+        members: sheath.members,
+      },
+      ringData: {
+        systemName: "The heliosphere",
+        order: "Between the first two boundaries, from the Sun outward",
+        character: sheath.type,
+        description: sheath.lede,
+        radialRange: sheath.span,
+        motion: sheath.period,
+      },
+    };
+    group.add(band);
+    markers.push(band);
+    hoverTargets?.push(band);
+  }
+
   group.userData.boundaryRings = rings;
   return markers;
 }
+
+/* The heliosheath's card. Crossing dates and distances: NASA/JPL Voyager
+ * mission pages (termination shock: Voyager 1 December 2004 at 94 AU,
+ * Voyager 2 August 2007 at 84 AU; heliopause: 25 August 2012 at 121.6 AU and
+ * 5 November 2018 at 119 AU). The "magnetic bubbles" are Opher et al. 2011
+ * (ApJ 734, 71), the stagnation region Krimigis et al. 2011 (Nature 474,
+ * 359). */
+const HELIOSHEATH = Object.freeze({
+  id: "heliosheath",
+  name: "The heliosheath",
+  type: "Heliosphere region · the stopped solar wind",
+  detail: "Between the termination shock and the heliopause — slowed, heated solar wind turning to flow down the tail",
+  span: "About 85 – 120 AU towards the Sun's direction of travel · far deeper down the tail",
+  period: "Solar wind slowed from ~400 km/s to ~100 km/s and less, heated to around a million kelvin",
+  population: "Nothing you could see — a hot, thin, turbulent gas of charged particles",
+  labels: { size: "What you would see", diameter: "Distance", orbital: "What it is like" },
+  subtitle: "The solar wind after it has hit the brakes",
+  lede: "Past the termination shock the solar wind is no longer a wind. It has slowed to a fraction of its speed, heated up, and become a thick, turbulent layer of plasma that piles up against the interstellar gas and is swept round to stream away down the heliosphere's tail. Both Voyagers spent years crossing it — and both found it stranger than anyone expected.",
+  sections: [
+    ["Nothing to see, again", "Like the two boundaries either side of it, the heliosheath gives off no light you could see. It is a layer of gas thinner than any laboratory vacuum, defined by what instruments measure in it: slower, hotter, denser wind, and a magnetic field folded on itself."],
+    ["How long it took to cross", "Voyager 1 entered it in December 2004 at 94 AU and left it on 25 August 2012 at 121.6 AU — nearly eight years. Voyager 2 entered in August 2007 at 84 AU and left on 5 November 2018 at 119 AU — eleven years. The two crossings were at different distances because the heliosphere is not a sphere and breathes in and out with the Sun's 11-year cycle."],
+    ["What they found", "Not the smooth layer the models drew. Around 2010-2012 Voyager 1 found the outward flow had stopped altogether — a 'stagnation region' where the wind was going nowhere. The folded magnetic field near the edge seems to break into a froth of magnetic bubbles, each perhaps 1 AU across, rather than lying in smooth lines."],
+    ["Where the wind goes", "Out here the Sun's motion through the galaxy matters: the heliosheath's gas is turned and swept back, round the heliosphere, into a long tail on the side away from the Sun's direction of travel — which is why the band drawn here is a cross-section of a squashed, tailed shape and not a circle."],
+  ],
+  members: [
+    { body: "Voyager 1", order: "Crossed 2004 – 2012", character: "First through", range: "94 → 121.6 AU", note: "Its plasma instrument had failed, so the heliopause was found by the sudden rise in plasma density its radio instrument picked up.", motion: "Now 169 AU out and beyond it" },
+    { body: "Voyager 2", order: "Crossed 2007 – 2018", character: "Measured it directly", range: "84 → 119 AU", note: "Crossed with a working plasma instrument and measured the boundary as it went through.", motion: "Now 142 AU out and beyond it" },
+  ],
+});
 
 export function createOuterBoundaries({
   world,
@@ -734,6 +895,32 @@ export function createOuterBoundaries({
   return group;
 }
 
+/*
+ * Round 38, second pass: keep the heliosheath's hover band at least 26 px
+ * across on screen (13 px either side of its middle). Rebuilt only when
+ * the width it needs changes by a fifth -- a 200-segment ring, a few times
+ * during a long zoom, never while the camera is still.
+ */
+const _sheathCamera = new THREE.Vector3();
+const _sheathCentre = new THREE.Vector3();
+const _sheathScale = new THREE.Vector3();
+function fitHeliosheathBand(system, camera, projScale) {
+  const band = system.userData.heliosheathBand;
+  if (!band) return;
+  const data = band.userData;
+  _sheathCamera.setFromMatrixPosition(camera.matrixWorld);
+  band.getWorldPosition(_sheathCentre);
+  band.getWorldScale(_sheathScale);
+  const unitsToWorld = Math.max(1e-6, Math.max(_sheathScale.x, _sheathScale.y));
+  const pixelsPerUnit = (projScale * unitsToWorld) / Math.max(1e-6, _sheathCamera.distanceTo(_sheathCentre));
+  const wanted = Math.min(data.bandMid * 0.2, Math.max(data.bandHalf, 13 / pixelsPerUnit));
+  if (Math.abs(wanted - data.bandBuiltHalf) < data.bandBuiltHalf * 0.2) return;
+  band.geometry.dispose();
+  band.geometry = new THREE.RingGeometry(data.bandMid - wanted, data.bandMid + wanted, 200, 1);
+  data.bandBuiltHalf = wanted;
+  data.visualRadius = wanted;
+}
+
 export function updateOuterBoundaries(system, motionScale = 1, camera = null) {
   if (!system) return;
 
@@ -746,6 +933,7 @@ export function updateOuterBoundaries(system, motionScale = 1, camera = null) {
       const markerUniforms = ring.userData.markerUniforms;
       if (markerUniforms) markerUniforms.uMarkerProjScale.value = projScale;
     });
+    fitHeliosheathBand(system, camera, projScale);
   }
 
   const target = system.userData.hiliteTarget ?? 0;
@@ -764,11 +952,11 @@ export function updateOuterBoundaries(system, motionScale = 1, camera = null) {
   system.userData.shells?.forEach((shell) => {
     const uniforms = shell.material?.uniforms;
     if (!uniforms?.uHilite) return;
-    uniforms.uHilite.value = shell.userData.shellId === activeId ? hilite : 0;
+    uniforms.uHilite.value = litBy(shell.userData.shellId, activeId) ? hilite : 0;
   });
   system.userData.boundaryRings?.forEach((ring) => {
     const base = ring.userData.baseOpacity ?? (ring.userData.baseOpacity = ring.material.opacity);
-    const active = ring.userData.boundaryId === activeId;
+    const active = litBy(ring.userData.boundaryId, activeId);
     ring.material.opacity = active ? base * (1 + hilite * 2.2) : base;
   });
 

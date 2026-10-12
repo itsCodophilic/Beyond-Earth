@@ -167,66 +167,29 @@ function createMercuryMaterial(texture) {
         vec3 lightDirection = normalize(-vWorldPosition);
         vec3 viewDirection = normalize(cameraPosition - vWorldPosition);
 
+        /*
+         * Round 41 (the owner: "do the same for Mercury"). The surface is now
+         * MESSENGER's own global mosaic (PIA16298, config/textures.js), shown
+         * as it is. The earlier shader painted over the old map: three noise
+         * octaves, a warm "Caloris" tint at an invented place, six invented
+         * blue-white "hollow" clusters and random fresh-ejecta flecks -- none
+         * of them where Mercury has them.
+         *
+         * Mercury in visible light is a slightly warm grey (MESSENGER
+         * true-colour views; geometric albedo 0.142, NASA Mercury Fact
+         * Sheet). The mosaic is greyscale, so a faint warm tint is applied
+         * (R 1.04, B 0.93, chosen by eye), and its mean (0.18 linear) is
+         * scaled by 2.4 to this shader's lighting scale -- the mean the old
+         * composite had, so Mercury is as bright as before overall.
+         */
         vec3 observed = texture2D(uMap, vUv).rgb;
-        float observedLuma = dot(observed, vec3(0.2126, 0.7152, 0.0722));
-        float broadRock = fbm3D(direction * 5.4);
-        float mediumRock = fbm3D(direction * 21.0 + vec3(3.1, 9.7, 5.2));
-        float fineRock = fbm3D(direction * 88.0 + vec3(11.4, 2.8, 17.3));
-
-        // MESSENGER true-colour views show a subdued grey-brown world. Preserve
-        // that neutral visible-light character while increasing local contrast
-        // so the terrain remains readable under the Sun's white light.
-        vec3 charcoalRock = vec3(0.205, 0.198, 0.190);
-        vec3 middleRock = vec3(0.455, 0.430, 0.398);
-        vec3 sunlitRock = vec3(0.715, 0.675, 0.610);
-        float terrainValue = clamp(
-          observedLuma * 0.64
-          + broadRock * 0.22
-          + mediumRock * 0.11
-          + fineRock * 0.03,
-          0.0,
-          1.0
-        );
-        vec3 colour = mix(charcoalRock, middleRock, smoothstep(0.16, 0.52, terrainValue));
-        colour = mix(colour, sunlitRock, smoothstep(0.48, 0.88, terrainValue));
-
-        // Retain restrained mineral colour variations from the observed map,
-        // avoiding the saturated false-colour appearance of scientific maps.
-        vec3 observedChroma = observed / max(observedLuma, 0.08);
-        colour *= mix(vec3(1.0), clamp(observedChroma, 0.78, 1.20), 0.24);
-
-        // Caloris-like smooth volcanic plains receive a subtle warm tint, while
-        // low-reflectance material remains dark brown-charcoal around basins.
-        float caloris = sphericalMask(direction, vec3(-0.78, 0.22, 0.58), 0.18, 0.34);
-        float calorisInterior = sphericalMask(direction, vec3(-0.78, 0.22, 0.58), 0.0, 0.22);
-        colour = mix(colour, vec3(0.61, 0.535, 0.435), calorisInterior * 0.34);
-        float lowReflectance = smoothstep(0.63, 0.82, fbm3D(direction * 9.0 + vec3(21.0)))
-          * (0.42 + caloris * 0.35);
-        colour = mix(colour, vec3(0.155, 0.145, 0.140), lowReflectance * 0.54);
-
-        // Mercury's hollows are shallow, irregular and unusually reflective.
-        // Several deterministic clusters create blue-white pitted material on
-        // crater floors, walls and central peaks without turning them emissive.
-        float hollows = 0.0;
-        hollows += hollowCluster(direction, vec3(0.34, 0.60, 0.72), 0.145, 2.4);
-        hollows += hollowCluster(direction, vec3(-0.24, 0.18, 0.95), 0.118, 5.8);
-        hollows += hollowCluster(direction, vec3(0.72, -0.28, 0.63), 0.126, 8.1);
-        hollows += hollowCluster(direction, vec3(-0.66, -0.12, 0.74), 0.134, 11.7);
-        hollows += hollowCluster(direction, vec3(0.15, -0.78, -0.60), 0.105, 14.2);
-        hollows += hollowCluster(direction, vec3(-0.84, 0.41, -0.35), 0.114, 17.6);
-        hollows = clamp(hollows, 0.0, 1.0);
-        vec3 hollowMaterial = vec3(0.80, 0.845, 0.835);
-        colour = mix(colour, hollowMaterial, hollows * 0.82);
-
-        // Fresh ejecta and crater rims catch white sunlight with higher albedo.
-        float freshMaterial = smoothstep(0.72, 0.90, fineRock)
-          * smoothstep(0.48, 0.82, mediumRock);
-        colour = mix(colour, vec3(0.77, 0.735, 0.675), freshMaterial * 0.24);
+        vec3 colour = observed * 2.4 * vec3(1.04, 1.0, 0.93);
+        float fineRock = 0.5;
 
         float ndl = dot(normal, lightDirection);
         float dayBlend = smoothstep(-0.16, 0.24, ndl);
         float diffuse = 0.14 + max(ndl, 0.0) * 1.12;
-        float microShadow = mix(0.87, 1.08, fineRock);
+        float microShadow = 1.0;
         colour *= mix(0.035, diffuse * microShadow, dayBlend);
 
         // A very restrained opposition lift helps crater relief remain readable
@@ -345,10 +308,21 @@ function createRockyMaterial(config, textures) {
   if (config.name === "Mars") return createMarsMaterial(map);
   if (config.name === "Venus") return createVenusSurfaceMaterial(map);
   if (config.name === "Pluto") return createPlutoMaterial(map);
-  return new THREE.MeshStandardMaterial({
+  /* Round 41: Earth on MeshPhysicalMaterial for one setting,
+   * specularIntensity. MeshStandardMaterial's fixed 4% specular, under the
+   * scene's strong Sun, laid a grey sheen over the whole sunlit ocean (the
+   * same floor that kept the Moon pale; earth/satellites/moon.js). Water's
+   * real reflectance at normal incidence is 2%, so half (0.5). */
+  const Material = config.name === "Earth" ? THREE.MeshPhysicalMaterial : THREE.MeshStandardMaterial;
+  return new Material({
+    ...(config.name === "Earth" ? { specularIntensity: 0.5 } : {}),
     map,
     color: config.name === "Earth" ? 0xf4f8ff : 0xffffff,
-    roughness: config.name === "Earth" ? 0.82 : 0.96,
+    /* Round 41: Earth's roughness from its water map (config/textures.js
+     * earthRoughness), so the oceans carry the Sun's glint; the map holds the
+     * value, so the factor is 1. */
+    roughness: config.name === "Earth" ? (textures.earthRoughness ? 1 : 0.82) : 0.96,
+    roughnessMap: config.name === "Earth" ? textures.earthRoughness ?? null : null,
     metalness: 0,
     bumpMap: config.bump ? map : null,
     bumpScale: config.bump ?? 0,
@@ -850,9 +824,19 @@ function createGasMaterial(config, texture) {
 
           float whisperCloud = ellipseMask(dir, -0.34 + uTime * 0.0006, 0.24, 0.22, 0.055, 0.01);
           procedural = mix(procedural, vec3(0.91, 1.0, 1.0), whisperCloud * 0.04);
+
+          // Round 41 (the owner: Uranus "was like earlier ... make it
+          // properly"). Hubble (NASA/ESA, November 2022) and JWST (2023)
+          // show the sunlit north pole under a distinct bright, whitish cap
+          // above about 50-60 degrees north as Uranus nears its 2030 northern
+          // solstice; the old cap was a faint tint. Brightened (0.45, edge
+          // 46-60 degrees, chosen by eye to those images).
+          float hubbleCap = smoothstep(0.72, 0.86, dir.y);
+          procedural = mix(procedural, vec3(0.92, 0.99, 1.0), hubbleCap * 0.45);
         }
 
-        vec2 textureUv = vec2(fract(vUv.x + uTime * 0.0008), vUv.y);
+        // Round 42: no fract() here. The map repeats across the seam (RepeatWrapping), and fract() made the texture coordinate jump from 1 back to 0 inside one pixel; the GPU read that jump as the whole map squeezed into a pixel and drew that column from its smallest mip level -- the thin line along the date line the owner saw.
+        vec2 textureUv = vec2(vUv.x + uTime * 0.0008, vUv.y);
         vec3 textureColor = texture2D(uMap, textureUv).rgb;
         if (uPlanetKind == 3) {
           // Uranus ignores high-frequency texture detail in visible light.
@@ -869,8 +853,17 @@ function createGasMaterial(config, texture) {
         float ndl = dot(normal, lightDir);
         float terminator = smoothstep(-0.18, 0.28, ndl);
         float diffuse = 0.16 + max(ndl, 0.0) * 0.9;
-        color *= mix(0.075, diffuse, terminator);
+        // Round 41: Uranus's night side dark (0.03, was 0.075 -- it read as a
+        // grey-green second disc), and its disc limb-darkened, as Voyager 2's
+        // true-colour images show: the edge about a quarter dimmer than the
+        // centre (0.76, chosen by eye to those).
+        color *= mix(uPlanetKind == 3 ? 0.03 : 0.075, diffuse, terminator);
+        if (uPlanetKind == 3) {
+          color *= mix(0.76, 1.0, pow(max(dot(normal, viewDir), 0.0), 0.5));
+        }
         float rim = pow(1.0 - max(dot(normal, viewDir), 0.0), 3.0);
+        // Uranus's haze rim only where the Sun reaches.
+        if (uPlanetKind == 3) rim *= 0.3 + 0.7 * terminator;
         color += mix(uAccent, uPolarLight, polar) * rim * (uPlanetKind == 4 ? 0.12 : uPlanetKind == 3 ? 0.11 : 0.085);
         gl_FragColor = vec4(max(color, vec3(0.0)), 1.0);
       }
@@ -1102,7 +1095,8 @@ function createVenusCloudShader({
           * polarHood;
 
         vec2 mapUv = vec2(
-          fract(vUv.x - flowTime * (0.0010 + uLayer * 0.00032)),
+          // Round 42: no fract(), as for the planets' maps above (the seam line).
+          vUv.x - flowTime * (0.0010 + uLayer * 0.00032),
           vUv.y
         );
         vec3 observedClouds = texture2D(uCloudMap, mapUv).rgb;
@@ -1125,7 +1119,9 @@ function createVenusCloudShader({
         color = mix(color, uHighlight, smoothstep(0.58, 0.94, structure));
         color = mix(color, uHighlight, convection * 0.18);
         color = mix(color, uShadow * vec3(0.88, 0.92, 1.02), filaments * 0.14);
-        color = mix(color, vec3(0.58, 0.45, 0.29), yWave * 0.11);
+        // Round 41: the ultraviolet Y pattern is barely there in visible
+        // light -- 0.11 -> 0.04.
+        color = mix(color, vec3(0.58, 0.45, 0.29), yWave * 0.04);
         color = mix(color, uHighlight, polarHood * (0.16 + polarBands * 0.10));
 
         vec3 normal = normalize(vWorldNormal);
@@ -1142,7 +1138,8 @@ function createVenusCloudShader({
         float illumination = mix(0.026 + limb * 0.018, diffuse, dayBlend);
         color *= illumination;
         color += uHighlight * backscatter * dayBlend * 0.075;
-        color += vec3(1.0, 0.78, 0.48) * limb * (0.025 + dayBlend * 0.075);
+        // Round 41: a warm-white limb, not orange.
+        color += vec3(1.0, 0.93, 0.80) * limb * (0.025 + dayBlend * 0.075);
 
         float density = 0.56 + broad * 0.24 + medium * 0.14 + polarHood * 0.08;
         float alpha = clamp(uOpacity * density + limb * uOpacity * 0.34, 0.0, 0.96);
@@ -1168,10 +1165,19 @@ function addVenusClouds(planet, config, textures, segmentScale = 1) {
       getSegmentCount(208, segmentScale, 104),
       getSegmentCount(168, segmentScale, 80),
     ),
+    /*
+     * Round 41 (the owner: Venus should look as it does "as per space").
+     * In visible light Venus is a bright, almost featureless pale yellowish-
+     * white -- the brightest planet, Bond albedo 0.76 (NASA Venus Fact
+     * Sheet) -- its cloud patterns show only in ultraviolet. The deck was a
+     * tan-to-brown palette (shadow 0x9d7548) that rendered as an orange-brown
+     * globe with an orange rim. Now pale cream with shadows only a little
+     * darker, for all three layers (chosen by eye to that description).
+     */
     createVenusCloudShader({
-      baseColor: 0xe3c894,
-      highlightColor: 0xfff1cf,
-      shadowColor: 0x9d7548,
+      baseColor: 0xeee3c6,
+      highlightColor: 0xfbf6e8,
+      shadowColor: 0xd6c6a0,
       opacity: 1,
       cloudTexture: textures.venusAtmosphere,
       layer: 0,
@@ -1191,9 +1197,9 @@ function addVenusClouds(planet, config, textures, segmentScale = 1) {
       getSegmentCount(144, segmentScale, 72),
     ),
     createVenusCloudShader({
-      baseColor: 0xe9cf9c,
-      highlightColor: 0xffedc6,
-      shadowColor: 0xae8350,
+      baseColor: 0xf0e6cc,
+      highlightColor: 0xfff9ec,
+      shadowColor: 0xdccca7,
       opacity: 0.28,
       cloudTexture: textures.venusAtmosphere,
       layer: 1,
@@ -1212,9 +1218,9 @@ function addVenusClouds(planet, config, textures, segmentScale = 1) {
       getSegmentCount(136, segmentScale, 68),
     ),
     createVenusCloudShader({
-      baseColor: 0xf0d9aa,
-      highlightColor: 0xfff5d9,
-      shadowColor: 0xc49a68,
+      baseColor: 0xf3eadb,
+      highlightColor: 0xfffbf2,
+      shadowColor: 0xe1d3b2,
       opacity: 0.155,
       cloudTexture: textures.venusAtmosphere,
       layer: 2,
@@ -1232,7 +1238,7 @@ function addVenusClouds(planet, config, textures, segmentScale = 1) {
       getSegmentCount(136, segmentScale, 68),
       getSegmentCount(104, segmentScale, 52),
     ),
-    createAtmosphereMaterial(0xffdda2, 0.18),
+    createAtmosphereMaterial(0xfff1d6, 0.18),
   );
   softGlow.name = "Venus sunlit atmospheric limb";
   cloudGroup.add(softGlow);

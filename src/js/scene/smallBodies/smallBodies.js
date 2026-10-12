@@ -15,8 +15,15 @@ import { KUIPER_BINARIES } from "./binaryCatalogue.js";
 import { COMETS } from "./cometCatalogue.js";
 import { JUPITER_TROJANS } from "./trojanCatalogue.js";
 import { NEAR_EARTH_ODDITIES } from "./neoCatalogue.js";
+import { NEAR_EARTH_FAMILY_ROCKS } from "./nearEarthFamilies.js";
+import { PLANET_TROJAN_BODIES } from "./planetTrojans.js";
+import { FAMILY_NAMESAKES } from "./familyNamesakes.js";
+import { createFamilyOrbits, nearEarthFamilyOf } from "./familyOrbits.js";
+import { createNearEarthSwarm } from "./nearEarthSwarm.js";
+import { CENTAUR_PROFILE } from "./centaurSwarm.js";
 import { createCentaurComa, updateCentaurComa, setComaStrength } from "./centaurComa.js";
 import { createResonantSwarms, updateResonantSwarms } from "./resonantSwarms.js";
+import { createPopulationClouds, updatePopulationClouds } from "./populationClouds.js";
 import { createIcyRingSystem, hasIcyRingSystem } from "../../planets/icyRings.js";
 import { applyRingShadow } from "../../graphics/ringShadow.js";
 import { applyRingProximityVisibility } from "../../planets/ringProximity.js";
@@ -58,6 +65,16 @@ const ALL_SMALL_BODIES = Object.freeze([
   ...JUPITER_TROJANS,
   /* Rank 10: near-Earth oddities; Cruithne and Kamoʻoalewa in Earth's frame. */
   ...NEAR_EARTH_ODDITIES,
+  /* Round 38: the four near-Earth families, as twenty of their real
+   * members (three Atiras, three Atens, eight Apollos, six Amors), in place
+   * of the 891 points that read as stars. See nearEarthFamilies.js. */
+  ...NEAR_EARTH_FAMILY_ROCKS,
+  /* Round 38: Venus's, Earth's, Mars's and Uranus's Trojans, 22 bodies in
+   * their planets' co-orbital frames. See planetTrojans.js. */
+  ...PLANET_TROJAN_BODIES,
+  /* Round 38, second pass: the belt families' namesakes not yet drawn --
+   * Flora, Nysa, Polana, Koronis, Eos, Themis (familyNamesakes.js). */
+  ...FAMILY_NAMESAKES,
 ]);
 import { createSmallBodyGeometry, maxHalfExtent } from "./smallBodyShapes.js";
 
@@ -538,6 +555,12 @@ const J2000_JD = 2451545.0;
 const CO_ORBITAL_PLANETS = Object.freeze({
   Jupiter: { aAU: 5.20288700, e: 0.04838624, iDeg: 1.30439695, L0: 34.39644051, Ldot: 3034.74612775, varpi: 14.72847983, node: 100.47390909 },
   Earth: { aAU: 1.00000261, e: 0.01671123, iDeg: -0.00001531, L0: 100.46457166, Ldot: 35999.37244981, varpi: 102.93768193, node: 0 },
+  /* Final round: the Neptune Trojans (populationClouds.js). Same table. */
+  Neptune: { aAU: 30.06992276, e: 0.00859048, iDeg: 1.77004347, L0: -55.12002969, Ldot: 218.45945325, varpi: 44.96476227, node: 131.78422574 },
+  /* Round 37: the other planets' Trojans (populationClouds.js). Same table. */
+  Venus: { aAU: 0.72333566, e: 0.00677672, iDeg: 3.39467605, L0: 181.97909950, Ldot: 58517.81538729, varpi: 131.60246718, node: 76.67984255 },
+  Mars: { aAU: 1.52371034, e: 0.09339410, iDeg: 1.84969142, L0: -4.55343205, Ldot: 19140.30268499, varpi: -23.94362959, node: 49.55953891 },
+  Uranus: { aAU: 19.18916464, e: 0.04725744, iDeg: 0.77263783, L0: 313.23810451, Ldot: 428.48202785, varpi: 170.95427630, node: 74.01692503 },
 });
 
 function coOrbitalModel(name, nowJD) {
@@ -704,6 +727,55 @@ const SMALL_BODY_TEXTURES = Object.freeze({
   Chiron: { file: "chiron", meanLinear: 0.2222 },
   Pholus: { file: "pholus", meanLinear: 0.2314 },
   Echeclus: { file: "echeclus", meanLinear: 0.2313 },
+  /* Round 38: the four later Centaurs. Nessus carries a *colour* map
+   * unwrapped from the image supplied for it (images/Nessus.jpeg, through
+   * tools/dwarf-textures: build-dwarf-textures.py, nessus-poles.py,
+   * to-small-body.py) and its record is flagged `colourMap`; the other three
+   * get grey relief maps from build-small-body-textures.py, coloured by their
+   * measured chroma. */
+  Nessus: { file: "nessus", meanLinear: 0.1554 },
+  Bienor: { file: "bienor", meanLinear: 0.2303 },
+  Asbolus: { file: "asbolus", meanLinear: 0.2282 },
+  Hylonome: { file: "hylonome", meanLinear: 0.2203 },
+  /* Round 38: the near-Earth families as real rocks (nearEarthFamilies.js).
+   * Built by tools/small-body-textures (analogue relief per spectral type;
+   * each recipe's credit names it); meanLinear as that build printed it.
+   * Not lazy: 512 x 256 and ~50 kB each (1 MB for all twenty), and a rock
+   * opened from the board with its card up must not wait for the camera. */
+  Atira: { file: "atira", meanLinear: 0.2237, normal: "atira-normal" },
+  "ʼAylóʼchaxnim": { file: "aylochaxnim", meanLinear: 0.2224, normal: "aylochaxnim-normal" },
+  "2021 PH27": { file: "2021-ph27", meanLinear: 0.2244, normal: "2021-ph27-normal" },
+  Aten: { file: "aten", meanLinear: 0.2260, normal: "aten-normal" },
+  "Ra-Shalom": { file: "ra-shalom", meanLinear: 0.2400, normal: "ra-shalom-normal" },
+  Hathor: { file: "hathor", meanLinear: 0.2345, normal: "hathor-normal" },
+  Apollo: { file: "apollo", meanLinear: 0.2260, normal: "apollo-normal" },
+  Icarus: { file: "icarus", meanLinear: 0.2305, normal: "icarus-normal" },
+  Toro: { file: "toro", meanLinear: 0.2263, normal: "toro-normal" },
+  Nereus: { file: "nereus", meanLinear: 0.2277, normal: "nereus-normal" },
+  Castalia: { file: "castalia", meanLinear: 0.2352, normal: "castalia-normal" },
+  Eger: { file: "eger", meanLinear: 0.2280, normal: "eger-normal" },
+  Daedalus: { file: "daedalus", meanLinear: 0.2265, normal: "daedalus-normal" },
+  "1989 JA": { file: "1989-ja", meanLinear: 0.2314, normal: "1989-ja-normal" },
+  Ganymed: { file: "ganymed", meanLinear: 0.2257, normal: "ganymed-normal" },
+  "Don Quixote": { file: "don-quixote", meanLinear: 0.2400, normal: "don-quixote-normal" },
+  Ivar: { file: "ivar", meanLinear: 0.2276, normal: "ivar-normal" },
+  Florence: { file: "florence", meanLinear: 0.2308, normal: "florence-normal" },
+  Betulia: { file: "betulia", meanLinear: 0.2404, normal: "betulia-normal" },
+  "1986 DA": { file: "1986-da", meanLinear: 0.2348, normal: "1986-da-normal" },
+  /* Round 39, fourth pass (the owner: "ensure all those near objects have
+   * craters terrains"). The twenty above gain crater normal maps (their
+   * colour maps are unchanged), and the six stamps every one of the ~38,000
+   * other near-Earth asteroids is drawn with get their own crater maps:
+   * tools/binary-surface-lab/build-neo-maps.mjs, encoded by
+   * encode-binary-maps.py, meanLinear as it printed. Stamp 1 rubble pile,
+   * 2-4 saturated craters (4 two-lobed), 5 Mathilde-like giant craters,
+   * 6 the metal one, shallower. */
+  "NEO stamp 1": { file: "neo-stamp-1", meanLinear: 0.2015, normal: "neo-stamp-1-normal" },
+  "NEO stamp 2": { file: "neo-stamp-2", meanLinear: 0.2302, normal: "neo-stamp-2-normal" },
+  "NEO stamp 3": { file: "neo-stamp-3", meanLinear: 0.2344, normal: "neo-stamp-3-normal" },
+  "NEO stamp 4": { file: "neo-stamp-4", meanLinear: 0.2366, normal: "neo-stamp-4-normal" },
+  "NEO stamp 5": { file: "neo-stamp-5", meanLinear: 0.2262, normal: "neo-stamp-5-normal" },
+  "NEO stamp 6": { file: "neo-stamp-6", meanLinear: 0.2279, normal: "neo-stamp-6-normal" },
   /* Rank 4, batch A: fourteen worlds past Neptune and five moons.
    * Ten of them -- Aya, Chaos, Chiminigagua, DeeDee, Gǃkúnǁʼhòmdímà,
    * Goibniu, Huya, Leleākūhonua, Ritona, Xewioso -- and Huya I carry
@@ -724,6 +796,11 @@ const SMALL_BODY_TEXTURES = Object.freeze({
   Ritona: { file: "ritona", meanLinear: 0.0633 },
   Xewioso: { file: "xewioso", meanLinear: 0.0863 },
   Rumina: { file: "rumina", meanLinear: 0.2212 },
+  /* Round 38: the colour map the owner supplied for it (images/, an
+   * artist's equirectangular map), levelled and resized by
+   * tools/dwarf-textures/to-small-body.py; the record is flagged `colourMap`.
+   * (Round 37's grey Arrokoth-relief map is replaced.) */
+  Dziewanna: { file: "dziewanna", meanLinear: 0.3310 },
   DeeDee: { file: "deedee", meanLinear: 0.1725 },
   Chaos: { file: "chaos", meanLinear: 0.0905 },
   "Leleākūhonua": { file: "leleakuhonua", meanLinear: 0.2616 },
@@ -800,6 +877,28 @@ const SMALL_BODY_TEXTURES = Object.freeze({
   "Moshup": { file: "moshup", meanLinear: 0.1543, normal: "moshup-normal", lazy: true },
   "Squannit": { file: "squannit", meanLinear: 0.1538, normal: "squannit-normal", lazy: true },
   "Geographos": { file: "geographos", meanLinear: 0.1612, normal: "geographos-normal", lazy: true },
+  /* Round 38, second pass: the families' namesakes (familyNamesakes.js). */
+  Flora: { file: "flora", meanLinear: 0.2207 },
+  Nysa: { file: "nysa", meanLinear: 0.2275 },
+  Polana: { file: "polana", meanLinear: 0.2386 },
+  Koronis: { file: "koronis", meanLinear: 0.2221 },
+  Eos: { file: "eos", meanLinear: 0.2237 },
+  Themis: { file: "themis", meanLinear: 0.2385 },
+  /* Round 38: every planet's Trojans share seven maps (planetTrojans.js
+   * `textureFile`; tools/small-body-textures, meanLinear as printed).
+   * Six small files (~300 kB together), loaded at once, not lazily. */
+  ...Object.fromEntries(PLANET_TROJAN_BODIES.map((record) => [record.name, {
+    file: record.textureFile,
+    meanLinear: {
+      eureka: 0.2310,
+      "mars-l5": 0.2310,
+      "mars-l4": 0.2269,
+      "earth-trojan": 0.2388,
+      "venus-trojan": 0.2310,
+      "uranus-trojan": 0.2215,
+      "neptune-trojan": 0.2212,
+    }[record.textureFile],
+  }])),
 });
 
 /* The map's URL for a body, for the board's binary view, which draws the
@@ -983,7 +1082,9 @@ function createSmallBodyMaterial(record, baseColor, textured = true) {
   const material = new THREE.MeshStandardMaterial({
     vertexColors: true,
     color: 0xffffff,
-    roughness: THREE.MathUtils.clamp(0.99 - record.albedo * 0.30, 0.80, 0.99),
+    /* Round 38: a record may set its own roughness -- the metal 1986 DA,
+     * which the brief wants "medium-low", not rock-matte. */
+    roughness: record.roughness ?? THREE.MathUtils.clamp(0.99 - record.albedo * 0.30, 0.80, 0.99),
     metalness: record.metalness ?? 0,
     emissive: baseColor,
     emissiveIntensity: 0.28,
@@ -1027,7 +1128,10 @@ function applyNightSide(material) {
       .replace("#include <common>", "#include <common>\nvarying vec3 sbRadial;")
       .replace(
         "#include <project_vertex>",
-        "#include <project_vertex>\n\tsbRadial = mvPosition.xyz - ( modelViewMatrix * vec4( 0.0, 0.0, 0.0, 1.0 ) ).xyz;",
+        /* Round 38: an instanced rock's centre is its instance's, not the
+         * mesh's (nearEarthSwarm.js); the #ifdef leaves every other body's
+         * shader exactly as it was. */
+        "#include <project_vertex>\n#ifdef USE_INSTANCING\n\tsbRadial = mvPosition.xyz - ( modelViewMatrix * instanceMatrix * vec4( 0.0, 0.0, 0.0, 1.0 ) ).xyz;\n#else\n\tsbRadial = mvPosition.xyz - ( modelViewMatrix * vec4( 0.0, 0.0, 0.0, 1.0 ) ).xyz;\n#endif",
       );
     shader.fragmentShader = shader.fragmentShader
       .replace("#include <common>", "#include <common>\nvarying vec3 sbRadial;");
@@ -1715,6 +1819,15 @@ export async function createSmallBodies({
       comaRadius: coma ? built.reach * (record.coma?.radii ?? 0) : 0,
     });
     built.group.userData.orbit = orbit;
+    /* Round 38: which near-Earth family, if any -- hovering or focusing it
+     * lights that family's orbits (familyOrbits.js). From the orbit, so
+     * Eros, Apophis, Bennu, Cruithne and the rest count as well as the new
+     * rocks (Cruithne is an Aten as well as Earth's companion). Comets are
+     * left out: 67P and Halley have near-Earth orbits too, but the four
+     * families are asteroid classes (CNEOS). */
+    built.group.userData.nearEarthFamily = /^(\d+P|C)\//.test(record.name) ? null : nearEarthFamilyOf(record.orbit);
+    /* Round 38: a planet's Trojan carries its camp. */
+    if (record.trojanCamp) built.group.userData.trojanCamp = record.trojanCamp;
     /* How far the system reaches from this body, for main.js to keep the
      * selection card clear of the partners. */
     if (binary) built.group.userData.selectionClearance = binarySystemSpan(record, built.renderedMeanRadius);
@@ -1747,6 +1860,7 @@ export async function createSmallBodies({
        * always on. */
       activity: coma && record.activity ? record.activity : null,
       coOrbital,
+      cullTiny: Boolean(record.cullTiny),
     };
     if (entry.activity) setComaStrength(coma, cometActivity(entry.activity, currentAU, record.orbit));
 
@@ -1901,7 +2015,25 @@ export async function createSmallBodies({
        * circle looks identical either way, and a ring that spins is one more
        * matrix multiply per frame for no picture.
        */
-      built.group.add(createMoonOrbitRing(separation, moon));
+      const moonRing = createMoonOrbitRing(separation, moon);
+      built.group.add(moonRing);
+      /*
+       * Round 38 (Prompts.md: "Eurybates, moon orbital rings, are visible when
+       * we inspect any planet, and its moon when clicked on Eurybates isn't
+       * that visible"). Queta is 68 of Eurybates's radii out, so its ring is
+       * tens of units across and showed from Jupiter and beyond; and the
+       * moon itself, a kilometre-sized speck, could not be found when
+       * Eurybates was focused. So a moon's path now follows the binaries'
+       * rule -- shown only while the parent or the moon is focused -- and
+       * the moon gets the same named marker ring the binaries' partners
+       * have (`updateBinaryHighlights`).
+       */
+      moonRing.visible = false;
+      entry.moonView ??= { rings: [], markers: [], groups: [], separations: [], active: false };
+      entry.moonView.separations.push(separation);
+      entry.moonView.rings.push(moonRing);
+      entry.moonView.groups.push(builtMoon.group);
+      entry.moonView.markers.push(createBinaryMarker(moon.name, builtMoon.group, builtMoon.renderedMeanRadius));
 
       const moonEntry = {
         pivot,
@@ -2006,6 +2138,107 @@ export async function createSmallBodies({
     jupiterFrame.swarmGroup = swarms.group;
   }
 
+  /* The stamped rocks' size rule (nearEarthSwarm.js): the asteroid curve,
+   * 0.022 to 0.92 scene units. */
+  const stampRadius = (D) => getAsteroidVisualRadius(D, { minimum: 0.022, maximum: 0.92 });
+
+  /* Final round: every catalogued Centaur, the Neptune Trojans (in
+   * Neptune's frame) and the kilometre-class near-Earth families, as points
+   * on their real orbits. See populationClouds.js. */
+  const populations = createPopulationClouds({
+    auToScene: smallBodyAuToScene,
+    visualMeanMotion,
+    referenceJD,
+    neptuneFrame: coOrbitalFrameFor("Neptune"),
+    frameFor: coOrbitalFrameFor,
+    hoverTargets,
+    markPointerProxy,
+    pixelRatio: typeof window !== "undefined" ? Math.min(2, window.devicePixelRatio || 1) : 1,
+    /* Round 40: the Centaur dots hand over to their rocks at this size. */
+    visualRadiusFor: stampRadius,
+  });
+  system.add(populations.group);
+
+  /* Round 38: the near-Earth families' orbits, lit by hovering or focusing
+   * any member. See familyOrbits.js. */
+  const familyOrbits = createFamilyOrbits({ auToScene: smallBodyAuToScene });
+  system.add(familyOrbits.group);
+
+  /*
+   * Round 39: every known near-Earth asteroid, stamped (nearEarthSwarm.js).
+   * The stamps use the scene's own sculptor, material and night-side gate;
+   * the named near-Earth bodies already drawn are left out of the stamps
+   * by their JPL designation. Nothing is drawn until the list is loaded
+   * (`loadNearEarthSwarm`, from main.js) and then only near the camera.
+   */
+  const STAMP_ALBEDO = 0.15;
+  const stampBase = albedoToLinearValue(STAMP_ALBEDO) * solarCompensation(SUN_REFERENCE_RADIUS);
+  /* Round 39, fourth pass: each stamp its own crater maps (the "NEO stamp"
+   * entries in SMALL_BODY_TEXTURES), no longer the named rocks' grain maps. */
+  const STAMP_TEXTURE = { "ra-shalom": "NEO stamp 1", toro: "NEO stamp 2", "1989-ja": "NEO stamp 3", castalia: "NEO stamp 4", ganymed: "NEO stamp 5", "1986-da": "NEO stamp 6" };
+  const drawnDesignations = new Set();
+  ALL_SMALL_BODIES.forEach((record) => {
+    const text = String(record.designation ?? "");
+    const number = /^\(?(\d+)\)?[\s)]/.exec(text)?.[1];
+    if (number) drawnDesignations.add(number);
+    const provisional = /\((\d{4} [A-Z]{2}\d*)\)/.exec(text)?.[1] ?? /^\(?(\d{4} [A-Z]{2}\d*)\)?$/.exec(text)?.[1];
+    if (provisional) drawnDesignations.add(provisional);
+  });
+  /* Round 40: shared by the near-Earth rocks and the Centaur rocks. */
+  const stampOptions = {
+    auToScene: smallBodyAuToScene,
+    visualMeanMotion,
+    visualPeriodSeconds,
+    visualRadiusFor: stampRadius,
+    referenceJD,
+    albedoScale: (albedo) => THREE.MathUtils.clamp(albedoToLinearValue(albedo) / albedoToLinearValue(STAMP_ALBEDO), 0.35, 2.4),
+    buildShape: (shape) => {
+      const geometry = createSmallBodyGeometry(shape, { widthSegments: 30, heightSegments: 20, chroma: [1, 1, 1], baseValue: stampBase });
+      const reach = maxHalfExtent(geometry);
+      geometry.scale(1 / reach, 1 / reach, 1 / reach);
+      return geometry;
+    },
+    makeMaterial: (shape) => {
+      const record = {
+        name: STAMP_TEXTURE[shape.map],
+        albedo: STAMP_ALBEDO,
+        metalness: shape.metal ? 0.85 : 0,
+        roughness: shape.metal ? 0.4 : undefined,
+      };
+      const baseColor = new THREE.Color().setRGB(stampBase, stampBase, stampBase, THREE.LinearSRGBColorSpace);
+      const material = createSmallBodyMaterial(record, baseColor, true);
+      material.userData.loadTexture?.();
+      return material;
+    },
+    attachMetadata: (group, record, options) => attachMetadata(group, record, options),
+    markPointerProxy,
+  };
+  const swarm = createNearEarthSwarm({
+    ...stampOptions,
+    exclude: drawnDesignations,
+    dataUrl: `${PUBLIC_ASSET_ROOT}/data/near-earth-asteroids.json`,
+  });
+  system.add(swarm.group);
+  swarm.targets.forEach((target) => hoverTargets.push(target));
+
+  /*
+   * Round 40: the Centaurs as rocks (centaurSwarm.js), on the same stamps.
+   * The near-Earth stamps are lit as if at the reference radius, which is
+   * about right where they are (0.5-2 AU). Centaurs range from 5 to 30 AU,
+   * where the scene's Sun is 2-6x fainter, so each rock is compensated for
+   * its own distance, as every named body is (`solarCompensation`). No
+   * names until the JPL list is supplied (dataUrl null: the catalogue's
+   * own 1,036 orbits are used).
+   */
+  const centaurSwarm = createNearEarthSwarm({
+    ...stampOptions,
+    profile: CENTAUR_PROFILE,
+    dataUrl: null,
+    solarScale: (sceneRadius) => solarCompensation(sceneRadius) / solarCompensation(SUN_REFERENCE_RADIUS),
+  });
+  system.add(centaurSwarm.group);
+  centaurSwarm.targets.forEach((target) => hoverTargets.push(target));
+
   const frames = Object.values(coOrbitalFrames);
   updateCoOrbitalFrames(frames);
 
@@ -2016,10 +2249,14 @@ export async function createSmallBodies({
     orbitGuides,
     coOrbitalFrames: frames,
     swarms,
+    populations,
+    familyOrbits,
     lazyTextures,
     lazyCheck: 0,
     bodies: bodies.filter((entry) => !entry.isMoon),
-    allTargets: bodies.map((entry) => entry.group),
+    allTargets: [...bodies.map((entry) => entry.group), ...swarm.targets, ...centaurSwarm.targets],
+    swarm,
+    centaurSwarm,
     elapsedSeconds: 0,
     referenceJD,
   };
@@ -2526,6 +2763,19 @@ export function updateSmallBodies(
     camera,
     typeof window !== "undefined" ? window.innerHeight : 800,
   );
+  updatePopulationClouds(
+    smallBodies.populations,
+    motionScale,
+    camera,
+    typeof window !== "undefined" ? window.innerHeight : 800,
+  );
+
+  /* Round 38, second pass: tiny-body culling -- see `cullTiny` below. */
+  smallBodies.cullTick = ((smallBodies.cullTick ?? 0) + 1) % 12;
+  const cullFocal = camera
+    ? camera.projectionMatrix.elements[5] * (typeof window !== "undefined" ? window.innerHeight : 800) * 0.5
+    : 0;
+  if (camera) _cullCamera.setFromMatrixPosition(camera.matrixWorld);
 
   for (let i = 0; i < smallBodies.bodies.length; i += 1) {
     const entry = smallBodies.bodies[i];
@@ -2547,6 +2797,22 @@ export function updateSmallBodies(
 
     entry.spinner.rotation.y = entry.spinRate * elapsed;
     if (entry.tumbleRate) entry.spinner.rotation.z = entry.tumbleRate * elapsed;
+
+    /*
+     * Round 38, second pass: the 90 bodies added this round (the near-Earth
+     * rocks, every planet's Trojans, the family namesakes -- `cullTiny` on
+     * their records) skip drawing their mesh while it would be under half a
+     * pixel across, which is most of the time: Neptune's 42 Trojans from
+     * anywhere in the inner system, the near-Earth rocks from the outer.
+     * One distance test per body every 12th frame; hover and click are
+     * untouched (a raycast ignores `visible`), so a speck can still be
+     * found and flown to. Nothing else in the scene is affected.
+     */
+    if (entry.cullTiny && camera && i % 12 === smallBodies.cullTick) {
+      entry.group.getWorldPosition(_cullWorld);
+      const pixels = (entry.ringBodyRadius / Math.max(1e-6, _cullWorld.distanceTo(_cullCamera))) * cullFocal;
+      entry.spinner.visible = pixels > 0.25;
+    }
 
     const moons = entry.moons ?? (entry.moon ? [entry.moon] : []);
     for (let m = 0; m < moons.length; m += 1) {
@@ -2764,10 +3030,15 @@ function buildBinaryMarkerSprite(marker) {
  */
 const _markerWorld = new THREE.Vector3();
 const _markerCamera = new THREE.Vector3();
+const _markerParent = new THREE.Vector3();
+const _cullWorld = new THREE.Vector3();
+const _cullCamera = new THREE.Vector3();
 export function updateBinaryHighlights(smallBodies, focusedBody = null, camera = null) {
   if (!smallBodies?.bodies) return;
   for (let i = 0; i < smallBodies.bodies.length; i += 1) {
     const entry = smallBodies.bodies[i];
+    /* Round 38: ordinary moons' paths and markers -- see `moonView`. */
+    if (entry.moonView) updateMoonView(entry, focusedBody, camera);
     const binary = entry.binary;
     if (!binary?.markers) continue;
     const active = Boolean(focusedBody) && (focusedBody === entry.group
@@ -2800,6 +3071,51 @@ export function updateBinaryHighlights(smallBodies, focusedBody = null, camera =
       marker.sprite.material.opacity = opacity;
       marker.sprite.visible = opacity > 0.01;
     }
+  }
+}
+
+/* Round 38: a moon's path and name ring, lit while its parent or the moon
+ * itself is focused, with the marker fading as the moon grows on screen --
+ * the binaries' rule above. */
+function updateMoonView(entry, focusedBody, camera) {
+  const view = entry.moonView;
+  const active = Boolean(focusedBody) && (focusedBody === entry.group || view.groups.includes(focusedBody));
+  if (active !== view.active) {
+    view.active = active;
+    if (active) view.markers.forEach((marker) => buildBinaryMarkerSprite(marker));
+    if (!active) {
+      view.rings.forEach((ring) => { ring.visible = false; });
+      view.markers.forEach((marker) => { if (marker.sprite) marker.sprite.visible = false; });
+    }
+  }
+  if (!active || !camera) return;
+  _markerCamera.setFromMatrixPosition(camera.matrixWorld);
+  /*
+   * Round 38, second pass (Prompts.md: "Queta seems to be always
+   * highlighted ... once zoomed out too much its highlight must disappear").
+   * Focus stays on Eurybates however far the viewer scrolls out, so the
+   * ring and the name stayed on at every distance -- a label floating over
+   * Jupiter's swarm from the edge of the Solar System. Now each moon's ring
+   * and marker fade out once its orbit is smaller than ~18 px across on
+   * screen (gone below 10 px): zoomed out that far, there is no pair left
+   * to point at. `focal` is the camera's pixels per unit at unit distance.
+   */
+  const focal = camera.projectionMatrix.elements[5] * (typeof window !== "undefined" ? window.innerHeight : 800) * 0.5;
+  entry.group.getWorldPosition(_markerParent);
+  const parentDistance = Math.max(1e-6, _markerParent.distanceTo(_markerCamera));
+  for (let m = 0; m < view.markers.length; m += 1) {
+    const orbitPixels = ((view.separations?.[m] ?? 0) / parentDistance) * focal * 2;
+    const near = THREE.MathUtils.smoothstep(orbitPixels, 10, 18);
+    const ring = view.rings[m];
+    if (ring) ring.visible = near > 0.01;
+    const marker = view.markers[m];
+    if (!marker.sprite) continue;
+    marker.group.getWorldPosition(_markerWorld);
+    const angular = marker.radius / Math.max(1e-6, _markerWorld.distanceTo(_markerCamera));
+    const fill = angular / (BINARY_MARKER_SCALE * BINARY_MARKER_RING);
+    const opacity = (1 - THREE.MathUtils.smoothstep(fill, 0.35, 0.8)) * near;
+    marker.sprite.material.opacity = opacity;
+    marker.sprite.visible = opacity > 0.01;
   }
 }
 
@@ -2870,4 +3186,33 @@ function updateRingSystem(entry, spinSeconds, camera) {
  * instancing and no point fields -- so this only exists so a caller can treat
  * all three population modules the same way.
  */
+/**
+ * Round 38: one body, built on its own, for a portrait outside the scene --
+ * the board's "How they look in space" (ui/explainers/nearEarth.js). The
+ * same geometry, colour, material and map the scene draws, normalised to a
+ * half-extent of 1 so a portrait can set its own size. The material keeps
+ * its night-side gate, which takes the Sun to be at the world origin, so a
+ * portrait lights it from there.
+ */
+export function buildSmallBodyPortrait(record, { widthSegments = 80, heightSegments = 54 } = {}) {
+  const chroma = record.colourMap ? [1, 1, 1] : (record.chroma ?? [1, 1, 1]);
+  const baseValue = albedoToLinearValue(record.albedo) * solarCompensation(SUN_REFERENCE_RADIUS);
+  const geometry = createSmallBodyGeometry(record.shape, { widthSegments, heightSegments, chroma, baseValue });
+  const baseColor = new THREE.Color().setRGB(baseValue * chroma[0], baseValue * chroma[1], baseValue * chroma[2], THREE.LinearSRGBColorSpace);
+  const material = createSmallBodyMaterial(record, baseColor, true);
+  /* A lazy map is wanted now: the portrait is what the viewer opened. */
+  material.userData.loadTexture?.();
+  const mesh = new THREE.Mesh(geometry, material);
+  mesh.name = `${record.name} portrait`;
+  const reach = maxHalfExtent(geometry);
+  mesh.scale.setScalar(1 / Math.max(1e-6, reach));
+  return {
+    mesh,
+    dispose() {
+      geometry.dispose();
+      material.dispose();
+    },
+  };
+}
+
 export function setSmallBodyQuality() {}

@@ -94,9 +94,10 @@ const UV_LOOK = Object.freeze({
     range: [0.5, 0.86],
     ramp: [rgb(0.28, 0.52, 0.92), rgb(0.42, 0.74, 0.96), rgb(0.62, 0.63, 0.95), rgb(0.80, 0.66, 0.92), rgb(0.94, 0.78, 0.90), rgb(0.96, 0.93, 0.97)],
     detail: 0,
-    // Found in jupiter-2k.jpg: reddest point in the southern tropics,
-    // latitude -20 deg, longitude 135 deg (u 0.375, v 0.388).
-    spot: { uv: [0.375, 0.388], size: [0.045, 0.04], red: 0.26, color: rgb(0.08, 0.10, 0.48) },
+    // Found in the scene's map, now Cassini's PIA07782 (round 41): reddest
+    // point in the southern tropics, latitude -21 deg, longitude 132 deg
+    // (u 0.367, v 0.383). Was u 0.375, v 0.388 in the old jupiter-2k.jpg.
+    spot: { uv: [0.367, 0.383], size: [0.045, 0.04], red: 0.26, color: rgb(0.08, 0.10, 0.48) },
     pole: { color: rgb(0.56, 0.32, 0.29), start: 0.72, hemisphere: 0, strength: 0.9, wave: 0.3 },
     cap: null,
     haze: null,

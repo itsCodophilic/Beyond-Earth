@@ -44,6 +44,8 @@ function createNeutralTexture(name) {
     earthNormal: [128, 128, 255, 255],
     earthClouds: [0, 0, 0, 255],
     earthLights: [0, 0, 0, 255],
+    // Round 41: roughness 0.92 everywhere until the real map arrives.
+    earthRoughness: [235, 235, 235, 255],
     saturnRing: [255, 255, 255, 255],
   };
   const [red, green, blue, alpha] = neutralPixels[name] ?? [255, 255, 255, 255];
@@ -281,7 +283,7 @@ export async function loadUniverseTextures({ anisotropy = 4 } = {}) {
     const options = {
       optional: OPTIONAL_TEXTURES.has(name),
       backupUrls: TEXTURE_BACKUP_URLS[name] ? [TEXTURE_BACKUP_URLS[name]] : [],
-      color: !["earthNormal", "earthClouds", "moonDisplacement"].includes(name),
+      color: !["earthNormal", "earthClouds", "earthRoughness", "moonDisplacement"].includes(name),
       anisotropy,
     };
 
@@ -319,8 +321,13 @@ export async function loadUniverseTextures({ anisotropy = 4 } = {}) {
 
     // Bundled surface maps are dependable and should be ready before their
     // planets are constructed, avoiding a visible low-to-high detail pop.
+    // Round 41: 15 s, not the remote maps' 6.5 s. A bundled map that misses
+    // the limit is replaced by the procedural fallback for the whole visit --
+    // the owner saw Mercury's and Jupiter's real surfaces "gone" after they
+    // were replaced with larger NASA maps -- and the loader is waiting for
+    // these anyway, so a slow local server should cost time, not the map.
     startupTextureJobs.push(
-      loadTexture(loader, url, fallbackKind, options).then((texture) => {
+      loadTexture(loader, url, fallbackKind, { ...options, timeoutMs: 15000 }).then((texture) => {
         textures[name] = texture;
       }),
     );

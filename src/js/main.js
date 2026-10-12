@@ -57,10 +57,26 @@ import { createOuterBoundaries, updateOuterBoundaries, applyOuterBoundaryQuality
  * them is scattered through the shared registries. Fifteen meshes, fifteen
  * draw calls, no textures.
  */
-import { createSmallBodies, updateSmallBodies, updateBinaryHighlights, placeCometAt, restoreCometToToday, cometActivity } from './scene/smallBodies/smallBodies.js';
+import { createSmallBodies, updateSmallBodies, updateBinaryHighlights, placeCometAt, restoreCometToToday, cometActivity, smallBodyAuToScene } from './scene/smallBodies/smallBodies.js';
+/* Round 38: the near-Earth families shown by their orbits (familyOrbits.js). */
+import { updateFamilyOrbits, pinFamilyOrbits, NEAR_EARTH_FAMILIES } from './scene/smallBodies/familyOrbits.js';
+/* Round 40: Jupiter's Trojans and the Hildas, lit from the board. */
+import { lightResonantSwarms } from './scene/smallBodies/resonantSwarms.js';
+/* Round 40: the main belt dimmer from afar. */
+import { dimBeltWithDistance } from './scene/beltDistanceDimming.js';
+/* Round 39: every known near-Earth asteroid, stamped (nearEarthSwarm.js). */
+import { loadNearEarthSwarm, updateNearEarthSwarm, spotlightFamily, pinRockByName } from './scene/smallBodies/nearEarthSwarm.js';
 import { createCometPlacementChip } from './ui/cometPlacementChip.js';
 import { createUltravioletView, ULTRAVIOLET_PLANETS, auroraViewDirection, ultravioletFramingRadii } from './scene/ultravioletView.js';
+import { setVenusRadar, isVenusRadarOn } from './scene/venusRadarView.js';
 import { attachExtraAurorae, updateExtraAurorae, bodyRadius as auroraBodyRadius } from './graphics/extraAurorae.js';
+/* Final round: the population highlights and the notes for layers switched
+ * on. (Round 38: the spacecraft were removed -- the site draws only what
+ * nature made -- and the solar wind and magnetospheres moved to the planned
+ * space events; see docs/archive/space-events-coming-soon/.) */
+import { highlightPopulations } from './scene/smallBodies/populationClouds.js';
+import { createKirkwoodOverlay } from './scene/kirkwoodOverlay.js';
+import { createSceneLayerChips } from './ui/sceneLayerChips.js';
 import {
   ASTRONOMICAL_UNIT_KM,
   createEarthDistanceTracker,
@@ -1277,6 +1293,10 @@ import { POINTER_PROXY_LAYER } from "./scene/pointerProxies.js";
    * mode would have put every orbit line back.
    */
   const guideSuppressionReasons = new Set();
+  /* Round 39: the near-Earth family shown from the board ("atira", "aten",
+   * "apollo", "amor"), or null. While set, only that family's rocks answer
+   * the pointer (findCelestialForHover, getBodyAtPointer, pointerup). */
+  let nearEarthFamilyView = null;
 
   function setGuideSuppression(reason, active) {
     const suppressedBefore = guideSuppressionReasons.size > 0;
@@ -2039,6 +2059,9 @@ composeSolarEventShot(
   // Escape then restores Europa, followed by Io, followed by the original
   // Jupiter inspection, and only then returns to free-flight.
   const focusNavigationHistory = [];
+  /* Round 38: the board resets the journey -- see `resetSceneForBoard`. */
+  let boardResetPending = false;
+  let travelSinceBoardOpen = false;
   const MAX_FOCUS_NAVIGATION_HISTORY = 48;
   const focusHistoryWorldPosition = new THREE.Vector3();
   let displayedBody = null;
@@ -2073,6 +2096,15 @@ composeSolarEventShot(
   let broadViewResetCount = 0;
 
   let focusZoomTarget = 1;
+  /*
+   * Round 38, second pass (Prompts.md: "Kirkwood gaps ... when clicked the
+   * screen should be lock kinda, no zoom out should happen, zoom in allowed,
+   * just observe"). While set, the focused body cannot be zoomed out past
+   * `maxZoom` and clicks on other bodies are ignored; turning and zooming
+   * in still work. Released with the layer that set it (its note's button,
+   * Escape, or opening the board).
+   */
+  let observeLock = null;
   let focusZoomCurrent = 1;
   let focusPinchDistance = null;
 
@@ -2844,6 +2876,9 @@ composeSolarEventShot(
       };
     };
 
+    /* Debug only: turn the camera round the focused body (for checking a
+     * planet's sunlit side headlessly). */
+    window.__setCameraYaw = (value) => { yaw = value; targetYaw = value; };
     window.__focusBody = (name) => {
       const target = planets.find((planet) => planet.name === name);
       if (target) { focusBody(target); return true; }
@@ -3321,6 +3356,177 @@ composeSolarEventShot(
    * the flight half-way. Already there: the card opens at once.
    */
   let auroraInfoWait = null;
+  /*
+   * Final round: what the board's explanations ask the scene to show.
+   *
+   *   beyond-earth:show-in-scene  { populations, travel } -- light a
+   *     population and/or fly somewhere. (Round 38: the solar wind and
+   *     magnetosphere layers it also drove were moved to the planned space
+   *     events.)
+   *
+   * Each layer that stays on says so in a note with its own off switch
+   * (ui/sceneLayerChips.js).
+   */
+  const sceneLayerChips = createSceneLayerChips();
+  /*
+   * Round 42: Venus beneath its clouds, as Magellan's radar saw it
+   * (scene/venusRadarView.js), opened from Venus's card. A note with its
+   * own off switch says what is shown; Escape, the switch, travelling to
+   * another body or opening the ultraviolet view put the clouds back.
+   */
+  function venusRadar(on) {
+    const venus = findSceneBody("Venus");
+    if (!venus) return;
+    setVenusRadar(venus, on);
+    if (!on) { sceneLayerChips.hide("venusRadar"); return; }
+    if (focusedBody !== venus) focusBody(venus);
+    sceneLayerChips.show("venusRadar", "Venus beneath its clouds, as radar sees it: NASA's Magellan map, in the orange NASA gave it after the Venera landers' photos. No eye or camera could see this.", {
+      button: "Clouds back",
+      onHide: () => setVenusRadar(findSceneBody("Venus"), false),
+    });
+  }
+  addEventListener("beyond-earth:venus-radar", (event) => venusRadar(event.detail?.on !== false));
+  addEventListener("beyond-earth:ultraviolet-view", () => venusRadar(false), { capture: true });
+  addEventListener("beyond-earth:travel-to-body", (event) => {
+    if (event.detail?.name !== "Venus" && isVenusRadarOn(findSceneBody("Venus"))) venusRadar(false);
+  }, { capture: true });
+  addEventListener("beyond-earth:show-in-scene", (event) => {
+    const detail = event.detail ?? {};
+    if (Array.isArray(detail.populations) && smallBodies?.populations) {
+      highlightPopulations(smallBodies.populations, detail.populations);
+      clearTimeout(populationHighlightTimer);
+      /* Round 37: Trojans of several planets now; say whose. */
+      const trojanOf = [...new Set(detail.populations.map((k) => /^(venus|earth|mars|uranus|neptune)L[45]$/.exec(k)?.[1]).filter(Boolean))]
+        .map((k) => k[0].toUpperCase() + k.slice(1));
+      const words = trojanOf.length > 1 ? `Every known Trojan of ${trojanOf.slice(0, -1).join(", ")} and ${trojanOf[trojanOf.length - 1]} is`
+        : trojanOf.length === 1 ? `${trojanOf[0]}'s Trojans are`
+        : detail.populations.includes("centaurs") ? "Every known Centaur is"
+          : "They are";
+      sceneLayerChips.show("populations", `${words} lit up in the scene, each flying on its own real orbit.`, {
+        button: "Done",
+        onHide: () => {
+          highlightPopulations(smallBodies.populations, []);
+        },
+      });
+      populationHighlightTimer = setTimeout(() => {
+        highlightPopulations(smallBodies.populations, []);
+        sceneLayerChips.hide("populations");
+      }, 45_000);
+      /* Round 40 (the owner: "when I am viewing a body and click anything
+       * on the dashboard that is not a body, the camera stays on that
+       * body -- reset it to that thing's view"). Leave whatever was in
+       * focus and frame the population from above the Sun: the Centaurs
+       * reach 30 AU, so 32 AU of the drawn system with 10% room. */
+      dispatchEvent(new CustomEvent("beyond-earth:travel-to-body", { detail: { name: "Sun", noDossier: true } }));
+      frameAroundFocused("Sun", smallBodyAuToScene(32) * 1.1, 0.75);
+    }
+    if (detail.travel) {
+      dispatchEvent(new CustomEvent("beyond-earth:travel-to-body", { detail: { name: detail.travel } }));
+    }
+    /* Round 40: Jupiter's Trojans and the Hildas, lit from their board page
+     * -- they are no longer drawn at rest (resonantSwarms.js). */
+    if (detail.jupiterSwarms && smallBodies?.swarms) {
+      lightResonantSwarms(smallBodies.swarms, true);
+      /* Round 40: as for every board action that is not a body -- leave
+       * the body in view and frame what was asked for: Jupiter's orbit and
+       * the Hildas inside it (5.2 AU, with 45% room: the clouds spread past
+       * the orbit), from above the Sun. */
+      dispatchEvent(new CustomEvent("beyond-earth:travel-to-body", { detail: { name: "Sun", noDossier: true } }));
+      frameAroundFocused("Sun", smallBodyAuToScene(5.2) * 1.45, 0.95);
+      sceneLayerChips.show("jupiterSwarms", "Jupiter's Trojans (the two clouds 60° ahead of and behind Jupiter) and the Hildas (the triangle) are lit up. Each dot stands for many; the real ones are far too faint to see.", {
+        button: "Done",
+        onHide: () => lightResonantSwarms(smallBodies.swarms, false),
+      });
+    }
+    /* Round 38: the Kirkwood gaps, marked on the belt. Fly to the Sun and
+     * stand back and above until the whole belt is in frame. */
+    if (detail.kirkwood && kirkwoodOverlay) {
+      kirkwoodOverlay.show(true);
+      sceneLayerChips.show("kirkwood", "The Kirkwood gaps are marked on the asteroid belt: the dashed rings are the empty lanes Jupiter keeps clear, and the blue rings the belt's edges. The view is held here — drag to turn, scroll in to look closer; Escape to leave.", {
+        onHide: () => {
+          kirkwoodOverlay.show(false);
+          observeLock = null;
+        },
+      });
+      dispatchEvent(new CustomEvent("beyond-earth:travel-to-body", { detail: { name: "Sun", noDossier: true } }));
+      frameAroundFocused("Sun", 52 * 10.5 * 1.2, 0.95, { lock: true });
+    }
+    /* Round 38: a near-Earth family's paths, from the board ("Show their
+     * paths"). Pinned until the note is closed; fly to the Sun and stand
+     * back far enough to hold 3 AU of the drawn system with 15% room -- most
+     * Apollo and Amor aphelia -- from 0.95 rad above, as the Kirkwood view. */
+    if (detail.nearEarthFamily && smallBodies?.familyOrbits) {
+      const family = NEAR_EARTH_FAMILIES[detail.nearEarthFamily];
+      if (family) {
+        pinFamilyOrbits(smallBodies.familyOrbits, family.key);
+        /* Round 39: and the family's 20 largest rocks, named -- click a
+         * name to fly there (nearEarthSwarm.js `spotlightFamily`). */
+        spotlightFamily(smallBodies.swarm, family.key);
+        /* Round 39, fourth pass (the owner: "disable all the background
+         * orbital paths ... I am not able to select or hover those largest
+         * bodies"). Every other orbit line goes, as in space mode, and
+         * none of them can be hovered; the family's paths and the named
+         * rocks are what the pointer finds. */
+        setGuideSuppression("near-earth-family", true);
+        /* Round 39, fifth pass (the owner: "the Hildas and Jupiter Trojans
+         * also get hovered ... it should also get disabled"). The pointer
+         * finds only this family's rocks while the view is up: regions
+         * (the Hildas, the Trojan camps, the belt), planets and every other
+         * body are passed over, and a click on empty space does nothing
+         * (it would otherwise fly into the region behind the pointer). */
+        nearEarthFamilyView = family.key;
+        sceneLayerChips.show("nearEarthFamily", `The ${family.label}' orbits are drawn, and their 20 largest rocks are named — click a name to fly to that rock. Every other ${family.label.slice(0, -1)} is listed on its board page.`, {
+          button: "Done",
+          onHide: () => {
+            pinFamilyOrbits(smallBodies.familyOrbits, null);
+            spotlightFamily(smallBodies.swarm, null);
+            setGuideSuppression("near-earth-family", false);
+            nearEarthFamilyView = null;
+            /* Round 39, fifth pass (the owner: "when clicked on Escape ...
+             * the name of that info card also must disappear when Escape or
+             * Done is clicked"). Closing the view leaves what it put you on
+             * -- a rock visited from it, or the Sun it opened on -- with no
+             * card and no way "back" into it, as closing the board does:
+             * the camera returns to the whole system. */
+            const focusName = focusedBody?.userData?.name ?? focusedBody?.name;
+            if (focusedBody?.userData?.nearEarthFamily || focusName === "Sun") {
+              focusNavigationHistory.length = 0;
+              focusBody(null);
+            }
+          },
+        });
+        dispatchEvent(new CustomEvent("beyond-earth:travel-to-body", { detail: { name: "Sun", noDossier: true } }));
+        frameAroundFocused("Sun", smallBodyAuToScene(3) * 1.15, 0.95);
+      }
+    }
+  });
+  /* Waits for `name` to be focused (the travel lands), then zooms out until a
+   * circle of `radius` scene units round it fits the frame, from `pitch`
+   * radians above its plane. Gives up after 60 s or if something else is
+   * focused. */
+  let frameAroundWait = null;
+  function frameAroundFocused(name, radius, pitch, { lock = false } = {}) {
+    clearInterval(frameAroundWait);
+    const startedAt = performance.now();
+    frameAroundWait = setInterval(() => {
+      const body = findSceneBody(name) ?? (name === "Sun" ? (() => {
+        let found = null;
+        scene.traverse((o) => { if (!found && o.userData?.name === "Sun" && o.userData?.info) found = o; });
+        return found;
+      })() : hoverTargets.find((candidate) => candidate?.userData?.isRegion && candidate.userData.name === name) ?? null);
+      if (performance.now() - startedAt > 60_000) { clearInterval(frameAroundWait); frameAroundWait = null; return; }
+      if (!body || focusedBody !== body) return;
+      clearInterval(frameAroundWait);
+      frameAroundWait = null;
+      const baseDistance = Math.max(0.001, getFocusedBaseDistance(body));
+      const halfFov = THREE.MathUtils.degToRad(Number(body.userData?.focusFov ?? camera.fov ?? 34) * 0.5);
+      const wanted = radius / Math.max(0.08, Math.tan(halfFov));
+      focusZoomTarget = THREE.MathUtils.clamp(wanted / baseDistance, 1, getFocusedMaximumZoom(body));
+      targetPitch = pitch;
+      if (lock && kirkwoodOverlay?.on) observeLock = { body, maxZoom: focusZoomTarget };
+    }, 250);
+  }
+
   addEventListener("beyond-earth:aurora-info", (event) => {
     const name = event.detail?.name;
     /* Earth's aurora is visible light, so it has a card section but no
@@ -3397,7 +3603,48 @@ composeSolarEventShot(
       const placed = placeCometAt(smallBodies, name, au, { outbound });
       if (placed) cometPlacementChip.show(placed.name, placed.au, placed.strength);
     },
-    onOpen: resetPlacedComets,
+    onOpen: () => {
+      resetPlacedComets();
+      resetSceneForBoard();
+    },
+  });
+  /*
+   * Round 38, second pass (Prompts.md: "as soon as they click on dashboard
+   * everything should be cleared from the queue and zoomed out solar system
+   * ... dashboard it will act as a reset").
+   *
+   * Opening the board clears what the viewer had built up: every layer the
+   * board switched on (the notes and their layers), and the Back history,
+   * so Escape after the next journey leads straight out rather than back
+   * through everything visited before. The camera itself cannot be moved
+   * while the board is open -- the universe is frozen behind it, and a
+   * focus exit started now would still be running when a row's journey
+   * begins and would swallow it (`focusBody` ignores calls mid-exit). So:
+   *   - a row or a "show it in the scene" button travels from where the
+   *     camera is, with nothing to go back to (`boardResetPending`);
+   *   - closing the board without choosing anything zooms all the way out
+   *     to the Solar System.
+   */
+  function resetSceneForBoard() {
+    sceneLayerChips.hideAll();
+    focusNavigationHistory.length = 0;
+    boardResetPending = true;
+    travelSinceBoardOpen = false;
+  }
+  addEventListener("beyond-earth:travel-to-body", () => { travelSinceBoardOpen = true; }, { capture: true });
+  addEventListener("beyond-earth:show-in-scene", () => { travelSinceBoardOpen = true; }, { capture: true });
+  addEventListener("beyond-earth:board-state", (event) => {
+    if (event.detail?.open || !boardResetPending) return;
+    setTimeout(() => {
+      if (travelSinceBoardOpen || isCelestialBoardOpen) return;
+      boardResetPending = false;
+      if (focusedBody) {
+        focusNavigationHistory.length = 0;
+        focusBody(null);
+      } else if (hasExploredFreeSpace) {
+        resetFreeExploration();
+      }
+    }, 320);
   });
   addEventListener("beyond-earth:board-state", (event) => {
     isCelestialBoardOpen = Boolean(event.detail?.open);
@@ -3670,6 +3917,9 @@ composeSolarEventShot(
    * than from an archetype -- see `scene/smallBodies/smallBodies.js`.
    */
   let smallBodies = null;
+  let populationHighlightTimer = 0;
+  /* Round 38: the Kirkwood gaps marked on the drawn belt (kirkwoodOverlay.js). */
+  let kirkwoodOverlay = null;
 
   async function buildAsteroidBeltProgressively() {
     if (asteroidBeltBuildStarted) return;
@@ -3682,6 +3932,11 @@ composeSolarEventShot(
       yieldToBrowser,
     });
     performance.mark("BE:belt-end");
+    try {
+      kirkwoodOverlay = createKirkwoodOverlay(asteroidBelt?.system ?? null);
+    } catch (error) {
+      console.warn("[BeyondEarth] Kirkwood marks failed to build", error);
+    }
     setAsteroidBeltQuality(asteroidBelt, asteroidBeltDensity, cinematicPixelRatio);
 
     /*
@@ -3752,6 +4007,11 @@ composeSolarEventShot(
       resolvePlanet: (name) => planets.find((planet) => planet.name === name) ?? null,
     });
     performance.mark("BE:smallBodies-end");
+    /* Round 39: the near-Earth list (~3.4 MB, ~0.9 MB compressed) is
+     * fetched once the scene is up, not during the opening. */
+    setTimeout(() => loadNearEarthSwarm(smallBodies?.swarm), 4000);
+    /* Round 40: the Centaur rocks (their orbits are already in hand). */
+    setTimeout(() => loadNearEarthSwarm(smallBodies?.centaurSwarm), 4500);
     // Thirteen more hoverable paths. These guides already carry their body,
     // so nothing has to be looked up.
     registerOrbitGuideHover({
@@ -4942,6 +5202,10 @@ composeSolarEventShot(
   function pickRegionCandidate(candidates) {
     let best = null;
     let bestWidth = Infinity;
+    /* Round 38, second pass: a band that says it must win (the
+     * heliosheath's, `pickPriority`) wins wherever it is hit. */
+    const priority = candidates.find((candidate) => candidate?.userData?.isRegion && candidate.userData.pickPriority > 0);
+    if (priority) return priority;
     for (const candidate of candidates) {
       if (!candidate?.userData?.isRegion) continue;
       const width = Number(candidate.userData.visualRadius);
@@ -5194,6 +5458,11 @@ composeSolarEventShot(
 
   function findPlanetOrbitAtPointer() {
     if (focusExitTransition || isDragging || lastPointerType === "touch" || orbitTargets.length === 0) return null;
+    /* Round 39: while the guides are suppressed (space mode, an event, a
+     * near-Earth family view) no orbit line is on screen, so none is a
+     * target. The planets' lines are hidden through their parent, which
+     * leaves each line's own `visible` set, so the check below missed them. */
+    if (guideSuppressionReasons.size) return null;
     // The first Earth composition is intentionally held close for a few scroll
     // frames. Its large projected orbit used to acquire an accidental hover as
     // soon as the cursor entered the canvas, freezing the opening camera before
@@ -6524,6 +6793,25 @@ composeSolarEventShot(
         body && (body !== focusedBody || focusedUiSuppressedByWideView)
       ));
 
+    /* Round 39, fourth pass: a named rock of a near-Earth family view
+     * (its ring or its name) wins first. It is far smaller than a pixel at
+     * that view, so the size floors below would turn it away. */
+    const spotRock = hitBodies.find((body) => body.userData?.spotlit);
+    if (spotRock) {
+      setCelestialHover(spotRock);
+      return;
+    }
+    /* Round 39, fifth pass: in a family view nothing else answers. */
+    if (nearEarthFamilyView) {
+      const member = hitBodies.find((body) => body.userData?.nearEarthFamily === nearEarthFamilyView);
+      if (member) setCelestialHover(member);
+      else {
+        clearCelestialHover();
+        clearPlanetOrbitHover();
+      }
+      return;
+    }
+
     const nearbyMajor = overFocusedDisk ? null : findNearestMajorBodyAtPointer({
       minimumVisibleRadiusPixels: 0.14,
       extraHitPixels: innerWidth <= 760 ? 12 : 7,
@@ -6737,6 +7025,13 @@ composeSolarEventShot(
     raycaster.setFromCamera(pointer, camera);
     const hits = raycaster.intersectObjects(hoverTargets, true);
     const bodies = hits.map((hit) => findInteractiveObject(hit)).filter(Boolean);
+    /* Round 39, fourth pass: as in the hover pass, a named family rock. */
+    const spotRock = bodies.find((body) => body.userData?.spotlit && body !== focusedBody);
+    if (spotRock) return spotRock;
+    /* Round 39, fifth pass: in a family view, only that family's rocks. */
+    if (nearEarthFamilyView) {
+      return bodies.find((body) => body.userData?.nearEarthFamily === nearEarthFamilyView && body !== focusedBody) ?? null;
+    }
 
     // When a small asteroid crosses the same line of sight as a planet, the
     // user's likely target is the clearly recognisable major body behind it.
@@ -7506,12 +7801,24 @@ composeSolarEventShot(
         }
       }
     }
+    /* Round 38: a named region band -- the heliosheath, the heliosphere's
+     * boundaries, the Kuiper Belt's zones -- found among the pointer
+     * targets, so the board can fly to one. */
+    if (!target) {
+      target = hoverTargets.find((candidate) => candidate?.userData?.isRegion && matches(candidate)) ?? null;
+    }
     // The Sun and Earth's Moon live outside every list above.
     if (!target && (name === "Sun" || name === "Moon")) {
       scene.traverse((object) => {
         if (!target && object.userData?.name === name && object.userData?.info) target = object;
       });
     }
+    /* Round 39: last of all, the stamped near-Earth rocks, by name, from
+     * the board's family lists -- held drawn while it is flown to. Last,
+     * so a moon or a named body that shares a rock's name (Saturn's Pan,
+     * the Apollo asteroid 4450 Pan) is always the one found. */
+    if (!target && smallBodies?.swarm) target = pinRockByName(smallBodies.swarm, name);
+    if (!target && smallBodies?.centaurSwarm) target = pinRockByName(smallBodies.centaurSwarm, name);
     if (!target) return;
     /*
      * Round 10 (the owner): "Fly to" from a comet's glow view opened its info
@@ -7532,6 +7839,9 @@ composeSolarEventShot(
 
   function focusBody(body) {
     if (focusExitTransition) return;
+    /* Round 38: observing the Kirkwood gaps -- clicks elsewhere do nothing. */
+    if (observeLock && body && body !== observeLock.body) return;
+    if (!body) observeLock = null;
     const retainedAtlasParentName = body?.userData?.parentPlanet === satelliteOverviewParentName
       ? satelliteOverviewParentName
       : null;
@@ -7575,8 +7885,12 @@ composeSolarEventShot(
       lockJourneyScroll();
     }
 
+    /* Round 38: a heliosphere region stays lit while it is focused. */
+    if (focusedBody?.userData?.isOuterBoundary && focusedBody !== body) focusedBody.userData.setHovered?.(false);
     if (focusedBody) {
-      if (isFocusedWideView()) {
+      /* Round 38: a journey chosen from the board starts a fresh history
+       * (`resetSceneForBoard`). */
+      if (isFocusedWideView() || boardResetPending) {
         focusNavigationHistory.length = 0;
       } else {
         pushFocusedNavigationState(focusedBody);
@@ -7586,6 +7900,7 @@ composeSolarEventShot(
     }
 
     focusedBody = body;
+    boardResetPending = false;
     focusedUiSuppressedByWideView = false;
     focusSelectionPulseStartedAt = elapsedTime;
     focusedBodyLocator.visible = true;
@@ -7599,8 +7914,43 @@ composeSolarEventShot(
 
     setAsteroidInspectionDetail(focusedBody, true);
     setAsteroidFocusAppearance(focusedBody, true);
+    faceSunlitSide(focusedBody);
+    /* Round 38 (Prompts.md: "could not find Heliosheath?"): focusing the
+     * heliosheath -- or either boundary -- lights the shells it lies between
+     * and stands back far enough to see the whole heliosphere. */
+    if (focusedBody.userData?.isOuterBoundary) {
+      focusedBody.userData.setHovered?.(true);
+      frameAroundFocused(focusedBody.userData.name, Number(focusedBody.userData.focusVisualRadius || 2400) * 1.45, 0.62);
+    }
     updateDistanceReadout(smoothProgress);
     updateBodyCard(focusedBody);
+  }
+
+  /*
+   * Round 38 (Prompts.md: "Bienor ... looks like plain"). Arriving at a small
+   * body the camera keeps whatever heading it had, and for a body on the far
+   * side of the Sun that heading looks at its night side: Bienor arrived as
+   * a black silhouette, with its new craters invisible. For the small bodies
+   * only -- planets and moons keep their framing -- when the view would show
+   * more night than day (phase angle over 100 degrees), the camera swings
+   * round to a 40-degree phase on the same side, which lights most of the
+   * face and still leaves a terminator for the relief to read against.
+   */
+  const _sunlitBody = new THREE.Vector3();
+  const _sunlitSun = new THREE.Vector3();
+  function faceSunlitSide(body) {
+    if (!body || !smallBodies?.allTargets?.includes(body)) return;
+    body.getWorldPosition(_sunlitBody);
+    world.getWorldPosition(_sunlitSun);
+    const sx = _sunlitSun.x - _sunlitBody.x;
+    const sz = _sunlitSun.z - _sunlitBody.z;
+    if (Math.hypot(sx, sz) < 1e-6) return;
+    const sunYaw = Math.atan2(sx, sz);
+    const phase = Math.abs(wrapAngle(targetYaw - sunYaw));
+    if (phase <= (100 * Math.PI) / 180) return;
+    const side = Math.sign(wrapAngle(targetYaw - sunYaw)) || 1;
+    const desiredYaw = sunYaw + side * ((40 * Math.PI) / 180);
+    targetYaw += wrapAngle(desiredYaw - targetYaw);
   }
 
   /*
@@ -7644,7 +7994,10 @@ composeSolarEventShot(
 
   function getFocusedMaximumZoom(body = focusedBody) {
     const baseDistance = Math.max(0.001, getFocusedBaseDistance(body));
-    return Math.max(2.45, MAX_CINEMATIC_CAMERA_DISTANCE / baseDistance);
+    const maximum = Math.max(2.45, MAX_CINEMATIC_CAMERA_DISTANCE / baseDistance);
+    return observeLock && observeLock.body === body && observeLock.maxZoom
+      ? Math.min(maximum, observeLock.maxZoom)
+      : maximum;
   }
 
   /*
@@ -8687,6 +9040,9 @@ composeSolarEventShot(
       openCelestialDetails(body);
       return;
     }
+    /* Round 39, fifth pass: in a near-Earth family view a click that found
+     * none of the family's rocks does nothing -- no region, no exit. */
+    if (!body && !orbit && nearEarthFamilyView) return;
     if (body) {
       /*
        * Two steps, and the order matters: travel first, record second.
@@ -8742,6 +9098,18 @@ composeSolarEventShot(
     const isDistancePopoverOpen = Boolean(distanceUnitPopover && !distanceUnitPopover.hidden);
     if (isDistancePopoverOpen) {
       closeDistanceInfoPopover();
+      return;
+    }
+    /*
+     * Round 38, second pass (Prompts.md: "hide, done or any button which we
+     * get via dashboard ... should also be gone when clicked escape, the
+     * scene should also be gone"). A layer switched on from the board --
+     * the Kirkwood marks, a family's orbits, lit Trojan camps -- is the
+     * first thing Escape takes away, note and layer together, as its own
+     * button would. One press, one step: the next press leaves the body.
+     */
+    if (sceneLayerChips.count > 0) {
+      sceneLayerChips.hideAll();
       return;
     }
     if (focusedBody) {
@@ -9616,6 +9984,7 @@ composeSolarEventShot(
     // update removes stepping/flicker while keeping the main belt smooth.
     updateJupiterTrojanFrame(asteroidBelt, jupiter);
 
+    kirkwoodOverlay?.update(deltaTime);
     if (asteroidBelt) updateAsteroidBelt(
       asteroidBelt,
       frameMotionScale,
@@ -9626,6 +9995,9 @@ composeSolarEventShot(
         hoveredBody: hoveredCelestialBody,
       },
     );
+    /* Round 40: the belt's pebbles dimmer from afar (beltDistanceDimming.js;
+     * asteroidBelt.js itself is frozen and untouched). */
+    if (asteroidBelt) dimBeltWithDistance(asteroidBelt, camera, innerHeight);
     if (kuiperBelt) updateKuiperBelt(kuiperBelt, frameMotionScale, camera);
     // Two clocks, for the same reason the belt uses two: `frameMotionScale`
     // already folds in delta time and drives orbital advance per frame, while
@@ -9650,6 +10022,36 @@ composeSolarEventShot(
       smallBodies,
       guideSuppressionReasons.size ? null : focusedBody,
       camera,
+    );
+    /* Round 38: a near-Earth family's orbits while one of its rocks is
+     * hovered or focused (or the board pinned it). Off with the guides in
+     * space mode and the events, as the binary lines are. */
+    /* Round 39: the stamped near-Earth rocks near the camera. */
+    if (smallBodies?.swarm) updateNearEarthSwarm(smallBodies.swarm, {
+      motionScale: frameMotionScale,
+      elapsed: smallBodies.elapsedSeconds,
+      camera,
+      focused: focusedBody,
+      hovered: hoveredCelestialBody,
+    });
+    /* Round 40: the Centaur rocks, on the Centaur dots' clock, so each rock
+     * is exactly where its dot hands over to it. */
+    if (smallBodies?.centaurSwarm) updateNearEarthSwarm(smallBodies.centaurSwarm, {
+      elapsed: smallBodies.elapsedSeconds,
+      camera,
+      focused: focusedBody,
+      hovered: hoveredCelestialBody,
+      clock: smallBodies.populations?.clock ?? 0,
+    });
+    if (smallBodies?.familyOrbits) updateFamilyOrbits(
+      smallBodies.familyOrbits,
+      guideSuppressionReasons.size ? null : hoveredCelestialBody,
+      guideSuppressionReasons.size ? null : focusedBody,
+      deltaTime,
+      camera,
+      /* The fade near a focused rock still applies when the guides are
+       * suppressed (the family view suppresses them). */
+      focusedBody,
     );
     if (outerBoundaries) updateOuterBoundaries(outerBoundaries, frameMotionScale, camera);
     /*

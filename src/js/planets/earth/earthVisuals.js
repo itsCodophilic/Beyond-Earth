@@ -51,7 +51,8 @@ function createCloudMaterial(cloudMap, {
       varying vec3 vWorldPosition;
 
       float cloudValue(vec2 uv) {
-        vec2 wrappedUv = vec2(fract(uv.x), clamp(uv.y, 0.001, 0.999));
+        // Round 42: no fract() here. The map repeats across the seam (RepeatWrapping), and fract() made the texture coordinate jump from 1 back to 0 inside one pixel; the GPU read that jump as the whole map squeezed into a pixel and drew that column from its smallest mip level -- the thin line along the date line the owner saw.
+        vec2 wrappedUv = vec2(uv.x, clamp(uv.y, 0.001, 0.999));
         vec4 sampleColor = texture2D(uCloudMap, wrappedUv);
         float luminance = dot(sampleColor.rgb, vec3(0.299, 0.587, 0.114));
 
@@ -83,13 +84,15 @@ function createCloudMaterial(cloudMap, {
 
         // Suppress low-level grey haze and preserve only coherent cloud fields.
         // A gentle power curve keeps wispy edges while avoiding posterised blobs.
-        filteredCloud = pow(clamp(filteredCloud, 0.0, 1.0), 1.28);
+        // Round 41: a lifting curve (0.8), not a darkening one (was 1.28) --
+        // this GEOS-5 field is dim (mean 0.19), and its mid-greys are cloud.
+        filteredCloud = pow(clamp(filteredCloud, 0.0, 1.0), 0.8);
         float cloudAlpha = smoothstep(
           uThreshold,
           uThreshold + uSoftness,
           filteredCloud
         );
-        cloudAlpha *= smoothstep(0.055, 0.24, filteredCloud);
+        cloudAlpha *= smoothstep(0.03, 0.12, filteredCloud);
 
         vec3 normal = normalize(vWorldNormal);
         vec3 lightDirection = normalize(-vWorldPosition);
@@ -97,14 +100,18 @@ function createCloudMaterial(cloudMap, {
         float daylight = smoothstep(-0.18, 0.38, dot(normal, lightDirection));
         float limb = pow(1.0 - max(dot(normal, viewDirection), 0.0), 2.2);
 
-        vec3 shadowWhite = vec3(0.70, 0.73, 0.77);
+        // Round 41: night-side cloud is dark. It was drawn at 0.70 grey on
+        // the night side too, so with the thicker deck the dark hemisphere
+        // read as a grey-white cloud globe. Now 4% of sunlit white (a
+        // moonlit hint, chosen by eye), easing up across the terminator.
+        vec3 shadowWhite = vec3(0.035, 0.04, 0.05);
         vec3 sunlitWhite = vec3(1.0, 0.995, 0.975);
         vec3 cloudColor = mix(shadowWhite, sunlitWhite, daylight);
         cloudColor += vec3(0.08, 0.16, 0.24) * limb * daylight * 0.15;
 
         // Clouds remain visible on the nightside, but sunlight—not a dark tint—
         // determines their photographic brightness.
-        float alpha = cloudAlpha * uOpacity * mix(0.26, 0.82, daylight);
+        float alpha = cloudAlpha * uOpacity * mix(0.26, 0.95, daylight);
         if (alpha < 0.012) discard;
         gl_FragColor = vec4(cloudColor, alpha);
       }
@@ -166,8 +173,18 @@ function createAtmosphereMaterial() {
         vec3 color = mix(blue, paleBlue, daylight);
         color += sunset * sunsetRim * 0.18;
 
-        float alpha = fresnel * mix(0.035, 0.34, daylight);
-        gl_FragColor = vec4(color, alpha);
+        // Round 41: and a faint blue veil over the whole day side, not only
+        // the limb -- the air scatters blue light over everything below it,
+        // which is why the oceans read blue, not black, in every photograph
+        // of the whole Earth (Apollo 17's Blue Marble, DSCOVR/EPIC). 0.06 of
+        // a deep blue, chosen by eye against those.
+        float rim = fresnel * mix(0.035, 0.34, daylight);
+        float veil = daylight * 0.06;
+        vec3 veilColor = vec3(0.10, 0.30, 0.85);
+        gl_FragColor = vec4(
+          (color * rim + veilColor * veil) / max(rim + veil, 1e-4),
+          rim + veil
+        );
       }
     `,
     transparent: true,
@@ -389,10 +406,18 @@ export function createEarthVisualSystem({
     const cloudGeometry = new THREE.SphereGeometry(radius * 1.020, segments, segments);
     const primaryClouds = new THREE.Mesh(
       cloudGeometry,
+      /* Round 41 (the owner: Earth "does not seem realistic as per
+       * space"): about two thirds of Earth is under cloud at any moment
+       * (NASA Earth Observatory, MODIS cloud fraction ~67%), and from space
+       * the clouds are the brightest thing on it. The deck was thin -- 0.68
+       * opacity, faint cloud below 0.19 dropped -- so the globe read as a
+       * clear map. The GEOS-5 field here is dim (mean 0.19; only 36% of it
+       * above 0.2), so mid-grey cloud is real cloud: now opacity 0.95, from
+       * 0.05 over 0.25 (was 0.68, from 0.19 over 0.46). */
       createCloudMaterial(textures.earthClouds, {
-        opacity: 0.68,
-        threshold: 0.19,
-        softness: 0.46,
+        opacity: 0.95,
+        threshold: 0.05,
+        softness: 0.25,
       }),
     );
     primaryClouds.name = "Earth primary cloud deck";

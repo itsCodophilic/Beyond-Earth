@@ -427,13 +427,9 @@ Not committed to git.
   - Neptune: Proteus, Nereid
 
   These need images.
-- More Centaurs: Nessus, Asbolus, Bienor, Hylonome, plus a 5–30 AU population.
-- A near-Earth asteroid population.
-- Neptune's Trojans.
-- The solar wind and the heliosheath as their own objects.
-- Spacecraft.
-- Magnetospheres and radiation belts, as labelled diagrams.
-- Tidal locking, the Laplace resonance, seasons and formation, shown rather than stated.
+- ~~More Centaurs, a near-Earth asteroid population, Neptune's Trojans, the solar wind and the heliosheath, spacecraft, magnetospheres, tidal locking, the Laplace resonance and seasons~~ — done in Part 15.
+- ~~How the Solar System formed~~ — done in Part 16, with the other planets' Trojans, Dziewanna and the Kirkwood gaps.
+- **Still blocked:** real textures for Nix, Hydra, Kerberos, Styx and the Rank 6 moons need images (the image hosts are blocked from the build environment); Vesta/Pallas/Hygiea/Psyche surfaces and gaps in the 3D belt need `asteroidBelt.js` unfrozen.
 
 ## Part 4 — Checks only the owner's Mac can run
 - A production `vite build`.
@@ -535,3 +531,382 @@ The owner asked for every body with an aurora to say where and how it happens, E
 2. Press Mars's "Aurora · UV mode" pill. "Where it happens" names Terra Sirenum and Terra Cimmeria, and the ultraviolet button is still there.
 3. Spot-check Jupiter, Saturn, Uranus, Neptune, Io, Europa, Ganymede, Callisto, Venus, Mercury and 67P. Each card says where its aurora is.
 4. Nothing looks different on any planet, in either view.
+
+## Part 15 — Populations, spacecraft, magnetospheres and the solar wind, how it works: done
+The owner asked for "everything at once" of what Part 3 still listed. Nothing on the existing planets changed; the new layers are off until asked for, except the population clouds and the spacecraft, which are always drawn.
+
+**Populations** (`scene/smallBodies/populationCatalogue.js`, `populationClouds.js`)
+- 1,038 more Centaurs, 891 near-Earth asteroids (all 38 known Atiras, plus the 30 Atens, 427 Apollos and 396 Amors about 1 km or larger, H < 17.75, apart from the ones already drawn individually) and 42 Neptune Trojans, each on its real JPL orbit, moved on the graphics card (one draw per family).
+- Nessus, Asbolus, Hylonome and Bienor as full bodies, with colours from Peixinho 2012 and shapes from their measured sizes.
+- Hovering Neptune's L4 or L5 shows a band with a card, like Jupiter's camps.
+
+**Spacecraft** (`scene/spacecraft.js`, `spacecraftCatalogue.js`, `spacecraftPaths.js`)
+- Voyager 1 and 2, Pioneer 10 and 11, New Horizons, Parker Solar Probe, Europa Clipper, JUICE, Lucy and Psyche, at today's position from JPL Horizons.
+- The path already flown is solid; the route still to fly is dashed.
+- Each can be focused and has a card. The readout says "spacecraft track (JPL Horizons)".
+- Past 40 AU each is placed against the drawn heliosphere, so the Voyagers are outside the drawn heliopause and New Horizons is inside the drawn termination shock, as in reality. Juno is left out: NASA has not said whether it still operates.
+
+**The heliosheath and the solar wind** (`scene/outerBoundaries.js`, `scene/solarWind.js`)
+- The heliosheath is a hover band of its own, between the termination shock and the heliopause.
+- The solar wind is 6,000 particles plus eight Parker-spiral field lines out to 10 AU. Fast above 25° latitude, slow near the equator; it slows, reddens and bends tailward in the heliosheath and stops at the heliopause. Off until switched on from the board.
+
+**Magnetospheres** (`graphics/magnetospheres.js`)
+- Mercury, Earth, Jupiter, Saturn, Uranus, Neptune and Ganymede: bow shock, magnetopause, tail, belts and plasma tori, with field lines, labelled. Sizes come from spacecraft measurements and are scaled with each planet's moons, so Io's torus sits on Io's orbit.
+- Switched on from the planet's card ("Show its magnetosphere") or the board. The camera pulls back to fit it. Labels appear only when the diagram is big enough to read, are kept on screen, and step aside when two would overlap.
+
+**How it works** (board, filter "How it works")
+- Nine explanation views: Centaurs, near-Earth families, Neptune's company, spacecraft (with a 1972–2033 replay), magnetospheres, the solar wind, tidal locking, the Laplace resonance and seasons.
+- Each has a "show it in the scene" button that closes the board and lights the thing up. A note at the top right says what is on and has its own Hide button.
+
+**Files:** new — the six above plus `ui/explainerView.js`, `ui/explainers/{common,populations,spacecraft,fields,mechanisms}.js`, `ui/sceneLayerChips.js`. Changed — `smallBodies.js`, `centaurCatalogue.js`, `outerBoundaries.js`, `distanceFromEarth.js` (spacecraft readout label), `celestialBoardData.js`, `celestialBoard.js`, `boardGlossary.js`, `planetDetailsPanel.js`, `main.js`, `binary-system.css`, `cinematic-ui.css`.
+
+## What to test (part 15)
+1. **Board → "How it works" filter.** Open each of the nine views. Check that pictures animate, the mode buttons switch, and no text overlaps or runs out of its box.
+2. **Spacecraft.** In the spacecraft view, press "Replay 1972 – 2033"; the probes should bend round Jupiter and Saturn. On the board's "Spacecraft" filter, click Voyager 1. The camera travels there, and the card shows "Launch and flybys", "What still works" and "Where its position comes from" (not "Gravity"). The distance readout says "spacecraft track".
+3. **Dashed future paths.** Focus Lucy or Europa Clipper: the route ahead is dashed, the route behind solid.
+4. **Magnetospheres.** Open Jupiter's card and press "Show its magnetosphere". The card closes, the camera pulls back, and the shells, belts, Io torus and field lines appear with readable labels. "Hide" in the top-right note removes it. Repeat for Earth, Saturn, Uranus (tilted), Neptune, Mercury and Ganymede. When you scroll far out, the labels should fade away instead of piling up.
+5. **Solar wind.** From the solar-wind view, press the scene button, then scroll out to the whole system. Particles should stream out, faster at the poles. Watch for spiral lines in the ecliptic and reddening near the edge. "Hide" switches it off.
+6. **Populations.** From the Centaurs, near-Earth or Neptune views, press "Light them up". The right family brightens for 45 seconds (or until "Done"). Hover near Neptune's orbit 60° ahead of and behind Neptune to see the L4/L5 bands.
+7. **The heliosheath.** Hover between the termination shock and the heliopause: its own card appears, and both shells light up.
+8. **New Centaurs.** Search or travel to Nessus, Asbolus, Hylonome and Bienor. Nessus should look reddest. Bienor should be elongated.
+9. **Performance.** With everything switched on, scrolling should feel as smooth as before. The clouds are drawn on the graphics card, and the wind and diagrams cost nothing while off.
+
+## Part 16 — Everything left except space events: done
+The owner asked for everything still pending, except space events. All of it is either built here or blocked for a reason listed at the end.
+
+1. **Every planet's Trojans** (`populationCatalogue.js` `PLANET_TROJANS`, `populationClouds.js`, `smallBodies.js`).
+   - Each Trojan rides in its own planet's frame, as Neptune's do:
+     - Venus: 2013 ND15.
+     - Earth: 2010 TK7 and 2020 XL5.
+     - Mars: the 17 shown stable — 2 at L4, plus Eureka and 14 more at L5.
+     - Uranus: 2011 QF99 and 2014 YX49.
+   - Elements are from JPL SBDB, 10 October 2026.
+   - Uranus's two were taken out of the Centaur cloud (now 1,036), so they are not drawn twice.
+   - Venus, Mars and Uranus join `CO_ORBITAL_PLANETS` (Standish elements).
+   - Mars's L4 and L5 camps have hover bands with cards, like Neptune's.
+   - New board view, **"Every planet's Trojans"**: one mode per planet, with the planet held still at the top. Each Trojan is shown with the loop it traces over a year. Includes a "Light them all up" button.
+   - **Measured:** after loading, each camp sits on its own side of its drawn planet. Mars L5 points are 61–88° behind Mars, Mars L4 56–74° ahead, Earth's 12° and 62° ahead.
+2. **Dziewanna** (`tnoCatalogue.js`, its own Arrokoth-relief map `dziewanna.jpg`, `kuiperBelt.js` member list).
+   - Size 470 km, albedo 0.25 (Herschel, Pál et al. 2012); 7.07 h rotation; red (g′−r′ 0.80).
+   - JPL orbit solution 12; in Neptune's 2:7 resonance.
+3. **Kirkwood gaps & asteroid families** (new `ui/explainers/belt.js`, board, "How it works").
+   - A histogram of all 861,399 numbered asteroids by orbit size, from 88 SBDB count queries.
+   - The 4:1, 3:1, 5:2, 7:3 and 2:1 gaps are marked, plus the Hildas gathering at 3:2.
+   - An animation of why: a 3:1 asteroid passes Jupiter at the same two places every time.
+   - The eight largest families, drawn as soft regions on an orbit-size vs tilt chart (Nesvorný et al. 2015).
+   - The 3D belt is unchanged (`asteroidBelt.js` stays frozen), and the view says so.
+4. **How the Solar System formed** (new `ui/explainers/formation.js`): six stages — cloud, disc, Jupiter, rocky worlds, giants move, settled.
+   - A log-time clock shows where each stage sits.
+   - Dates are the measured ones: CAIs 4,567.30 Myr (Connelly 2012), Jupiter's core about 1 Myr (Kruijer 2017), Mars 2–4 Myr, the gas gone by about 4 Myr (Wang 2017), the Moon-forming impact, the early giant-planet instability (Nesvorný 2018), the 4.4 Gyr zircons.
+5. **Magnetosphere note** now says it is a diagram — "it gives off no light you could see" (the `not-covered.md` band rule).
+
+**Still blocked:**
+- Real textures for Nix, Hydra, Kerberos, Styx and the Rank 6 moons need source images. The image hosts are blocked from here, so the owner has to supply them.
+- `asteroidBelt.js` (frozen) blocks Vesta, Pallas, Hygiea and Psyche surfaces, and gaps or families in the 3D belt.
+- `vite build`, KTX2 compression and a visible-tab timing run only on the owner's Mac.
+
+## What to test (part 16)
+1. **Board → "Every planet's Trojans"** (in the inner planets column, or the "How it works" and asteroid filters).
+   - Click Venus, Earth, Mars, Uranus and Neptune in turn. Each planet stays at the top with its Trojans' loops round the 60° points.
+   - Venus's single loop is huge; Mars's are small and clustered behind it.
+   - "Light them all up" closes the board and lights every camp. The top-right note names all five planets.
+2. **Mars's camps in the scene.** Fly to Mars and zoom out until its orbit is visible. Hover about 60° ahead of and behind Mars along its orbit: a card appears ("Mars's Trojans · L4 / L5") and that camp brightens.
+3. **Board → "Kirkwood gaps & asteroid families"** (asteroid belt column).
+   - "1 · The count" shows the histogram with deep notches at the dashed lines and a spike at the Hildas.
+   - "2 · Why the gaps": the orange asteroid's rings pile up at two spots, while the blue one's spread all round.
+   - "3 · The families": eight labelled blobs, with the gaps cutting through.
+4. **Board → "How the Solar System formed"** (Sun column). Step through all six modes. Check that the bar at the bottom moves to the right span, and that nothing overlaps.
+5. **Dziewanna.** Search for it on the board and fly there. It should be a slightly reddish, slightly elongated world, with a card that says 2:7 resonance and 470 km.
+6. **Centaurs** still light up as before (1,036 now).
+7. **Smoothness:** no change expected. Five tiny point clouds were added.
+
+
+## Part 17 — Prompts.md, round 38: done
+
+**Moved to the space events, as "Coming soon"** (`spaceEventsDashboard.js`, `COMING_SOON`):
+- How the Solar System formed, The solar wind, Magnetospheres and Why there are seasons are listed, disabled, under the event list.
+- Their first versions were taken out of the site. The code and full implementation notes are kept in `docs/archive/space-events-coming-soon/` (README.md says how each worked, for the redesign).
+
+**Near-Earth families, redesigned** (the "sparkling" points are gone):
+- 20 real rocks (`scene/smallBodies/nearEarthFamilies.js`): Atiras — Atira (with its moon), ʼAylóʼchaxnim, 2021 PH27; Atens — Aten, Ra-Shalom, Hathor; Apollos — Apollo (with moon), Icarus, Toro, Nereus, Castalia, Eger, Daedalus, 1989 JA (with moon); Amors — Ganymed, Don Quixote, Ivar, Florence (two moons), Betulia, 1986 DA. Elements, sizes, albedos and rotations from JPL SBDB (10 October 2026), each card citing its sources.
+- Surfaces by type: C dark rubble (Bennu relief), S cratered rock with dust ponds (Eros/Itokawa), M metal (1986 DA: metalness 0.85, roughness 0.4, shallow scoops), E bright enstatite, D dark (Don Quixote); Atiras baked (Ida relief). Shapes by family: varied Apollos with binaries, big cratered Amors, small fast Atens.
+- Hover or click any near-Earth rock (also Eros, Bennu, Apophis…) and its family's orbits light: 891 real paths (`familyOrbits.js`).
+- Four board views (inner column): "In space" (the real rocks rendered with hard light on black, `rockPortraits.js`), "Their orbits", composition chips (rock, metals, water & clays, organics, volatile gases — hover one), a "Misconception · Not a belt" note, fly-to rows, and "Show their paths in space".
+
+**Every planet's Trojans as bodies** (`planetTrojans.js`): Venus 1, Earth 2, Mars 17, Uranus 2 — textured, clickable, with cards. A camp lights (ring + name on each member) from the board, by hovering Mars's camp bands, or by focusing any member. Neptune's 42 stay points.
+
+**Fixes:** Eurybates' moon ring only shows while Eurybates or Queta is focused, and Queta is labelled; the board's Sun dot is white; Kirkwood is labelled as the belt's structure and "Show the gaps in our belt" marks the real lanes on the drawn belt (`kirkwoodOverlay.js`); Dziewanna uses the supplied map; Nessus redrawn from the supplied image; Bienor (and Asbolus, Hylonome) have cratered maps; the Space Dictionary pulses during the tour; "How it works" filter removed; spacecraft removed; the heliosheath is listed on the board and flies there.
+
+**Cost:** 148 small-body meshes, 724,000 triangles (was ~595,000); textures 512 × 256, ~1.3 MB for all 26 new maps. The point clouds dropped from ~1,990 to ~1,080.
+
+## What to test (part 17)
+1. **Space events → bottom of the list:** four greyed "(coming soon)" items; their buttons do nothing.
+2. **Board → inner column → "The Apollos · near-Earth family"** (then Atiras, Atens, Amors):
+   - "1 · In space": the rocks turn, lit from the left, night sides black; names and types under each.
+   - "2 · Their orbits": the family's sheaf of orbits, the drawn rocks moving.
+   - Hover each composition chip: the line underneath changes.
+   - The orange "Misconception · Not a belt" box is at the top right.
+   - Click a row (e.g. Florence) → flies there and the card opens.
+   - "Show the Apollos' paths in space" → closes the board, zooms out over the Sun and draws the orbits; "Done" removes them.
+3. **In the scene:** fly to Ganymed, 1986 DA (metal shine on the lit side), Atira and Florence (moons go round them). Hover any near-Earth rock from afar: its family's paths light faintly.
+4. **Board → "Every planet's Trojans":** click Eureka / 2010 TK7 / 2013 ND15 / 2011 QF99 rows → each flies to a real body with a card. "Mars's camps" row → Mars with 17 rings and names. Focusing Eureka lights its whole camp.
+5. **Eurybates:** open Mars or Jupiter — no stray ring. Fly to Eurybates — Queta's ring and name appear.
+6. **Kirkwood:** board → Kirkwood → "Show the gaps in our belt": dashed rings on the belt, labels spread round it.
+7. **Smoothness:** fly round the inner Solar System; it should feel as before.
+
+## Part 18 — Prompts.md observations, round 38 second pass: done
+
+1. **Queta not always highlighted** (`smallBodies.js` `updateMoonView`). A moon's ring and name show only while its parent or the moon is focused, and fade away once the orbit is smaller than about 18 px across on screen — zoom out and they go.
+2. **The board resets the journey** (`main.js` `resetSceneForBoard`). Opening All bodies switches off every layer the board turned on and clears the Back history. Choosing something travels from where you are, with nothing to go back through. Closing the board without choosing zooms all the way out to the Solar System.
+3. **Heliosheath hoverable in the scene** (`outerBoundaries.js`). Its band was 17 units wide on a 2,600-unit heliosphere (85 → 120 AU is only 43 units on the scene's distance curve), so it was 2–3 px wide. The band is now the whole gap between the two rings and never narrower than 26 px on screen, and it wins where it overlaps the scattered disk or the detached objects.
+4. **Bodies to test:** `docs/bodies-to-test.md` lists every named body drawn, as tick-boxes, with the new groups marked.
+5. **Kirkwood gaps:**
+   - "Show the gaps in our belt" now holds the view. You can turn and zoom in, but not zoom out or click away; Escape releases it.
+   - The board lists every family on the chart with a fly-to: Vesta, Flora (and Gaspra), Nysa, Polana, Eunomia, Koronis (and Ida), Eos, Themis and Hygiea.
+   - Flora, Nysa, Polana, Koronis, Eos and Themis are new bodies (`familyNamesakes.js`), with JPL SBDB elements, NEOWISE sizes and albedos, and textured maps.
+6. **Escape clears board layers** (`sceneLayerChips.js` `hideAll`). The first Escape removes every note (Hide / Done) and its layer together. The next Escape leaves the body as before.
+7. **Every Trojan listed and clickable:**
+   - Neptune's 42 Trojans are now bodies too (`planetTrojans.js`): 64 Trojans in all, plus Jupiter's six named ones.
+   - "Every planet's Trojans" lists all 70 at the bottom right; "Neptune's Trojans" lists its 42.
+   - On both diagrams, hovering a dot names it, and clicking flies there.
+   - Camp lighting and "Light them up" are removed.
+   - Uranus's two now carry plain names (2011 QF99, 2014 YX49).
+
+**Cost:** 196 small-body meshes, 800,000 triangles at most. The 90 new bodies skip drawing while under half a pixel (`cullTiny`), so Neptune's 42 cost nothing from the inner system, and vice versa. The point clouds are now only the Centaurs (one draw call).
+
+## What to test (part 18)
+1. **Eurybates:** fly there and Queta's ring and name show. Scroll out a long way and they fade out. Fly to Jupiter: no Queta ring.
+2. **Board reset:** fly to Io, then Jupiter, then open All bodies and close it. You should zoom out to the Solar System, not go back to Io. Fly to Mars from the board, then press Escape: you leave Mars straight away.
+3. **Heliosheath:** zoom out until the heliosphere is in view, tilted (not edge-on). Hover between the termination-shock and heliopause rings: "The heliosheath" card shows and both shells light.
+4. **Kirkwood:** board → Kirkwood → "Show the gaps in our belt". Scrolling out does nothing, scrolling in works, and dragging turns the view. Escape removes the rings and the note and frees the view. Back on the board, try each family row.
+5. **Escape:** after any "Show ... in the scene" button, press Escape once. The top-right note and its layer both go.
+6. **Trojans:** board → Every planet's Trojans → Neptune. Hover the dots (each is named) and click one: you fly to it. Check that the list at the bottom right has all of them.
+7. **Smoothness:** fly round the inner and outer Solar System. It should feel as before.
+
+## Part 19 — Every near-Earth asteroid, as rocks you meet: done (38,422 of 42,712)
+
+- **Data:** the owner downloaded the JPL list in the browser (`webresponse/`, 5 of 6 files). This session's network cannot reach JPL. `tools/neo-catalogue/build-neo-catalogue.mjs` turns it into `public/assets/data/near-earth-asteroids.json`: 38,422 rows, 3.4 MB, about 0.9 MB compressed, fetched 4 s after the scene starts. The 36 already drawn as detailed bodies (Eros, Apophis, Bennu…) are left out, so 38,386 are stamped. The last 4,290 Apollos (`6.json`) are pending: NASA's server was returning errors.
+- **Drawing** (`scene/smallBodies/nearEarthSwarm.js`):
+  - Six rock shapes made with the scene's own sculptor and surface maps — rubble pile, potato, spinning top, two lobes, cratered lump, metal — each stamped up to 240 times.
+  - Each rock gets its own size (measured, or from its brightness), turn, spin, and colour by type.
+  - Each rides its real orbit on the scene's conic, like every other small body.
+- **Shown only near you:** a rock appears from 3 px across and grows to full size at 8 px. At most the 240 largest on screen are drawn, and nothing is tested at all when the camera is beyond every rock's reach. No dots, ever.
+- **Hover and click:** the 16 largest on screen carry hit targets. Each opens a card from the JPL row: name, family, size (measured, or from brightness), type, rotation, and how close its path comes to Earth's orbit. You can fly to and focus any of them; hovering one lights its family's orbits.
+- **Cost:** about 0.7 ms of CPU per frame near Earth's orbit (measured in Node, 38,422 rows), 0 in the outer system. On the GPU, 6 instanced draw calls.
+
+### Also this pass (Prompts.md)
+- `docs/bodies-to-test.md` now lists **every named body: 684** — 192 bodies and 492 moons, by board column, with the moons named. Regenerate with `node scripts/list-bodies.mjs`.
+- **Trojans by column:** "Trojans of Venus, Earth & Mars" sits in the inner planets column, and "Trojans of Uranus & Neptune" in the giants column. The duplicate "Neptune's Trojans" card is gone; it showed the same 42. Trojan rows are listed with their planet: Neptune's had fallen into the Plutinos column.
+
+## What to test (part 19)
+1. Open the site and wait a few seconds. Fly to Apophis or Earth and look around: a handful of small rocks near you, of different shapes, sizes and colours, slowly turning, with nothing that looks like twinkling dots.
+2. Hover one: its card names it (e.g. "2007 WC5 · Aten") and its family's orbits light. Click it: you fly there and its card shows its size, type and closest approach.
+3. Zoom out to the whole system: no rocks are drawn. Fly back in: they reappear.
+4. Board → inner column → "Trojans of Venus, Earth & Mars"; giants column → "Trojans of Uranus & Neptune". The Plutinos column no longer lists Neptune's Trojans.
+5. Smoothness near Earth's orbit should feel as before.
+
+## Part 20 — Fly straight to any near-Earth rock; Trojan lists per planet: done
+
+1. **Every rock listed on the board** (`explainerView.js` `searchList`, `nearEarth.js`). Each family page has a new list, **"Every Aten — fly to any of them"**, with every member from JPL, largest first, 40 at a time ("Show more"), and a search box. Click a name and you fly straight to that rock; it is held drawn while you go (`nearEarthSwarm.js` `pinRockByName`).
+2. **Names in space** (`spotlightFamily`). "Show the Apollos in space — paths and the 20 largest, named" draws the family's orbits and puts names on its 20 largest rocks, wherever you are. Click a name to fly there. Escape or Done removes both.
+3. **Trojan lists follow the chosen planet** (`explainerView.js`, `populations.js`). Click Earth and the list shows Earth's 2; Venus shows its 1, Mars its 17, Uranus its 2 and Neptune its 42.
+
+## What to test (part 20)
+1. Board → "The Atens" → scroll down the right side: "Every Aten — fly to any of them". Type "Khufu" and click it: you fly to Khufu, and its card opens.
+2. On "The Apollos", press "Show the Apollos in space…": the orbits appear with 20 names (Zeus, Heracles, Sisyphus, Cadmus, Wilson-Harrington…). Click one and you fly there. Escape clears it.
+3. Board → "Trojans of Venus, Earth & Mars": click Earth, Venus and Mars in turn; the list matches. The same for "Trojans of Uranus & Neptune".
+
+### Part 20, follow-up fixes
+- **"Show more" did nothing:** it did add rows, but it redrew the whole list, so the screen still showed the first 40 and the button jumped out of sight. Now the new rows are added below, the view scrolls to them, and the button says "Show 40 more · 80 of 3,469 shown".
+- **Rocks looked detached from the yellow paths:** those paths are the family's 891 largest members, and a smaller rock is on none of them. Now any rock you hover, click, fly to, or see named shows its own orbit, bright in its family's colour, on exactly the path it rides. The family's paths dim to 35% meanwhile (`nearEarthSwarm.js` `drawOrbits`, `familyOrbits.js`).
+
+## Part 21 — Every near-Earth asteroid in one searchable table: done
+
+"Show more" is gone. Each family page now has **"See all 3,469 in a table"** above its list (the list itself keeps the 40 largest and its search box). The button opens a full screen over the board (`src/js/ui/nearEarthTable.js`):
+
+- **Only the family you came from** ("Every Aten", 3,469 rows; Apollos 19,983; Amors 14,907; Atiras 38). There are no "All" or other-family buttons.
+- **Search** by name or designation ("Khufu", "2024 YR4", "99942").
+- **Columns:** name, size (* = from brightness, not measured), type, how close its path comes to Earth's orbit, nearest–farthest from the Sun, its year, its day. Click a heading to sort by it; click again to reverse. Rows with nothing on record stay at the bottom.
+- **Click a row** to fly to that rock. "Back to the Atens" returns to the family page.
+- **Cost:** only the ~25 rows on screen exist in the page; they are redrawn as you scroll. Opening the Apollos (19,983 rows) is instant.
+
+Also fixed: closest-approach distances. The catalogue kept MOID to 4 decimal places (15,000 km steps) and wrote 0 both for "no value" and for paths within 7,500 km. It now keeps 6 places (150 km) and writes -1 for "no value" (135 rows). Under one Moon-distance the table and the rock's card give kilometres: 2014 AA, which hit the Atlantic in 2014, reads "under 1,000 km".
+
+## What to test (part 21)
+1. Board → "The Atens" → "See all 3,469 in a table". The table shows only Atens, largest first (Amun, 3.3 km).
+2. Scroll fast to the bottom: no lag, and the rows keep up.
+3. Type "khufu": one row. Click it: you fly to Khufu.
+4. On "The Apollos" table, click "Path comes within" to sort by it: 2014 AA and others at "under 1,000 km". Click it again to reverse.
+5. "Back to the Atens" returns to the family page; Escape closes the board as before.
+
+### Part 21, follow-up: paths that go through their rocks
+- **Why they looked detached:** every path was drawn as straight pieces, and a straight piece cuts inside the curve. The family paths had 72 pieces an orbit and missed the curve by up to 7 scene units; a rock is drawn 0.02–0.09 units in radius. The rock's own path had 160 pieces and missed by one to four rock radii. Close up, a path also passed nearly through the camera, and one long piece from behind the camera to beyond the rock was dropped, so the line stopped short of the rock.
+- **The rock's own path** (`nearEarthSwarm.js` `drawOrbits`) is now built from the rock: one point exactly on it, the next half a radius away, the pieces growing outwards. It is rebuilt each time the rock has moved two of its radii. Measured: the path passes through the rock's centre; flown to Zeus, the line runs into and out of the rock on screen.
+- **The family paths** (`familyOrbits.js`) are spaced by eccentric anomaly and split wherever a piece misses the curve by more than 0.25 units (was 6.97). 116,000 pieces for all four families, built while the scene loads. Close to a focused member (under 120–240 units) they fade out, and the rock's own path is the one you see.
+
+## What to test (part 21, follow-up)
+1. From the Apollo list or table, fly to Zeus or Khufu. The bright path goes through the rock, on both sides.
+2. Press "Show the Apollos in space", then click a name: the same, and the faint family paths fade as you arrive.
+3. Zoom back out: the family paths come back.
+
+## Part 22 — Family view you can click, and craters on every near-Earth rock: done
+
+1. **"Show the Apollos in space" now clears the way** (`main.js`, `nearEarthSwarm.js`). While a family's paths are shown:
+   - every other orbit line (planets, named asteroids, comets…) is hidden and cannot be hovered, as in space mode (`setGuideSuppression("near-earth-family")`). They come back with Done or Escape.
+   - the 20 named rocks win the pointer first, on their ring **or their name**. Before, they are far below a pixel at that view and the size floors turned them away, so the pointer fell through to the orbit lines behind.
+   - Measured headless: hovering the ring and the name of Cuno, 2000 UV13 and 1993 BW3 picked each rock. Clicking the name "Heracles" flew to Heracles. Hovering empty space found no orbit. After Escape, all 191 orbit lines were back.
+2. **Craters on every near-Earth rock** (`tools/binary-surface-lab/build-neo-maps.mjs`, same generator as the binaries' maps).
+   - The six stamps that draw all ~38,000 rocks have their own crater maps (colour + normal, 1024 × 512): a rubble pile, three cratered (one two-lobed), one with Mathilde-like giant craters, and the metal one with shallower craters. Before, they used the named rocks' grain maps, which have no craters, and the sculpted craters were mostly lost at the stamps' low resolution.
+   - The twenty named family rocks keep their colour maps and gain crater normal maps (512 × 256), so the Sun lights crater rims and floors.
+   - About 9 MB more to download, loaded through the existing one-at-a-time texture queue.
+
+## What to test (part 22)
+1. Board → "The Apollos" → "Show the Apollos in space…". Only the Apollo paths and the 20 names remain. Hover a name: the rock's card appears; click it: you fly there.
+2. Press Escape (or Done): the planets' and other orbits come back.
+3. Fly to Zeus or Khufu (stamped rocks) and to Toro or Ganymed (named ones): craters show, best near the terminator.
+
+### Part 22, follow-up: only the family answers, and closing the view closes everything
+- **Only that family's rocks respond** while "Show the … in space" is on (`main.js` `nearEarthFamilyView`). The Hildas, the Trojan camps, the belt, planets and every other body are passed over by hover and click, and a click on empty space does nothing (before, it flew into the region behind the pointer). Measured: a 336-point hover sweep of the Apollo view found only Apollo rocks.
+- **The visited rock loses its ring and name** while you are on it (`nearEarthSwarm.js`), so its name is shown only once, on its card.
+- **Escape, Done or Hide closes all of it:** the paths, the names, the rock's card, and the visit. The camera returns to the whole Solar System, with no "back" into the view.
+
+## Part 23 — Centaurs in their real colours, as rocks you meet: done
+
+The owner: Centaurs are not sparkling blue, and in the normal view they were nearly invisible.
+
+- **Real colours** (`centaurSwarm.js` `centaurLook`). Centaurs are either neutral grey or red, with almost nothing between (the colour bimodality; Tegler & Romanishin 1998, 2003; Peixinho et al. 2003, 2012; review Peixinho et al. 2020). Almost none of the 1,036 has a measured colour, so each is given one:
+  - Red, with a chance that falls with orbital tilt: 55% below 10°, 35% to 25°, 15% above. This follows Tegler et al. 2016 (red Centaurs have lower inclinations), but no single body is measured. The result is 367 red and 669 grey.
+  - Red at B−R 1.8, grey at 1.2, converted as `centaurCatalogue.js` converts the measured ones, with saturation pushed 1.6× as for class colours (`mainBeltCatalogue.js`). Taken literally, the red rendered olive.
+  - Dark albedos: red 0.10, grey 0.055 (Bauer et al. 2013; Duffard et al. 2014).
+- **Dots** (`populationClouds.js`). Each dot has its own Centaur's colour, warm grey or orange-red, not icy blue.
+  - **At rest there are no dots at all** (third pass). The owner asked whether they should be visible at all, and in reality they should not: a Centaur is a dark body 10–200 km across, 5–30 AU out, and even Chiron is about magnitude 18–19 from Earth, far below what an eye can see. The near-Earth asteroids are treated the same way. Each Centaur appears only as its rock when you come near (below).
+  - **"Light them up"** shows them as dots in their colours, as a way of seeing where the population is.
+- **Rocks up close** (the near-Earth stamp machinery, `nearEarthSwarm.js` with a profile). Each Centaur grows in as a cratered rock in its colour as you approach, exactly where its dot was. The dot fades out as the rock appears. Rocks are sized from H at their albedo (10–200 km), and lit for their own distance from the Sun as named bodies are.
+- **Hover and click** a Centaur rock: a card with its orbit, size, colour group and how it was chosen. It shows its own orbit line, and you can fly to it.
+- **Names:** `CENTAUR_ELEMENTS` has no names, so cards say "Centaur 6" until the JPL list is supplied as `public/assets/data/centaurs.json`.
+- **Cost:** about 1,000 rows on the near-Earth machinery's sliced refresh, a fraction of a millisecond. The dots cost what they did.
+
+## What to test (part 23)
+1. Zoom out to the whole system: no Centaur dots. Board → "The Centaurs" → "Light them up": grey and orange-red dots appear between Jupiter and Neptune; Done removes them.
+2. Fly out past Saturn and drift through the region: grey and orange-red cratered rocks appear as you near them; hover one for its card.
+3. Board → "The Centaurs" → "Light them up": still lights the population.
+4. Near-Earth rocks behave as before.
+
+### Part 23, follow-up: Jupiter's Trojans and the Hildas, the same rule
+- **Depends on distance at rest** (`resonantSwarms.js`). A typical Jupiter Trojan is magnitude 15 or fainter even from Earth. The L4 and L5 clouds and the Hilda triangle (5,600 statistical dots) are:
+  - **invisible from far away**, while Jupiter's orbit is under 500 px across;
+  - **faint** (opacity 0.16) **close in**, near the Sun or among the inner planets, once Jupiter's orbit is 1,400 px or more; eased between;
+  - **bright** while you hover their region (with its card) or after lighting them from the board.
+  - Before, they were drawn at 0.42 at every distance. Measured: off from the wide view; 0.16 at Mars.
+- **"Light them up in the scene"** is a new button on the board's "Jupiter's Trojans & Hildas" page (`jupiterCompanyView.js`, `main.js`). It lights all three, with a note; Done or Escape clears them.
+- The named Trojans and Hildas (Hektor, Patroclus, Eurybates, Hilda…) are bodies and are unchanged. The main asteroid belt (`asteroidBelt.js`) is frozen and unchanged.
+
+## What to test (part 23, follow-up)
+1. Zoom out to the inner system: no glowing Trojan or Hilda clouds around Jupiter's orbit.
+2. Hover about 60° ahead of or behind Jupiter: that cloud appears with its card. Move away and it goes.
+3. Board → "Jupiter's Trojans & Hildas" → "Light them up in the scene": all three appear. Escape removes them.
+
+### Part 23, follow-up: the main belt, a little dimmer from afar
+- `asteroidBelt.js` stays frozen and untouched. Its pebble population draws every pebble at least 1.1 px wide at opacity 0.84, so from far out it read as a solid bright ring. A new `beltDistanceDimming.js` scales that one opacity from outside, by how large the belt is on screen:
+  - full (0.84) when the belt is 1,200 px across or more, at or near it;
+  - 35% when it is 300 px or less, with the whole system in view;
+  - eased between.
+- Measured: 0.29 from the wide view, 0.84 at Ceres. The belt's rocks, boulders and hover are unchanged.
+
+## What to test (belt and Trojans)
+1. Zoom far out: the belt is a dimmer ring, and the Trojans and Hildas are not drawn.
+2. Fly in towards the Sun or Mars: the belt comes back to full, and the Trojan clouds and Hilda triangle appear faintly.
+3. Hover 60° ahead of or behind Jupiter: that cloud brightens with its card.
+
+### Part 23, follow-up: board actions leave the body you were on
+- **The bug:** while viewing a body (e.g. Echeclus), pressing a board button that is not a body — "Light them up" for the Centaurs, or the new one for Jupiter's Trojans & Hildas — lit the layer but left the camera on that body.
+- **Now** (`main.js`, show-in-scene) every such button frames what it shows, from above the Sun, leaving the body:
+  - Centaurs: 32 AU of the drawn system.
+  - Trojans & Hildas: Jupiter's orbit with room for the clouds.
+  - The Kirkwood gaps and the near-Earth families already did this.
+- Measured: focused on Echeclus, then "Light them up in the scene" on the Jupiter page: focus moved to the Sun and the camera pulled back, with all three clouds lit.
+- **Trojans and Hildas at rest from afar:** a faint 0.07 (was off), rising to 0.16 close in, as the owner asked ("slightly visible").
+
+## Part 24 — Real spacecraft maps for Earth, the Moon, Jupiter and Mercury; Venus and Uranus as an eye sees them: done
+
+The owner: Earth, the Moon and Jupiter "do not seem realistic as per space", then the same for Mercury, Venus and Uranus. The maps were downloaded by the owner into `images/` (this build cannot reach NASA's servers) and prepared by `tools/planet-textures/prepare-planet-maps.py`. All are public domain.
+
+- **Earth.**
+  - **Map:** NASA Blue Marble Next Generation, July 2004 (4096 × 2048). Plain deep-blue oceans; the old map had bathymetry shading that read as pale turquoise seas.
+  - **Ocean sheen:** a roughness map made from it (water 0.8, land 0.92). Earth is now on MeshPhysicalMaterial with half the default specular (water reflects ~2%), which removes a grey glare that covered the sunlit ocean.
+  - **Clouds:** much thicker. About two-thirds of Earth is cloud-covered at any time; the deck's opacity, threshold and curve were all changed (`earthVisuals.js`). Night-side clouds are now dark (they were drawn 70% grey).
+  - **Air:** a faint deep-blue veil over the whole day side, as in every whole-Earth photograph.
+- **Moon.**
+  - **Map:** NASA CGI Moon Kit 2025 LROC colour map, 2k (was the 2019 1k).
+  - **Brightness:** colour 0.22 linear brings the map's mean (0.51) to the Moon's albedo of 0.11. MeshPhysicalMaterial at a quarter of the default specular: the fixed 4% specular had been adding a flat grey that kept the Moon pale whatever its colour (measured: colour 0.02 still rendered mid-grey).
+  - **Relief:** cut from 5% to 1.6% of the radius, so the limb is round and no longer lumpy.
+- **Jupiter.**
+  - **Map:** Cassini's global map (PIA07782, December 2000).
+  - **Shader:** shown as it is (texture strength 1, procedural detail 0). The procedural layer had drawn wavy contour bands, a violet pole and no Great Red Spot.
+  - **Ultraviolet view:** its Great Red Spot marker moved to the new map (latitude −21°, longitude 132°).
+- **Mercury.**
+  - **Map:** MESSENGER's global mosaic (PIA16298, 5 km/pixel), shown as it is, with a faint warm tint and the polar no-data rows filled.
+  - **Removed:** the shader's invented features — a "Caloris" tint in the wrong place, six blue-white "hollow" blobs, noise and random flecks.
+- **Venus.** No global visible-light photograph exists; in visible light it is a bright, nearly featureless pale yellowish-white (Bond albedo 0.76). The three cloud layers are now pale cream (were tan to brown), the ultraviolet Y-wave is barely visible (0.04, was 0.11), and the limb glow is warm white (was orange).
+- **Uranus** (follow-up). It already had Voyager 2's pale, almost featureless cyan, but its methane-haze shell was unlit, so the night hemisphere showed as a flat grey-green disc and the day side looked washed out.
+  - **Haze** (`uranusVisuals.js`): now follows the Sun.
+  - **Night side** (`planetFactory.js`): dark (0.03, was 0.075), and the haze rim only where it is sunlit.
+  - **Limb:** darkened by about a quarter, as in Voyager's images.
+  - **North polar cap:** the bright cap Hubble (2022) and JWST (2023) show, made distinct.
+
+### Part 24, follow-up: Mercury and Jupiter showed no surface on the owner's machine
+- They rendered here, so the cause was found by elimination. The two maps that failed were the only ones not a power of two (3601 × 1801 and 3060 × 1530) and the largest. A bundled map that misses the loader's 6.5 s limit is silently replaced by the procedural fallback.
+  - **Both maps:** now powers of two. Jupiter is 4096 × 2048 (0.76 MB); Mercury is 2048 × 1024 (0.83 MB, file `mercury-messenger-2k.jpg`).
+  - **Loader** (`loadTextures.js`): bundled maps now get 15 s, since the loader waits for them anyway.
+  - `public/textures/mercury-messenger-3k.jpg` on the device is unused and can be deleted.
+- Verified headless from four sides each: Mercury shows MESSENGER's cratered terrain on its sunlit side, Jupiter Cassini's bands and the Great Red Spot, and Uranus a cyan day side with a dark night side.
+- `main.js` gains a debug-only `window.__setCameraYaw` (with `?bodyDebug=1`), used for these checks.
+
+## What to test (part 24)
+1. **Earth:** deep blue oceans with a soft sheen toward the Sun, heavy swirling white cloud, a thin blue limb, a dark night side.
+2. **Moon:** grey, not white; dark maria on the near side; a round edge.
+3. **Jupiter:** the real Cassini bands, festoons and the Great Red Spot.
+4. **Mercury** (turn to the sunlit side): grey cratered MESSENGER terrain with no blue blobs.
+5. **Venus:** a pale cream ball.
+6. Each planet's ultraviolet view still opens and looks as before.
+
+### Part 24, follow-up: a thin line where the map wraps
+The owner saw "a very very thin line" on the planets, as if two images met end to end.
+- **Cause 1, the shaders (the visible line).** Earth's clouds and the Mercury, Jupiter, Venus-cloud and Saturn shaders wrapped the map coordinate themselves with `fract()`. At the seam that coordinate jumps from 1 back to 0 inside a single pixel. The GPU reads the jump as the whole map squeezed into that pixel, so it samples that column from the smallest mip level, which draws a one-pixel line along the date line. The maps already repeat across the seam, so `fract()` is simply removed (`earthVisuals.js`, `planetFactory.js` twice, `jupiter.js`, `saturn.js`).
+  - **Measured on a test sphere:** the step across the seam was 42 grey levels on Earth with `fract()` and 0.7 without; on Jupiter, 21 and 0.6.
+- **Cause 2, the maps.** Several maps' left and right edges did not match. On BMNG Earth, the edge columns differed by 4.3 levels against 0.6 between neighbouring columns; Jupiter 2.0 against 0.6; the cloud map 6.0 against 4.0.
+  - **New helper:** `prepare-planet-maps.py` gains `wrap_resize`, which pads each map with columns from its opposite side before resampling, then spreads any remaining step over 24 columns.
+  - **Jupiter:** Cassini's duplicate 3,601st column is dropped first.
+  - **Earth's cloud map:** feathered in place.
+  - **Edge mismatch now:** Earth 0.6, Jupiter 1.5 (JPEG noise), Moon 1.3, Mercury 3.2 (its neighbouring columns differ by 15), clouds 0.9.
+
+### Part 24, follow-up: Jupiter's sunlight
+The owner asked for a check of the sunlight on Jupiter. The light model drawn on Jupiter was wrong in three ways:
+- **Night side:** it kept 11% of daylight, so the bands showed on the night side.
+- **Day side:** it added a constant 0.13 everywhere, so the disc barely darkened toward the limb.
+- **Glows:** its terminator was blurred across half a hemisphere (−0.15 to 0.35), and both the bluish limb scatter and the haze shell glowed around the dark limb too.
+
+Spacecraft views (Cassini 2000, Juno) show a black night side and a strongly limb-darkened disc. `jupiter.js` now does the following:
+- **Light:** Lambert, wrapped by 0.06 for the haze.
+- **Brightness:** the sub-solar point is as bright as before (1.03); the night side is 0.012.
+- **Glows:** the limb scatter and the haze shell follow the Sun.
+- **Distance:** the scene exposes each planet for its own daylight, as a camera would. Jupiter's real sunlight, 1/27 of Earth's (5.2 AU, inverse square), is therefore not applied to its brightness, as for every other planet.
+- **Verified headless from four sides:** dark night side, crisp terminator, limb darkening; the day side is unchanged in brightness.
+
+### Part 24, follow-up: Venus beneath its clouds (radar)
+The owner sent NASA's orange Magellan globe of Venus and chose to keep the true cream clouds by default and add a view beneath them.
+- **What the image is:** a radar map, not a photograph. Magellan (1990–1994) mapped about 98% of the surface by radar. The orange was added by NASA after the Venera 13 and 14 landers' photos.
+- **Venus's card:** gains a "Beneath the clouds · radar" section (orange) that says this, with a **See beneath the clouds** button.
+- **The view** (`scene/venusRadarView.js`):
+  - **Hidden:** the cloud deck and the atmosphere shell.
+  - **Shown:** the radar map already in the scene (`venus-surface-2k.jpg`), lit evenly as a radar image is: emissive 0.72 on a 0x262626 base, chosen by eye against the owner's image.
+  - **A note says what is shown, and the clouds return when any of these happens:**
+    - its **Clouds back** button;
+    - Escape;
+    - travelling to another body;
+    - opening the ultraviolet view.
+- **Verified headless:**
+  - The card section appears for Venus only.
+  - The view shows the deep-orange radar globe from both sides.
+  - Clouds back restores the cream cloud ball.
+  - No console errors.

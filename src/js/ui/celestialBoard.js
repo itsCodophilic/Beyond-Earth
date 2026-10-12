@@ -5,6 +5,7 @@ import {
 } from "./celestialBoardData.js";
 import { buildBinarySystemView, systemNames } from "./binarySystemView.js";
 import { buildJupiterCompanyView } from "./jupiterCompanyView.js";
+import { buildExplainerView, hasExplainer } from "./explainerView.js";
 import { buildCometGlowView, GLOW_COMETS, glowStateLabel } from "./cometGlowView.js";
 
 /* The comets the "watch it glow" view can take round the Sun. */
@@ -91,6 +92,8 @@ const FILTERS = Object.freeze([
   /* Fifth final round: everything with an aurora view, the moons' planet
    * included (its moon board lists them). */
   { key: "uv", label: "UV mode · aurora" },
+  /* Round 38: the "Spacecraft" and "How it works" filters are gone -- the
+   * spacecraft were removed and the explanations moved (Prompts.md). */
 ]);
 
 /*
@@ -356,8 +359,15 @@ export function createCelestialBoard({ trigger = null, surfaceFor = null, cometS
     const item = el("li", "cboard__item cboard__structure");
     const button = el("button", "cboard__body");
     button.type = "button";
-    button.dataset.company = structure.key;
-    button.setAttribute("aria-label", `${structure.name}: see how they move`);
+    /* Round 38: a structure can be a place to fly to instead (the
+     * heliosheath -- Prompts.md: "could not find Heliosheath?"). */
+    if (structure.travel) {
+      button.dataset.travel = structure.travel;
+      button.setAttribute("aria-label", `${structure.name}: fly there`);
+    } else {
+      button.dataset.company = structure.key;
+      button.setAttribute("aria-label", `${structure.name}: see how they move`);
+    }
     const art = glossaryArt(structure.art ?? "trojan", "cboard__structure-art");
     const text = el("span", "cboard__text");
     text.append(el("span", "cboard__name", structure.name));
@@ -374,7 +384,9 @@ export function createCelestialBoard({ trigger = null, surfaceFor = null, cometS
     glossary?.closeAll();
     const built = key === "comet-glow"
       ? buildCometGlowView({ closeButton, initial: cometName, liveState: (name) => { try { return cometState?.(name) ?? null; } catch { return null; } } })
-      : buildJupiterCompanyView({ closeButton });
+      : hasExplainer(key)
+        ? buildExplainerView(key, { closeButton })
+        : buildJupiterCompanyView({ closeButton });
     moonBoard = built;
     root.append(built.board);
     built.fit();
@@ -720,7 +732,7 @@ export function createCelestialBoard({ trigger = null, surfaceFor = null, cometS
     structureItems.forEach(({ item, button, structure }) => {
       const on = searching
         ? matcher(structure.name, structure.words.split(" "))
-        : filter === "all" || filter === "asteroid";
+        : filter === "all" || (structure.filters ?? ["asteroid"]).includes(filter);
       item.classList.toggle("is-off", !on);
       button.disabled = !on;
       if (on && narrowing) litRegions.add(structure.region);
@@ -1726,6 +1738,18 @@ export function createCelestialBoard({ trigger = null, surfaceFor = null, cometS
       // The plain-words popovers and sheet first; a click elsewhere closes
       // an open popover and then does what it would have done anyway.
       if (glossary?.handleClick(event)) return;
+      /* Final round: an explanation's "show it in the scene" -- close the
+       * board (it covers the scene and pauses it) and pass the request on. */
+      const sceneAction = event.target.closest("[data-scene-action]");
+      if (sceneAction && !sceneAction.disabled) {
+        let detail = null;
+        try { detail = JSON.parse(sceneAction.dataset.sceneAction); } catch { detail = null; }
+        close({ restoreFocus: false, departing: true, from: sceneAction });
+        if (detail) {
+          setTimeout(() => window.dispatchEvent(new CustomEvent("beyond-earth:show-in-scene", { detail })), 160);
+        }
+        return;
+      }
       const travelTo = event.target.closest("[data-travel]");
       if (travelTo && !travelTo.disabled) {
         travel(travelTo.dataset.travel, travelTo);

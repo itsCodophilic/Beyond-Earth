@@ -342,7 +342,8 @@ export function createSaturnSurfaceMaterial(texture) {
 
         // Retain only low-amplitude luminance from the wrapped source map. This
         // adds natural micro-detail without importing its older yellow/brown hue.
-        vec2 sampledUv = vec2(fract(vUv.x + uTime * 0.000025), vUv.y);
+        // Round 42: no fract() here. The map repeats across the seam (RepeatWrapping), and fract() made the texture coordinate jump from 1 back to 0 inside one pixel; the GPU read that jump as the whole map squeezed into a pixel and drew that column from its smallest mip level -- the thin line along the date line the owner saw.
+        vec2 sampledUv = vec2(vUv.x + uTime * 0.000025, vUv.y);
         vec3 observed = texture2D(uMap, sampledUv).rgb;
         float observedLuma = dot(observed, vec3(0.2126, 0.7152, 0.0722));
         float mapDetail = (observedLuma - 0.5) * 0.060;

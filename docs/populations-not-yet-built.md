@@ -117,8 +117,14 @@ Objects trapped 60° ahead of and behind a planet, at the L4 and L5 points.
 | **Uranus** | **2** |
 | **Venus** | **1** |
 
-Jupiter's two swarms are already in the scene. Nothing else is. **Neptune's
-are the interesting omission** — there are far more of them than the 35 found
+**Built (rounds 36–37):** every known Trojan of Venus (1), Earth (2), Mars
+(the 17 shown stable — Eureka and its family at L5, 1999 UJ7 and 2023 FW14
+at L4), Uranus (2) and Neptune (42) is drawn on its real orbit in its
+planet's frame (`populationClouds.js`), with hover bands on Mars's and
+Neptune's camps and a board view, "Every planet's Trojans".
+
+Before that, Jupiter's two swarms were the only ones in the scene. **Neptune's
+were the interesting omission** — there are far more of them than the 35 found
 suggests, they are hard to see because they are dark and distant, and they are
 redder than Jupiter's, which says something about where they formed.
 
@@ -150,7 +156,8 @@ spin) and **Ixion** (617 km, a Plutino).
 Still a selection rather than the set: roughly **10 more** are very likely and
 over **100** possible depending on the size threshold used. The next tier —
 **Huya · Chaos · 2002 AW197 · Dziewanna** — is smaller, less certain, and well
-into diminishing returns. The point that the IAU line is administrative rather
+into diminishing returns. **All four are now built** (Aya is 2002 AW197;
+Dziewanna added in round 37). The point that the IAU line is administrative rather
 than physical is already made by the eight.
 
 ---
@@ -163,7 +170,9 @@ than physical is already made by the eight.
 - **The Oort Cloud** — 5,000 to 100,000 AU, spherical, never observed.
 - **Kirkwood gaps and asteroid families** — the main belt is drawn as a field
   rather than as a structured population with resonance gaps and collisional
-  families (Vesta, Flora, Koronis, Eos).
+  families (Vesta, Flora, Koronis, Eos). **Round 37:** shown instead as a
+  board explanation built from a real count of 861,399 numbered asteroids;
+  the 3D field stays smooth because `asteroidBelt.js` is frozen.
 - **Magnetospheres and radiation belts** — see `not-covered.md` § B; these emit
   no light at any wavelength and can only ever be diagrams.
 

@@ -43,6 +43,15 @@ function createUranusHazeMaterial() {
         float shimmer = 0.96 + 0.04 * sin(local.x * 10.0 + local.z * 7.0 + uTime * 0.15);
         float alpha = 0.07 + limb * 0.24 + northHood * 0.06;
         alpha *= shimmer;
+        // Round 41 (the owner: Uranus "was like earlier ... make it
+        // properly"). The haze is sunlit haze: it was drawn the same on the
+        // night side, so the dark hemisphere showed as a flat grey-green disc
+        // and the day side looked washed out. Now it follows the Sun (the
+        // scene's Sun is at the origin), keeping a sliver past the terminator
+        // where the high haze still catches light.
+        vec3 sunDir = normalize(-vWorldPosition);
+        float day = smoothstep(-0.12, 0.35, dot(normal, sunDir));
+        alpha *= 0.06 + 0.94 * day;
         if (alpha < 0.01) discard;
         gl_FragColor = vec4(colour, alpha);
       }

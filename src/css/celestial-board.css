@@ -568,6 +568,11 @@
 .cboard__body[data-kind="comet"] .cboard__kind { color: rgba(159, 227, 199, 0.75); }
 .cboard__body[data-kind="nea"] .cboard__kind { color: rgba(116, 214, 192, 0.75); }
 .cboard__body[data-kind="sun"] .cboard__kind { color: #ffd38a; }
+/* Round 38: the Sun's mark is a white disc with a white glow, not yellow. */
+.cboard__body[data-kind="sun"] .cboard__dot {
+  background: radial-gradient(circle at 50% 50%, #ffffff 0 58%, #f1f5ff 100%);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.35), 0 0 14px rgba(255, 255, 255, 0.55);
+}
 
 .cboard__moons,
 .cboard__ring-badge {
@@ -1494,6 +1499,27 @@ body.is-board-open .tour { z-index: 210; }
  */
 body.is-board-open .tour__veil,
 body.is-board-open .tour__spotlight { opacity: 0 !important; }
+
+/*
+ * Round 38 (Prompts.md: "Space dictionary in the tour guide should be
+ * highlighted"). With the board open the spotlight goes, so the "Space
+ * Dictionary" step pointed at a button nothing marked. The button the step
+ * is about now carries its own beacon while that step is on: an amber ring
+ * that breathes, and a brighter label.
+ */
+body.is-tour-open .cgloss__launch.is-tour-subject {
+  border-color: var(--cin-amber, #ffc482);
+  color: #fff3df;
+  box-shadow: 0 0 0 2px rgba(255, 196, 130, 0.55), 0 0 22px rgba(255, 196, 130, 0.45);
+  animation: cgloss-tour-beacon 1.6s ease-in-out infinite;
+}
+@keyframes cgloss-tour-beacon {
+  0%, 100% { box-shadow: 0 0 0 2px rgba(255, 196, 130, 0.55), 0 0 18px rgba(255, 196, 130, 0.35); }
+  50% { box-shadow: 0 0 0 5px rgba(255, 196, 130, 0.25), 0 0 30px rgba(255, 196, 130, 0.6); }
+}
+@media (prefers-reduced-motion: reduce) {
+  body.is-tour-open .cgloss__launch.is-tour-subject { animation: none; }
+}
 
 body.is-board-open .tour__card {
   top: auto !important;

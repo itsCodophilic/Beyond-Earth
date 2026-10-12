@@ -71,6 +71,14 @@ BODIES = {
     # The flipped readings fill the south from the north, which is all a
     # half-disc can give; Hiisi and Paha take this map turned and mirrored.
     "lempo": dict(cx=192.5, cy=192.4, A=167.9, B=167.9, ang=0.0, sub=0.0, cap_s=30.0),
+    # Round 38 (Prompts.md: "Redesign Nessus i have attached images"). The
+    # Centaur Nessus, from the image supplied as images/Nessus.jpeg (an
+    # artist's impression; Nessus has never been resolved). Fitted the same
+    # way: centre (162, 140), radius 70.5, drawn back over the image and
+    # checked. Lit from the upper right with a dark lower-left limb, so the
+    # shadow band is raised as for Varda.
+    "nessus": dict(cx=162.0, cy=140.0, A=70.5, B=70.5, ang=0.0, sub=0.0,
+                   lit=(0.24, 0.54), dark=(0.07, 0.17)),
     # Haumea gets its own route.  It is not a sphere -- it is a rugby ball
     # spinning every four hours -- and the reference shows it obliquely, from
     # behind its own ring, with two moons crossing the frame.  Inverting that

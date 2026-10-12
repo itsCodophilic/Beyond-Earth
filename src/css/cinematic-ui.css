@@ -3986,3 +3986,82 @@ body.is-ultraviolet-view .uv-view { cursor: auto; }
 }
 .cmoons__fly.cmoons__aurora:hover,
 .cmoons__fly.cmoons__aurora:focus-visible { background: rgba(124, 77, 255, 0.2); }
+
+/* Round 38: planned space events, listed disabled under the real ones. */
+.events-dashboard__soon {
+  margin-top: 1.4rem;
+  padding-top: 0.9rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.events-dashboard__soon-title {
+  margin: 0 0 0.4rem;
+  font-family: var(--cin-mono);
+  font-size: 0.56rem;
+  font-weight: 400;
+  letter-spacing: 0.26em;
+  text-transform: uppercase;
+  color: var(--cin-ink-faint);
+}
+
+.events-dashboard__soon-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.events-dashboard__soon-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding: 0.8rem 0.2rem 0.9rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  opacity: 0.55;
+}
+
+.events-dashboard__soon-name {
+  margin: 0;
+  font-size: 0.98rem;
+  font-weight: 200;
+  letter-spacing: 0.02em;
+  color: var(--cin-ink);
+}
+
+.events-dashboard__soon-badge {
+  font-family: var(--cin-mono);
+  font-size: 0.5rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--cin-amber);
+}
+
+.events-dashboard__soon-item .events-dashboard__play[disabled] {
+  cursor: not-allowed;
+  filter: grayscale(1);
+}
+
+
+/* Round 42: Venus's radar section, in the orange of NASA's Magellan globe
+ * rather than the ultraviolet violet. */
+.planet-details__radar {
+  border-color: rgba(251, 166, 82, 0.34);
+  background: linear-gradient(180deg, rgba(180, 92, 24, 0.16), rgba(40, 20, 10, 0.34));
+}
+.planet-details__radar .planet-details__aurora-eyebrow { color: #fdc58a; }
+.planet-details__radar .planet-details__uv-button {
+  border-color: rgba(251, 166, 82, 0.55);
+  background: rgba(214, 110, 30, 0.14);
+  color: #ffe2c2;
+}
+.planet-details__radar .planet-details__uv-button:hover,
+.planet-details__radar .planet-details__uv-button:focus-visible {
+  background: rgba(214, 110, 30, 0.26);
+  border-color: rgba(253, 197, 138, 0.9);
+}
+.planet-details__radar .planet-details__uv-glyph {
+  background: radial-gradient(circle, #fff3e4 0 22%, #f59e3b 45%, rgba(214, 110, 30, 0) 72%);
+  box-shadow: 0 0 10px rgba(245, 158, 59, 0.8);
+}
