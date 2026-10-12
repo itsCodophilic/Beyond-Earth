@@ -117,28 +117,35 @@
 }
 
 .intro__log {
-  display: flex;
-  flex-direction: column;
   /*
-   * The manifest is longer than the screen. Anchoring it to the bottom means
-   * new lines push older ones up and out of view, like a terminal, instead of
-   * the block growing until it shunts the header off the top -- which is
-   * exactly what happened before this. The mask fades the oldest lines out
-   * rather than clipping them on a hard edge.
+   * A fixed window onto the manifest (round 50). The lines sit on a track
+   * that fills from the top and, once the window is full, glides upward on
+   * the compositor -- introSequence.js books each glide -- so old lines
+   * drift out through the faded top edge like a terminal, with no jump.
+   * The top 12% is the fade; the track starts below it, so the first lines
+   * are never dimmed.
    */
-  justify-content: flex-end;
-  max-height: 44vh;
+  position: relative;
+  height: 44vh;
   overflow: hidden;
-  -webkit-mask-image: linear-gradient(180deg, transparent 0%, #000 18%, #000 100%);
-  mask-image: linear-gradient(180deg, transparent 0%, #000 18%, #000 100%);
-  /* Tight leading: the manifest should read as one block of telemetry rather
-     than a spaced-out list. */
-  gap: 0.12rem;
+  -webkit-mask-image: linear-gradient(180deg, transparent 0%, #000 12%, #000 100%);
+  mask-image: linear-gradient(180deg, transparent 0%, #000 12%, #000 100%);
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 0.74rem;
   letter-spacing: 0.11em;
   text-transform: uppercase;
   transition: opacity 700ms ease;
+}
+
+.intro__track {
+  display: flex;
+  flex-direction: column;
+  /* Tight leading: the manifest should read as one block of telemetry rather
+     than a spaced-out list. */
+  gap: 0.12rem;
+  /* 12% of the window's 44vh: below the fade. */
+  padding-top: 5.3vh;
+  will-change: transform;
 }
 
 .intro__log.is-retiring { opacity: 0; }
@@ -151,33 +158,37 @@
  * back, the way debris settles in vacuum. The entrance is longer than the gap
  * between lines, so several are in flight at once and the manifest arrives as
  * a slow cascade instead of a list appearing a row at a time.
+ *
+ * Round 50: only transform and opacity animate here (the blur and the colour
+ * changes are gone), so the compositor can play every line on its own,
+ * whatever the main thread is doing. The delay that books each line onto
+ * the beat is set inline by introSequence.js.
  */
 .intro__line {
-  display: grid;
   flex: 0 0 auto;
-  grid-template-columns: 2.4rem 1fr;
-  align-items: baseline;
   margin: 0;
   padding: 0.28rem 0;
-  color: rgba(206, 216, 234, 0.26);
-  transition: color 1100ms ease;
   animation: intro-line-fall 1250ms cubic-bezier(0.17, 0.72, 0.24, 1) both;
   will-change: transform, opacity;
+}
+
+.intro__line-body {
+  display: grid;
+  grid-template-columns: 2.4rem 1fr;
+  align-items: baseline;
+  /* The newest line is bright; introSequence.js dims each one (opacity)
+     as the next arrives, so it recedes into the record. */
+  color: rgba(255, 246, 232, 0.96);
 }
 
 .intro__index {
   font-size: 0.62rem;
   letter-spacing: 0.14em;
-  color: rgba(255, 196, 130, 0.28);
-  transition: color 1100ms ease;
+  color: rgba(255, 200, 138, 0.95);
 }
 
-/* The newest line is the live one; earlier lines recede into the record. */
-.intro__line:last-child { color: rgba(255, 246, 232, 0.96); }
-.intro__line:last-child .intro__index { color: rgba(255, 200, 138, 0.95); }
-
-.intro__line:last-child .intro__label::after {
-  content: "";
+/* The live marker on the newest line. */
+.intro__live {
   display: inline-block;
   width: 5px;
   height: 5px;
@@ -185,19 +196,18 @@
   border-radius: 50%;
   background: #ffd096;
   box-shadow: 0 0 10px rgba(255, 208, 150, 0.95);
-  transform: translateY(-1px);
-  animation: intro-spark 1600ms ease-in-out infinite;
+  vertical-align: 0.1em;
 }
+.intro__live { animation: intro-spark 1600ms ease-in-out infinite; }
 
 @keyframes intro-line-fall {
   0% {
     opacity: 0;
-    transform: translate3d(-16px, -76px, 0) rotate(-1.8deg);
-    filter: blur(4px);
+    transform: translate3d(-16px, -38px, 0) rotate(-1.8deg);
   }
-  45% { opacity: 1; filter: blur(0); }
-  74% { transform: translate3d(2px, 6px, 0) rotate(0.3deg); }
-  100% { opacity: 1; transform: none; filter: blur(0); }
+  45% { opacity: 1; }
+  74% { transform: translate3d(2px, 4px, 0) rotate(0.3deg); }
+  100% { opacity: 1; transform: none; }
 }
 
 @keyframes intro-spark {
@@ -717,7 +727,7 @@ body.is-cosmic-intro .body-connector {
   .intro__singularity.is-winding .intro__core,
   .intro__singularity.is-collapsing .intro__core,
   .intro__lore-line,
-  .intro__line:last-child .intro__label::after { animation: none; }
+  .intro__live { animation: none; }
 }
 
 /* ------------------------------------------------- acts three to seven */

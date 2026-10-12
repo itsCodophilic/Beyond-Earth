@@ -2635,7 +2635,16 @@ composeSolarEventShot(
   performance.mark("BE:sun-end");
   intro.step("sun");
   intro.step("corona");
-  PLANET_CONFIGS.forEach((config) => {
+  /*
+   * Round 50: a breath for the browser before each world is built, so each
+   * manifest line reaches the screen as it happens instead of all of them
+   * waiting for the whole loop (about 1-2 s of solid work). The intro books
+   * the lines onto its beat on the compositor (introSequence.js), so lines
+   * already in hand keep arriving while the next world is built. Costs a
+   * frame per world, which the log's own pacing (0.4 s a line) hides.
+   */
+  for (const config of PLANET_CONFIGS) {
+    await yieldPastPaint();
     // One manifest line per world, carrying its real orbital distance. These
     // are emitted from the actual construction loop, not a script.
     const au = HELIOCENTRIC_ORBIT_AU[config.name];
@@ -2653,7 +2662,7 @@ composeSolarEventShot(
       orbitTargets,
       quality: creationQuality,
     });
-  });
+  }
 
   /*
    * Diagnostic: the body list, by name.
@@ -4054,6 +4063,26 @@ composeSolarEventShot(
   let asteroidBelt = null;
   let asteroidBeltBuildStarted = false;
 
+
+  /*
+   * Round 50: like yieldToBrowser, but resumes only after the frame has been
+   * painted. yieldToBrowser resumes inside the frame's own callbacks, before
+   * the paint, so a long block that follows it would still hold back
+   * whatever the intro just put on screen.
+   */
+  function yieldPastPaint() {
+    if (document.hidden) return Promise.resolve();
+    return new Promise((resolve) => {
+      let settled = false;
+      const proceed = () => {
+        if (settled) return;
+        settled = true;
+        resolve();
+      };
+      requestAnimationFrame(() => setTimeout(proceed, 0));
+      setTimeout(proceed, 80);
+    });
+  }
 
   function yieldToBrowser() {
     // A hidden tab paints nothing, so there is no loader animation to protect --
@@ -10762,6 +10791,9 @@ composeSolarEventShot(
   //    otherwise spends its first ~34 frames swapping them down and visibly
   //    popping. Settle them all in one unbudgeted pass instead.
   intro.step("compile");
+  // Round 50: let the booked lines reach the screen before the compile's
+  // long block, so the compositor can keep the log moving through it.
+  await yieldPastPaint();
   performance.mark("BE:precompile-start");
   scene.updateMatrixWorld(true);
   camera.updateMatrixWorld(true);

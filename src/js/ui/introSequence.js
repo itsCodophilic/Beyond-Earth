@@ -39,7 +39,7 @@ const STEP_LABELS = {
   ready: "Universe stable",
 };
 
-// Minimum spacing between lines.
+// Spacing between lines (the log's rhythm).
 //
 // Construction is genuinely fast now (~2s), and real milestones can land within
 // a few milliseconds of one another, so without a floor the log is an
@@ -50,7 +50,7 @@ const STEP_LABELS = {
 // The cost is honest -- it does extend the time before the gate appears. That is
 // affordable precisely because the gate is self-paced: no one is waiting on a
 // clock they did not start.
-const MINIMUM_LINE_SPACING_MS = 400;
+const LINE_SPACING_MS = 400;
 
 const LOG_RETIRE_MS = 700;
 
@@ -275,47 +275,122 @@ export function createIntroSequence({ root } = {}) {
   };
   window.addEventListener("wheel", blockWheel, { capture: true, passive: false });
 
-  let lastLineAt = 0;
-  let queue = Promise.resolve();
-
+  /*
+   * The log, scheduled on the compositor (round 50: "the steps lag at 3-4
+   * points ... make all steps smoother").
+   *
+   * Why it stuttered: each line used to be added by a timer, and the universe
+   * is built on the main thread in a few long blocks (the worlds, the
+   * moons, the shader compile, the first frames). While a block runs no timer
+   * fires, so the log stopped dead, then caught up. On top of that, each new
+   * line shoved the whole log up a row in one jump, and the lines' blur and
+   * colour changes were main-thread work too.
+   *
+   * Now each real milestone is put in the DOM as soon as the browser can
+   * take it, with its appearance booked for its slot in a steady rhythm
+   * (LINE_SPACING_MS apart, never before the milestone itself happened):
+   * the line's entrance, the glide of the log upward and the dimming of the
+   * line before it are all transform/opacity animations with a delay. The
+   * compositor plays those on its own thread, so lines already booked keep
+   * arriving on the beat while the main thread is busy building. Since the
+   * milestones come faster than the rhythm, there is always a run of booked
+   * lines in hand when a long block starts.
+   */
+  const track = document.createElement("div");
+  track.className = "intro__track";
+  log.append(track);
+  const reducedLog = typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const GLIDE_MS = reducedLog ? 200 : 900;
+  const DIM_MS = reducedLog ? 200 : 1100;
   let lineCount = 0;
+  let nextSlot = 0;
+  let lastShownAt = 0;
+  let trackY = 0;
+  let previous = null;
+  const pending = [];
+  let flushBooked = false;
 
-  function appendLine(text) {
+  function buildLine(text) {
     lineCount += 1;
     const line = document.createElement("p");
     line.className = "intro__line";
-
+    const body = document.createElement("span");
+    body.className = "intro__line-body";
     const index = document.createElement("span");
     index.className = "intro__index";
     index.textContent = String(lineCount).padStart(2, "0");
-
     const label = document.createElement("span");
     label.className = "intro__label";
     label.textContent = text;
+    // The live marker: on while this is the newest line.
+    const live = document.createElement("span");
+    live.className = "intro__live";
+    live.setAttribute("aria-hidden", "true");
+    label.append(live);
+    body.append(index, label);
+    line.append(body);
+    return line;
+  }
 
-    line.append(index, label);
-    log.append(line);
+  function flush() {
+    flushBooked = false;
+    if (!pending.length) return;
+    const batch = pending.splice(0).map((text) => buildLine(text));
+    track.append(...batch);
+    const now = performance.now();
+    // One layout read for the whole batch.
+    const windowHeight = log.clientHeight;
+    batch.forEach((line) => {
+      const at = Math.max(now, nextSlot);
+      nextSlot = at + LINE_SPACING_MS;
+      lastShownAt = at;
+      const delay = Math.round(at - now);
+      line.style.animationDelay = `${delay}ms`;
+      // The log glides up only once it is full, like a terminal.
+      const bottom = line.offsetTop + line.offsetHeight;
+      const y = Math.max(0, bottom - windowHeight);
+      if (y !== trackY && track.animate) {
+        track.animate(
+          [{ transform: `translate3d(0, ${-trackY}px, 0)` }, { transform: `translate3d(0, ${-y}px, 0)` }],
+          { duration: GLIDE_MS, delay, easing: "cubic-bezier(0.22, 0.8, 0.3, 1)", fill: "forwards" },
+        );
+        trackY = y;
+      }
+      if (previous?.animate) {
+        // The line before recedes into the record as this one arrives.
+        previous.firstChild.animate([{ opacity: 1 }, { opacity: 0.3 }], { duration: DIM_MS, delay, easing: "ease", fill: "forwards" });
+        previous.querySelector(".intro__live").animate([{ opacity: 1 }, { opacity: 0 }], { duration: 300, delay, fill: "forwards" });
+      }
+      previous = line;
+    });
   }
 
   /** Records one real construction milestone. */
   function step(key, overrideText) {
-    const text = overrideText ?? STEP_LABELS[key] ?? key;
-    queue = queue.then(() => new Promise((resolve) => {
-      const wait = Math.max(0, MINIMUM_LINE_SPACING_MS - (performance.now() - lastLineAt));
-      const emit = () => {
-        lastLineAt = performance.now();
-        appendLine(text);
-        resolve();
-      };
-      if (wait <= 0) emit(); else setTimeout(emit, wait);
-    }));
-    return queue;
+    pending.push(overrideText ?? STEP_LABELS[key] ?? key);
+    if (!flushBooked) {
+      flushBooked = true;
+      // Whichever comes first: the next frame, or a short timer (a hidden
+      // tab never runs frames).
+      requestAnimationFrame(() => { if (flushBooked) flush(); });
+      setTimeout(() => { if (flushBooked) flush(); }, 50);
+    }
+    return Promise.resolve();
   }
 
-  /**
-   * Resolves once the viewer chooses to begin. Waits for every queued log line
-   * to have been shown first, so the sequence never skips its own ending.
-   */
+  /** Resolves once every line has been shown and held for a beat. */
+  function logDone() {
+    flush();
+    return new Promise((resolve) => {
+      const check = () => {
+        if (pending.length) flush();
+        const left = lastShownAt + LINE_SPACING_MS - performance.now();
+        if (left <= 0) resolve(); else setTimeout(check, left);
+      };
+      check();
+    });
+  }
+
   /**
    * Resolves once the viewer chooses to begin.
    *
@@ -326,7 +401,7 @@ export function createIntroSequence({ root } = {}) {
    * rest do the halo, the breathing and the invitation appear.
    */
   function ready() {
-    return queue.then(() => startTitle()).then(() => new Promise((resolve) => {
+    return logDone().then(() => startTitle()).then(() => new Promise((resolve) => {
       // Shorter since round 46: the title card is now the held beat.
       const BLACKOUT_MS = 500;
       const DESCENT_MS = 6200;
