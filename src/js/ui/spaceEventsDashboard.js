@@ -1,3 +1,4 @@
+import { searchTerms, matches } from "./searchMatch.js";
 import { drawEventVignette, FAMILY_COLOURS } from "./eventVignettes.js";
 
 /**
@@ -423,16 +424,46 @@ export function createSpaceEventsDashboard({ events, trigger = null, onView = nu
 
   /* ------------------------------------------------------------ filter */
 
+  /* Everything a card shows (renderText), as one string to search. */
+  function searchText(e) {
+    const timeline = TIMELINE[e.id];
+    return [e.place, e.body, e.title, e.familyLabel, e.kindLabel, e.kindShort, e.kindBlurb,
+      OFTEN[e.id], e.detail, timeline?.last, timeline?.next, e.when, e.cause, e.frequency,
+      e.accuracy, e.note].filter(Boolean).join(" ");
+  }
+  let searchFrom = null;
+
   function applyFilter() {
-    const needle = normalise(filterInput.value).trim();
+    // Round 76: every word typed, anywhere, any case (ui/searchMatch.js).
+    const terms = searchTerms(filterInput.value);
     const current = shown[index]?.id;
-    shown = needle
-      ? roster.filter((e) => normalise(`${e.place} ${e.body} ${e.title} ${e.detail} ${e.familyLabel} ${e.kindLabel} ${e.cause}`).includes(needle))
-      : roster.slice();
+    /*
+     * Round 78 (the owner: "the events search still does not bring it up --
+     * is it because of the tile I am on?"). Two things were wrong:
+     * - It searched only part of what a card shows. A word in "how often",
+     *   the last/next dates, the kind's description or the accuracy note
+     *   was on screen but not searched ("mag" missed the Supernova, "storm"
+     *   the solar wind). It now searches everything the card shows.
+     * - It kept the tile you were on at the front whenever that tile also
+     *   matched, so the match you were after could be round the back of the
+     *   ring. Now a search always brings its best match to the front: those
+     *   with the words in the title or place first, then the rest. Clearing
+     *   the search returns to the tile you were on.
+     */
+    if (terms.length) {
+      const hits = roster.filter((e) => matches(searchText(e), terms));
+      const inName = hits.filter((e) => matches(`${e.title} ${e.place} ${e.body}`, terms));
+      shown = [...inName, ...hits.filter((e) => !inName.includes(e))];
+      if (!searchFrom) searchFrom = current;
+      index = 0;
+    } else {
+      shown = roster.slice();
+      const back = shown.findIndex((e) => e.id === (searchFrom ?? current));
+      index = back >= 0 ? back : 0;
+      searchFrom = null;
+    }
     emptyEl.hidden = shown.length > 0;
     track.hidden = shown.length === 0;
-    const keep = shown.findIndex((e) => e.id === current);
-    index = keep >= 0 ? keep : 0;
     buildRing();
   }
 

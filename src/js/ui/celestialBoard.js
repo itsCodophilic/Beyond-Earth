@@ -1,3 +1,4 @@
+import { searchTerms, matches } from "./searchMatch.js";
 import {
   BODY_KINDS,
   buildCelestialBoard,
@@ -207,12 +208,19 @@ function nameMatches(nameWords, terms) {
  * one has to find it in the name, in that order.
  */
 function queryMatcher(text) {
-  const terms = words(text);
-  const raw = normalise(text).trim().replace(/\s+/g, " ");
-  const literal = /[^a-z0-9 ]/.test(raw) ? raw : null;
-  if (!terms.length && !literal) return null;
-  return (name, nameWords = words(name)) => nameMatches(nameWords, terms)
-    && (!literal || normalise(name).replace(/\s+/g, " ").includes(literal));
+  /*
+   * Round 76 (the owner: "%like% and case-insensitive, anywhere, in between
+   * words"): each typed word is now found anywhere in the name -- "rth" finds
+   * Earth -- and every word has to be there, in any order. Still names only
+   * (a moon's name still finds its planet), so "Earth" does not light the
+   * near-Earth asteroids again, and "S/" still finds only the provisional
+   * designations, because the slash is part of what is looked for. The
+   * word-start rule above (nameMatches) is no longer used. See
+   * ui/searchMatch.js.
+   */
+  const terms = searchTerms(text);
+  if (!terms.length) return null;
+  return (name) => matches(name, terms);
 }
 
 /**
@@ -760,6 +768,7 @@ export function createCelestialBoard({ trigger = null, surfaceFor = null, cometS
     columns.forEach(({ key, column }) => {
       column.classList.toggle("is-quiet", narrowing && !litRegions.has(key));
     });
+    liftMatches(narrowing);
     if (searching && !lit) {
       emptyNote.textContent = `Nothing called “${searchInput.value.trim()}”. Clear the search to bring everything back.`;
       emptyNote.hidden = false;
@@ -779,6 +788,36 @@ export function createCelestialBoard({ trigger = null, surfaceFor = null, cometS
         }
       }
     }
+  }
+
+  /*
+   * Round 76 (the owner: "when a filter is on, the matching bodies should
+   * come up to the top of their column and the dimmed ones go down -- no
+   * scrolling to find them"). While a filter or a search narrows the board,
+   * each region's list is re-ordered: what matches first, in its usual
+   * order outward from the Sun, then the rest, with a hairline between the
+   * two (.is-first-off), and the list scrolled back to its top. With
+   * Everything chosen and the search empty, the original order returns.
+   * Moving the existing nodes keeps their listeners and state.
+   */
+  function liftMatches(narrowing) {
+    columns.forEach((entry) => {
+      const list = entry.column.querySelector(".cboard__bodies");
+      if (!list) return;
+      entry.order ??= [...list.children];
+      const off = (node) => node.classList.contains("is-off");
+      const want = narrowing
+        ? [...entry.order.filter((node) => !off(node)), ...entry.order.filter(off)]
+        : entry.order;
+      const now = [...list.children];
+      if (want.some((node, i) => now[i] !== node)) list.append(...want);
+      entry.order.forEach((node) => node.classList.remove("is-first-off"));
+      if (narrowing) {
+        const firstOff = want.findIndex(off);
+        if (firstOff > 0) want[firstOff].classList.add("is-first-off");
+        list.scrollTop = 0;
+      }
+    });
   }
 
   function writeResults(matcher) {

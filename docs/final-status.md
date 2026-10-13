@@ -1695,3 +1695,63 @@ Prompts.md items, in order:
   - `user-select` is none on the page and text in inputs.
   - On localhost, nothing is blocked.
   - No errors.
+
+## Part 55 — Round 76: every search box finds a word anywhere, in any case
+- **The owner's ask:** "%like% and case-insensitive. If I search 'mag', the magnetic events show up. Everywhere, in between words, anywhere."
+- **One matcher for all three boxes:** `src/js/ui/searchMatch.js`.
+  - Case is ignored.
+  - Accents and marks are ignored: "oumuamua" finds 'Oumuamua, and any dash counts as "-".
+  - Each word typed is looked for anywhere, inside a word as well as at its start.
+  - Every word has to be there, in any order.
+- **Space events:** searches the place, body, title, one-line detail, family, kind, cause, note and date. Before, a phrase had to appear exactly as typed, so "storm magnetic" found nothing; it now finds the magnetic shield.
+- **All bodies board:** names only, as before, so a moon's name still finds its planet and "Earth" does not light the near-Earth asteroids through their descriptions.
+  - The word-start rule is gone: "rth" finds Earth and "tit" finds Titan and Titania.
+  - "S/" still finds only the provisional designations.
+- **Space Dictionary:** searches the term, its other names and its plain-language line, now with the same matching.
+- **Checked:**
+  - Matcher cases in Node.
+  - In Chromium with the site running, the events search:
+    - "mag" and "MAG" → 3 cards;
+    - "netic" → 3;
+    - "storm magnetic" → 2;
+    - "oumuamua" → 1;
+    - "zzz" → 0.
+  - The board search:
+    - "rth" → Earth, Orthosie and the bodies that cross Earth's path;
+    - "tit" → Titan and Titania;
+    - "s/" → the S/ moons;
+    - "churyumov-g" → 67P.
+  - No errors.
+
+## Part 56 — Round 77: filtered bodies rise to the top of their column
+- **The owner's ask:** "When a filter is on, the matching bodies should come up to the top of their separator and the dimmed ones go down, so nobody has to scroll to find them."
+- **How it works:**
+  - While a filter (Planets, Dwarf worlds, Asteroids…) or a search narrows the All bodies board, `liftMatches` in `celestialBoard.js` re-orders each region's list.
+  - The matches come first, in their usual order, then the dimmed rest.
+  - A 14 px gap (`.is-first-off`) marks where the matches end, and the list is scrolled back to its top.
+  - Choosing Everything with an empty search restores the original order.
+  - The existing nodes are moved rather than rebuilt, so every button keeps its listeners and state.
+- **Checked in Chromium with the site running:**
+  - Planets: the four inner and the four giant planets lead their columns.
+  - Dwarf worlds: Ceres heads the belt.
+  - Asteroids: the near-Earth families and the belt's asteroids come first.
+  - Everything: the gaps are gone and the order is back.
+  - No errors. Screenshot looked right.
+
+## Part 57 — Round 78: the events search finds what the card shows, and brings it to the front
+- **The owner:** "The space events search is still not working. Is it because of the tile I'm on?"
+- **Two causes:**
+  - **It searched only part of each card.** Words in "how often", the last and next dates, the kind's description and the accuracy note were on screen but were not searched. Against the text of all 24 cards, "mag" missed the Supernova and "storm" missed the solar wind.
+  - **The tile you were on stayed at the front** whenever it also matched, so the match you wanted could be round the back of the ring.
+- **Fix in `spaceEventsDashboard.js`:**
+  - `searchText(e)` is everything `renderText` shows, plus the body and the note.
+  - A search always brings its best match to the front: events with the words in their title or place first, then the rest.
+  - Clearing the search returns to the tile you were on.
+- **Checked in Chromium**, starting from tile 11, by comparing each search with the words visible on every card. Nothing is missed now, and each search's front card:
+
+  | Search | Cards | Front card |
+  |---|---|---|
+  | mag | 4 | A magnetic shield in a storm |
+  | storm | 6 | A magnetic shield in a storm |
+  | comet | 7 | Sungrazing comet |
+  | eclipse | 1 | Solar eclipse |

@@ -1,3 +1,4 @@
+import { searchTerms, matches } from "./searchMatch.js";
 import { createNarrationButton } from "./narrationButton.js";
 import { narrate, stopNarration } from "../audio/narrationBus.js";
 /**
@@ -1224,15 +1225,17 @@ export function createBoardGlossary(host, { data = null } = {}) {
 
     let group = "all";
     function apply() {
-      const query = normalise(input.value.trim());
+      // Round 76: every word typed, anywhere, any case (ui/searchMatch.js).
+      const terms = searchTerms(input.value);
+      const query = terms.length > 0;
       let shown = 0;
       bunches.forEach((bunch) => {
         let inBunch = 0;
         const groupOn = group === "all" || bunch.group.key === group;
         bunch.cards.forEach(({ node, text, term }, k) => {
-          const on = groupOn && (!query || text.includes(query));
+          const on = groupOn && (!query || matches(text, terms));
           node.hidden = !on;
-          node.classList.toggle("is-match", Boolean(query) && on && term.includes(query));
+          node.classList.toggle("is-match", query && on && matches(term, terms));
           if (on) {
             node.style.setProperty("--k", String(inBunch));
             inBunch += 1;

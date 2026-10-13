@@ -493,6 +493,11 @@
   pointer-events: none;
 }
 
+/* Round 76: with a filter or search on, the matches sit at the top of each
+   column and the dimmed rest below (celestialBoard.js liftMatches); a small
+   gap marks where one ends and the other begins. */
+.cboard__item.is-first-off { margin-top: 14px; }
+
 .cboard__body {
   flex: 1;
   min-width: 0;
