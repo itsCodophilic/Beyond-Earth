@@ -2593,6 +2593,7 @@ composeSolarEventShot(
   let simulationTime = 0;
   let elapsedTime = 0;
   let isPageVisible = !document.hidden;
+  let lastEventWallMs = 0;
   let isAboutExperienceOpen = false;
   let isEventsDashboardOpen = false;
   let isGuidedTourOpen = false;
@@ -9768,7 +9769,56 @@ composeSolarEventShot(
     isPageVisible = !document.hidden;
     spaceEnvironment.setPaused(!isPageVisible || isInformationOverlayOpen());
     if (isPageVisible) timer.reset();
+    keepJourneyGoingWhileHidden(!isPageVisible);
   });
+
+  /*
+   * Round 73: the opening keeps going in a hidden tab. Her voice and the song
+   * are audio and play on in the background, but this loop stops with the
+   * tab, so the pictures used to wait where they were and come back out of
+   * step with her. While the tab is hidden a timer (which the browser runs
+   * about once a second there) moves the opening on by the time that has
+   * really passed -- in 50 ms steps, as the frames would have, and through
+   * journeyStep, so the song and her paragraphs are booked exactly as if the
+   * viewer were watching. Nothing is drawn. Back on the tab, the loop takes
+   * over from the same point.
+   */
+  let hiddenJourneyTimer = null;
+  let hiddenJourneyAt = 0;
+  function advanceHiddenJourney() {
+    if (!cosmicIntro || introHold) return;
+    const now = performance.now();
+    // If frames are still arriving (a browser that keeps drawing a hidden
+    // tab), the loop is moving the opening already: do not move it twice.
+    if (lastCinematicFrameTime > 0 && now - lastCinematicFrameTime < 200) {
+      hiddenJourneyAt = now;
+      return;
+    }
+    // Up to two minutes at a time: a tab hidden for long is woken only about
+    // once a minute by Chrome, and the steps must cover all of it.
+    let left = Math.min(120, (now - hiddenJourneyAt) / 1000);
+    hiddenJourneyAt = now;
+    try {
+      while (left > 1e-4) {
+        const step = Math.min(0.05, left);
+        left -= step;
+        cosmicIntro.update(journeyStep(step));
+      }
+    } catch (error) {
+      /* the visible loop reports failures; here, just stop advancing */
+    }
+  }
+  function keepJourneyGoingWhileHidden(hidden) {
+    clearInterval(hiddenJourneyTimer);
+    hiddenJourneyTimer = null;
+    if (hidden) {
+      hiddenJourneyAt = performance.now();
+      hiddenJourneyTimer = setInterval(advanceHiddenJourney, 250);
+    } else {
+      advanceHiddenJourney();
+      lastCinematicFrameTime = 0;
+    }
+  }
 
   // Release GPU-owned space resources when the page is actually discarded.
   addEventListener("pagehide", (event) => {
@@ -10681,7 +10731,18 @@ composeSolarEventShot(
     // on the sky rather than sliding past as the camera moves.
     skyEventAnchor.position.copy(camera.position);
     solarSystemEvents.setPaused(!isPageVisible || Boolean(cosmicIntro) || cosmicIntroPending);
-    solarSystemEvents.update(deltaTime);
+    /*
+     * Round 73 (the owner: "when I switch to another tab, the voice and the
+     * view go out of step -- let it carry on"). Her story is audio and keeps
+     * playing in a hidden tab, while this loop does not run there at all. So
+     * an event is timed by the wall clock: back on the tab, the first frame
+     * moves it on by however long it was away, and the picture is where her
+     * words are (or the event has ended, as it would have).
+     */
+    const eventWallNow = performance.now();
+    const eventWallDelta = lastEventWallMs > 0 ? (eventWallNow - lastEventWallMs) / 1000 : deltaTime;
+    lastEventWallMs = eventWallNow;
+    solarSystemEvents.update(Math.max(deltaTime, eventWallDelta));
     galactocentric?.update(deltaTime);
 
     spaceEnvironment.setJourneyProgress(getEnvironmentJourneyProgress());

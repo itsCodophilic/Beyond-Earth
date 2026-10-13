@@ -24,6 +24,11 @@
  *
  * Each cut has 60 ms of lead-in and 150 ms of tail, never past the middle of
  * the pause on either side.
+ *
+ * Round 73: the CME and magnetic-shield stories were re-recorded on their
+ * own (Part 3F-cme, 37.33 s; Part 3F-shield, 32.21 s) and point there; their
+ * speech runs 0.06-37.13 s and 0.06-31.94 s. Their old takes in Part 3F-2
+ * are no longer used.
  */
 export const NARRATION_CUTS = Object.freeze({
   "arrival-1": ["Part 3A", 0.04, 6.61],
@@ -196,13 +201,13 @@ export const NARRATION_CUTS = Object.freeze({
   "galacto-2": ["Part 3F-2", 65.72, 96.80],
   "event:solar-system-formation": ["Part 3F-2", 97.62, 136.08],
   "event:solar-wind": ["Part 3F-2", 136.84, 169.21],
-  "event:solar-cme": ["Part 3F-2", 170.04, 206.85],
+  "event:solar-cme": ["Part 3F-cme", 0.00, 37.28],
   "event:sungrazer": ["Part 3F-2", 207.54, 244.09],
   "event:mercury-sodium-tail": ["Part 3F-2", 244.82, 272.96],
   "event:meteor-shower": ["Part 3F-2", 273.79, 308.11],
   "event:solar-eclipse": ["Part 3F-2", 308.79, 346.07],
   "event:seasons": ["Part 3F-2", 346.56, 379.97],
-  "event:earth-magnetosphere": ["Part 3F-2", 380.38, 411.69],
+  "event:earth-magnetosphere": ["Part 3F-shield", 0.00, 32.09],
   "event:lunar-impact-flash": ["Part 3F-2", 412.13, 444.46],
   "event:mars-dust-storm": ["Part 3F-2", 444.95, 479.28],
   "event:jupiter-impact": ["Part 3F-3", 0.03, 38.10],

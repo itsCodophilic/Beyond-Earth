@@ -1644,3 +1644,17 @@ Prompts.md items, in order:
   - **`public/favicon.ico` (16–64 px) and `public/favicon.png` (64 px):** a lit, tilted globe rendered from the site's own `earth-no-clouds.jpg`. These are what shows before the page runs, and stays if reduced motion is asked for.
   - **`src/js/ui/spinningFavicon.js`:** draws the turning globe on a 64 px canvas from `public/favicon-earth-map.png` (128 × 64) and gives it to the icon link about 12 times a second, one turn every 8 s. Each pixel's latitude, shading, limb glow and edge coverage are precomputed, so a frame is about 3,200 texture look-ups and one `toDataURL`.
   - **Checked in Chromium:** the icon's data URL changes between frames, and two frames show the globe turned (Asia and Australia, then the Pacific). No errors.
+
+## Part 52 — Round 73: the new CME and shield takes, and the site keeps going in a background tab
+- **New recordings in use.**
+  - `event:solar-cme` now plays `Part 3F-cme.mp3`, 0.00–37.28 s.
+  - `event:earth-magnetosphere` now plays `Part 3F-shield.mp3`, 0.00–32.09 s.
+  - The old takes inside `Part 3F-2.mp3` are no longer used.
+  - Measured at the two phrases the owner named, the new takes come out the same as the old ones: peak, short-term loudness, high- and low-band energy, spectral slope. Nothing in either recording stands out there, and no other line has a defect like it. If the spike is still heard with these takes, it is not in the recording and has to be looked for in playback.
+- **Background tab.** The owner switched tabs during the opening and came back to find the voice and the pictures out of step. The voice and music are audio and keep playing in a hidden tab. The drawing loop (`requestAnimationFrame`) does not run there at all, so the pictures used to wait where they were.
+  - **The opening:** while the tab is hidden, a timer moves the journey on by the time that has really passed. Browsers run it about once a second, or once a minute after a few minutes hidden. It moves the journey in 50 ms steps through `journeyStep`, so the song starts at the Multiverse and her paragraphs are booked exactly as on screen. Nothing is drawn. On return the loop takes over from the same point. If a browser keeps delivering frames to a hidden tab, the timer stands aside so the journey is not moved twice.
+  - **Space events:** an event's progress is now timed by the wall clock. The first frame back on the tab moves it on by however long the tab was away. The picture lands where her words are, or the event has finished, as it would have.
+  - **Checked:**
+    - A simulation of the timer against `journeyStep`'s rules (one tick a second for 60 s, across the Multiverse) keeps the journey exactly on the wall clock.
+    - Syntax checked.
+    - The headless renderer is too slow to reach the opening in a run, so this still needs a check in a real browser.
