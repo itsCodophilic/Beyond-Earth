@@ -6475,6 +6475,7 @@ composeSolarEventShot(
     );
     if (
       !body
+      || !reachedSolarSystem // round 74: never a body's card on the beginning screen
       || atlasParentOwnsView
       || focusedUiSuppressedByWideView
       || focusExitTransition
@@ -7244,6 +7245,7 @@ composeSolarEventShot(
      * veil hides could still be hovered -- and lit -- through it.
      */
     if (isDragging
+      || !reachedSolarSystem // round 74: no hover behind the beginning screen
       || lastPointerType === "touch"
       || isArrivalCaptionPlaying
       || tourSuppressesHover
@@ -9453,6 +9455,19 @@ composeSolarEventShot(
   });
 
   addEventListener("pointerdown", (event) => {
+    /*
+     * Round 74 (the owner: "sometimes the Earth info card, or another body's,
+     * appears on the beginning screen"). Before the arrival the solar system
+     * is already built and drawn behind the Begin screen, and nothing stopped
+     * a press there from reaching it: a click anywhere on the gate (Begin, the
+     * sound switch, empty space) was raycast into the scene behind, and if
+     * Earth or another body was under the pointer it was focused -- and its
+     * card, which stacks above the gate (z-index 14 over 10), came up on the
+     * beginning screen. "Sometimes" is whether a body happened to be under
+     * the click. Until the viewer has arrived, the scene takes no hover and
+     * no clicks.
+     */
+    if (!reachedSolarSystem) return;
     if (event.target.closest?.(".about-experience, .events-dashboard, .planet-details, .celestial-selection-card, .satellite-system-overview, .satellite-atlas-directory, .satellite-name-label, .body-card-restore, .progress, .distance-cinematic-layer, .system-return-button")) return;
     updatePointerFromEvent(event);
     const pressedOrbitCandidate = hoveredPlanetOrbit && isPointerStillOnHoveredPlanetOrbit()
@@ -9472,6 +9487,12 @@ composeSolarEventShot(
   addEventListener("pointerup", (event) => {
     updatePointerFromEvent(event);
     isDragging = false;
+    // Round 74: nothing in the scene is chosen before the arrival (see pointerdown).
+    if (!reachedSolarSystem) {
+      pointerDownCelestialBody = null;
+      pointerDownPlanetOrbit = null;
+      return;
+    }
     // HUD clicks belong to HTML controls and must not select objects behind them.
     if (event.target.closest?.(".about-experience, .events-dashboard, .planet-details, .celestial-selection-card, .satellite-system-overview, .satellite-atlas-directory, .satellite-name-label, .hud, .body-card, .body-card-restore, .progress, .distance-cinematic-layer, .system-return-button")) {
       pointerDownCelestialBody = null;

@@ -1658,3 +1658,16 @@ Prompts.md items, in order:
     - A simulation of the timer against `journeyStep`'s rules (one tick a second for 60 s, across the Multiverse) keeps the journey exactly on the wall clock.
     - Syntax checked.
     - The headless renderer is too slow to reach the opening in a run, so this still needs a check in a real browser.
+
+## Part 53 — Round 74: no body's card on the beginning screen
+- **What the owner saw:** sometimes the Earth info card, or another body's, came up on the beginning screen.
+- **Cause:** the solar system is already built and drawn behind the Begin screen. Nothing stopped a press on the gate from reaching it.
+  - Any click there (Begin, the sound switch, empty space) was raycast into the scene behind.
+  - If Earth or another body was under the pointer, it was focused.
+  - The selection card stacks above the gate (z-index 14 over the intro's 10), so it showed on the beginning screen.
+  - "Sometimes" was simply whether a body happened to be under the click.
+- **Fix:** until the viewer has arrived (`reachedSolarSystem`, set in `completeCosmicIntro`, which is also used by `?skipIntro` and the failure paths), the scene takes no hover and no clicks.
+  - `pointerdown` and `pointerup` return early.
+  - `findCelestialForHover` declines.
+  - `updateCelestialSelectionCard` keeps the card hidden.
+- **Checked:** syntax only. The headless renderer was too slow to click through the whole gate in a run.
