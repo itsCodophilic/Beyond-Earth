@@ -447,5 +447,12 @@ export function createSoundscape() {
     stopAll(fadeMs = 400) {
       live.forEach((handle) => handle.stop(fadeMs));
     },
+    /** Round 65: releases the audio device when the page goes away. */
+    close() {
+      try { ctx?.close(); } catch (error) { /* already closed */ }
+      ctx = null;
+      buffers.clear();
+      seams.clear();
+    },
   };
 }

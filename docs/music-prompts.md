@@ -159,3 +159,43 @@ cinematic orchestral space score, instrumental, no vocals, majestic church pipe 
 | Climax | The Milky Way | 64–76 s |
 | Breakdown | The Orion Arm | 76–88 s |
 | Outro | Our Star, then the arrival | 88–97.5 s |
+
+---
+
+## Update (round 64): the journey song, rewritten in the cornfield-chase spirit
+**Length needed:** about **2:20** (140 s), from the Multiverse to the arrival, at the current pace (`JOURNEY_PACE` in `main.js`). Aim for 2:30–3:00; anything extra is trimmed.
+
+**Style of Music** (396 characters):
+```
+minimalist cinematic space score, instrumental, solo church pipe organ, one simple repeating arpeggio motif played over and over, the same four chords cycling, hypnotic ostinato, each repetition louder and fuller as more organ stops are added, relentless slow crescendo, awe and wonder, ancient sacred sound, D minor, steady 8th notes, no piano, no drums, no vocals, no choir, no guitar, no synth
+```
+**Lyrics box:**
+```
+[Intro: a single soft organ arpeggio alone, very quiet]
+
+[Verse: the same arpeggio repeats, a low organ pedal note joins]
+
+[Verse: the same pattern again, a second organ voice joins, louder]
+
+[Build: the same pattern, more organ stops, louder and fuller]
+
+[Climax: full organ, every stop open, the same pattern at maximum volume]
+
+[Break: suddenly drops back to the single quiet arpeggio]
+
+[Final: rises again to full power and resolves to D major]
+
+[Outro: one long held organ chord, fading]
+
+[End]
+```
+| Section | Act | Seconds into the song (current pace) |
+|---|---|---|
+| Intro | The Multiverse | 0–14 |
+| Verse | Our Universe | 14–35 |
+| Verse | The Cosmic Web | 35–57 |
+| Build | Laniakea | 57–79 |
+| Climax | The Milky Way | 79–100 |
+| Break | The Orion Arm | 100–122 |
+| Final | Our Star | 122–136 |
+| Outro | the arrival | 136–140 |

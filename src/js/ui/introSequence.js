@@ -143,6 +143,17 @@ export function createIntroSequence({ root, sound = null } = {}) {
    * click, its lines booked from that moment (never before their milestone).
    */
   let begun = !sound;
+  /*
+   * Round 65: whether the log is on screen, which is not the same as begun.
+   * Between the click and the log appearing there are ~0.65 s (the Begin
+   * screen fades, the tick decodes). On a warm reload the universe builds so
+   * fast that many milestones land in that gap; they used to be put in the
+   * page and booked while the log was still display:none -- every line
+   * measured at height 0, so the log never learned it had to glide up, and
+   * every later line was drawn below the window ("stuck, and the next steps
+   * are underneath"). Lines are now only placed once the log is visible.
+   */
+  let logOpen = !sound;
   // Music 5's handle: started by the fall, stopped by the click.
   let waitingLoop = null;
   let markBegun = () => {};
@@ -183,6 +194,7 @@ export function createIntroSequence({ root, sound = null } = {}) {
       Promise.all([decoded, faded]).then(() => {
         opening.remove();
         stage.hidden = false;
+        logOpen = true;
         container.append(soundToggle);
         requestAnimationFrame(() => soundToggle.classList.add("is-shown"));
         markBegun();
@@ -449,7 +461,7 @@ export function createIntroSequence({ root, sound = null } = {}) {
 
   function flush() {
     flushBooked = false;
-    if (!pending.length || !begun) return;
+    if (!pending.length || !logOpen) return;
     const items = pending.splice(0);
     const batch = items.map((item) => {
       const line = buildLine(item.text);
@@ -463,9 +475,15 @@ export function createIntroSequence({ root, sound = null } = {}) {
   }
 
   function bookBatch(batch) {
+    const windowHeight = log.clientHeight;
+    // Never measure a log that is not laid out (hidden, or not yet drawn):
+    // every line would come out at height 0 and the glide would be lost.
+    if (!windowHeight || !batch[0].line.offsetHeight) {
+      nextFrame(() => bookBatch(batch));
+      return;
+    }
     unbooked -= 1;
     const now = performance.now();
-    const windowHeight = log.clientHeight;
     batch.forEach((entry) => {
       const { line } = entry;
       const at = Math.max(now + BOOK_LEAD_MS, nextSlot);

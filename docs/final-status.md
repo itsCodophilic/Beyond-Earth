@@ -1295,3 +1295,24 @@ Sources are listed above the `TIMELINE` table in `spaceEventsDashboard.js`. Thes
   - it was released on the first journey frame past 19 s, and the tail started with it;
   - the song started at the Multiverse;
   - no errors.
+
+## Part 43 — Round 65: the log stuck on a reload (fixed), and a clean hand-back on leaving
+- **Reported:** on the first load the log and ticks were in sync. On a reload, the log stuck: new steps appeared *below* the window and only came up at the very end.
+- **Cause, reproduced:** after the Begin click there are about 0.65 s before the log appears (the Begin screen fades, the tick decodes). On a warm reload the universe builds so fast that most milestones land in that gap.
+  - They were put in the page and booked while the log was still `display: none`, so every line measured 0 px and the log never glided up.
+  - Instrumented, the old code booked 33 of 35 lines with a window height of 0. Only the last line, booked once visible, glided, in one jump of 533 px at the end.
+  - Sampled mid-log, the newest line was below the window from the 18th line on.
+- **Fix** (`introSequence.js`):
+  - Lines are only placed once the log is on screen. This is a new `logOpen` flag, set when the stage is shown; `begun` is no longer used for this.
+  - Booking never measures an unlaid-out log: if the window or the line has no height, it waits a frame and tries again.
+- **Checked:**
+  - **Same harness, before and after** (5 steps before the click, 29 in the 0.6 s after it), sampled at 6, 9, 12 and 15 s:
+
+    | Version | Newest line | Track |
+    |---|---|---|
+    | before | below the window from 9 s on | never moved |
+    | after | at the window's bottom edge every time | glided to −101, −250, then −407 px |
+
+  - **The real app, loaded then reloaded twice** (Begin pressed after 1.5, 6 and 30 s): no line ever below the window, and no errors.
+- **Leaving the page now releases the GPU and the audio device.** On `pagehide` (when not kept in the back-forward cache), the page now also disposes the opening and the renderer and forces the WebGL context to be released (`forceContextLoss`). It also closes the AudioContext (`sound.close()`). Without this, a reload could start building while the browser was still reclaiming the old page's context.
+- **Also this round:** the experimental generated journey music (`public/audio/journey-original.mp3`, `tools/music/compose-journey.py`) was deleted at the owner's request. The site never used it.

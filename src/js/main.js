@@ -9526,6 +9526,16 @@ composeSolarEventShot(
       timer.dispose();
       spaceEnvironment.dispose();
       distanceCinematicPanel?.dispose();
+      /*
+       * Round 65 ("every reload must clear out the garbage"): hand the GPU
+       * and the audio device back as the page goes, rather than leaving the
+       * old page's WebGL context and AudioContext for the browser to reclaim
+       * whenever it gets round to it -- which can still be happening while
+       * the reloaded page is building its own.
+       */
+      try { cosmicIntro?.dispose?.(); } catch (error) { /* going anyway */ }
+      try { renderer.dispose(); renderer.forceContextLoss(); } catch (error) { /* going anyway */ }
+      sound.close();
     }
   });
 
