@@ -171,7 +171,15 @@ const CAPTIONS = {
     lines: [
       "One of them is ours.",
       "This is the bubble we cooled into.",
-      "13.8 billion years old, 93 billion light-years across — and still growing.",
+      /*
+       * Round 67: it said "93 billion light-years across" -- the diameter --
+       * while the readout beside it says "The edge of the observable
+       * universe · 46.5 billion light-years" -- the radius. Both true, and
+       * side by side they read as a contradiction. The caption now gives the
+       * same figure as the readout; the narrator says why it is more than
+       * 13.8 billion (space kept stretching while the light travelled).
+       */
+      "13.8 billion years old — yet its edge is 46.5 billion light-years away.",
     ],
   },
   cosmicWeb: {
@@ -1935,6 +1943,9 @@ export function createCosmicIntro({ pixelRatio } = {}) {
   }
 
   let captionKey = null;
+  const captionSpans = {};
+  const ACT_START_MS = {};
+  PHASE_ORDER.reduce((start, key) => { ACT_START_MS[key] = start; return start + INTRO_TIMING[key]; }, 0);
   /*
    * The body line is faded by hand, not by CSS.
    *
@@ -1955,6 +1966,19 @@ export function createCosmicIntro({ pixelRatio } = {}) {
 
   function showCaption(key, local = 1, deltaSeconds = 0) {
     const entry = CAPTIONS[key];
+    /*
+     * Round 69: when the narrator speaks this act, its lines follow *her*,
+     * not the act's full length. The acts run 1.8x long now (JOURNEY_PACE),
+     * so spreading three lines over the whole act put the last one up long
+     * after she had said it. captionSpans[key] (set by main.js from the
+     * length of her paragraph) is the stretch of the act, in the opening's
+     * own milliseconds, that the lines are spread over; the last line then
+     * holds to the end of the act.
+     */
+    const span = captionSpans[key];
+    if (span > 0 && ACT_START_MS[key] != null) {
+      local = Math.max(0, Math.min(1, (elapsed - ACT_START_MS[key]) / span));
+    }
     if (!entry) {
       caption.classList.remove("is-live");
       captionKey = key;
@@ -6247,5 +6271,8 @@ export function createCosmicIntro({ pixelRatio } = {}) {
     // Round 62: main.js paces the journey by its music and needs to know
     // where the sequence is.
     get elapsedMs() { return elapsed; },
+    // Round 69: spread an act's caption lines over this many of the
+    // opening's milliseconds (the narrator's paragraph), not the whole act.
+    setCaptionSpans(spans) { Object.assign(captionSpans, spans); },
   };
 }

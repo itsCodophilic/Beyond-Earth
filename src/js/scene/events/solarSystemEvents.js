@@ -3284,11 +3284,12 @@ function createSolarEjection(target, camera) {
   group.add(kernel);
 
   const kernelView = new THREE.Vector3();
+  let cmeZoom = 1;
 
   return {
     group,
     duration: 18,
-    update(progress) {
+    update(progress, api) {
       const fade = 1 - smoothstep(0.78, 1, progress);
 
       // The viewpoint is not set here; see `volume.onBeforeRender`.
@@ -3351,6 +3352,20 @@ function createSolarEjection(target, camera) {
        * width, and never past the shell itself.
        */
       uniforms.uMaxHead.value = Math.min(1, maxHead * 1.06);
+      /*
+       * Round 69 (Prompts.md: "as the ejection happens, slowly zoom out so
+       * the layer of ejection stays visible"). The camera stands back as the
+       * furthest front climbs: at the focused framing (zoom 1) the Sun's
+       * disc fills the middle of the frame, so the front, `frontRadii` solar
+       * radii out, stays inside it at about frontRadii / 1.6. It only ever
+       * moves out (never back in while the cloud fades), and the camera eases
+       * to it as to any zoom, so the pull-back is as slow as the cloud.
+       */
+      const frontRadii = maxHead / sunFraction;
+      if (frontRadii > 1.4) {
+        cmeZoom = Math.max(cmeZoom, frontRadii / 1.6);
+        api?.setZoom?.(cmeZoom);
+      }
       /*
        * Nothing to march through before the first site opens or after the last
        * one fades, and a full-screen shell that resolves to nothing is still a
@@ -8573,7 +8588,7 @@ export function createSolarSystemEvents({
      * Stages one event now, by id. Runs once and takes itself apart -- there is
      * no looping, because the thing being depicted does not loop either.
      */
-    play(id) {
+    play(id, { fitTo = null } = {}) {
       const definition = EVENTS.find((event) => event.id === id);
       if (!definition) return false;
       // An event with no body happens against the sky, not on anything.
@@ -8588,6 +8603,18 @@ export function createSolarSystemEvents({
       );
       host.add(instance.group);
       active = { ...instance, definition, elapsed: 0 };
+      /*
+       * Round 69 (Prompts.md: "some events end soon but the voice keeps on
+       * going, some are still going when she has finished"). The narrator's
+       * story of the event sets how long it runs: `fitTo` seconds, from
+       * main.js. Every event is drawn from progress (elapsed / duration), so
+       * a different length plays the same thing faster or slower, stages and
+       * all. Kept within 0.6x to 2.6x of the length it was designed for, so
+       * nothing becomes a blur or a crawl.
+       */
+      if (Number.isFinite(fitTo) && fitTo > 0) {
+        active.duration = THREE.MathUtils.clamp(fitTo, instance.duration * 0.6, instance.duration * 2.6);
+      }
       viewCounts.set(definition.id, (viewCounts.get(definition.id) ?? 0) + 1);
       lastPlayedId = definition.id;
       announce?.({

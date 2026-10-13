@@ -1,3 +1,4 @@
+import { createNarrationButton } from "../ui/narrationButton.js";
 import * as THREE from "three";
 import { textSprite, glow, declutterLabels } from "./events/interstellarPassages.js";
 
@@ -583,6 +584,9 @@ export function createGalactocentricView({
     <details class="galacto-chrome__more"><summary>More</summary><p></p></details>
   `;
   document.body.append(chrome);
+  // Round 69: hear this tab's paragraph again.
+  const replay = createNarrationButton("galacto-1", { label: "Hear this again", className: "narr-btn--galacto" });
+  chrome.querySelector(".galacto-chrome__head").insertBefore(replay.element, chrome.querySelector(".galacto-chrome__close"));
   const odo = chrome.querySelector(".galacto-chrome__odo");
   const stage = document.createElement("div");
   stage.className = "galacto-stage";
@@ -630,6 +634,7 @@ export function createGalactocentricView({
     chrome.querySelector(".galacto-chrome__title").textContent = info.title;
     chrome.querySelector(".galacto-chrome__text").textContent = info.text;
     chrome.querySelector(".galacto-chrome__more p").textContent = info.more;
+    replay.setLine(`galacto-${scale}`);
     chrome.querySelectorAll("[data-scale]").forEach((b) => b.setAttribute("aria-selected", String(Number(b.dataset.scale) === scale)));
   }
 

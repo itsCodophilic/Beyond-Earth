@@ -217,6 +217,8 @@ const JOURNEY_UI_SELECTOR = [
 ].join(", ");
 import { createIntroSequence } from './ui/introSequence.js';
 import { createSoundscape, SOUND_CUES } from './audio/soundscape.js';
+import { createNarrator, lineForBody, ultravioletLine } from './audio/narrator.js';
+import { createNarrationButton } from './ui/narrationButton.js';
 import { createCosmicIntro, INTRO_TIMING } from './scene/space/cosmicIntro.js';
 import { POINTER_PROXY_LAYER } from "./scene/pointerProxies.js";
 
@@ -259,6 +261,51 @@ import { POINTER_PROXY_LAYER } from "./scene/pointerProxies.js";
    */
   const sound = createSoundscape();
   sound.preload(Object.keys(SOUND_CUES));
+  /*
+   * Round 69: the narrator's third part -- what she says when you go
+   * somewhere (audio/narrator.js). One line at a time: going somewhere new
+   * starts its line and stops the last. The interface asks for lines with
+   * window events (audio/narrationBus.js); she answers here, and says back
+   * what she is saying so the replay buttons can light up.
+   */
+  const narrator = createNarrator(sound);
+  narrator.onChange((id) => {
+    window.dispatchEvent(new CustomEvent("beyond-earth:narration", { detail: { id } }));
+  });
+  addEventListener("beyond-earth:narrate", (event) => narrator.say(event.detail?.id));
+  addEventListener("beyond-earth:narrate-toggle", (event) => narrator.toggle(event.detail?.id));
+  addEventListener("beyond-earth:narrate-stop", (event) => {
+    const { id = null, prefix = null } = event.detail ?? {};
+    if (id) narrator.stopIf(id);
+    else if (prefix) narrator.stopIf((current) => current.startsWith(prefix));
+    else narrator.stop();
+  });
+  /*
+   * A body's line is not wanted while something else is speaking for the
+   * moment: the ultraviolet view, an event, or the galaxy view all fly to a
+   * body on their way in, and their own line is the one to hear.
+   */
+  let bodyNarrationQuietUntil = 0;
+  const quietBodyNarration = (ms = 1500) => { bodyNarrationQuietUntil = performance.now() + ms; };
+  const isPlaceLine = (id) => !id.includes(":") || id.startsWith("family:") || id.startsWith("region:");
+  /** Leaving a body (or region) stops its line; other lines are not hers to stop. */
+  const stopBodyNarration = () => narrator.stopIf(isPlaceLine);
+  // A clicked ring flies to its planet; the ring's line is the one wanted.
+  let pendingRingLine = null;
+  function narrateBody(body) {
+    if (performance.now() < bodyNarrationQuietUntil) return;
+    if (pendingRingLine && performance.now() - pendingRingLine.at < 2500) {
+      const ring = pendingRingLine.id;
+      pendingRingLine = null;
+      narrator.say(ring);
+      return;
+    }
+    pendingRingLine = null;
+    if (solarEventPhase === "waiting" || solarEventPhase === "running") return;
+    if (ULTRAVIOLET_LOCK.active) return;
+    const id = lineForBody(body?.userData?.name ?? body?.name ?? null);
+    if (id) narrator.say(id); else narrator.stop();
+  }
   let journeyMusic = null;
   /*
    * Round 62: the journey paced by its music ("make the travelling slow,
@@ -300,6 +347,30 @@ import { POINTER_PROXY_LAYER } from "./scene/pointerProxies.js";
   const JOURNEY_SETTLE_RELEASE_MS = INTRO_TIMING.inflation + 7000;
   let settleHold = null;
   let journeySettleReleased = false;
+  /*
+   * Round 68: the narrator's second part, one paragraph per act, each
+   * spoken 0.4 s after its act begins (SOUND_CUES.voice2). The act starts
+   * are the opening's own clock, so she follows the pictures however the
+   * pace is set. A paragraph never starts over the one before (0.3 s apart);
+   * a seek past several acts speaks only the act it lands in.
+   */
+  const VOICE2_ACTS = ["inflation", "condense", "multiverse", "approach", "cosmicWeb",
+    "galaxies", "milkyWay", "orionArm", "sunApproach", "arrive"];
+  const VOICE2_AT_MS = VOICE2_ACTS.map((key, i) =>
+    VOICE2_ACTS.slice(0, i).reduce((sum, k) => sum + INTRO_TIMING[k], 0));
+  let voice2Next = 0;
+  let voice2FreeAt = 0;
+  function speakJourney(elapsed) {
+    let due = -1;
+    while (voice2Next < VOICE2_AT_MS.length && elapsed >= VOICE2_AT_MS[voice2Next]) {
+      due = voice2Next; voice2Next += 1;
+    }
+    if (due < 0 || !sound.has("voice2")) return;
+    const segment = `p${due + 1}`;
+    const start = Math.max(performance.now() + 400, voice2FreeAt + 300);
+    sound.playAt("voice2", start, { segment });
+    voice2FreeAt = start + sound.segmentLength("voice2", segment) * 1000;
+  }
   let journeySongClockMs = 0; // stands in for the song's clock if it has none
   // Song time -> journey time from the Multiverse: speed 1 easing to k.
   const pacedJourneyMs = (songMs) => {
@@ -316,6 +387,7 @@ import { POINTER_PROXY_LAYER } from "./scene/pointerProxies.js";
    */
   function journeyStep(frameSeconds) {
     const elapsed = cosmicIntro.elapsedMs;
+    speakJourney(elapsed);
     if (settleHold && !journeySettleReleased && elapsed >= JOURNEY_SETTLE_RELEASE_MS) {
       journeySettleReleased = true;
       settleHold.stop(1500);
@@ -1334,6 +1406,10 @@ import { POINTER_PROXY_LAYER } from "./scene/pointerProxies.js";
   const solarEventTitle = solarEventNotice.querySelector("#solar-event-title");
   const solarEventDetail = solarEventNotice.querySelector("#solar-event-detail");
   const solarEventNote = solarEventNotice.querySelector("#solar-event-note");
+  /* Round 69: hear the event's story again (the card itself takes no clicks;
+   * the button does -- see .solar-event-notice .narr-btn). */
+  const solarEventReplay = createNarrationButton(null, { label: "Hear about this event", className: "narr-btn--event" });
+  solarEventNotice.append(solarEventReplay.element);
   /* Round 43: the step an event told in steps is on (formation, the solar
    * wind, the magnetosphere, the seasons). Replaces the summary line while
    * it is up; the summary comes back when it clears. */
@@ -1692,6 +1768,9 @@ composeSolarEventShot(
     solarEventNote.textContent = definition.note;
     solarEventNotice.classList.add("is-visible", "is-waiting");
     setSolarEventStagingUI(true);
+    // Round 69: she tells the story of the event while it is staged and plays.
+    narrator.say(`event:${id}`);
+    solarEventReplay?.setLine(`event:${id}`);
 
     let remaining = EVENT_ARRIVAL_DELAY_SECONDS;
     const tick = () => {
@@ -1709,9 +1788,15 @@ composeSolarEventShot(
       }
     }, 1000);
 
+    /*
+     * Round 69: she starts as the card appears, so the event is fitted to end
+     * 1.2 s after she does: her line, less the countdown, plus that breath.
+     */
+    const storySeconds = narrator.canSpeak() ? narrator.lengthOf(`event:${id}`) : 0;
+    const fitTo = storySeconds > 0 ? storySeconds - EVENT_ARRIVAL_DELAY_SECONDS + 1.2 : null;
     solarEventStartTimer = setTimeout(() => {
       solarEventStartTimer = null;
-      solarSystemEvents.play(id);
+      solarSystemEvents.play(id, { fitTo });
     }, EVENT_ARRIVAL_DELAY_SECONDS * 1000);
     return true;
   }
@@ -1767,7 +1852,10 @@ composeSolarEventShot(
     // Opening the catalogue is the one action that clears the card even
     // mid-event: the viewer is explicitly going to choose something else, and
     // `presentSolarEvent` will stop whatever is running anyway.
-    if (event.detail?.open) dismissSolarEventNotice();
+    if (event.detail?.open) {
+      dismissSolarEventNotice();
+      narrator.stopIf((id) => id.startsWith("event:"));
+    }
   });
 
   /*
@@ -3380,6 +3468,9 @@ composeSolarEventShot(
       );
     },
     onScaleChange: (step) => {
+      // Round 69: each tab has its paragraph; a tab pressed again says it again.
+      quietBodyNarration();
+      narrator.say(`galacto-${step}`);
       if (step !== 1) return;
       const sunBody = findSunBody();
       if (!sunBody) return;
@@ -3394,6 +3485,7 @@ composeSolarEventShot(
       targetYaw = side + Math.round((yaw - side) / (Math.PI * 2)) * Math.PI * 2;
     },
     onExit: () => {
+      narrator.stopIf((id) => id.startsWith("galacto-"));
       galactoToggle?.setAttribute("aria-checked", "false");
       galactoToggle?.classList.remove("is-on");
     },
@@ -3533,8 +3625,10 @@ composeSolarEventShot(
     },
     onExitRequest: () => leaveUltravioletView(),
   });
+  let heardUltravioletIntro = false;
   function leaveUltravioletView() {
     if (!ultravioletView.active) return;
+    narrator.stopIf((id) => id.startsWith("uv:"));
     ultravioletView.exit();
     ULTRAVIOLET_LOCK.active = false;
     ULTRAVIOLET_LOCK.exit = null;
@@ -3581,6 +3675,8 @@ composeSolarEventShot(
     );
   }
   addEventListener("beyond-earth:ultraviolet-view", (event) => {
+    // Round 69: the flight in should not start the body's line over hers.
+    quietBodyNarration(event.detail?.retried ? 1500 : 7000);
     const planet = findAuroraBody(event.detail?.name);
     if (!planet) {
       /* A Jovian moon not built yet: travelling there builds it (see the
@@ -3611,6 +3707,18 @@ composeSolarEventShot(
     ULTRAVIOLET_LOCK.exit = leaveUltravioletView;
     ULTRAVIOLET_LOCK.rotate = rotateUltravioletView;
     ULTRAVIOLET_LOCK.active = true;
+    /*
+     * Round 69: what ultraviolet is, the first time in a visit, then what
+     * this world's aurora is; after that, just the world's own line.
+     */
+    const uvLine = ultravioletLine(planet.userData?.name ?? event.detail?.name);
+    if (!heardUltravioletIntro && narrator.say("uv:intro", {
+      onEnd: (how) => { if (how === "ended" && ULTRAVIOLET_LOCK.active && uvLine) narrator.say(uvLine); },
+    })) {
+      heardUltravioletIntro = true;
+    } else if (uvLine) {
+      narrator.say(uvLine);
+    }
   });
   /*
    * The board's "Aurora · UV mode" pill (second final round). Flies to the
@@ -3641,12 +3749,14 @@ composeSolarEventShot(
     const venus = findSceneBody("Venus");
     if (!venus) return;
     setVenusRadar(venus, on);
-    if (!on) { sceneLayerChips.hide("venusRadar"); return; }
+    if (!on) { sceneLayerChips.hide("venusRadar"); narrator.stopIf("venus-radar"); return; }
+    quietBodyNarration();
     if (focusedBody !== venus) focusBody(venus);
     sceneLayerChips.show("venusRadar", "Venus beneath its clouds, as radar sees it: NASA's Magellan map, in the orange NASA gave it after the Venera landers' photos. No eye or camera could see this.", {
       button: "Clouds back",
-      onHide: () => setVenusRadar(findSceneBody("Venus"), false),
+      onHide: () => { setVenusRadar(findSceneBody("Venus"), false); narrator.stopIf("venus-radar"); },
     });
+    narrator.say("venus-radar");
   }
   addEventListener("beyond-earth:venus-radar", (event) => venusRadar(event.detail?.on !== false));
   addEventListener("beyond-earth:ultraviolet-view", () => venusRadar(false), { capture: true });
@@ -3680,7 +3790,7 @@ composeSolarEventShot(
        * body -- reset it to that thing's view"). Leave whatever was in
        * focus and frame the population from above the Sun: the Centaurs
        * reach 30 AU, so 32 AU of the drawn system with 10% room. */
-      dispatchEvent(new CustomEvent("beyond-earth:travel-to-body", { detail: { name: "Sun", noDossier: true } }));
+      dispatchEvent(new CustomEvent("beyond-earth:travel-to-body", { detail: { name: "Sun", noDossier: true, framing: true } }));
       frameAroundFocused("Sun", smallBodyAuToScene(32) * 1.1, 0.75);
     }
     if (detail.travel) {
@@ -3694,7 +3804,7 @@ composeSolarEventShot(
        * the body in view and frame what was asked for: Jupiter's orbit and
        * the Hildas inside it (5.2 AU, with 45% room: the clouds spread past
        * the orbit), from above the Sun. */
-      dispatchEvent(new CustomEvent("beyond-earth:travel-to-body", { detail: { name: "Sun", noDossier: true } }));
+      dispatchEvent(new CustomEvent("beyond-earth:travel-to-body", { detail: { name: "Sun", noDossier: true, framing: true } }));
       frameAroundFocused("Sun", smallBodyAuToScene(5.2) * 1.45, 0.95);
       sceneLayerChips.show("jupiterSwarms", "Jupiter's Trojans (the two clouds 60° ahead of and behind Jupiter) and the Hildas (the triangle) are lit up. Each dot stands for many; the real ones are far too faint to see.", {
         button: "Done",
@@ -3711,7 +3821,7 @@ composeSolarEventShot(
           observeLock = null;
         },
       });
-      dispatchEvent(new CustomEvent("beyond-earth:travel-to-body", { detail: { name: "Sun", noDossier: true } }));
+      dispatchEvent(new CustomEvent("beyond-earth:travel-to-body", { detail: { name: "Sun", noDossier: true, framing: true } }));
       frameAroundFocused("Sun", 52 * 10.5 * 1.2, 0.95, { lock: true });
     }
     /* Round 38: a near-Earth family's paths, from the board ("Show their
@@ -3758,7 +3868,7 @@ composeSolarEventShot(
             }
           },
         });
-        dispatchEvent(new CustomEvent("beyond-earth:travel-to-body", { detail: { name: "Sun", noDossier: true } }));
+        dispatchEvent(new CustomEvent("beyond-earth:travel-to-body", { detail: { name: "Sun", noDossier: true, framing: true } }));
         frameAroundFocused("Sun", smallBodyAuToScene(3) * 1.15, 0.95);
       }
     }
@@ -4089,6 +4199,8 @@ composeSolarEventShot(
   // can truly freeze the universe behind each blurred card.
   addEventListener("beyond-earth:about-state", (event) => {
     isAboutExperienceOpen = Boolean(event.detail?.open);
+    // Round 69: she introduces the project while its card is open.
+    if (isAboutExperienceOpen) narrator.say("about"); else narrator.stopIf("about");
     pauseUniverseForInformationOverlay();
     if (!isInformationOverlayOpen()) {
       // Ignore time spent reading so orbital bodies cannot jump on resume.
@@ -4108,6 +4220,8 @@ composeSolarEventShot(
    */
   addEventListener("beyond-earth:tour-state", (event) => {
     isGuidedTourOpen = Boolean(event.detail?.open);
+    // Round 69: Skip (or the end of the tour) stops the tour line at once.
+    if (!isGuidedTourOpen) narrator.stopIf("tour-invite");
     if (isGuidedTourOpen) {
       /*
        * A replay re-locks the interface.
@@ -7586,6 +7700,8 @@ composeSolarEventShot(
     if (!snapshot || !body || focusExitTransition) return;
     cancelPlanetDetailsReveal();
     celestialDetailsPanel?.hide({ restoreFocus: false });
+    // Round 69: she stops the moment you start to leave, not when the camera lands.
+    stopBodyNarration();
 
     focusExitTransition = {
       phase: "camera",
@@ -7800,6 +7916,7 @@ composeSolarEventShot(
     setAsteroidFocusAppearance(focusedBody, false);
     setAsteroidInspectionDetail(focusedBody, false);
     focusedBody = null;
+    stopBodyNarration();
     focusedUiSuppressedByWideView = false;
     displayedBody = null;
     focusNavigationHistory.length = 0;
@@ -7927,6 +8044,7 @@ composeSolarEventShot(
     }
 
     focusedBody = state.body;
+    narrateBody(state.body);
     focusedUiSuppressedByWideView = false;
     focusedBody.getWorldPosition(focusHistoryWorldPosition);
 
@@ -7984,6 +8102,7 @@ composeSolarEventShot(
       setAsteroidFocusAppearance(focusedBody, false);
       setAsteroidInspectionDetail(focusedBody, false);
       focusedBody = null;
+      stopBodyNarration();
       displayedBody = null;
       focusedBodyLocator.visible = false;
       focusedBodyLocator.material.opacity = 0;
@@ -8145,6 +8264,21 @@ composeSolarEventShot(
      * dormant-card case still goes through `focusBody`, which wakes the
      * compact card and nothing more.
      */
+    /*
+     * Round 69 (Prompts.md): a board action that shows something in the
+     * scene -- the Centaurs lit up, the Kirkwood gaps, a near-Earth family's
+     * paths -- flies to the Sun only to stand back from it. The Sun is the
+     * place to look from, not the subject: no Sun card, and no Sun line over
+     * the line about what was asked for.
+     */
+    if (event.detail?.framing) {
+      setTimeout(() => {
+        quietBodyNarration();
+        if (target !== focusedBody) focusBody(target);
+        focusedUiSuppressedByWideView = true;
+      }, 180);
+      return;
+    }
     if (event.detail?.noDossier && target === focusedBody) {
       if (focusedUiSuppressedByWideView) setTimeout(() => focusBody(target), 180);
       return;
@@ -8216,6 +8350,7 @@ composeSolarEventShot(
     }
 
     focusedBody = body;
+    narrateBody(body);
     boardResetPending = false;
     focusedUiSuppressedByWideView = false;
     focusSelectionPulseStartedAt = elapsedTime;
@@ -9328,6 +9463,17 @@ composeSolarEventShot(
     const ringSelection = !restrictedToSpace && isSaturnRingBody(hoveredCelestialBody)
       ? hoveredCelestialBody
       : null;
+    if (ringSelection) {
+      const ringLine = lineForBody(ringSelection.userData?.name ?? null);
+      if (ringLine) {
+        pendingRingLine = { id: ringLine, at: performance.now() };
+        // Already on the planet: no flight will come, so say it now.
+        if (focusedBody && focusedBody === ringSelection.userData?.parentPlanetObject) {
+          pendingRingLine = null;
+          narrator.say(ringLine);
+        }
+      }
+    }
     if (ringSelection?.userData?.parentPlanetObject) {
       queueCelestialDetailsContext(ringSelection.userData.parentPlanetObject.userData?.name ?? ringSelection.userData.parentPlanetObject.name, {
         highlightSection: "rings",
@@ -10599,6 +10745,34 @@ composeSolarEventShot(
 
     setTimeout(() => caption.classList.add("is-live"), 560);
 
+    /*
+     * Round 69: she reads the three lines. Each line stays up for its 5.2 s or
+     * for as long as she takes to say it and a breath (0.7 s), whichever is
+     * longer, and the first waits for "Welcome… beyond Earth" to finish.
+     */
+    const voiced = narrator.canSpeak();
+    const firstAt = Math.max(560, voice2FreeAt - performance.now() + 250);
+    // A line moves on when its 5.2 s are up and she has finished it (+0.7 s).
+    // Waiting on her rather than on a second timer keeps the two together
+    // even when the page is busy and timers run late.
+    let voiceEndedAt = 0;
+    let voiceBusy = false;
+    const speakArrival = (i) => {
+      if (!voiced) return;
+      voiceBusy = narrator.say(`arrival-${i + 1}`, {
+        onEnd: () => { voiceBusy = false; voiceEndedAt = performance.now(); },
+      });
+    };
+    const after = (minMs, then) => {
+      const shownAt = performance.now();
+      const check = () => {
+        const now = performance.now();
+        if (now - shownAt >= minMs && !voiceBusy && now - voiceEndedAt >= 700) then();
+        else setTimeout(check, 120);
+      };
+      setTimeout(check, minMs);
+    };
+
     let arrivalLine = 0;
     const advanceArrivalLine = () => {
       arrivalLine += 1;
@@ -10625,16 +10799,22 @@ composeSolarEventShot(
          */
         isArrivalCaptionPlaying = false;
         guidedTour?.start();
+        // Round 69: one line about the tour, and only that; Skip stops her.
+        if (voiced) narrator.say("tour-invite");
         return;
       }
       arrivalBody.style.opacity = "0";
       setTimeout(() => {
         arrivalBody.textContent = ARRIVAL_LINES[arrivalLine];
         arrivalBody.style.opacity = "1";
-        setTimeout(advanceArrivalLine, ARRIVAL_LINE_MS);
+        speakArrival(arrivalLine);
+        after(ARRIVAL_LINE_MS, advanceArrivalLine);
       }, ARRIVAL_FADE_MS);
     };
-    setTimeout(advanceArrivalLine, 560 + ARRIVAL_LINE_MS);
+    setTimeout(() => {
+      speakArrival(0);
+      after(Math.max(0, ARRIVAL_LINE_MS - (firstAt - 560)), advanceArrivalLine);
+    }, firstAt);
   }
 
   /** Hand-off from the burst into the solar system. */
@@ -10801,6 +10981,24 @@ composeSolarEventShot(
         // their moments (round 62).
         journeySettleReleased = false;
         journeySongClockMs = 0;
+        voice2Next = 0;
+        voice2FreeAt = 0;
+        /*
+         * Round 69: each act's caption lines are spread over the narrator's
+         * paragraph (0.4 s lead + 85% of its length, so the last line is up
+         * before she finishes it), not over the whole act -- which runs
+         * 1.8x long now and left the lines trailing her. Her time is real
+         * time; from the Multiverse on the opening's clock runs at
+         * JOURNEY_PACE of it.
+         */
+        if (sound.has("voice2")) {
+          const spans = {};
+          VOICE2_ACTS.forEach((key, i) => {
+            const realMs = 400 + 850 * sound.segmentLength("voice2", `p${i + 1}`);
+            spans[key] = i >= 2 ? realMs * JOURNEY_PACE : realMs;
+          });
+          cosmicIntro.setCaptionSpans?.(spans);
+        }
       } catch (error) {
         console.error("[BeyondEarth] opening sequence could not be built", error);
         cosmicIntroBlackout?.remove();

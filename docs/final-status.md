@@ -1316,3 +1316,263 @@ Sources are listed above the `TIMELINE` table in `spaceEventsDashboard.js`. Thes
   - **The real app, loaded then reloaded twice** (Begin pressed after 1.5, 6 and 30 s): no line ever below the window, and no errors.
 - **Leaving the page now releases the GPU and the audio device.** On `pagehide` (when not kept in the back-forward cache), the page now also disposes the opening and the renderer and forces the WebGL context to be released (`forceContextLoss`). It also closes the AudioContext (`sound.close()`). Without this, a reload could start building while the browser was still reclaiming the old page's context.
 - **Also this round:** the experimental generated journey music (`public/audio/journey-original.mp3`, `tools/music/compose-journey.py`) was deleted at the owner's request. The site never used it.
+
+## Part 44 — Round 66: the narrator, part 1
+- **`public/audio/Part-1.mp3`** (36.52 s, mono): the text of Voice 1 in `docs/voice-script.md`. Mean −23.5 dB, peak −6.5 dBFS.
+  - Its pauses were found with ffmpeg `silencedetect` (−40 dB, 0.35 s): 15 phrases, matched to the script by length.
+  - It is cut, in the pauses, into four lines (`SOUND_CUES.voice1.segments`), each spoken to its moment:
+
+  | Line | Text | Spoken when | Measured (s from her first word) |
+  |---|---|---|---|
+  | opening | "Before there were stars … dense beginning." | 0.3 s after the log appears | 0.00–18.95 |
+  | title | "This is Beyond Earth … the star we call home." | 1.6 s into the rise | — |
+  | look | "Look closely. Somewhere in the dark, it is waiting." | 0.3 s into the drift | 29.59, drift at 29.29 |
+  | touch | "That point of light … When you are ready… touch it." | booked so "touch it" ends as the point of light settles | 43.84 → 49.77, settle at 49.17 |
+
+  - In that run the rise began at 17.81 s and the title line came at 20.01 s, with a 2.2 s offset; it is now 1.6 s. The title line now ends about 0.9 s before the title sound's hit, so the music is back up to full size for it.
+  - Lines never overlap: each waits for the one before, plus 0.35 s.
+- **The singularity waits for her.** It is not clickable, and the invitation doesn't show, until her last line has ended (`gateReadyAt`). In the test it became clickable at 49.77 s, the moment the line ended.
+- **The music dips under her voice.** Every sound except the narrator now goes through a music bus. While she speaks, the bus eases down to 0.4 (−8 dB) from 0.3 s before her line, and back up after it. The narrator goes straight to the output at gain 1.5.
+- **Checked:** a harness running the full intro (35 log lines, real timings) gave the times in the table, with no errors.
+
+## Part 45 — Round 67: the narrator after the log, "Beyond Earth" on the title, and 46.5 vs 93
+- **The narrator now starts after the system log** (the owner's ask). Her recording is cut into five lines (`voice1.segments`): `openingA`, `title`, `openingB`, `look`, `touch`. They play in that order, and each waits for the one before.
+- **"Beyond Earth" lands on the title.** Measured at 20 ms resolution in `Part-1.mp3`: "This" 19.30–19.76 s, "is" 19.92–20.10 s, "Beyond" 20.12–20.62 s, "Earth" 20.68–21.06 s. So "Beyond" falls 1.12 s into the title line (`voice1.beyondAt`).
+  - The title line is booked so "Beyond" is spoken exactly as BEYOND EARTH comes to rest, which is also the title sound's hit.
+  - Under that line the music dips only to 0.6 (not 0.4), and she plays at gain 2.0 (not 1.5). The hit stays big and her words still carry over it.
+  - "Before there were stars…" fills the rise before it. If the rise is set too short for that, it follows the title line instead.
+- **Checked** in a harness (times from the end of the log):
+
+  | Event | Time (s) |
+  |---|---|
+  | rise begins | 0.74 |
+  | "Before there were stars…" | 0.74–9.19 |
+  | "Beyond" spoken | 10.74 |
+  | word at rest, and the title sound's hit | 10.74 |
+  | "Every galaxy…" | 17.47–27.82 |
+  | "Look closely…" | 28.17–32.12 |
+  | point of light settles | 32.10 |
+  | "…touch it" | 32.47–38.39 |
+  | singularity clickable | 38.39 |
+
+  No errors.
+- **46.5 vs 93 billion light-years.** The "Our Universe" caption said "93 billion light-years across" (the diameter of the observable universe). The readout beside it says "The edge of the observable universe · 46.5 billion light-years" (the radius). Side by side they read as a contradiction.
+  - The caption now reads: "13.8 billion years old — yet its edge is 46.5 billion light-years away."
+  - The narrator explains why the distance exceeds the age: space kept stretching while the light was on its way.
+- **Voice 2's script is rewritten** (`docs/voice-script.md`). Each paragraph is spoken under its own on-screen title and uses the readout's figures. For example, the Milky Way paragraph opens "from two and a half million light-years out… as far away as Andromeda", the readout's value at that moment.
+
+## Part 46 — Round 68: black until "Beyond Earth", and the narrator's second part
+- **The title waits for her word.** After the system log, the screen goes black. The narrator speaks over the black: "Before there were stars… smaller than an atom. This is…". BEYOND EARTH starts to rise exactly as she says "Beyond".
+  - `startTitle` books her first two lines first, then computes the rise's moment: the title line's start plus `voice1.beyondAt` (1.12 s).
+  - `playTitle(riseAt)` holds the banner in the black until then, cued on a frame.
+  - "Every galaxy…" follows just after the title sound's hit, so her voice does not dip the hit. Then "Look closely…" plays during the fall, and "…touch it" ends as the point of light settles.
+  - **Measured in a harness**, from the end of the log:
+
+    | Event | Time (s) |
+    |---|---|
+    | screen black | 0.7 |
+    | "Before there were stars…" | 1.10–9.55 |
+    | "Beyond" spoken | 11.02 |
+    | banner starts rising | 11.00 |
+    | title sound's hit | 21.00 |
+    | "Every galaxy…" | 21.40–31.75 |
+    | point of light settles | 42.39 |
+    | "…touch it" ends, and the singularity is clickable | 42.98 |
+
+    No errors.
+- **`public/audio/Part 2.mp3`** (107.65 s, mono; mean −22.9 dB, peak −4.8 dBFS) is the narrator's second part, one paragraph per act.
+  - **No long pauses.** It was recorded without the 2 s pauses the script asked for: the longest pause is 0.86 s.
+  - **How the paragraphs were found:** its 49 stretches of speech (silencedetect −42 dB, 0.22 s) were aligned to the script's 40 phrases by length against syllable counts (dynamic programming, 0.244 s a syllable). The paragraph breaks fall on the longer pauses (0.6–0.86 s), and each paragraph is cut in the middle of its pause.
+  - **Laugh removed.** After "beyond Earth." (ends 106.37 s) there is a breathy, laugh-like tail: 106.77–107.65 s, −32 to −48 dB, spectral flatness 0.6–0.7, bursts about every 0.2 s. Paragraph 10 ends at 106.55 s, so the tail never plays.
+  - **Spoken on the acts.** `main.js` (`speakJourney`) speaks each paragraph 0.4 s after its act begins, on the opening's own clock: Big Bang, Where It Stopped, Multiverse, Our Universe, Cosmic Web, Laniakea, Milky Way, Orion Arm, Our Star, arrival. Paragraphs never overlap (0.3 s apart), and a seek speaks only the act it lands in.
+  - **They fit.** Every paragraph is shorter than its act at the current pace. For example, Our Universe is 13.0 s of speech in a 21.7 s act.
+  - **Plumbing:** audio file names are now URL-encoded when fetched, because this one contains a space.
+- **Checked:**
+  - The app loads and runs the log with no errors, and the file decodes (107.65 s).
+  - The act start times are 0, 12, 20, 28, 40, 52, 64, 76, 88 and 96 s of the opening's clock.
+  - The full journey can't be run headless in reasonable time, because the renderer is too slow.
+
+## Part 47 — Round 69: captions keep pace with her, and the narrator's third part (the script)
+- **The journey's captions no longer trail the voice.**
+  - **Why they lagged:** each act's caption lines were spread over the whole act. From the Multiverse on, the pictures follow the song, so an act lasts about 21.7 s. She says its paragraph in about 13 s, so each line appeared well after she had said it.
+  - **Fix:** `cosmicIntro.setCaptionSpans()`. `main.js` gives every act a span equal to 0.4 s plus 85% of her paragraph's length, scaled by `JOURNEY_PACE` from the Multiverse on. `showCaption` spreads the act's lines over that span, and the last line then holds to the end of the act. Acts with no narrator keep the old behaviour.
+  - **Lines now spread over** (seconds, real time; before → after): Our Universe 21.7 → 11.5, Cosmic Web 21.7 → 11.8, Laniakea 21.7 → 11.4, Milky Way 21.7 → 13.1, Orion Arm 21.7 → 12.0, Our Star 14.4 → 9.5, Big Bang 12.0 → 9.3. Each line therefore lands while she is saying it, slightly ahead rather than behind.
+- **`src/js/audio/narrationScript.js`** (new) holds Voice 3: the few lines she says when you go somewhere.
+  - **191 entries, about 4,900 words.** It covers:
+    - the arrival (the three arrival captions, word for word), the Sun, the eight planets and the Moon;
+    - the 13 dwarf planets, and 38 named moons with size rankings (Ganymede first, Titan second … Oberon tenth);
+    - 40 named small bodies (asteroids, near-Earth asteroids, Trojans, Centaurs, comets);
+    - a fallback line for every moon family, asteroid class, near-Earth family, Trojans, Centaurs, comets, trans-Neptunian worlds, binaries and every outer region;
+    - the dashboard explainers (Jupiter's company, tidal locking, Centaurs, Laplace, inner and outer Trojans, Kirkwood, heliosheath, the four near-Earth families, binaries, comet glow), plus the radar view of Venus;
+    - the ultraviolet view of each of the 12 bodies that have one, plus an introduction;
+    - all 24 space events, in carousel order;
+    - the galactocentric view's two tabs.
+  - **Recordings:** the entries are grouped into seven recordings, 3A–3G, in speaking order. Each recording is to have 3 s of silence between entries, so the cuts are reliable.
+  - **Ids** are the site's own names: exact body names, `event:<id>`, `topic:<card id>`, and `family:` or `region:` keys for the fallbacks. Every body, event and topic id was checked to exist in the source.
+  - `narrationFor(id)` looks one up. Nothing calls it yet; the click-to-speak wiring comes once the recordings exist.
+- **`docs/voice-script.md`** has a new Voice 3 section, generated from that file, with the recording instructions. A stale duplicate of the old Voice 2 text, left at the end of the 13.8 / 46.5 note, was removed.
+- **Checked:**
+  - `node --check` passes on all three changed modules.
+  - The narration has no duplicate ids.
+  - The act start times (0, 12, 20, 28, 40, 52, 64, 76, 88, 96 s) match the start times of her paragraphs, so each act's span starts with its paragraph.
+- **Later in round 69, a tour invitation.** A single line was added to Voice 3, `tour-invite`, as entry 4 of recording 3A, straight after the three arrival lines: "Before you set off, take the short tour… Or skip it, and explore on your own."
+  - It is spoken as the guided tour opens, and only then.
+  - Pressing **Skip tour** stops it at once.
+  - The tour runs only once, so a returning visitor never hears it.
+  - No tour step has a line of its own.
+  - Voice 3 now has 192 entries, about 4,950 words.
+- **Paste-ready text for ElevenLabs:** `docs/voice3-text/`.
+  - **14 files, 3A to 3G.** The bigger recordings are split evenly into pieces of at most 2,900 characters: 3B and 3C in three, 3D, 3E and 3F in two.
+  - **Contents:** only the spoken words, with `<break time="3.0s" />` between entries. The ʻokina is removed from names so the voice doesn't trip on it.
+  - **Generated** from `narrationScript.js`, so the text cannot drift from the site's copy.
+- **`docs/voice3-text/Part 3 (all, with pauses).txt`** has all 192 entries in one file for a single ElevenLabs generation. It uses the shorter tag `<break time="3s"/>` and is 30,305 characters in total, of which 26,484 are speech. ElevenLabs bills per character, so one file costs the same as the 14 pieces, minus about 800 characters of tags.
+- **Break tags dropped.** In the user's ElevenLabs model, `<break>` tags were ignored and the speech came out continuous (likely Eleven v3, which does not take them).
+  - The paste files are now plain: one entry per paragraph, with no tags. That is 13 files, since 3C now fits in two, plus `Part 3 (all).txt` at 26,867 characters.
+  - The old tagged files were removed.
+  - The recordings will be cut the way Part 2 was: silence detection, then aligning the stretches of speech to the entries by syllable count.
+- **Deeper narration for the views the visitor sits and watches.** The owner subscribed to ElevenLabs and asked for "a good amount of vocal" on the space events, the galactocentric view and the bigger dashboard items.
+  - **New recording 3F, 40 entries, 3,712 words (about 20,500 characters).** Each entry is four to eight sentences, about 30–45 s:
+    - 14 explainers: Jupiter's Trojans and Hildas, tidal locking, Centaurs, Laplace, inner and outer Trojans, Kirkwood, heliosheath, the four near-Earth families, binaries, comet glow;
+    - the two galactocentric tabs;
+    - all 24 space events.
+  - Every fact is taken from the view's own card text. Checks made on the way: "half a lap ago" was dropped, because dinosaurs died out 66 million years ago, not 115; the supernova line says oxygen rather than iron, since iron comes largely from other supernovae; the kilonova line keeps "much of the gold".
+  - **3E** is now just the ultraviolet lines and Venus by radar. **3G** is gone (folded into 3F).
+  - **Paste files:** 10, with `Part 3F.txt` as one file for ElevenLabs Studio. The stale 3E-1, 3E-2, 3F-1, 3F-2 and 3G files were removed.
+  - **Already recorded by the owner** (3A, 3B-1 to 3B-3, 3C-1): their text is unchanged.
+- **Coverage check (the owner: "have we missed any?").** `buildCelestialBoard()` was run in Node and every row was checked against the narration ids.
+  - **Before:** 94 bodies had their own line; every other body had a family line to fall back on.
+  - **The gaps worth a line of their own** were well-known asteroids, visited rocks and comets, moons with a story, and the larger named worlds beyond Neptune.
+  - **New recording 3G, 35 entries, 4,657 characters** (`Part 3G-1`, `3G-2`):
+    - asteroids: Juno, 52 Europa, Davida, Eunomia, Cybele, Camilla, Kalliope and Linus, Themis, Flora, Romulus and Remus, Dactyl, Dimorphos, Dinkinesh and Selam, Donaldjohanson;
+    - comets: Borrelly, Hartley 2, Don Quixote;
+    - moons of the giants: Puck, Galatea, Larissa;
+    - moons beyond Neptune: Vanth, Hiʻiaka, Namaka, MK 2;
+    - worlds beyond Neptune: Huya, Máni, Chaos, Dziewanna, DeeDee, Leleākūhonua, Sila–Nunam, Lempo.
+  - **After:** 129 bodies have their own line. Every moon group, small-body kind and structure card has a line, either its own or its family's.
+  - **Voice 3 in total:** 227 entries, about 8,400 words.
+- **The Space Dictionary is narrated too.** New recording 3H covers all 37 terms in `boardGlossary.js` (ids `term:<key>`), 7,707 characters in three paste files.
+  - Each entry is the card's `plain` text, rephrased for the ear, with the same facts.
+  - The board's region columns (inner, belt, giants, Plutinos, classical, scattered, detached, Oort) are explained by the dictionary's "Our neighbourhood" terms, so they are covered here.
+  - **Voice 3 now:** 264 entries, about 9,860 words, in 15 paste files.
+  - **Left without a voice on purpose:** the guided tour's steps (the owner's choice), and plain controls such as the unit toggle, space mode and the sound button.
+- **3F split to fit ElevenLabs.** Text to speech takes at most 10,000 characters per generation, and the single 20,492-character `Part 3F.txt` would not go in.
+  - 3F is now `Part 3F-1` (13 entries, 6,890 characters: the explainers), `3F-2` (14 entries, 6,998: comet glow, galactocentric and the first events) and `3F-3` (13 entries, 6,602: the remaining events).
+  - Every other paste file is under 2,900 characters. That makes 17 paste files in all, plus the reference copy `Part 3 (all).txt`.
+- **The Beyond Earth card (opened from the brand) now says what the project is, and who made it.**
+  - **Eyebrow:** "The Solar System, brought to you".
+  - **Intro:** everything here was made by nature, not by us: no spacecraft, no satellites, no stations. It lists what is here, 684 of them (192 bodies and 492 moons, from `buildCelestialBoard()`), each on its real orbit and in its real place today.
+  - **Corrected claim:** the old intro said the worlds are "the sizes and distances they genuinely are". Sizes are compressed so the small worlds stay findable (`config/celestialScale.js`), so that claim was dropped.
+  - **Second paragraph:** the 24 events, the Space Dictionary, the ultraviolet views and the galactocentric ride.
+  - **Tour line:** now says "Sixteen steps" (`guidedTour.js` has 16). It said thirteen before.
+  - **Credits:** "Imagined by Harsh Pandya · Powered by AI · email", with a quieter line under it: "Built with Claude, by Anthropic · Narration voiced with ElevenLabs · Music made with Suno" (`.about-experience__credits` in `about-experience.css`).
+  - **Narration:** recording 3I (`about`) is the spoken version, and it is to play while the card is open.
+  - **Checked:** screenshots of the card at 1440×900 and 390×844, with no script errors.
+
+## Part 48 — Round 69, part two: Voice 3 wired in, replay buttons, and a headphones mark
+- **The 18 recordings are in and cut.** `public/audio/Part 3A.mp3` … `Part 3I.mp3` are 128 kbit/s mono, 58 minutes in all. Every one measures −22 to −23 dB mean, like Part 2.
+  - **`src/js/audio/narrationCuts.js` (generated)** maps each of the 265 lines to `[file, start, end]`.
+  - **How the cuts were found:**
+    - The pauses were found from a 10 ms RMS envelope at −45 dBFS (pauses of 0.12 s or more).
+    - Each paste file's paragraphs were aligned to those pauses by dynamic programming. The model is 0.22–0.24 s per syllable (fitted per file), 0.55 s per sentence break and 0.2 s per comma, plus a bonus for ending on a long pause.
+    - Residuals: median 4.2%, four lines over 20%.
+  - **Independent check:** in the seven recordings where every line starts "This is", every cut's onset matches the average "This is" onset (spectral correlation 0.83–0.90). Of 425 other pause ends, all scored below every cut but one: 0.84, which is inside Halley's line.
+  - Each cut has 60 ms of lead-in and 150 ms of tail, never past the middle of a pause.
+- **Streaming, not decoding.** 58 minutes decoded as PCM would be about 600 MB, so `soundscape.speakSpan(file, start, end)` plays a stretch of an `<audio>` element per recording instead.
+  - The element is created on first use and routed through Web Audio (MediaElementSource → gain → master). It is therefore muted with everything else, passes the limiter, and dips the music while she speaks.
+  - Its edges are faded on the audio clock (30 ms in, 80 ms out).
+  - **Seeking is exact** (CBR). Measured: the Earth line played from 73.41 s, and the Space Dictionary's AU ended at 16.70 s against a cut of 16.67 s.
+  - **Latency:** about 0.4–1 s for the first line from a recording, then about 0.6 s.
+- **`src/js/audio/narrator.js`:** one line at a time. `say(id)` stops whatever she is saying with a 180 ms fade; leaving stops her. Turning sound off stops her at once.
+  - `lineForBody(name)` gives every body on the board a line: 129 have their own, and all the others get their family's line, worked out from the board's own data:
+    - near-Earth families from the classification;
+    - Trojans by planet;
+    - C, S and M asteroid classes;
+    - moon families by parent: Jupiter inner and irregular; Saturn Norse, Inuit, Gallic, ring and Trojan; Uranus and Neptune inner and irregular; Pluto's small moons; moons of dwarf planets; asteroid moons as binaries; unnamed `S/` moons get the "no name yet" line.
+  - All 684 resolve to a line.
+  - Focusable regions are mapped by their scene names: the termination shock, the heliosheath, the heliopause, the inner and outer Oort Cloud, the Plutinos, the classical belt, the Kuiper Cliff, the scattered disk, the detached objects, and the Trojan and Hilda swarms.
+- **`src/js/audio/narrationBus.js`:** the interface asks for lines with window events (`narrate`, `narrate-toggle`, `narrate-stop`). main.js answers them and posts back `beyond-earth:narration {id}`.
+- **Where she speaks:**
+  - **Arrival:** she reads the three arrival lines. Each line now stays up for its 5.2 s or until she has finished it plus 0.7 s, whichever is longer. The first waits for "Welcome… beyond Earth".
+  - **Tour:** the tour invitation is spoken as the tour opens. Skip, or the end of the tour, stops it.
+  - **Bodies:** `focusBody` and Escape-back (`restorePreviousFocusedNavigationState`) say the body's line. Leaving stops it the moment the exit begins (`beginFocusExitTransition`), not when the camera lands. Body lines are held back while an event, the ultraviolet view, Venus radar or the galaxy view is flying in, so their own line is heard.
+  - **Board views:** explainers, Jupiter's company, binaries and comet glow speak their topic when opened. Closing the view stops her.
+  - **Space Dictionary:** the "?" popover speaks its word. Closing the dictionary stops her.
+  - **Events:** each event's story is spoken from the moment its card appears. Opening the catalogue stops it.
+  - **Ultraviolet:** the first time in a visit she gives the ultraviolet introduction, then that world's aurora; after that, just the world. Leaving ultraviolet stops her.
+  - **Venus radar** has its line. Both "Clouds back" and Escape stop it.
+  - **Galactocentric view:** each tab says its paragraph; closing the view stops her.
+  - **The Beyond Earth card:** opening it speaks the introduction; closing it stops her.
+- **Replay buttons** (`ui/narrationButton.js`, `src/css/narration.css`): a round speaker button that turns into moving bars while its line plays. Pressing it plays the line again, or stops it.
+  - **Where they are:**
+    - the dossier's heading row (the body's line, or its family's);
+    - every Space Dictionary card;
+    - the header of every board view;
+    - the space-event card (the card takes no clicks, the button does);
+    - the galactocentric panel (follows the tab);
+    - the ultraviolet panel;
+    - the Beyond Earth card.
+  - **One listener for all of them:** buttons carry their line in `data-line`, and a single listener repaints every button on the page. Cards the dictionary rebuilds therefore leave nothing subscribed behind.
+- **Begin screen:** a headphones mark after "best with headphones" (`.intro__begin-phones`).
+- **Checked in Chromium with the site running:**
+  - **Arrival:** lines 1, 2 and 3 play in turn, about 1.2 s apart; then the tour invite; Skip stops it.
+  - **Bodies:** Earth → Mars → Eureka (Mars Trojan family) → Titan each say their line; Escape back to Eureka says its line again.
+  - **Board views:** tidal locking speaks on open; replay stops it and plays it again; the back button stops it. Jupiter's company speaks on open.
+  - **Space Dictionary:** the Oort Cloud card's button speaks; closing the dictionary stops her.
+  - **The Beyond Earth card:** the introduction plays on open and stops on Escape.
+  - **Galactocentric view:** tab 1, then tab 2, then Escape stops her.
+  - **Ultraviolet:** Jupiter plays the introduction, then Jupiter's aurora; Escape stops her.
+  - **Events:** the formation event's 38.5 s story plays from when the card appears, and the card's button shows it speaking.
+  - No page errors. Screenshots in `/tmp/claude-0/r69/`.
+  - Narration does no per-frame work. A line costs one seek of an `<audio>` element and a few gain ramps.
+
+## Part 49 — Round 70: Prompts.md fixes, rings and more lines, lines decoded rather than streamed
+Prompts.md items, in order:
+1. **Credits:** the second line of credits is gone. The card keeps "Imagined by Harsh Pandya · Powered by AI · email". The owner's reason: other AI tools were used too, so naming three would not be fair to the rest.
+2. **Dossier speaker sits right after the body's name** ("Earth 🔈"). `.planet-details__title-line` holds the `h2` and the button. It is not inside the `h2`, whose text is re-split into glyphs.
+3. **Space Dictionary:**
+   - The word and its gloss are now one span, and the `h4` is a flex row. The speaker therefore stays level with the word however the word wraps. This covers "Quasi-satellite & horseshoe".
+   - "Light-time" loses its gloss "looking back in time".
+4. **Events and voice in step, and the "spikes":**
+   - **Fit:** `solarSystemEvents.play(id, { fitTo })`. The event now runs her story's length, less the 5 s countdown, plus 1.2 s, so it ends just after she does. It is clamped to 0.6–2.6× its designed length. Every event is drawn from `elapsed / duration`, so stages and all play faster or slower together.
+   - **Before the fit** (designed length + countdown vs her story, s):
+
+     | Event | Designed + countdown | Story |
+     |---|---|---|
+     | Jupiter impact | 20 | 38.1 |
+     | Enceladus | 23 | 40.2 |
+     | Kilonova | 25 | 38.5 |
+     | Formation | 63 | 38.5 |
+     | Solar wind | 53 | 32.4 |
+
+   - **Spikes:** lines are no longer streamed through an `<audio>` element. That route into Web Audio can glitch while the scene is heavy, which is the likely source of the spikes during events. Each line's byte range is now fetched (CBR: time → frame → byte), decoded with `decodeAudioData`, and played as a buffer on the audio thread.
+     - The ID3 tag and LAME "Info" frame are parsed for the first audio byte and the encoder delay. 12 lead frames are decoded and thrown away, for the bit reservoir.
+     - Measured against a decode of the whole file, the four test lines match at lag 0 ms with envelope correlation 1.00. Without the 1,105-sample decoder delay they were 25 ms late.
+     - The last 24 lines are kept, so a replay is instant. A server that ignores Range sends the whole file once, and ranges are cut from it in memory.
+   - **No damage in the recordings themselves:** a scan for clicks and loud bursts found only plosives below −3 dBFS and a few −40 dB mouth clicks.
+5. **CME camera:** it pulls back as the ejection climbs. The zoom is `frontRadii / 1.6` and only ever moves outward; the camera eases to it.
+6. **Board views:** the speaker sits right after the view's title, in `.cboard__h-line` ("Tidal locking 🔈").
+7. **Showing something in the scene from the board** (Centaurs lit up, Kirkwood gaps, Trojans and Hildas, a near-Earth family's paths):
+   - It flies to the Sun with `framing: true`. The Sun's card is not shown and the Sun's line is not spoken.
+   - Her explanation of the view carries on (`keepViewVoice`) instead of stopping as the board closes.
+
+**Rings (the owner: "we missed rings"):**
+- Every ring in the scene was listed from the running site: 42 named rings and arcs in 8 systems (Jupiter, Saturn, Uranus, Neptune, Haumea, Quaoar, Chariklo, Chiron).
+- **Recording 3J:** a line for each ring system and each ring, 50 entries, 6,238 characters, in 3 paste files.
+- **Where they play:**
+  - Clicking a ring says its line instead of the planet's (`pendingRingLine`).
+  - In the dossier, each ring in the roster has a speaker after its name, and the system has one under the roster's caption.
+- They appear as soon as the recordings are cut in.
+
+**More lines (the owner: "any vocal always welcome"):**
+- **Recording 3K:** 90 named moons and small bodies that had only their family's line, 9,657 characters, in 4 paste files. They include:
+  - the shepherd and co-orbital moons of Saturn;
+  - the ring moons and outer moons of Uranus;
+  - Naiad and Thalassa's dance;
+  - Pluto's four small moons;
+  - the moons of the binaries;
+  - Lucy's Trojans;
+  - the named near-Earth asteroids;
+  - the remaining Centaurs and worlds beyond Neptune.
+- Gǃkúnǁʼhòmdímà and its moon are left out, because a voice cannot say the click consonants.
+- Every id was checked against the board's names, and every ring name against the scene.
+- **Voice 3 now:** 405 entries in 25 paste files. The 18 already recorded are unchanged.

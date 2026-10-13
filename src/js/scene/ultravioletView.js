@@ -1,3 +1,5 @@
+import { createNarrationButton } from "../ui/narrationButton.js";
+import { ultravioletLine } from "../audio/narrator.js";
 import * as THREE from "three";
 import { setAuroraSpectrum } from "../graphics/planetAurora.js";
 import { setRingUltraviolet } from "../graphics/ringShadow.js";
@@ -679,7 +681,9 @@ export function createUltravioletView({ bodies = () => [], getSky = () => null, 
   exit.className = "uv-view__exit";
   exit.innerHTML = '<span>Back to visible light</span><kbd>Esc</kbd>';
   exit.addEventListener("click", () => onExitRequest?.());
-  foot.append(hint, exit);
+  // Round 69: hear about this world's aurora again.
+  const replay = createNarrationButton(null, { label: "Hear about this aurora", className: "narr-btn--uv" });
+  foot.append(hint, replay.element, exit);
   chrome.append(eyebrow, title, why, line, foot);
   /* Its presses are its own. Without this the press on "Back to visible
    * light" went on to the scene's window handlers, which read it as a click
@@ -750,6 +754,7 @@ export function createUltravioletView({ bodies = () => [], getSky = () => null, 
     hideSky();
     title.textContent = planet.name;
     line.textContent = look.line;
+    replay.setLine(ultravioletLine(planet.name));
     chrome.setAttribute("aria-label", `Ultraviolet view of ${planet.name}`);
     chrome.hidden = false;
     exit.focus({ preventScroll: true });

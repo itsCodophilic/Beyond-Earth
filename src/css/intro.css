@@ -1346,12 +1346,24 @@ body.is-cosmic-intro::-webkit-scrollbar { width: 0; height: 0; }
 }
 
 .intro__begin-note {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.7em;
   margin: 0;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 0.62rem;
   letter-spacing: 0.3em;
   text-transform: uppercase;
   color: rgba(232, 224, 214, 0.5);
+}
+
+/* Round 69 (the owner): a headphones mark after "best with headphones". */
+.intro__begin-phones {
+  width: 1.5em;
+  height: 1.5em;
+  flex: none;
+  color: rgba(255, 226, 192, 0.72);
+  filter: drop-shadow(0 0 6px rgba(255, 196, 130, 0.35));
 }
 
 .intro__begin-quiet {

@@ -1,3 +1,5 @@
+import { createNarrationButton } from "./narrationButton.js";
+import { narrate, stopNarration } from "../audio/narrationBus.js";
 /**
  * Space Dictionary: the board's words, in plain language, each with a small
  * moving picture.
@@ -90,7 +92,6 @@ export const GLOSSARY = Object.freeze([
   {
     key: "lighttime", group: "light",
     term: "Light-time",
-    also: "looking back in time",
     plain: "How long light takes to reach us, which means how old the view is. You see the Sun as it was 8 minutes ago and Neptune as it was 4 hours ago. The board's clock counts it out, region by region.",
   },
   {
@@ -986,10 +987,16 @@ function card(entry, { compact = false, index = 0, data = null } = {}) {
   node.append(arts);
   const text = el("div", "cgloss__words");
   const head = el("h4", "cgloss__term");
+  // Round 69: the word and its gloss in one span, so the speaker that follows
+  // stays level with the word however the line wraps (Prompts.md).
+  const words = el("span", "cgloss__term-text");
   const term = el("span", null, entry.term);
   term.dataset.cosmicText = "";
-  head.append(term);
-  if (entry.also) head.append(el("span", "cgloss__also", ` · ${entry.also}`));
+  words.append(term);
+  if (entry.also) words.append(el("span", "cgloss__also", ` · ${entry.also}`));
+  head.append(words);
+  // Every word can be heard (narrationScript.js, recording 3H).
+  head.append(createNarrationButton(`term:${entry.key}`, { label: `Hear "${entry.term}"`, className: "narr-btn--term" }).element);
   const plain = el("p", "cgloss__plain", entry.plain);
   plain.dataset.cosmicText = "";
   text.append(head, plain);
@@ -1052,6 +1059,7 @@ export function createBoardGlossary(host, { data = null } = {}) {
     popoverField = null;
     popover.remove();
     popover = null;
+    if (popoverKey) stopNarration({ id: `term:${popoverKey}` });
     popoverKey = null;
     host.querySelectorAll("[data-gloss][aria-expanded=\"true\"]")
       .forEach((node) => node.setAttribute("aria-expanded", "false"));
@@ -1079,6 +1087,8 @@ export function createBoardGlossary(host, { data = null } = {}) {
     popoverField = createCosmicField(popover);
     popoverKey = key;
     anchor?.setAttribute("aria-expanded", "true");
+    // Round 69: the "?" asks what a word means; she answers.
+    narrate(`term:${key}`);
 
     // Under the "?", kept on screen; above it if there is no room below.
     const box = anchor?.getBoundingClientRect();
@@ -1264,6 +1274,7 @@ export function createBoardGlossary(host, { data = null } = {}) {
     const { overlay, stopField, origin } = decoder;
     decoder = null;
     stopField();
+    stopNarration({ prefix: "term:" });
     window.dispatchEvent(new CustomEvent("beyond-earth:decoder-state", { detail: { open: false } }));
     if (immediate || REDUCED()) {
       overlay.remove();

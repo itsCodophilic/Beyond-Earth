@@ -1,3 +1,4 @@
+import { createNarrationButton } from "./narrationButton.js";
 /**
  * Creates the cinematic project-information sequence opened by the brand.
  *
@@ -38,7 +39,7 @@ export function createAboutExperiencePanel({ trigger }) {
 
         <div class="about-experience__eyebrow">
           <span>Beyond Earth</span>
-          <span>An interactive universe, built to scale</span>
+          <span>The Solar System, brought to you</span>
         </div>
 
         <!--
@@ -51,23 +52,34 @@ export function createAboutExperiencePanel({ trigger }) {
           <span class="about-experience__cosmic-word about-experience__cosmic-word--accent" data-cosmic>Any one of us can leave the planet.</span>
         </h2>
 
+        <!--
+          Round 69 (the owner: "all things added are nature form not human man
+          made, here our goal was to bring solar system at you"). 684 = the
+          board's 192 bodies + 492 moons (buildCelestialBoard(), counted
+          13 October 2026). The old line said the worlds are "the sizes and
+          distances they genuinely are"; sizes are compressed so the small ones
+          stay findable (config/celestialScale.js), so it now says what is true:
+          real orbits, real places, real order of size.
+        -->
         <p class="about-experience__intro about-experience__cosmic-copy" data-cosmic>
-          Beyond Earth is a place to go, not a page to read. The orbits are solved from real ephemerides, the worlds are the sizes and distances they genuinely are, and the belt between Mars and Jupiter holds the rocks it actually holds. Start at the world you know. Then keep going.
+          Beyond Earth brings the Solar System to you. Everything in it was made by nature, not by us: no spacecraft, no satellites, no stations. Only the Sun, the planets and dwarf planets, nearly five hundred moons, the asteroids, the comets and the icy worlds beyond Neptune — 684 of them, each on its real orbit and in its real place today.
         </p>
 
         <p class="about-experience__vision about-experience__cosmic-copy" data-cosmic>
-          Drift out past Mars into the debris of a planet that never formed. Watch Saturn's rings resolve from a band of light into a hundred thousand kilometres of ice. Fall beyond Neptune into the dark, where the Sun is only the brightest star. Stay as long as you like — nothing out here is in a hurry.
+          Watch 24 things that really happen out here, from a comet diving into the Sun to two dead stars forging gold. Look up any word in the Space Dictionary, see the aurorae in ultraviolet, and ride with the Sun round the Milky Way. Start at the world you know. Stay as long as you like — nothing out here is in a hurry.
         </p>
 
         <div class="about-experience__replay">
           <button class="about-experience__replay-button" id="replay-tour" type="button">
             Replay the guided tour
           </button>
-          <span>Thirteen steps, about a minute. Skippable at any point.</span>
+          <span>Sixteen steps. Skippable at any point.</span>
         </div>
 
         <footer class="about-experience__author">
-          <span>Created with curiosity by <strong>Harsh Pandya</strong></span>
+          <span>Imagined by <strong>Harsh Pandya</strong></span>
+          <span aria-hidden="true">·</span>
+          <span>Powered by <strong>AI</strong></span>
           <span aria-hidden="true">·</span>
           <a href="mailto:harshpandya0111@gmail.com">harshpandya0111@gmail.com</a>
         </footer>
@@ -77,6 +89,11 @@ export function createAboutExperiencePanel({ trigger }) {
   }
 
   const card = layer.querySelector(".about-experience__card");
+  // Round 69: she reads the card (recording 3I); hear it again from here.
+  const aboutReplay = layer.querySelector(".about-experience__replay");
+  if (aboutReplay && !aboutReplay.querySelector(".narr-btn")) {
+    aboutReplay.append(createNarrationButton("about", { label: "Hear the introduction", className: "narr-btn--about" }).element);
+  }
   const brandAnchor = layer.querySelector(".about-experience__brand-anchor");
   const closeButton = layer.querySelector(".about-experience__close");
   const connector = layer.querySelector(".about-experience__connector");

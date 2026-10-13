@@ -4,6 +4,8 @@ import {
   lightTime,
 } from "./celestialBoardData.js";
 import { buildBinarySystemView, systemNames } from "./binarySystemView.js";
+import { createNarrationButton } from "./narrationButton.js";
+import { narrate, stopNarration } from "../audio/narrationBus.js";
 import { buildJupiterCompanyView } from "./jupiterCompanyView.js";
 import { buildExplainerView, hasExplainer } from "./explainerView.js";
 import { buildCometGlowView, GLOW_COMETS, glowStateLabel } from "./cometGlowView.js";
@@ -379,6 +381,24 @@ export function createCelestialBoard({ trigger = null, surfaceFor = null, cometS
     return item;
   }
 
+  /*
+   * Round 69: a view that explains something is narrated -- she starts as it
+   * opens, a replay button sits in its header beside the close button, and
+   * closing the view stops her.
+   */
+  let keepViewVoice = false;
+  function voiceView(built, id) {
+    // Right after the view's title (Prompts.md: "Tidal locking (speaker)").
+    const title = built.board.querySelector(".cmoons__head .cboard__h");
+    if (title) {
+      const replay = createNarrationButton(id, { label: "Hear the explanation", className: "narr-btn--view" });
+      const line = document.createElement("div");
+      line.className = "cboard__h-line";
+      title.replaceWith(line);
+      line.append(title, replay.element);
+    }
+    narrate(id);
+  }
   function openCompany(key = "jupiter-company", cometName = null) {
     closeMoons(true);
     glossary?.closeAll();
@@ -395,6 +415,7 @@ export function createCelestialBoard({ trigger = null, surfaceFor = null, cometS
     built.board.classList.add("is-opening");
     setTimeout(() => built.board.classList.remove("is-opening"), 1600);
     built.back.focus({ preventScroll: true });
+    voiceView(built, `topic:${key}`);
   }
 
   function buildChip(body, index) {
@@ -1631,6 +1652,7 @@ export function createCelestialBoard({ trigger = null, surfaceFor = null, cometS
     built.board.classList.add("is-opening");
     setTimeout(() => built.board.classList.remove("is-opening"), 1600);
     (built.filterBox ?? built.back).focus({ preventScroll: true });
+    if (body.partnerSystem) voiceView(built, "topic:binaries");
   }
 
   function closeMoons(immediate = false, { departing = false, from = null } = {}) {
@@ -1641,6 +1663,7 @@ export function createCelestialBoard({ trigger = null, surfaceFor = null, cometS
     const divePoint = departing ? moonBoard.departPoint?.() ?? null : null;
     moonBoard = null;
     destroy();
+    if (!keepViewVoice) stopNarration({ prefix: "topic:" });
     if (immediate) {
       board.remove();
       return true;
@@ -1744,7 +1767,11 @@ export function createCelestialBoard({ trigger = null, surfaceFor = null, cometS
       if (sceneAction && !sceneAction.disabled) {
         let detail = null;
         try { detail = JSON.parse(sceneAction.dataset.sceneAction); } catch { detail = null; }
+        // Round 69: showing the thing in the scene is still the same subject,
+        // so her explanation carries on (closeMoons would stop it).
+        keepViewVoice = true;
         close({ restoreFocus: false, departing: true, from: sceneAction });
+        keepViewVoice = false;
         if (detail) {
           setTimeout(() => window.dispatchEvent(new CustomEvent("beyond-earth:show-in-scene", { detail })), 160);
         }

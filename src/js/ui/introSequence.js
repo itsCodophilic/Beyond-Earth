@@ -156,6 +156,25 @@ export function createIntroSequence({ root, sound = null } = {}) {
   let logOpen = !sound;
   // Music 5's handle: started by the fall, stopped by the click.
   let waitingLoop = null;
+  /*
+   * Round 66: the narrator (voice1, docs/voice-script.md). Her lines are
+   * spoken to the moments they describe, and the point of light cannot be
+   * clicked until she has finished ("...when you are ready, touch it"):
+   * gateReadyAt is when her last line ends, on the page clock.
+   */
+  let gateReadyAt = 0;
+  // Where her last line's speech ends inside its segment, measured (35.93 s
+  // in the file, minus the segment's start, 30.6 s): "touch it" lands here.
+  const TOUCH_SPOKEN_END_S = 35.93 - 30.6;
+  // Her lines never overlap: each waits for the one before (+0.35 s).
+  let voiceFreeAt = 0;
+  const speak = (segment, at, options = {}) => {
+    if (!sound?.has("voice1")) return at;
+    const start = Math.max(at, voiceFreeAt + 350, performance.now());
+    sound.playAt("voice1", start, { segment, ...options });
+    voiceFreeAt = start + sound.segmentLength("voice1", segment) * 1000;
+    return start;
+  };
   let markBegun = () => {};
   const beganPromise = begun ? Promise.resolve() : new Promise((resolve) => { markBegun = resolve; });
   const soundToggle = document.createElement("button");
@@ -170,7 +189,7 @@ export function createIntroSequence({ root, sound = null } = {}) {
         <span class="intro__begin-dot" aria-hidden="true"></span>
         <span class="intro__begin-word">Begin</span>
       </button>
-      <p class="intro__begin-note">Sound on · best with headphones</p>
+      <p class="intro__begin-note">Sound on · best with headphones<svg class="intro__begin-phones" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 15v-3a8 8 0 0 1 16 0v3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><rect x="2.8" y="13.5" width="4.4" height="7" rx="1.6" fill="currentColor"/><rect x="16.8" y="13.5" width="4.4" height="7" rx="1.6" fill="currentColor"/></svg></p>
       <button class="intro__begin-quiet" type="button">Begin without sound</button>
     `;
     container.append(opening);
@@ -569,6 +588,11 @@ export function createIntroSequence({ root, sound = null } = {}) {
         // Only the descent counts -- the breathing and halo loops fire this too.
         if (event && event.animationName !== "intro-descend") return;
         button.removeEventListener("animationend", arrive);
+        if (button.classList.contains("is-arrived") || button.classList.contains("is-imploding")) return;
+        // Round 66: not clickable, and no invitation, until the narrator has
+        // finished her last line.
+        const wait = gateReadyAt - performance.now();
+        if (wait > 0) { setTimeout(() => arrive(null), wait); return; }
         button.disabled = false;
         button.classList.add("is-arrived");
         gate.classList.add("is-arrived");
@@ -658,10 +682,23 @@ export function createIntroSequence({ root, sound = null } = {}) {
     if (titlePromise) return titlePromise;
     log.classList.add("is-retiring");
     header.classList.add("is-retiring");
+    /*
+     * Round 68 (the owner): after the log, the screen goes black and stays
+     * black while the narrator begins -- "Before there were stars... smaller
+     * than an atom. This is..." -- and BEYOND EARTH only starts to rise as
+     * she says "Beyond Earth". Without her (no sound, or no file) it rises
+     * after a short black beat as before.
+     */
+    let riseAt = performance.now() + LOG_RETIRE_MS + 400;
+    if (sound?.has("voice1")) {
+      speak("openingA", riseAt);
+      const titleStart = speak("title", 0);
+      riseAt = titleStart + sound.cueValue("voice1", "beyondAt") * 1000;
+    }
     titlePromise = new Promise((resolve) => {
       setTimeout(() => {
         stage.hidden = true;
-        playTitle().then(resolve);
+        playTitle(riseAt).then(resolve);
       }, LOG_RETIRE_MS);
     });
     return titlePromise;
@@ -684,7 +721,7 @@ export function createIntroSequence({ root, sound = null } = {}) {
    * Timings: TITLE_TIMING, above. CSS transitions do the moving (cued
    * here), so the frames are the compositor's, not this script's.
    */
-  function playTitle() {
+  function playTitle(riseAt = performance.now()) {
     const reduced = typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
     const k = reduced ? 0.3 : 1;
     const T = Object.fromEntries(Object.entries(TITLE_TIMING).map(([key, v]) => [key, Math.max(0.1, Number(v) || 0.1) * 1000 * k]));
@@ -755,15 +792,30 @@ export function createIntroSequence({ root, sound = null } = {}) {
     const wait = (ms) => new Promise((r) => setTimeout(r, ms));
     return fontReady.then(() => new Promise((resolve) => {
       centreDot();
-      requestAnimationFrame(() => requestAnimationFrame(() => {
+      // Held in the black until the rise's moment (see startTitle), then
+      // cued on a frame: within one frame of her "Beyond".
+      const startRise = () => {
         marquee.classList.add("is-rising");
         // Music 2: booked so its peak lands the moment the word comes to
         // rest at the centre (the end of the rise); if the rise is set
         // shorter than the build-up, it starts part-way in.
         const restAt = performance.now() + T.riseSeconds;
         sound?.playAt("titleRise", restAt - sound.accentOf("titleRise") * 1000, { alignLate: true });
-      }));
-      wait(T.riseSeconds + T.holdSeconds).then(() => {
+        /*
+         * The narrator's lines (rounds 67-68), each after the one before:
+         *   openingA, title  booked in startTitle, over the black, so that
+         *            "Beyond" is the moment this rise begins;
+         *   openingB "Every galaxy ... dense beginning." just after the
+         *            title sound's hit (her voice would dip the hit), through
+         *            the hold, the drift and the dive;
+         *   look, touch  as before.
+         */
+        speak("openingB", restAt + 400);
+      };
+      wait(Math.max(0, riseAt - performance.now() - 16))
+        .then(() => new Promise((r) => requestAnimationFrame(() => r())))
+        .then(() => { startRise(); return wait(T.riseSeconds + T.holdSeconds); })
+        .then(() => {
         centreDot();
         // Freeze the risen position as the starting point of the camera move.
         marquee.classList.add("is-risen");
@@ -780,6 +832,8 @@ export function createIntroSequence({ root, sound = null } = {}) {
         // and is ended, on the audio clock, as we reach the particle.
         const driftAt = performance.now();
         sound?.playAt("focus", driftAt, { until: driftAt + T.approachSeconds + T.diveSeconds, fadeOutMs: 250 });
+        // "Look closely. Somewhere in the dark, it is waiting."
+        speak("look", driftAt + 300);
         inner.style.transition = `transform ${T.approachSeconds}ms cubic-bezier(0.45, 0, 0.3, 1)`;
         requestAnimationFrame(() => {
           inner.style.transform = `translate(${dx}px, ${dy}px) scale(${midScale})`;
@@ -829,6 +883,13 @@ export function createIntroSequence({ root, sound = null } = {}) {
         if (sound && !waitingLoop) {
           const settleAt = performance.now() + T.fallSeconds + 100 + BLACKOUT_MS + DESCENT_MS;
           waitingLoop = sound.playAt("rippleLoop", settleAt - sound.accentOf("rippleLoop") * 1000, { loop: true, fadeInMs: 2000 });
+          // "That point of light is where it all begins. When you are
+          // ready... touch it." -- spoken as it descends, "touch it" landing
+          // as it settles; the click opens when she has finished.
+          if (sound.has("voice1")) {
+            speak("touch", settleAt - TOUCH_SPOKEN_END_S * 1000);
+            gateReadyAt = voiceFreeAt;
+          }
         }
         marquee.remove();
         point.style.transition = "none";

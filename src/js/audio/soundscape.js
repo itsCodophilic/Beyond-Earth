@@ -149,6 +149,66 @@ export const SOUND_CUES = {
    *               carrying on under the song's start at the Multiverse,
    *               fading away under the song's quiet opening
    */
+  /*
+   * Part-1.mp3 (round 66), 36.52 s, mono -- the narrator's first part (the
+   * text is docs/voice-script.md, Voice 1). Mean -23.5 dB, peak -6.5 dBFS.
+   * Its pauses were found with ffmpeg silencedetect (-40 dB, 0.35 s) and
+   * matched to the script's phrases by length; it is cut, in the pauses,
+   * into the four moments it is spoken to:
+   *   opening  0-18.95 s   "Before there were stars ... dense beginning."
+   *                        (speech ends 18.58) -- from the log's first line
+   *   title    19.0-26.5   "This is Beyond Earth ... we call home."
+   *                        (speech 19.31-26.15) -- as BEYOND EARTH rises
+   *   look     26.6-30.55  "Look closely ... it is waiting."
+   *                        (speech 26.89-30.29) -- as the camera drifts in
+   *   touch    30.6-36.52  "That point of light ... touch it."
+   *                        (speech 30.79-35.93) -- ending as the point of
+   *                        light settles; only then can it be clicked
+   * The voice goes straight to the output, not through the music bus, and
+   * the music dips under it (VOICE_DUCK).
+   */
+  voice1: {
+    file: "Part-1.mp3", bus: "voice", gain: 1.5,
+    segments: {
+      opening: [0, 18.95], title: [19.0, 26.5], look: [26.6, 30.55], touch: [30.6, 36.52],
+      // Round 67: the opening in its two sentences (pause 8.25-8.83 s), and
+      // where "Beyond" begins in the title line: measured at 20 ms, "This"
+      // 19.30-19.76, "is" 19.92-20.10, "Beyond" 20.12-20.62, "Earth"
+      // 20.68-21.06 -- so "Beyond" is 1.12 s into the title segment.
+      openingA: [0, 8.45], openingB: [8.6, 18.95],
+    },
+    beyondAt: 20.12 - 19.0,
+  },
+  /*
+   * "Part 2.mp3" (round 68), 107.65 s, mono -- the narrator's second part
+   * (docs/voice-script.md, Voice 2): one paragraph per act of the journey.
+   * Mean -22.9 dB, peak -4.8 dBFS. Recorded without the long pauses the
+   * script asked for, so the paragraphs were found by alignment: its 49
+   * stretches of speech (ffmpeg silencedetect, -42 dB, 0.22 s) were matched
+   * to the script's 40 phrases by length against syllable counts (dynamic
+   * programming, 0.244 s a syllable), and each paragraph is cut in the
+   * middle of the pause before the next (the paragraph pauses are mostly
+   * the longer ones, 0.6-0.86 s; between the Orion Arm and Our Star the
+   * longest, 93.05-93.91 s, was taken over the first alignment's 92.38,
+   * which had squeezed "Our Star." into 0.42 s). After "beyond Earth." (ends
+   * 106.37 s) the file has a breathy, laugh-like tail (106.77-107.65 s:
+   * -32 to -48 dB, spectral flatness 0.6-0.7, bursts every ~0.2 s) -- it is
+   * cut off at 106.55 s and never plays.
+   *   p1 The Big Bang        0-10.44     p6 Laniakea          51.86-64.85
+   *   p2 Where It Stopped    10.44-16.32 p7 The Milky Way     64.85-79.84
+   *   p3 The Multiverse      16.32-25.38 p8 The Orion Arm     79.84-93.48
+   *   p4 Our Universe        25.38-38.41 p9 Our Star          93.48-104.20
+   *   p5 The Cosmic Web      38.41-51.86 p10 "Welcome..."     104.20-106.55
+   * main.js speaks each as its act begins.
+   */
+  voice2: {
+    file: "Part 2.mp3", bus: "voice", gain: 1.5,
+    segments: {
+      p1: [0, 10.44], p2: [10.44, 16.32], p3: [16.32, 25.38], p4: [25.38, 38.41],
+      p5: [38.41, 51.86], p6: [51.86, 64.85], p7: [64.85, 79.84], p8: [79.84, 93.48],
+      p9: [93.48, 104.2], p10: [104.2, 106.55],
+    },
+  },
   settleHold: { file: "6c.mp3", start: 0, loop: true, loopStart: 4.2, loopEnd: 7.32, loopFade: 0.5, gain: 0.6 },
   settleTail: { file: "6c.mp3", start: 7.32, gain: 0.6 },
   /*
@@ -190,6 +250,10 @@ function writePreference(on) {
 export function createSoundscape() {
   let ctx = null;
   let master = null;
+  // Round 66: everything but the narrator goes through musicBus, so the
+  // music can dip under her voice while she speaks.
+  let musicBus = null;
+  const VOICE_DUCK = 0.4; // music while she speaks: -8 dB
   let enabled = readPreference();
   const bytes = new Map();   // file -> Promise<ArrayBuffer>
   const buffers = new Map(); // file -> Promise<AudioBuffer|null>
@@ -209,7 +273,7 @@ export function createSoundscape() {
 
   function fetchBytes(file) {
     if (!bytes.has(file)) {
-      bytes.set(file, fetch(AUDIO_ROOT + file)
+      bytes.set(file, fetch(AUDIO_ROOT + encodeURIComponent(file))
         .then((response) => (response.ok ? response.arrayBuffer() : null))
         .catch(() => null));
     }
@@ -310,6 +374,8 @@ export function createSoundscape() {
       limiter.attack.value = 0.003;
       limiter.release.value = 0.25;
       master.connect(limiter).connect(ctx.destination);
+      musicBus = ctx.createGain();
+      musicBus.connect(master);
       Object.keys(SOUND_CUES).forEach((name) => {
         const cue = resolveCue(name);
         if (cue) bufferFor(cue.file, cue.reverse);
@@ -381,10 +447,28 @@ export function createSoundscape() {
       } else {
         gainNode.gain.value = level;
       }
-      source.connect(gainNode).connect(master);
-      const offset = (cue.start ?? 0) + (options.offset ?? 0) + late;
+      const isVoice = cue.bus === "voice";
+      source.connect(gainNode).connect(isVoice ? master : musicBus);
+      // A named stretch of the file (round 66: one line of the narration).
+      const seg = options.segment ? cue.segments?.[options.segment] : null;
+      const offset = (seg ? seg[0] : (cue.start ?? 0)) + (options.offset ?? 0) + late;
       if (offset >= buffer.duration) return;
-      source.start(when, offset);
+      if (seg) {
+        const length = Math.max(0.05, seg[1] - offset);
+        source.start(when, offset, length);
+        // The edges eased (20 ms) so a cut between words never clicks.
+        gainNode.gain.setValueAtTime(0, when);
+        gainNode.gain.linearRampToValueAtTime(level, when + 0.02);
+        gainNode.gain.setValueAtTime(level, when + length / rate - 0.02);
+        gainNode.gain.linearRampToValueAtTime(0, when + length / rate);
+        if (isVoice && musicBus) {
+          // The music dips just before she speaks and comes back after.
+          musicBus.gain.setTargetAtTime(options.duck ?? VOICE_DUCK, Math.max(ctx.currentTime, when - 0.3), 0.1);
+          musicBus.gain.setTargetAtTime(1, when + length / rate + 0.15, 0.35);
+        }
+      } else {
+        source.start(when, offset);
+      }
       handle.state = "playing";
       handle.position = () => {
         const heard = ctx.currentTime - (ctx.outputLatency || ctx.baseLatency || 0);
@@ -400,6 +484,183 @@ export function createSoundscape() {
       live.add(handle);
       source.onended = () => live.delete(handle);
     });
+    return handle;
+  }
+
+  /*
+   * Round 69: the narrator's third part -- 18 recordings, 58 minutes. Far too
+   * much to decode up front the way the cues are (as float PCM, about 600 MB),
+   * so each line is fetched and decoded on its own: a byte range of its MP3
+   * (the recordings are constant-bitrate, so a time maps to a frame and a
+   * frame to a byte), decoded with decodeAudioData and played as an ordinary
+   * buffer through master -- muted with everything else, through the
+   * limiter, dipping the music like the other voices.
+   *
+   * The first version streamed an <audio> element instead. Under a heavy
+   * scene (the space events) its route into Web Audio could glitch, which is
+   * the likely source of the "sharp spikes" the owner heard, and its timing
+   * came from the element's clock rather than the audio clock. A decoded
+   * buffer plays on the audio thread, sample-accurate, like every other cue.
+   */
+  const VOICE_STREAM_GAIN = 1.5; // same as voice1/voice2: Part 3 measures -22 to -23 dB mean, as Part 2 does
+  const MP3_BITRATES = [0, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320];
+  const MP3_RATES = [44100, 48000, 32000];
+  const LEAD_FRAMES = 12; // decoded and thrown away: the bit reservoir needs the frames before
+  const mp3Heads = new Map();   // file -> Promise<{ start, frameBytes, rate, skip }|null>
+  const fullFiles = new Map();  // file -> Promise<ArrayBuffer|null>, only if a server ignores Range
+  const spanBuffers = new Map(); // "file@start-end" -> Promise<{ buffer, offset }|null>
+  let speaking = 0;              // lines currently heard, for the duck
+
+  function readMp3Head(file) {
+    if (!mp3Heads.has(file)) {
+      mp3Heads.set(file, fetch(AUDIO_ROOT + encodeURIComponent(file), { headers: { Range: "bytes=0-65535" } })
+        .then((response) => (response.ok ? response.arrayBuffer() : null))
+        .then((data) => {
+          if (!data) return null;
+          const b = new Uint8Array(data);
+          let at = 0;
+          // ID3v2 tag: 10-byte header, syncsafe size, optional footer.
+          if (b[0] === 0x49 && b[1] === 0x44 && b[2] === 0x33) {
+            at = 10 + ((b[6] << 21) | (b[7] << 14) | (b[8] << 7) | b[9]) + ((b[5] & 0x10) ? 10 : 0);
+          }
+          while (at < b.length - 4 && !(b[at] === 0xff && (b[at + 1] & 0xe0) === 0xe0)) at += 1;
+          if (at >= b.length - 4) return null;
+          const bitrate = MP3_BITRATES[b[at + 2] >> 4] * 1000;
+          const rate = MP3_RATES[(b[at + 2] >> 2) & 3];
+          if (!bitrate || !rate) return null;
+          const frameBytes = (144 * bitrate) / rate;
+          const mono = (b[at + 3] >> 6) === 3;
+          // A LAME "Info"/"Xing" frame first carries no audio; it holds the encoder delay.
+          const tagAt = at + 4 + (mono ? 17 : 32);
+          const tag = String.fromCharCode(b[tagAt], b[tagAt + 1], b[tagAt + 2], b[tagAt + 3]);
+          let skip = 576 + 529; // encoder + decoder delay, LAME's usual
+          let start = at;
+          if (tag === "Info" || tag === "Xing") {
+            const delay = (b[tagAt + 141] << 4) | (b[tagAt + 142] >> 4);
+            if (delay > 0 && delay < 3000) skip = delay + 529;
+            start = at + Math.floor(frameBytes) + ((b[at + 2] >> 1) & 1);
+          }
+          return { start, frameBytes, rate, skip };
+        })
+        .catch(() => null));
+    }
+    return mp3Heads.get(file);
+  }
+
+  async function fetchRange(file, from, to) {
+    const url = AUDIO_ROOT + encodeURIComponent(file);
+    if (!fullFiles.has(file)) {
+      const response = await fetch(url, { headers: { Range: `bytes=${from}-${to}` } }).catch(() => null);
+      if (response?.status === 206) return response.arrayBuffer();
+      // The server sent the whole file: keep it, and cut ranges from it here.
+      fullFiles.set(file, response?.ok ? response.arrayBuffer() : Promise.resolve(null));
+    }
+    const whole = await fullFiles.get(file);
+    return whole ? whole.slice(from, to + 1) : null;
+  }
+
+  /** Decodes seconds [start, end] of a recording; resolves { buffer, offset } or null. */
+  function spanBuffer(file, start, end) {
+    const key = `${file}@${start}-${end}`;
+    if (!spanBuffers.has(key)) {
+      spanBuffers.set(key, (async () => {
+        const head = await readMp3Head(file);
+        if (!head || !ctx) return null;
+        const firstSample = start * head.rate + head.skip;
+        const lastSample = end * head.rate + head.skip;
+        const k0 = Math.max(0, Math.floor(firstSample / 1152) - LEAD_FRAMES);
+        const k1 = Math.ceil(lastSample / 1152) + 4;
+        const from = head.start + Math.floor(k0 * head.frameBytes);
+        const to = head.start + Math.ceil(k1 * head.frameBytes) + 4;
+        const data = await fetchRange(file, from, to);
+        if (!data) return null;
+        // Begin exactly on a frame: the first sync word within the range.
+        const b = new Uint8Array(data);
+        let sync = 0;
+        while (sync < 1200 && !(b[sync] === 0xff && (b[sync + 1] & 0xe0) === 0xe0 && (b[sync + 2] >> 4) !== 0)) sync += 1;
+        const k = Math.round((from + sync - head.start) / head.frameBytes);
+        const buffer = await ctx.decodeAudioData(data.slice(sync)).catch(() => null);
+        if (!buffer) return null;
+        // The decoded chunk starts at stream sample k * 1152, less the
+        // decoder's own 1,105-sample delay, which a decoder trims from the
+        // front of whatever it is given. Measured (round 69): with it, the
+        // chunk matches the whole file's decode at lag 0 (envelope
+        // correlation 1.00 on four lines); without it, 25 ms late.
+        const offset = (firstSample - 1105 - k * 1152) / head.rate;
+        return { buffer, offset, length: end - start };
+      })());
+      // Keep the last few dozen lines; a replay of one is then instant.
+      if (spanBuffers.size > 24) spanBuffers.delete(spanBuffers.keys().next().value);
+    }
+    return spanBuffers.get(key);
+  }
+
+  function duck(on) {
+    if (!musicBus || !ctx) return;
+    speaking = Math.max(0, speaking + (on ? 1 : -1));
+    const now = ctx.currentTime;
+    musicBus.gain.setTargetAtTime(speaking > 0 ? VOICE_DUCK : 1, now, speaking > 0 ? 0.1 : 0.35);
+  }
+
+  /*
+   * Plays seconds [start, end] of a recording as narration. Returns a
+   * handle: state ("pending" | "playing" | "ended" | "stopped" | "none"),
+   * stop(fadeMs), and `done`, a promise that settles "ended" or "stopped".
+   */
+  function speakSpan(file, start, end, options = {}) {
+    let settle;
+    const handle = { state: "none", stop() {}, done: new Promise((resolve) => { settle = resolve; }) };
+    if (!ctx || !master || !enabled) { settle("stopped"); return handle; }
+    handle.state = "pending";
+    const level = options.gain ?? VOICE_STREAM_GAIN;
+    let source = null;
+    let gainNode = null;
+    let ducked = false;
+    let finished = false;
+    const finish = (how) => {
+      if (finished) return;
+      finished = true;
+      if (ducked) duck(false);
+      ducked = false;
+      live.delete(handle);
+      handle.state = how;
+      settle(how);
+    };
+    handle.stop = (fadeMs = 250) => {
+      if (finished) return;
+      if (source && gainNode && ctx) {
+        const now = ctx.currentTime;
+        const fade = Math.max(0.02, fadeMs / 1000);
+        gainNode.gain.cancelScheduledValues(now);
+        gainNode.gain.setValueAtTime(gainNode.gain.value, now);
+        gainNode.gain.linearRampToValueAtTime(0, now + fade);
+        source.onended = null;
+        try { source.stop(now + fade + 0.02); } catch (error) { /* already stopped */ }
+      }
+      finish("stopped");
+    };
+    spanBuffer(file, start, end).then((span) => {
+      if (finished) return;
+      if (!span || !ctx) { finish("stopped"); return; }
+      const { buffer, offset, length } = span;
+      const when = ctx.currentTime + 0.02;
+      const playFor = Math.max(0.05, Math.min(length, buffer.duration - offset));
+      source = ctx.createBufferSource();
+      source.buffer = buffer;
+      gainNode = ctx.createGain();
+      gainNode.gain.setValueAtTime(0, when);
+      gainNode.gain.linearRampToValueAtTime(level, when + 0.03);
+      gainNode.gain.setValueAtTime(level, when + Math.max(0.03, playFor - 0.08));
+      gainNode.gain.linearRampToValueAtTime(0, when + playFor);
+      source.connect(gainNode).connect(master);
+      source.onended = () => finish("ended");
+      source.start(when, Math.max(0, offset), playFor + 0.02);
+      handle.state = "playing";
+      duck(true);
+      ducked = true;
+      live.add(handle);
+    });
+    if (ctx.state === "suspended") ctx.resume().catch(() => {});
     return handle;
   }
 
@@ -423,7 +684,17 @@ export function createSoundscape() {
     unlock,
     play,
     playAt,
+    speakSpan,
+    /** True once the audio context exists (after the first click). */
+    isUnlocked: () => Boolean(ctx),
     has: (name) => Boolean(resolveCue(name)),
+    /** Seconds a named segment of a cue lasts (0 if there is no such cue). */
+    /** A number a cue carries for timing (e.g. voice1.beyondAt). */
+    cueValue(name, key) { return resolveCue(name)?.[key] ?? 0; },
+    segmentLength(name, segment) {
+      const seg = resolveCue(name)?.segments?.[segment];
+      return seg ? seg[1] - seg[0] : 0;
+    },
     /** Seconds from where a cue starts playing to its main hit. */
     accentOf(name) {
       const cue = resolveCue(name);
@@ -451,6 +722,8 @@ export function createSoundscape() {
     close() {
       try { ctx?.close(); } catch (error) { /* already closed */ }
       ctx = null;
+      spanBuffers.clear();
+      fullFiles.clear();
       buffers.clear();
       seams.clear();
     },

@@ -1,3 +1,5 @@
+import { createNarrationButton } from "./narrationButton.js";
+import { lineForBody, hasLine } from "../audio/narrator.js";
 
 /**
  * Reusable celestial dossier for planets, stars, moons, and asteroids.
@@ -485,7 +487,9 @@ export function createCelestialDetailsPanel() {
           <span class="planet-details__eyebrow" id="planet-details-breadcrumb" data-cosmic-text>Milky Way Galaxy · Solar System</span>
           <div class="planet-details__heading-row">
             <div>
-              <h2 id="planet-details-title" data-cosmic-text>Celestial body</h2>
+              <div class="planet-details__title-line">
+                <h2 id="planet-details-title" data-cosmic-text>Celestial body</h2>
+              </div>
               <p id="planet-details-classification" data-cosmic-text>Classification</p>
             </div>
           </div>
@@ -610,6 +614,9 @@ export function createCelestialDetailsPanel() {
   }
 
   const card = layer.querySelector(".planet-details__card");
+  const dossierReplay = createNarrationButton(null, { label: "Hear about it", className: "narr-btn--dossier" });
+  // Round 69 (Prompts.md): right after the name -- "Earth (speaker)".
+  layer.querySelector(".planet-details__title-line")?.append(dossierReplay.element);
   const closeButton = layer.querySelector(".planet-details__close");
   const advanced = layer.querySelector(".planet-details__advanced");
   const breadcrumb = layer.querySelector("#planet-details-breadcrumb");
@@ -719,6 +726,15 @@ export function createCelestialDetailsPanel() {
       caption.setAttribute("data-cosmic-text", "");
       caption.textContent = `${systemName} · ${rings.length} named ${rings.length === 1 ? "ring" : "rings"}`;
       ringRoster.append(caption);
+      // Round 69: the ring system, spoken (recording 3J). Its own row: the
+      // caption's text is re-split into glyphs, which would drop a child.
+      const systemLine = bodyName ? `ring-system:${bodyName}` : null;
+      if (hasLine(systemLine)) {
+        const row = document.createElement("li");
+        row.className = "planet-details__ring-voice";
+        row.append(createNarrationButton(systemLine, { label: `Hear about the ${systemName}`, className: "narr-btn--ring" }).element);
+        ringRoster.append(row);
+      }
     }
 
     rings.forEach((ring) => {
@@ -737,6 +753,16 @@ export function createCelestialDetailsPanel() {
 
       append("planet-details__ring-order", ring.order);
       append("planet-details__ring-name", ring.name, "strong");
+      // Round 69: every named ring has its line (recording 3J), its speaker
+      // right after the ring's name.
+      const ringLine = lineForBody(ring.name);
+      const nameNode = entry.querySelector(".planet-details__ring-name");
+      if (ringLine && nameNode) {
+        const line = document.createElement("div");
+        line.className = "planet-details__ring-name-line";
+        nameNode.replaceWith(line);
+        line.append(nameNode, createNarrationButton(ringLine, { label: `Hear about the ${ring.name}`, className: "narr-btn--ring" }).element);
+      }
       append("planet-details__ring-character", ring.character);
       append("planet-details__ring-range", ring.radialRange);
       append("planet-details__ring-description", ring.description, "p");
@@ -1028,6 +1054,8 @@ export function createCelestialDetailsPanel() {
     revealFrame = null;
     previouslyFocused = document.activeElement;
     activeBodyName = details.name;
+    // Round 69: the replay button speaks this body's line (or its family's).
+    dossierReplay?.setLine(lineForBody(details.name));
     details.highlightRingName = context.highlightRingName ?? null;
     clearContextHighlight();
 
