@@ -100,6 +100,10 @@ import { createSpaceEventsDashboard } from './ui/spaceEventsDashboard.js';
 import { createCelestialBoard } from './ui/celestialBoard.js';
 import { createGuidedTour, replayGuidedTour } from './ui/guidedTour.js';
 import { startSpinningFavicon } from './ui/spinningFavicon.js';
+import { startPageGuard } from './ui/pageGuard.js';
+// Round 75: no right-click, developer-tools shortcuts or text selection on
+// the live site (off on localhost). First, before any other listener.
+startPageGuard();
 
 /**
  * Every surface that owns its own scrolling, and must never have a wheel or a

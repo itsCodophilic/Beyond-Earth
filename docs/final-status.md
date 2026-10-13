@@ -1671,3 +1671,27 @@ Prompts.md items, in order:
   - `findCelestialForHover` declines.
   - `updateCelestialSelectionCard` keeps the card hidden.
 - **Checked:** syntax only. The headless renderer was too slow to click through the whole gate in a run.
+
+## Part 54 — Round 75: no inspecting, selecting or copying on the live site
+- **The owner's ask:** "inspect should be disabled, also selecting words or anything; people use developer tools."
+- **What is turned off** (`src/js/ui/pageGuard.js`, started at the top of `main.js`, plus `src/css/page-guard.css`):
+  - The right-click menu, and with it Inspect and View page source. The page's own right-click handling still runs.
+  - Developer-tools shortcuts:
+    - F12;
+    - Ctrl+Shift+I/J/C/K (Windows and Linux);
+    - Cmd+Option+I/J/C/U and Cmd+Shift+C (Mac).
+  - Other shortcuts:
+    - Ctrl/Cmd+U (view source);
+    - Ctrl/Cmd+S (save page);
+    - Ctrl/Cmd+A (select all).
+  - Selecting, copying, cutting, long-press callouts and dragging text and images.
+- **What still works:** text fields (the board and events search) keep selection, copy and paste. Escape and every other key the site uses are untouched.
+- **Off on localhost**, so working on the site is not blocked. On the live site it is on.
+- **Limits:** this is a deterrent, not a lock. The browser's own menu can still open developer tools, and a published site's files can always be fetched.
+- **Checked in Chromium**, with a non-local hostname mapped to the dev server:
+  - The right-click menu, F12, Ctrl+Shift+I, Cmd+Option+I and Ctrl+U are blocked.
+  - Escape still passes.
+  - Selection is blocked on the page and allowed in an input.
+  - `user-select` is none on the page and text in inputs.
+  - On localhost, nothing is blocked.
+  - No errors.

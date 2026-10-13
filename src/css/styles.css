@@ -21,3 +21,5 @@
 @import url("./galactocentric.css");
 /* Round 69: the narrator's replay buttons. */
 @import url("./narration.css");
+/* Round 75: no selecting, copying or dragging on the live site. */
+@import url("./page-guard.css");

@@ -1,0 +1,25 @@
+/*
+ * Round 75: nothing on the page can be selected, highlighted, long-pressed
+ * or dragged -- except text fields (search boxes), which keep normal
+ * editing. Applied only where src/js/ui/pageGuard.js runs (not on
+ * localhost), through the class it sets on <html>.
+ */
+html.is-page-guarded,
+html.is-page-guarded body,
+html.is-page-guarded * {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+html.is-page-guarded img,
+html.is-page-guarded canvas {
+  -webkit-user-drag: none;
+}
+
+html.is-page-guarded input,
+html.is-page-guarded textarea,
+html.is-page-guarded [contenteditable="true"] {
+  -webkit-user-select: text;
+  user-select: text;
+}
