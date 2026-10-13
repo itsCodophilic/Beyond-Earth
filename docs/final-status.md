@@ -1620,3 +1620,27 @@ Prompts.md items, in order:
   - The formation story played its full 38.5 s.
   - The headless renderer runs an event far slower than real time, so the unlock at the event's end was not reached in the run. It is the same `setSolarEventStagingUI(false)` that already gave the planet back.
   - No page errors.
+
+## Part 51 — Round 72: nothing hoverable during events, the two spikes, a turning Earth for the tab
+- **No hover during space events.** `findCelestialForHover` declines while an event counts down or plays (`isSolarEventStaging()`), and any hover in place is cleared as the event starts.
+  - The owner could still see targets during events: bodies, Trojans, Hildas, the Kuiper Belt. During the formation he also saw the heliosheath and the Oort Cloud.
+  - **Cause of the second:** Three's raycaster does not check `visible`. The regions the formation veil hides could still be hovered, and hovering lights them up.
+- **The two spikes, found and fixed.** The owner placed them at "one of these storms painted aurora" (CME) and just after "glows green and red" (magnetic shield).
+  - **What they were:** the loudest syllables of the two loudest event lines, 0.49 and 0.60 peak in the file (0.74 and 0.90 at her 1.5× gain), clamped by the master limiter (20:1 above 0.71).
+  - **Why round 71 didn't fix it:** its compressor made things worse. A `DynamicsCompressorNode` adds automatic make-up gain (the Web Audio spec's `(1 / full-range gain)^0.6`, about +4 dB at those settings), which lifted everything else into the limiter. That compressor is gone.
+  - **The fix:** each line is now peak-limited in its buffer before it plays (`limitPeaks`). The ceiling is 0.42, which is 0.63 after her gain, under the limiter's 0.71. The gain is computed in 64-sample blocks, held for 5 ms either side, released over 80 ms and eased in over 2 ms.
+  - **Measured on the real lines** (peak before → after, loudness change):
+
+    | Line | Peak | Loudness |
+    |---|---|---|
+    | CME | 0.547 → 0.420 | −0.09 dB |
+    | magnetic shield | 0.599 → 0.420 | −0.03 dB |
+    | kilonova | 0.507 → 0.420 | −0.04 dB |
+    | Earth | 0.443 → 0.420 | −0.01 dB |
+    | AU | 0.52 → 0.420 | −0.08 dB |
+
+    The loud words are tamed and nothing else changes.
+- **Tab icon:** an Earth that turns.
+  - **`public/favicon.ico` (16–64 px) and `public/favicon.png` (64 px):** a lit, tilted globe rendered from the site's own `earth-no-clouds.jpg`. These are what shows before the page runs, and stays if reduced motion is asked for.
+  - **`src/js/ui/spinningFavicon.js`:** draws the turning globe on a 64 px canvas from `public/favicon-earth-map.png` (128 × 64) and gives it to the icon link about 12 times a second, one turn every 8 s. Each pixel's latitude, shading, limb glow and edge coverage are precomputed, so a frame is about 3,200 texture look-ups and one `toDataURL`.
+  - **Checked in Chromium:** the icon's data URL changes between frames, and two frames show the globe turned (Asia and Australia, then the Pacific). No errors.

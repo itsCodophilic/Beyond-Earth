@@ -99,6 +99,7 @@ import { createPerformanceHud } from './ui/performanceHud.js';
 import { createSpaceEventsDashboard } from './ui/spaceEventsDashboard.js';
 import { createCelestialBoard } from './ui/celestialBoard.js';
 import { createGuidedTour, replayGuidedTour } from './ui/guidedTour.js';
+import { startSpinningFavicon } from './ui/spinningFavicon.js';
 
 /**
  * Every surface that owns its own scrolling, and must never have a wheel or a
@@ -286,6 +287,19 @@ import { POINTER_PROXY_LAYER } from "./scene/pointerProxies.js";
    * tick on every log line, and plays the other cues on their moments as
    * their files arrive (see SOUND_CUES and docs/music-prompts.md).
    */
+  /*
+   * Round 72: the tab icon turns. The drawn icon replaces the static ones
+   * (index.html), so the browser has only the one to show.
+   */
+  {
+    const icons = [...document.querySelectorAll('link[rel="icon"]')];
+    const spinning = icons.find((link) => link.type === "image/png") ?? icons[0];
+    const favicon = startSpinningFavicon({
+      mapUrl: `${(import.meta.env && import.meta.env.BASE_URL) || "/"}favicon-earth-map.png`,
+      link: spinning,
+    });
+    if (favicon) icons.filter((link) => link !== spinning).forEach((link) => link.remove());
+  }
   const sound = createSoundscape();
   sound.preload(Object.keys(SOUND_CUES));
   /*
@@ -1594,6 +1608,7 @@ import { POINTER_PROXY_LAYER } from "./scene/pointerProxies.js";
   function setSolarEventStagingUI(active) {
     document.body.classList.toggle("is-space-event", active);
     EVENT_LOCK.active = active;
+    if (active) { clearCelestialHover(); clearPlanetOrbitHover(); }
     document.querySelectorAll(EVENT_LOCKED_CONTROLS).forEach((control) => {
       control.toggleAttribute("data-event-locked", active);
       control.setAttribute("aria-disabled", String(active));
@@ -7219,10 +7234,19 @@ composeSolarEventShot(
     // Reading a distance explanation no longer disables discovery in the 3D
     // scene. Moving outside the card can still reveal the green target and its
     // hover label, preparing the exact body the user may click next.
+    /*
+     * Round 72 (the owner: "in space events I could still see targets --
+     * bodies, Trojans, Hildas, the Kuiper Belt -- wherever I hovered, and the
+     * heliosheath and Oort Cloud showed during the Solar System's formation").
+     * Nothing is hoverable while an event counts down or plays. The raycast
+     * does not care whether an object is drawn, so the regions the formation
+     * veil hides could still be hovered -- and lit -- through it.
+     */
     if (isDragging
       || lastPointerType === "touch"
       || isArrivalCaptionPlaying
       || tourSuppressesHover
+      || isSolarEventStaging()
       || (tourClickMode !== "all" && tourClickMode !== "only")) {
       clearCelestialHover();
       clearPlanetOrbitHover();

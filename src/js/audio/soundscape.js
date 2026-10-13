@@ -561,25 +561,6 @@ export function createSoundscape() {
   const fullFiles = new Map();  // file -> Promise<ArrayBuffer|null>, only if a server ignores Range
   const spanBuffers = new Map(); // "file@start-end" -> Promise<{ buffer, offset }|null>
   let speaking = 0;              // lines currently heard, for the duck
-  /*
-   * Her own gentle compressor on the way to master (round 70): soft knee from
-   * -9 dBFS, 4:1, fast enough (2 ms) to round off what the spike pass leaves,
-   * so the master limiter -- 20:1 at -3 dBFS, there for the music's peaks --
-   * never has to grab her voice.
-   */
-  let voiceComp = null;
-  function voiceBus() {
-    if (!voiceComp && ctx && master) {
-      voiceComp = ctx.createDynamicsCompressor();
-      voiceComp.threshold.value = -9;
-      voiceComp.knee.value = 6;
-      voiceComp.ratio.value = 4;
-      voiceComp.attack.value = 0.002;
-      voiceComp.release.value = 0.12;
-      voiceComp.connect(master);
-    }
-    return voiceComp ?? master;
-  }
 
   function readMp3Head(file) {
     if (!mp3Heads.has(file)) {
@@ -652,6 +633,7 @@ export function createSoundscape() {
         const buffer = await ctx.decodeAudioData(data.slice(sync)).catch(() => null);
         if (!buffer) return null;
         softenSpikes(buffer);
+        limitPeaks(buffer);
         // The decoded chunk starts at stream sample k * 1152, less the
         // decoder's own 1,105-sample delay, which a decoder trims from the
         // front of whatever it is given. Measured (round 69): with it, the
@@ -712,6 +694,70 @@ export function createSoundscape() {
     return softened;
   }
 
+  /*
+   * Round 72 (the owner: still a spike in the CME story near "one of these
+   * storms painted aurora", and in the magnetic shield's after "glows green
+   * and red"). Those are the loudest syllables of the two loudest event lines
+   * -- 0.49 and 0.60 peak in the file, 0.74 and 0.90 at her 1.5x gain -- and
+   * the master limiter (20:1 above 0.71) clamped them, which is what was
+   * heard. Round 71's compressor did not help: a DynamicsCompressorNode adds
+   * automatic make-up gain (about +4 dB at those settings), so it raised
+   * everything else into the limiter instead. It is gone. In its place each
+   * line is limited once, in the buffer, before it plays: no sample may come
+   * out above 0.42 (0.63 after her gain, under the limiter's knee). The gain
+   * is worked out in 64-sample blocks, held for 5 ms either side so it is
+   * already down when a peak arrives, and released over 80 ms -- the way a
+   * mastering limiter does it, so a loud word is only a little less loud.
+   */
+  const VOICE_CEILING = 0.42;
+  function limitPeaks(buffer, ceiling = VOICE_CEILING) {
+    const rate = buffer.sampleRate;
+    const block = 64;
+    const blocks = Math.ceil(buffer.length / block);
+    const need = new Float32Array(blocks).fill(1);
+    for (let c = 0; c < buffer.numberOfChannels; c += 1) {
+      const data = buffer.getChannelData(c);
+      for (let k = 0; k < blocks; k += 1) {
+        let max = 0;
+        for (let i = k * block, end = Math.min(data.length, i + block); i < end; i += 1) {
+          const v = Math.abs(data[i]); if (v > max) max = v;
+        }
+        if (max > ceiling) need[k] = Math.min(need[k], ceiling / max);
+      }
+    }
+    // Hold: each block takes the lowest gain within 5 ms either side.
+    const hold = Math.max(1, Math.round((0.005 * rate) / block));
+    const held = new Float32Array(blocks);
+    for (let k = 0; k < blocks; k += 1) {
+      let g = 1;
+      for (let j = Math.max(0, k - hold), end = Math.min(blocks - 1, k + hold); j <= end; j += 1) g = Math.min(g, need[j]);
+      held[k] = g;
+    }
+    // Release over 80 ms going forward, and ease in over 2 ms going back.
+    const release = 1 - Math.exp(-block / (0.08 * rate));
+    const attack = 1 - Math.exp(-block / (0.002 * rate));
+    const gain = new Float32Array(blocks);
+    let g = 1;
+    for (let k = 0; k < blocks; k += 1) { g = Math.min(held[k], g + (1 - g) * release); gain[k] = g; }
+    for (let k = blocks - 2; k >= 0; k -= 1) gain[k] = Math.min(gain[k], gain[k + 1] + (gain[k] - gain[k + 1]) * (1 - attack));
+    let touched = 0;
+    for (let k = 0; k < blocks; k += 1) if (gain[k] < 0.999) touched += 1;
+    if (!touched) return 0;
+    for (let c = 0; c < buffer.numberOfChannels; c += 1) {
+      const data = buffer.getChannelData(c);
+      for (let i = 0; i < data.length; i += 1) {
+        // Interpolated between block centres, so the gain never steps.
+        const pos = i / block - 0.5;
+        const k = Math.max(0, Math.min(blocks - 1, Math.floor(pos)));
+        const t = Math.max(0, Math.min(1, pos - k));
+        const gk = gain[k];
+        const gn = gain[Math.min(blocks - 1, k + 1)];
+        data[i] *= gk + (gn - gk) * t;
+      }
+    }
+    return touched;
+  }
+
   function duck(on) {
     if (!musicBus || !ctx) return;
     speaking = Math.max(0, speaking + (on ? 1 : -1));
@@ -769,7 +815,7 @@ export function createSoundscape() {
       gainNode.gain.linearRampToValueAtTime(level, when + 0.03);
       gainNode.gain.setValueAtTime(level, when + Math.max(0.03, playFor - 0.08));
       gainNode.gain.linearRampToValueAtTime(0, when + playFor);
-      source.connect(gainNode).connect(voiceBus());
+      source.connect(gainNode).connect(master);
       source.onended = () => finish("ended");
       source.start(when, Math.max(0, offset), playFor + 0.02);
       handle.state = "playing";
@@ -841,7 +887,6 @@ export function createSoundscape() {
       ctx = null;
       spanBuffers.clear();
       fullFiles.clear();
-      voiceComp = null;
       buffers.clear();
       seams.clear();
     },
