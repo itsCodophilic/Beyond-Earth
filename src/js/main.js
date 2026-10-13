@@ -154,6 +154,33 @@ const ULTRAVIOLET_LOCK = { active: false, exit: null, rotate: null, drag: null, 
       if (event.cancelable && type !== "pointermove" && type !== "pointerdown") event.preventDefault();
     }, { capture: true, passive: false });
   });
+/*
+ * Round 70 (Prompts.md: "whenever space events are being played, all the
+ * toggle buttons -- all bodies, escape, space events, space mode, galactic
+ * mode, back to the Solar System, the Beyond Earth card -- must be disabled;
+ * enable everything once the event ends. The planet can still be turned and
+ * zoomed"). While an event counts down or plays, those controls take no
+ * click and no key, and Escape does nothing. Registered here, before every
+ * other capture listener, so nothing else sees the press first. Dragging and
+ * the wheel are untouched: the planet stays the viewer's to turn and zoom.
+ * The sound button stays live.
+ */
+const EVENT_LOCK = { active: false };
+const EVENT_LOCKED_CONTROLS = "#about-experience-trigger, #celestial-board-trigger, #space-events-trigger, #space-mode-toggle, #galacto-toggle, #space-exit-control, #system-return-button";
+["pointerdown", "pointerup", "click", "dblclick"].forEach((type) => {
+  addEventListener(type, (event) => {
+    if (!EVENT_LOCK.active || !event.target?.closest?.(EVENT_LOCKED_CONTROLS)) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+  }, { capture: true });
+});
+addEventListener("keydown", (event) => {
+  if (!EVENT_LOCK.active) return;
+  const onLocked = ["Enter", " "].includes(event.key) && document.activeElement?.closest?.(EVENT_LOCKED_CONTROLS);
+  if (event.key !== "Escape" && !onLocked) return;
+  event.preventDefault();
+  event.stopImmediatePropagation();
+}, { capture: true });
 const ULTRAVIOLET_ARROWS = { ArrowLeft: [-30, 0], ArrowRight: [30, 0], ArrowUp: [0, -30], ArrowDown: [0, 30] };
 addEventListener("keydown", (event) => {
   if (!ULTRAVIOLET_LOCK.active) {
@@ -216,7 +243,7 @@ const JOURNEY_UI_SELECTOR = [
   ".galacto-toggle",
 ].join(", ");
 import { createIntroSequence } from './ui/introSequence.js';
-import { createSoundscape, SOUND_CUES } from './audio/soundscape.js';
+import { createSoundscape, SOUND_CUES, AMBIENCE_FADE_IN_MS } from './audio/soundscape.js';
 import { createNarrator, lineForBody, ultravioletLine } from './audio/narrator.js';
 import { createNarrationButton } from './ui/narrationButton.js';
 import { createCosmicIntro, INTRO_TIMING } from './scene/space/cosmicIntro.js';
@@ -268,6 +295,20 @@ import { POINTER_PROXY_LAYER } from "./scene/pointerProxies.js";
    * window events (audio/narrationBus.js); she answers here, and says back
    * what she is saying so the replay buttons can light up.
    */
+  /*
+   * Round 71: the background music in the Solar System (`ambience` in
+   * SOUND_CUES; its level is AMBIENCE_VOLUME in audio/soundscape.js). It
+   * starts on arriving -- or, if the visit began silent, the first time sound
+   * is switched on after that -- fades in slowly, and loops for the rest of
+   * the visit. The sound button mutes it with everything else.
+   */
+  let reachedSolarSystem = false;
+  let ambienceTrack = null;
+  function startAmbience() {
+    if (!reachedSolarSystem || !sound.isUnlocked?.() || !sound.has("ambience")) return;
+    if (ambienceTrack && ambienceTrack.state !== "none") return;
+    ambienceTrack = sound.play("ambience", { loop: true, fadeInMs: AMBIENCE_FADE_IN_MS });
+  }
   const narrator = createNarrator(sound);
   narrator.onChange((id) => {
     window.dispatchEvent(new CustomEvent("beyond-earth:narration", { detail: { id } }));
@@ -297,13 +338,14 @@ import { POINTER_PROXY_LAYER } from "./scene/pointerProxies.js";
     if (pendingRingLine && performance.now() - pendingRingLine.at < 2500) {
       const ring = pendingRingLine.id;
       pendingRingLine = null;
-      narrator.say(ring);
+      if (narrator.current() !== ring) narrator.say(ring);
       return;
     }
     pendingRingLine = null;
     if (solarEventPhase === "waiting" || solarEventPhase === "running") return;
     if (ULTRAVIOLET_LOCK.active) return;
     const id = lineForBody(body?.userData?.name ?? body?.name ?? null);
+    if (id && narrator.current() === id) return; // already saying it (a hovered ring, clicked)
     if (id) narrator.say(id); else narrator.stop();
   }
   let journeyMusic = null;
@@ -428,6 +470,8 @@ import { POINTER_PROXY_LAYER } from "./scene/pointerProxies.js";
     soundToggleButton.addEventListener("click", () => {
       sound.unlock();
       sound.toggle();
+      // A visit that began without sound gets its music once sound is on.
+      startAmbience();
     });
   }
   intro.step("boot");
@@ -1549,6 +1593,12 @@ import { POINTER_PROXY_LAYER } from "./scene/pointerProxies.js";
 
   function setSolarEventStagingUI(active) {
     document.body.classList.toggle("is-space-event", active);
+    EVENT_LOCK.active = active;
+    document.querySelectorAll(EVENT_LOCKED_CONTROLS).forEach((control) => {
+      control.toggleAttribute("data-event-locked", active);
+      control.setAttribute("aria-disabled", String(active));
+      if (active && control.contains(document.activeElement)) document.activeElement.blur();
+    });
     setGuideSuppression("space-event", active);
   }
 
@@ -7043,7 +7093,37 @@ composeSolarEventShot(
     satelliteNameLayer.setAttribute("aria-hidden", shownBodies.size > 0 ? "false" : "true");
   }
 
+  /*
+   * Round 70 (Prompts.md: "for the rings, when hovered it should play until
+   * the hover goes"). Resting the pointer on a ring for a quarter of a second
+   * starts its line; moving off the ring stops it -- unless the ring was
+   * clicked, which makes the line the viewer's to keep.
+   */
+  let hoverRing = null;
+  let hoverRingTimer = null;
+  let hoverRingLine = null;
+  let clickedRingLine = null;
+  function voiceRingHover(ring) {
+    if (ring === hoverRing) return;
+    hoverRing = ring;
+    clearTimeout(hoverRingTimer);
+    hoverRingTimer = null;
+    if (hoverRingLine && hoverRingLine !== clickedRingLine) narrator.stopIf(hoverRingLine);
+    hoverRingLine = null;
+    if (!ring || isSolarEventStaging()) return;
+    const line = lineForBody(ring.userData?.name ?? null);
+    if (!line) return;
+    hoverRingTimer = setTimeout(() => {
+      hoverRingTimer = null;
+      if (hoverRing !== ring) return;
+      hoverRingLine = line;
+      clickedRingLine = null;
+      if (narrator.current() !== line) narrator.say(line);
+    }, 250);
+  }
+
   function clearCelestialHover() {
+    voiceRingHover(null);
     const previousBody = hoveredCelestialBody;
     previousBody?.userData?.setHovered?.(false);
     hoveredCelestialBody = null;
@@ -7085,6 +7165,7 @@ composeSolarEventShot(
       hoveredCelestialBody.userData?.setHovered?.(false);
     }
     hoveredCelestialBody = body;
+    voiceRingHover(isPlanetRingBody(body) ? body : null);
 
     if (usesPanelHoverCard(body)) {
       const ringData = body.userData?.ringData ?? {};
@@ -9466,11 +9547,12 @@ composeSolarEventShot(
     if (ringSelection) {
       const ringLine = lineForBody(ringSelection.userData?.name ?? null);
       if (ringLine) {
+        clickedRingLine = ringLine;
         pendingRingLine = { id: ringLine, at: performance.now() };
         // Already on the planet: no flight will come, so say it now.
         if (focusedBody && focusedBody === ringSelection.userData?.parentPlanetObject) {
           pendingRingLine = null;
-          narrator.say(ringLine);
+          if (narrator.current() !== ringLine) narrator.say(ringLine);
         }
       }
     }
@@ -10825,6 +10907,9 @@ composeSolarEventShot(
     journeyMusic = null;
     settleHold?.stop(800);
     settleHold = null;
+    // Round 71: the quiet background music, from here on.
+    reachedSolarSystem = true;
+    startAmbience();
     /*
      * A short white veil across the join.
      *

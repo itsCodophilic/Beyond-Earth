@@ -386,7 +386,6 @@ export function createCelestialBoard({ trigger = null, surfaceFor = null, cometS
    * opens, a replay button sits in its header beside the close button, and
    * closing the view stops her.
    */
-  let keepViewVoice = false;
   function voiceView(built, id) {
     // Right after the view's title (Prompts.md: "Tidal locking (speaker)").
     const title = built.board.querySelector(".cmoons__head .cboard__h");
@@ -1663,7 +1662,7 @@ export function createCelestialBoard({ trigger = null, surfaceFor = null, cometS
     const divePoint = departing ? moonBoard.departPoint?.() ?? null : null;
     moonBoard = null;
     destroy();
-    if (!keepViewVoice) stopNarration({ prefix: "topic:" });
+    stopNarration({ prefix: "topic:" });
     if (immediate) {
       board.remove();
       return true;
@@ -1767,11 +1766,9 @@ export function createCelestialBoard({ trigger = null, surfaceFor = null, cometS
       if (sceneAction && !sceneAction.disabled) {
         let detail = null;
         try { detail = JSON.parse(sceneAction.dataset.sceneAction); } catch { detail = null; }
-        // Round 69: showing the thing in the scene is still the same subject,
-        // so her explanation carries on (closeMoons would stop it).
-        keepViewVoice = true;
+        // Round 70 (Prompts.md): leaving the board stops her explanation,
+        // this way out included.
         close({ restoreFocus: false, departing: true, from: sceneAction });
-        keepViewVoice = false;
         if (detail) {
           setTimeout(() => window.dispatchEvent(new CustomEvent("beyond-earth:show-in-scene", { detail })), 160);
         }

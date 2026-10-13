@@ -1576,3 +1576,47 @@ Prompts.md items, in order:
 - Gǃkúnǁʼhòmdímà and its moon are left out, because a voice cannot say the click consonants.
 - Every id was checked against the board's names, and every ring name against the scene.
 - **Voice 3 now:** 405 entries in 25 paste files. The 18 already recorded are unchanged.
+
+## Part 50 — Round 71: 3J and 3K cut in, the 3F-3 cuts fixed, events lock the interface, spikes softened
+- **The seven new recordings are cut in** (`Part 3J-1` to `3J-3`, `Part 3K-1` to `3K-4`). That is 405 lines in `narrationCuts.js`.
+  - Ring lines now play when a ring is clicked or hovered, and from the speakers in the dossier's ring roster.
+  - The 90 new moons and small bodies say their own line instead of their family's.
+- **Two lines started with the end of the previous one** (Prompts.md 3 and 4):
+  - 'Oumuamua opened with Triton's "…and no spacecraft has been back since", and Borisov opened with 'Oumuamua's "It is still a mystery".
+  - **Cause:** the paragraph-level alignment had put a closing sentence on the wrong side of the cut, in three lines of 3F-3 (Triton, 'Oumuamua, Borisov).
+  - **Fix:** the aligner now works sentence by sentence. Every sentence is fitted to the stretches of speech, a sentence never ends inside a pause shorter than 0.2 s, and long pauses inside a sentence are penalised.
+  - **Result:** it moves exactly those three lines, and agrees with the old cuts to within 0.4 s on all 262 others. The "This is" onset check passes on all 11 files where every line starts that way. In 3K-1 one pause end inside Adrastea's line scores 0.81 against 0.80 for the first cut, but that cut is the file's opening line, so it cannot be misplaced.
+- **Space events lock the interface** (Prompts.md 1). While an event counts down or plays:
+  - The brand card, All bodies, Space events, Space mode, Galactocentric, Exit and the Solar System return are dimmed and take no clicks or keys (`[data-event-locked]`, `EVENT_LOCK`).
+  - Escape does nothing.
+  - Body clicks were already declined. Dragging and the wheel still turn and zoom the planet, and the sound button stays live.
+  - Everything comes back the moment the event ends.
+- **CME camera** (Prompts.md 2): the pull-back starts with the event. It ramps to 4.2× over the first half, and the front can only push it further. The camera follows at its usual ease (0.12 per frame).
+- **Spikes** (Prompts.md 5): they are in the recordings themselves.
+  - **Example:** in the magnetosphere line at 22.2 s there is a single 5 ms burst of 0.60 among 0.20–0.36. The +3.5 dB voice gain drove bursts like it into the master limiter.
+  - **Fixed in two places:**
+    - Each decoded line is scanned once. A 5 ms window more than 1.8× louder than everything 15–60 ms around it is brought down to 1.3× that, eased over half a window. This softens 93 windows in 77 of the 405 lines.
+    - Her lines now pass through their own gentle compressor (−9 dBFS, 4:1, 6 dB knee, 2 ms attack) before master.
+  - **The decoded lines are sample-identical to a decode of the whole file** (maximum difference 0 on 76 lines checked), so playback itself adds nothing.
+- **Leaving the board stops the explanation** (Prompts.md 6), including "show it in the scene". Round 70 had kept her talking there, and the owner now wants her to stop. Closing the dictionary or its popover already stopped a word.
+- **Ring hover:**
+  - Resting the pointer on a ring for 0.25 s starts its line; moving off stops it.
+  - Clicking the ring makes the line the viewer's to keep, so it is not cut when the hover ends as the camera flies.
+  - A line already playing is never restarted by the flight that follows the click.
+- **Background music in the Solar System** (the owner: "very low, hearable but not loud — space has no sound, it is just for the experience; give me a variable to fine-tune"):
+  - **`ambience` cue** (`soundscape.js`): the one-minute file is looped for the whole visit. Its last 6 s are blended into its first 6 s (equal power), so the loop has no audible join.
+  - **Routing:** it goes through the music bus, so it dips under her voice.
+  - **When it starts:** on arriving at the Solar System, fading in over 8 s. A visit that began silent starts it the first time sound is switched on.
+  - **The file:** `public/audio/bgmusic.mp3`, 60.0 s, stereo, mean −26 dB, peak −10 dB. It fades in over its first ~5 s and out over its last ~5 s.
+  - **Tuning**, all at the top of `src/js/audio/soundscape.js`:
+    - `AMBIENCE_VOLUME = 0.35` (−9 dB, so about −35 dB mean, some 16 dB under the narrator)
+    - `AMBIENCE_FILE = "bgmusic.mp3"`
+    - `AMBIENCE_SEAM = 6` (the file's fade-out laid across its fade-in)
+    - `AMBIENCE_FADE_IN_MS = 8000`
+  - Whole-file loops get their own seam builder in `seamed()`, for loops with nothing before their start to blend into.
+- **Checked in Chromium with the site running:**
+  - Saturn's dossier lists the speakers for the ring system and all seven rings, and the B ring's plays its line.
+  - During an event, the seven controls are marked locked, All bodies does not open the board, and Escape does not end the event.
+  - The formation story played its full 38.5 s.
+  - The headless renderer runs an event far slower than real time, so the unlock at the event's end was not reached in the run. It is the same `setSolarEventStagingUI(false)` that already gave the planet back.
+  - No page errors.

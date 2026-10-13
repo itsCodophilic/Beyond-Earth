@@ -4096,3 +4096,14 @@ body.is-ultraviolet-view .uv-view { cursor: auto; }
 @media (prefers-reduced-motion: reduce) {
   .sound-toggle__bars i { animation: none; transform: scaleY(0.7); }
 }
+
+/* Round 70 (Prompts.md): while a space event counts down or plays, the
+   header controls, the brand and the way back are switched off -- dimmed and
+   unclickable -- and come back the moment it ends. The sound button stays.
+   (main.js EVENT_LOCK also swallows their clicks, keys and Escape.) */
+body.is-space-event [data-event-locked] {
+  opacity: 0.32 !important;
+  pointer-events: none !important;
+  filter: saturate(0.4);
+  transition: opacity 320ms ease;
+}

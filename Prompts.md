@@ -1,12 +1,13 @@
 Absolulely Great Wok buddy just few minor things
 
-1. Remove out the line - Built with Claude, by Anthropic · Narration voiced with ElevenLabs · Music made with Suno because tbh our based was using other AI tool as well that's why being fair with all
-2. In Info card, the speak button should be next to the Celestial Body name, rightward side and not near the cross box of modal, basically "Earth (speaker)" like this next to it.
-3. In Space Dictionary, the card "Light-time" remove - looking back in time, because the speaker gets below it is not aligned currently, same in case of Quasi-satellite & horseshoe has the speaker below it should be aligned on same level,
-4. Observations of async between in space events buddy, basically some events end soon but the voice keeps on going whereas some events are still going but voice gets finish up soon we have to snyc it up buddy, also i observed there are sharp pikes in voices somewhere in events like Corornal Mass Ejection at the end it gives spikes voice and ends or continous, this sudden spike could be there in other audio as well, so we have to inspect it properly buddy.
-5. For Corornal Mass Ejection this is view change, as the mass ejection happens slowly slowly following masss ejection we have to zoom out sun so that layer of ejection is visible , we have to make the camera zoomed out slowly.
-6. Whenever we open up any stuff in dashboard like when we have vocal for it, ensure it is right after the title buddy for an example when we click on "Why moon has one face?' we open up Tidal Lock (speaker) like this way, same goes for all those whoever has speaker like torjan NEAR family comet glowing etc..
-7. There are scenarios where sun gets up so basically when i clicked on "Light them up in space" in the centures, sun info card appears and sun vocal appears, i got the info vocally for the centures but when clicked it gives info of sun, so if we don't show the card in that sun vocal may not appear, same thing happens when Kirkwood gaps & asteroid families when clicked on to see gaps
 
+Added audio files, sync them up buddy, for the rings, when hover it should play until and unless that hover ness goes, in the info card as well of the parent planet near the ring name , right next to the ring name put the speaker button to play it
 
-So buddy once we reached solar from intro we need to keep a soft background going just music give me prompt for it, a space music like
+Improvements require:
+
+1. Whenever Space events are being played all the web toggle buttons like all bodies, escape, space events, space mode galatic mode must get disable, even the back to solary system, Beyond Earth card must also get disabled, just only playing space events, enabled everything once event ends. The corresponding planet will be enabled to revole zoom in zoom out but everything else during space event play will be disabled
+2. For Corornal Mass Ejection, the camera zooms out lately as soon as the event begins it must start moving out buddy , currently it is slow
+3. Some words of ʻOumuamua passes through space events initially i think "and no space craft has been back since" this is the starting word which is odd, Please properly check because whole thing gonna messed up
+4. Also some words initially of "2I/Borisov passes through" space event which are "it is still a mystery" are actually part of ending of ʻOumuamua space event i think buddy. Please properly check because whole thing gonna messed up
+5. There is sharp spike of sound in CME and A magnetic shield in a storm event in the ending
+6. In Dashboard whenever the we click like NEAR torjan , why moon etc.. basically voice starts over on the dashboard sub-dashboard, when we leave it the sound must get's stopped buddy or else we are raoming and that sounds keep sound , as soon as we leave dashboard stop playing sound which was explanining, same goes for space dictionary as well

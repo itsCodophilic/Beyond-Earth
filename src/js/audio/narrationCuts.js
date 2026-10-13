@@ -1,23 +1,26 @@
 /**
- * Where each line of Voice 3 sits in its recording (round 69). GENERATED --
- * do not edit by hand; regenerate if a recording is replaced.
+ * Where each line of Voice 3 sits in its recording. GENERATED -- do not
+ * edit by hand; regenerate when a recording is added or replaced.
  *
  * id -> [file in public/audio (without .mp3), start s, end s].
  *
- * How the cuts were found: each recording (ElevenLabs, 128 kbit/s mono MP3)
- * was decoded at 16 kHz and its 10 ms RMS envelope thresholded at -45 dBFS;
- * pauses of 0.12 s or more split it into stretches of speech. The entries of
- * its paste file (docs/voice3-text/<file>.txt, one per paragraph) were
- * aligned to those stretches by dynamic programming: each entry's length
- * predicted as 0.22-0.24 s a syllable (fitted per file) + 0.55 s a sentence
- * break + 0.2 s a comma or dash, its error scaled by 12% of the prediction
- * + 0.5 s, and a bonus for ending on a long pause. Residuals: median under
- * 5%, all but four entries within 20%.
+ * How the cuts are found (round 70): each recording (ElevenLabs, 128 kbit/s
+ * mono MP3) is decoded at 16 kHz and its 10 ms RMS envelope thresholded at
+ * -45 dBFS; pauses of 0.12 s or more split it into stretches of speech. The
+ * paste file (docs/voice3-text/<file>.txt) is split into SENTENCES, and every
+ * sentence is aligned to the stretches by dynamic programming: its length
+ * predicted at 0.22-0.24 s a syllable (fitted per file) + 0.2 s a comma or
+ * dash, a sentence never ending inside a pause shorter than 0.2 s, a new
+ * line (paragraph) rewarded for starting after a long pause, and long pauses
+ * inside a sentence penalised.
  *
- * Checked independently: in the seven recordings where every entry starts
- * "This is", the onset of every cut matches the average "This is" onset
- * (spectral correlation 0.83-0.90) better than all 425 other pause ends but
- * one (0.84, inside Halley's line).
+ * Round 69 aligned whole paragraphs instead. That was right everywhere but
+ * three lines of Part 3F-3, where a closing sentence was put on the wrong
+ * side of the cut (the owner heard Triton's "...and no spacecraft has been
+ * back since" open 'Oumuamua, and 'Oumuamua's "It is still a mystery" open
+ * Borisov). The sentence-level alignment moves exactly those three and
+ * agrees with round 69, within 0.4 s, on all 262 other lines -- two models
+ * that agree everywhere they can be compared. Median sentence residual 4-9%.
  *
  * Each cut has 60 ms of lead-in and 150 ms of tail, never past the middle of
  * the pause on either side.
@@ -209,9 +212,9 @@ export const NARRATION_CUTS = Object.freeze({
   "event:ring-spokes": ["Part 3F-3", 131.99, 167.63],
   "event:enceladus-plumes": ["Part 3F-3", 167.92, 208.10],
   "event:uranus-storms": ["Part 3F-3", 208.60, 241.05],
-  "event:triton-geysers": ["Part 3F-3", 241.42, 271.79],
-  "event:oumuamua-passage": ["Part 3F-3", 272.10, 306.57],
-  "event:borisov-passage": ["Part 3F-3", 306.86, 335.64],
+  "event:triton-geysers": ["Part 3F-3", 241.42, 274.63],
+  "event:oumuamua-passage": ["Part 3F-3", 274.92, 308.37],
+  "event:borisov-passage": ["Part 3F-3", 308.71, 335.64],
   "event:atlas-3i-passage": ["Part 3F-3", 336.27, 368.94],
   "event:supernova": ["Part 3F-3", 369.70, 409.97],
   "event:kilonova": ["Part 3F-3", 410.46, 448.95],
@@ -288,4 +291,144 @@ export const NARRATION_CUTS = Object.freeze({
   "term:albedo": ["Part 3H-3", 154.96, 167.67],
   "term:tholins": ["Part 3H-3", 167.87, 181.42],
   "about": ["Part 3I", 0.06, 38.71],
+  "ring-system:Jupiter": ["Part 3J-1", 0.03, 15.07],
+  "ring:Halo Ring": ["Part 3J-1", 15.51, 26.07],
+  "ring:Main Ring": ["Part 3J-1", 26.45, 35.05],
+  "ring:Amalthea Gossamer Ring": ["Part 3J-1", 35.41, 44.02],
+  "ring:Thebe Gossamer Ring": ["Part 3J-1", 44.27, 51.31],
+  "ring-system:Saturn": ["Part 3J-1", 51.70, 67.87],
+  "ring:D Ring": ["Part 3J-1", 68.19, 75.46],
+  "ring:C Ring": ["Part 3J-1", 75.79, 83.04],
+  "ring:B Ring": ["Part 3J-1", 83.37, 93.48],
+  "ring:A Ring": ["Part 3J-1", 93.82, 104.23],
+  "ring:F Ring": ["Part 3J-1", 104.54, 115.19],
+  "ring:G Ring": ["Part 3J-1", 115.48, 123.70],
+  "ring:E Ring": ["Part 3J-1", 124.02, 131.58],
+  "ring-system:Uranus": ["Part 3J-1", 131.95, 145.54],
+  "ring:Zeta Ring": ["Part 3J-2", 0.04, 8.28],
+  "ring:6 Ring": ["Part 3J-2", 8.96, 16.12],
+  "ring:5 Ring": ["Part 3J-2", 16.81, 23.31],
+  "ring:4 Ring": ["Part 3J-2", 23.93, 29.38],
+  "ring:Alpha Ring": ["Part 3J-2", 30.06, 36.20],
+  "ring:Beta Ring": ["Part 3J-2", 36.76, 42.15],
+  "ring:Eta Ring": ["Part 3J-2", 42.84, 48.23],
+  "ring:Gamma Ring": ["Part 3J-2", 48.85, 55.26],
+  "ring:Delta Ring": ["Part 3J-2", 55.91, 61.03],
+  "ring:Lambda Ring": ["Part 3J-2", 61.62, 67.84],
+  "ring:Epsilon Ring": ["Part 3J-2", 68.51, 78.94],
+  "ring:Nu Ring": ["Part 3J-2", 79.57, 86.21],
+  "ring:Mu Ring": ["Part 3J-2", 86.84, 95.84],
+  "ring-system:Neptune": ["Part 3J-2", 96.51, 108.90],
+  "ring:Galle Ring": ["Part 3J-2", 109.53, 118.44],
+  "ring:Le Verrier Ring": ["Part 3J-2", 118.99, 126.34],
+  "ring:Lassell Ring": ["Part 3J-2", 126.91, 133.68],
+  "ring:Arago Ring": ["Part 3J-2", 134.24, 139.13],
+  "ring:Adams Ring": ["Part 3J-2", 139.78, 150.26],
+  "ring:Liberté Arc": ["Part 3J-3", 0.03, 12.18],
+  "ring:Egalité Arc": ["Part 3J-3", 12.67, 19.99],
+  "ring:Fraternité Arc": ["Part 3J-3", 20.38, 25.74],
+  "ring:Courage Arc": ["Part 3J-3", 26.07, 33.96],
+  "ring-system:Haumea": ["Part 3J-3", 34.30, 41.67],
+  "ring:Haumea's Ring": ["Part 3J-3", 42.05, 49.55],
+  "ring-system:Quaoar": ["Part 3J-3", 49.92, 57.84],
+  "ring:Q2R": ["Part 3J-3", 58.18, 63.28],
+  "ring:Q1R": ["Part 3J-3", 63.57, 73.39],
+  "ring-system:Chariklo": ["Part 3J-3", 73.72, 82.54],
+  "ring:Oiapoque (C1R)": ["Part 3J-3", 82.86, 92.81],
+  "ring:Chuí (C2R)": ["Part 3J-3", 93.10, 99.11],
+  "ring-system:Chiron": ["Part 3J-3", 99.47, 109.60],
+  "ring:Chiron inner ring": ["Part 3J-3", 109.87, 116.99],
+  "ring:Chiron main ring": ["Part 3J-3", 117.26, 122.24],
+  "ring:Chiron outer ring": ["Part 3J-3", 122.52, 125.88],
+  "ring:Chiron debris disc": ["Part 3J-3", 126.22, 134.74],
+  "Metis": ["Part 3K-1", 0.03, 9.88],
+  "Adrastea": ["Part 3K-1", 10.30, 19.55],
+  "Thebe": ["Part 3K-1", 19.92, 26.92],
+  "Elara": ["Part 3K-1", 27.21, 34.31],
+  "Pasiphae": ["Part 3K-1", 34.66, 42.71],
+  "Sinope": ["Part 3K-1", 42.97, 50.27],
+  "Carme": ["Part 3K-1", 50.59, 59.09],
+  "Ananke": ["Part 3K-1", 59.38, 67.34],
+  "Themisto": ["Part 3K-1", 67.62, 76.17],
+  "Valetudo": ["Part 3K-1", 76.41, 85.01],
+  "Prometheus": ["Part 3K-1", 85.25, 92.42],
+  "Pandora": ["Part 3K-1", 92.67, 99.20],
+  "Atlas": ["Part 3K-1", 99.46, 107.08],
+  "Telesto": ["Part 3K-1", 107.37, 115.75],
+  "Calypso": ["Part 3K-1", 116.02, 123.28],
+  "Helene": ["Part 3K-1", 123.55, 129.25],
+  "Polydeuces": ["Part 3K-1", 129.54, 135.59],
+  "Methone": ["Part 3K-1", 135.86, 140.94],
+  "Pallene": ["Part 3K-1", 141.18, 146.44],
+  "Anthe": ["Part 3K-1", 146.74, 152.75],
+  "Aegaeon": ["Part 3K-1", 152.98, 159.85],
+  "Ymir": ["Part 3K-2", 0.04, 7.00],
+  "Siarnaq": ["Part 3K-2", 7.61, 11.44],
+  "Albiorix": ["Part 3K-2", 12.03, 16.08],
+  "Cordelia": ["Part 3K-2", 16.70, 23.76],
+  "Ophelia": ["Part 3K-2", 24.39, 30.59],
+  "Portia": ["Part 3K-2", 31.17, 40.73],
+  "Mab": ["Part 3K-2", 41.37, 47.21],
+  "Cupid": ["Part 3K-2", 47.83, 56.06],
+  "Sycorax": ["Part 3K-2", 56.70, 66.11],
+  "Caliban": ["Part 3K-2", 66.73, 72.60],
+  "Margaret": ["Part 3K-2", 73.21, 78.62],
+  "Naiad": ["Part 3K-2", 79.17, 88.64],
+  "Thalassa": ["Part 3K-2", 89.24, 97.26],
+  "Despina": ["Part 3K-2", 97.91, 104.50],
+  "Hippocamp": ["Part 3K-2", 105.05, 114.10],
+  "Neso": ["Part 3K-2", 114.66, 122.54],
+  "Halimede": ["Part 3K-2", 123.09, 129.70],
+  "Nix": ["Part 3K-2", 130.28, 138.26],
+  "Hydra": ["Part 3K-2", 138.82, 147.88],
+  "Kerberos": ["Part 3K-2", 148.45, 154.01],
+  "Styx": ["Part 3K-2", 154.60, 160.57],
+  "Weywot": ["Part 3K-2", 161.15, 167.52],
+  "Actaea": ["Part 3K-2", 168.13, 172.66],
+  "Ilmarë": ["Part 3K-2", 173.33, 179.27],
+  "Xiangliu": ["Part 3K-3", 0.03, 6.64],
+  "Hiisi": ["Part 3K-3", 7.28, 14.93],
+  "Paha": ["Part 3K-3", 15.67, 21.75],
+  "Menoetius": ["Part 3K-3", 22.34, 33.57],
+  "Alexhelios": ["Part 3K-3", 34.13, 41.60],
+  "Cleoselene": ["Part 3K-3", 42.16, 47.62],
+  "Squannit": ["Part 3K-3", 48.21, 54.59],
+  "Skamandrios": ["Part 3K-3", 55.18, 60.65],
+  "Queta": ["Part 3K-3", 61.22, 68.18],
+  "Shaun": ["Part 3K-3", 68.76, 76.05],
+  "Aten": ["Part 3K-3", 76.62, 84.16],
+  "Apollo": ["Part 3K-3", 84.74, 94.48],
+  "Atira": ["Part 3K-3", 95.03, 103.25],
+  "ʼAylóʼchaxnim": ["Part 3K-3", 103.81, 115.46],
+  "Icarus": ["Part 3K-3", 116.04, 123.96],
+  "Geographos": ["Part 3K-3", 124.51, 131.65],
+  "Castalia": ["Part 3K-3", 132.22, 139.44],
+  "Nereus": ["Part 3K-3", 140.01, 147.82],
+  "Florence": ["Part 3K-3", 148.52, 154.81],
+  "Hathor": ["Part 3K-3", 155.37, 163.32],
+  "Eureka": ["Part 3K-3", 163.84, 171.62],
+  "Eurybates": ["Part 3K-4", 0.04, 6.64],
+  "Polymele": ["Part 3K-4", 7.05, 14.35],
+  "Leucus": ["Part 3K-4", 14.71, 24.71],
+  "Orus": ["Part 3K-4", 25.11, 31.68],
+  "Bienor": ["Part 3K-4", 32.02, 37.68],
+  "Asbolus": ["Part 3K-4", 38.00, 44.53],
+  "Nessus": ["Part 3K-4", 44.88, 50.15],
+  "Hylonome": ["Part 3K-4", 50.49, 57.43],
+  "Euphrosyne": ["Part 3K-4", 57.77, 65.28],
+  "Koronis": ["Part 3K-4", 65.61, 74.18],
+  "Eos": ["Part 3K-4", 74.51, 79.09],
+  "Nysa": ["Part 3K-4", 79.41, 86.88],
+  "Polana": ["Part 3K-4", 87.20, 93.39],
+  "Xewioso": ["Part 3K-4", 93.72, 100.60],
+  "Achlys": ["Part 3K-4", 100.89, 106.44],
+  "Uni": ["Part 3K-4", 106.73, 112.55],
+  "Aya": ["Part 3K-4", 112.87, 116.71],
+  "Rumina": ["Part 3K-4", 117.02, 122.49],
+  "Ritona": ["Part 3K-4", 122.79, 129.61],
+  "Goibniu": ["Part 3K-4", 129.91, 136.81],
+  "Manwë": ["Part 3K-4", 137.13, 143.43],
+  "Teharonhiawako": ["Part 3K-4", 143.77, 154.01],
+  "Altjira": ["Part 3K-4", 154.35, 159.95],
+  "Chiminigagua": ["Part 3K-4", 160.30, 168.63],
 });

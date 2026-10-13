@@ -20,6 +20,25 @@
 const AUDIO_ROOT = `${(import.meta.env && import.meta.env.BASE_URL) || "/"}audio/`;
 
 /*
+ * ===== The background music: tune it here =====
+ * AMBIENCE_VOLUME  how loud it plays, 0 (silent) to 1 (the file as it is).
+ *                  bgmusic.mp3 is already soft (mean -26 dB, peak -10 dB);
+ *                  0.35 (-9 dB) puts it near -35 dB, some 16 dB under her
+ *                  voice: there if you listen for it, never in front of
+ *                  anything. Try 0.5 for more presence, 0.2 for less.
+ * AMBIENCE_FILE    its file in public/audio/.
+ * AMBIENCE_SEAM    seconds the end of the file is blended into its start,
+ *                  so the loop has no join you can hear. The file fades in
+ *                  over its first ~5 s and out over its last ~5 s, so 6 s
+ *                  lays one fade across the other.
+ * AMBIENCE_FADE_IN_MS  how slowly it comes up on reaching the Solar System.
+ */
+export const AMBIENCE_VOLUME = 0.35;
+export const AMBIENCE_FILE = "bgmusic.mp3";
+export const AMBIENCE_SEAM = 6;
+export const AMBIENCE_FADE_IN_MS = 8000;
+
+/*
  * The cues.
  *   file    the file in public/audio/
  *   start   seconds into the file where the sound proper begins
@@ -226,6 +245,15 @@ export const SOUND_CUES = {
    * Mean -18.7 dB, peak -4.4 dBFS (ffmpeg volumedetect).
    */
   journey: { file: "journey-edit.mp3", start: 0, gain: 0.85, envelope: [[0, 2], [12, 1]] },
+  /*
+   * Round 71: the background music in the Solar System (the owner: "it will
+   * be very low -- hearable but not loud; space does not have sounds, it is
+   * just for the experience"). One minute, looped for as long as the visit
+   * lasts, its seam crossfaded over AMBIENCE_SEAM seconds so the loop never
+   * shows. It goes through the music bus, so it dips under her voice like
+   * the rest. Set its level with AMBIENCE_VOLUME, below.
+   */
+  ambience: { file: AMBIENCE_FILE, start: 0, loop: true, loopFade: AMBIENCE_SEAM, gain: AMBIENCE_VOLUME },
 };
 
 const PREF_KEY = "beyond-earth:sound";
@@ -316,6 +344,29 @@ export function createSoundscape() {
     const key = `${cue.file}#${cue.loopStart}-${cue.loopEnd}-${cue.loopFade}`;
     if (seams.has(key)) return seams.get(key);
     const rate = buffer.sampleRate;
+    /*
+     * Round 71: a whole-file loop (loopStart 0, no loopEnd -- the background
+     * music). There is nothing before the start to blend into, so the file's
+     * last loopFade seconds are laid over its first loopFade seconds instead
+     * (equal power) and the loop is the file less that overlap: the end of
+     * each pass has already become the start of the next.
+     */
+    if (!cue.loopStart && cue.loopEnd == null) {
+      const n = Math.min(Math.round(cue.loopFade * rate), Math.floor(buffer.length / 3));
+      const length = buffer.length - n;
+      const out = ctx.createBuffer(buffer.numberOfChannels, length, rate);
+      for (let c = 0; c < buffer.numberOfChannels; c += 1) {
+        const src = buffer.getChannelData(c);
+        const dst = src.slice(0, length);
+        for (let i = 0; i < n; i += 1) {
+          const g = (i + 0.5) / n;
+          dst[i] = src[i] * Math.sin(g * Math.PI / 2) + src[length + i] * Math.cos(g * Math.PI / 2);
+        }
+        out.copyToChannel(dst, c);
+      }
+      seams.set(key, out);
+      return out;
+    }
     const a = Math.round(cue.loopStart * rate);
     const b = Math.min(buffer.length, Math.round(cue.loopEnd * rate));
     const n = Math.min(Math.round(cue.loopFade * rate), a, b - a);
@@ -510,6 +561,25 @@ export function createSoundscape() {
   const fullFiles = new Map();  // file -> Promise<ArrayBuffer|null>, only if a server ignores Range
   const spanBuffers = new Map(); // "file@start-end" -> Promise<{ buffer, offset }|null>
   let speaking = 0;              // lines currently heard, for the duck
+  /*
+   * Her own gentle compressor on the way to master (round 70): soft knee from
+   * -9 dBFS, 4:1, fast enough (2 ms) to round off what the spike pass leaves,
+   * so the master limiter -- 20:1 at -3 dBFS, there for the music's peaks --
+   * never has to grab her voice.
+   */
+  let voiceComp = null;
+  function voiceBus() {
+    if (!voiceComp && ctx && master) {
+      voiceComp = ctx.createDynamicsCompressor();
+      voiceComp.threshold.value = -9;
+      voiceComp.knee.value = 6;
+      voiceComp.ratio.value = 4;
+      voiceComp.attack.value = 0.002;
+      voiceComp.release.value = 0.12;
+      voiceComp.connect(master);
+    }
+    return voiceComp ?? master;
+  }
 
   function readMp3Head(file) {
     if (!mp3Heads.has(file)) {
@@ -581,6 +651,7 @@ export function createSoundscape() {
         const k = Math.round((from + sync - head.start) / head.frameBytes);
         const buffer = await ctx.decodeAudioData(data.slice(sync)).catch(() => null);
         if (!buffer) return null;
+        softenSpikes(buffer);
         // The decoded chunk starts at stream sample k * 1152, less the
         // decoder's own 1,105-sample delay, which a decoder trims from the
         // front of whatever it is given. Measured (round 69): with it, the
@@ -593,6 +664,52 @@ export function createSoundscape() {
       if (spanBuffers.size > 24) spanBuffers.delete(spanBuffers.keys().next().value);
     }
     return spanBuffers.get(key);
+  }
+
+  /*
+   * Round 70 (Prompts.md: "sharp spikes of sound in the CME and magnetic
+   * shield events, near the end"). They are in the recordings: single 5 ms
+   * bursts far above the speech around them (in the magnetosphere line a
+   * 0.60 peak among 0.20-0.36; in the CME line 0.55 among about 0.27), which
+   * the +3.5 dB voice gain then drove into the master limiter. Each decoded
+   * line is scanned once: a 5 ms window more than 1.8x louder than everything
+   * within 15-60 ms either side is brought down to 1.3x that, with the gain
+   * eased in and out over a window, so the word is still there and the click
+   * is not. Plosives that are merely loud are well under 1.8x their
+   * neighbours and are left alone.
+   */
+  function softenSpikes(buffer) {
+    const rate = buffer.sampleRate;
+    const hop = Math.max(1, Math.round(rate * 0.005));
+    let softened = 0;
+    for (let c = 0; c < buffer.numberOfChannels; c += 1) {
+      const data = buffer.getChannelData(c);
+      const windows = Math.floor(data.length / hop);
+      const peak = new Float32Array(windows);
+      for (let w = 0; w < windows; w += 1) {
+        let max = 0;
+        for (let i = w * hop, end = i + hop; i < end; i += 1) { const v = Math.abs(data[i]); if (v > max) max = v; }
+        peak[w] = max;
+      }
+      for (let w = 12; w < windows - 12; w += 1) {
+        if (peak[w] < 0.3) continue;
+        let ref = 0;
+        for (let k = 3; k <= 12; k += 1) ref = Math.max(ref, peak[w - k], peak[w + k]);
+        if (peak[w] <= 1.8 * ref) continue;
+        const gain = (1.3 * ref) / peak[w];
+        // The burst's window and one either side, eased over half a window.
+        const from = (w - 1) * hop;
+        const to = (w + 2) * hop;
+        const ease = hop / 2;
+        for (let i = from; i < to; i += 1) {
+          const edge = Math.min(i - from, to - 1 - i);
+          const g = edge >= ease ? gain : 1 - (1 - gain) * (edge / ease);
+          data[i] *= g;
+        }
+        softened += 1;
+      }
+    }
+    return softened;
   }
 
   function duck(on) {
@@ -652,7 +769,7 @@ export function createSoundscape() {
       gainNode.gain.linearRampToValueAtTime(level, when + 0.03);
       gainNode.gain.setValueAtTime(level, when + Math.max(0.03, playFor - 0.08));
       gainNode.gain.linearRampToValueAtTime(0, when + playFor);
-      source.connect(gainNode).connect(master);
+      source.connect(gainNode).connect(voiceBus());
       source.onended = () => finish("ended");
       source.start(when, Math.max(0, offset), playFor + 0.02);
       handle.state = "playing";
@@ -724,6 +841,7 @@ export function createSoundscape() {
       ctx = null;
       spanBuffers.clear();
       fullFiles.clear();
+      voiceComp = null;
       buffers.clear();
       seams.clear();
     },

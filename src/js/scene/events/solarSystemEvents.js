@@ -3359,13 +3359,15 @@ function createSolarEjection(target, camera) {
        * disc fills the middle of the frame, so the front, `frontRadii` solar
        * radii out, stays inside it at about frontRadii / 1.6. It only ever
        * moves out (never back in while the cloud fades), and the camera eases
-       * to it as to any zoom, so the pull-back is as slow as the cloud.
+       * to it as to any zoom.
        */
+      // Round 70 (Prompts.md: "it zooms out late; as soon as the event
+      // begins it must start moving out"). The pull-back now starts with the
+      // event itself -- a smooth ramp to 4.2x over its first half -- and the
+      // front can only push it further.
       const frontRadii = maxHead / sunFraction;
-      if (frontRadii > 1.4) {
-        cmeZoom = Math.max(cmeZoom, frontRadii / 1.6);
-        api?.setZoom?.(cmeZoom);
-      }
+      cmeZoom = Math.max(cmeZoom, 1 + 3.2 * smoothstep(0, 0.5, progress), frontRadii / 1.6);
+      api?.setZoom?.(cmeZoom);
       /*
        * Nothing to march through before the first site opens or after the last
        * one fades, and a full-screen shell that resolves to nothing is still a
