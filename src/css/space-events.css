@@ -415,3 +415,31 @@
   line-height: 1.6;
   color: var(--cin-ink-soft);
 }
+
+/* ---- Round 79: the chips (the panel holds 134 events now). The same
+   squared, mono shape as the All bodies filters, in one wrapping row. */
+.sec__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding-top: 4px;
+}
+
+.sec__chip {
+  padding: 5px 10px;
+  border: 1px solid var(--sec-line);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.02);
+  color: var(--cin-ink-dim, rgba(226, 232, 244, 0.72));
+  font-family: var(--cin-mono);
+  font-size: 0.58rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: border-color 160ms ease, color 160ms ease, background 160ms ease;
+}
+
+.sec__chip span { opacity: 0.55; margin-left: 4px; letter-spacing: 0.04em; }
+.sec__chip:hover,
+.sec__chip:focus-visible { border-color: var(--sec-line-strong); color: var(--cin-ink); outline: none; }
+.sec__chip.is-on { border-color: var(--cin-amber); color: var(--cin-amber); background: rgba(255, 196, 120, 0.07); }

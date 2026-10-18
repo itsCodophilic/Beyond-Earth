@@ -258,6 +258,98 @@ export const SOUND_CUES = {
 
 const PREF_KEY = "beyond-earth:sound";
 
+/*
+ * Round 79 (Prompts.md: "spike after ... called a supermoon" and "spike
+ * after ... falling like snow" in the new event recordings, after the CME
+ * and shield ones were never quite cured). What is heard as a spike in
+ * these lines is a word that comes in much louder than the rest after a
+ * pause -- "Earth had ploughed..." peaks at 0.45 with a 10 ms level of
+ * 0.21, where her speech mostly sits at 0.06-0.15 -- or a hissing "s" at
+ * full level. Two gentle steps, the way a voice is mastered, run on every
+ * decoded line before the spike softener and the limiter:
+ *
+ *   evenVoice   a slow compressor: above a 10 ms level of 0.13 the level
+ *               rises at a third of the rate (3:1), eased in over 10 ms and
+ *               out over 150 ms, with no make-up gain -- so loud words come
+ *               down and nothing else goes up (the mistake of round 71).
+ *   deEss       the band above about 5 kHz is split off (one-pole filter)
+ *               and, where its own level passes 0.045, turned down 3:1, over
+ *               5 ms in and 60 ms out. The rest of the voice is untouched.
+ *
+ * Both return how many 10 ms windows they changed, for testing.
+ */
+export function evenVoice(data, rate, { threshold = 0.13, ratio = 3 } = {}) {
+  const hop = Math.max(1, Math.round(rate * 0.01));
+  const windows = Math.ceil(data.length / hop);
+  const want = new Float32Array(windows).fill(1);
+  let changed = 0;
+  for (let w = 0; w < windows; w += 1) {
+    let sum = 0;
+    const from = w * hop;
+    const to = Math.min(data.length, from + hop);
+    for (let i = from; i < to; i += 1) sum += data[i] * data[i];
+    const level = Math.sqrt(sum / Math.max(1, to - from));
+    if (level > threshold) { want[w] = (threshold + (level - threshold) / ratio) / level; changed += 1; }
+  }
+  if (!changed) return 0;
+  const attack = 1 - Math.exp(-1 / 1);    // 10 ms: one window
+  const release = 1 - Math.exp(-1 / 15);  // 150 ms
+  const gain = new Float32Array(windows);
+  let g = 1;
+  for (let w = 0; w < windows; w += 1) {
+    g = want[w] < g ? g + (want[w] - g) * attack : g + (want[w] - g) * release;
+    gain[w] = g;
+  }
+  // Look one window ahead so the gain is already down as a loud word starts.
+  for (let w = windows - 2; w >= 0; w -= 1) gain[w] = Math.min(gain[w], gain[w + 1] + 0.5 * (1 - gain[w + 1]));
+  for (let i = 0; i < data.length; i += 1) {
+    const pos = i / hop - 0.5;
+    const w = Math.max(0, Math.min(windows - 1, Math.floor(pos)));
+    const t = Math.max(0, Math.min(1, pos - w));
+    const a = gain[w];
+    const b = gain[Math.min(windows - 1, w + 1)];
+    data[i] *= a + (b - a) * t;
+  }
+  return changed;
+}
+
+export function deEss(data, rate, { threshold = 0.045, ratio = 3, cutoff = 5000 } = {}) {
+  const alpha = Math.exp((-2 * Math.PI * cutoff) / rate);
+  const high = new Float32Array(data.length);
+  let low = 0;
+  for (let i = 0; i < data.length; i += 1) { low = (1 - alpha) * data[i] + alpha * low; high[i] = data[i] - low; }
+  const hop = Math.max(1, Math.round(rate * 0.01));
+  const windows = Math.ceil(data.length / hop);
+  const want = new Float32Array(windows).fill(1);
+  let changed = 0;
+  for (let w = 0; w < windows; w += 1) {
+    let sum = 0;
+    const from = w * hop;
+    const to = Math.min(data.length, from + hop);
+    for (let i = from; i < to; i += 1) sum += high[i] * high[i];
+    const level = Math.sqrt(sum / Math.max(1, to - from));
+    if (level > threshold) { want[w] = (threshold + (level - threshold) / ratio) / level; changed += 1; }
+  }
+  if (!changed) return 0;
+  const release = 1 - Math.exp(-1 / 6);   // 60 ms
+  const gain = new Float32Array(windows);
+  let g = 1;
+  for (let w = 0; w < windows; w += 1) {
+    g = want[w] < g ? want[w] : g + (want[w] - g) * release;
+    gain[w] = g;
+  }
+  for (let w = windows - 2; w >= 0; w -= 1) gain[w] = Math.min(gain[w], gain[w + 1] + 0.5 * (1 - gain[w + 1]));
+  for (let i = 0; i < data.length; i += 1) {
+    const pos = i / hop - 0.5;
+    const w = Math.max(0, Math.min(windows - 1, Math.floor(pos)));
+    const t = Math.max(0, Math.min(1, pos - w));
+    const a = gain[w];
+    const b = gain[Math.min(windows - 1, w + 1)];
+    data[i] -= high[i] * (1 - (a + (b - a) * t));
+  }
+  return changed;
+}
+
 function readPreference() {
   try {
     const value = window.localStorage.getItem(PREF_KEY);
@@ -632,6 +724,12 @@ export function createSoundscape() {
         const k = Math.round((from + sync - head.start) / head.frameBytes);
         const buffer = await ctx.decodeAudioData(data.slice(sync)).catch(() => null);
         if (!buffer) return null;
+        // Round 79: even out loud words and hissing "s" first (see above).
+        for (let c = 0; c < buffer.numberOfChannels; c += 1) {
+          const channel = buffer.getChannelData(c);
+          deEss(channel, buffer.sampleRate);
+          evenVoice(channel, buffer.sampleRate);
+        }
         softenSpikes(buffer);
         limitPeaks(buffer);
         // The decoded chunk starts at stream sample k * 1152, less the

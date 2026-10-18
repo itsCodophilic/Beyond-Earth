@@ -4107,3 +4107,13 @@ body.is-space-event [data-event-locked] {
   filter: saturate(0.4);
   transition: opacity 320ms ease;
 }
+
+/* Round 79: while a catalogue event's diorama plays, the distance readout
+   and the scroll progress step aside, so the picture has the whole left of
+   the screen (main.js, setSolarEventStagingUI). */
+body.is-diorama-event .distance-cinematic-layer,
+body.is-diorama-event .progress {
+  opacity: 0 !important;
+  pointer-events: none !important;
+  transition: opacity 400ms ease;
+}

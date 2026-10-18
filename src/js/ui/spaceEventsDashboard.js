@@ -22,9 +22,12 @@ import { drawEventVignette, FAMILY_COLOURS } from "./eventVignettes.js";
  *
  * ## Order
  *
- * The ring runs as a journey: how it all began, then the Sun, then outwards
- * world by world, then the visitors from other stars, then beyond the Solar
- * System. Search narrows the ring to the events that match.
+ * Round 80 (Prompts.md: "first will be how the Solar System got formed, and
+ * reorder the events from how it was in the past to the future; all size
+ * events at the end"): the ring runs through time. Dated events from the
+ * Solar System's birth to the latest; then the things happening now (by
+ * chip); then what is to come; then the size-and-scale events. Search and
+ * the chips narrow the ring and keep that order.
  *
  * ## Cost
  *
@@ -44,6 +47,83 @@ const ORDER = [
   "ring-spokes", "enceladus-plumes", "uranus-storms", "triton-geysers",
   "oumuamua-passage", "borisov-passage", "atlas-3i-passage",
   "supernova", "kilonova",
+];
+
+/*
+ * Round 79: the chips above the ring (the catalogue took the panel from 24
+ * events to 134). Each event says which it belongs to (`section`).
+ */
+/*
+ * Round 80: when each dated event happened or will happen, as a year (CE;
+ * negative = before year 0, so -4.5673e9 is 4.567 billion years ago). Dates
+ * are the cards' own (`when`, `frequency`); ones not listed are happening
+ * now -- ongoing or recurring -- and sit between the past and the future.
+ */
+const PRESENT = 2026;
+const YEAR = {
+  /* the past */
+  "solar-system-formation": -4.5673e9, /* CAI ages, Connelly et al. 2012 */
+  "arrokoth-merger": -4.566e9, /* within the first few million years */
+  "theia-impact": -4.5e9,
+  "vesta-rheasilvia": -1e9,
+  chicxulub: -6.6e7,
+  "magnetic-reversal": -7.8e5,
+  "crab-supernova": 1054.5,
+  "leonid-storm-1833": 1833.87,
+  "sun-carrington": 1859.67,
+  tunguska: 1908.5,
+  "daylight-fireball-1972": 1972.61,
+  "sn-1987a": 1987.15,
+  "neptune-dark-spot": 1989.6,
+  "venus-volcano": 1991.5,
+  "comet-breakup": 1995.7,
+  "hale-bopp": 1997.25,
+  "magnetar-flare": 2004.99,
+  "encke-tail": 2007.3,
+  "holmes-outburst": 2007.81,
+  "asteroid-collision": 2009.2,
+  "jupiter-belt-fade": 2010.3,
+  "transit-venus": 2012.43,
+  chelyabinsk: 2013.12,
+  "asteroid-spin-apart": 2013.8,
+  gw150914: 2015.7,
+  "proxima-superflare": 2016.21,
+  kilonova: 2017.63, /* GW170817 */
+  "oumuamua-passage": 2017.8,
+  "bennu-particles": 2019.02,
+  "borisov-passage": 2019.67,
+  "betelgeuse-dimming": 2019.95,
+  neowise: 2020.5,
+  "great-conjunction": 2020.97,
+  "grb-boat": 2022.77,
+  "sun-gannon-storm": 2024.36,
+  "mini-moon-2024": 2024.75,
+  "tsuchinshan-atlas": 2024.78,
+  "atlas-3i-passage": 2025.8,
+  /* expected any time: first after the present */
+  "t-crb-nova": PRESENT + 0.5,
+  /* the future */
+  "eclipse-2027": 2027.59,
+  "apophis-2029": 2029.28,
+  "halley-2061": 2061.57,
+  "gliese-710": PRESENT + 1.29e6,
+  "phobos-fall": PRESENT + 4e7,
+  "triton-doom": PRESENT + 3.6e9,
+  "sun-red-giant": PRESENT + 5e9,
+  "milky-way-andromeda": PRESENT + 1e10,
+};
+
+const SECTIONS = [
+  { key: "scale", label: "Size & scale" },
+  { key: "sun", label: "The Sun" },
+  { key: "earth", label: "Earth & Moon" },
+  { key: "inner", label: "Mercury · Venus · Mars" },
+  { key: "asteroids", label: "Asteroids" },
+  { key: "giants", label: "Jupiter & Saturn" },
+  { key: "outer", label: "Ice giants & beyond" },
+  { key: "comets", label: "Comets & visitors" },
+  { key: "alignments", label: "Alignments" },
+  { key: "deep", label: "Deep sky" },
 ];
 
 /* Short "how often" words for the tag; the full sentence is in the card. */
@@ -217,10 +297,29 @@ export function createSpaceEventsDashboard({ events, trigger = null, onView = nu
   if (!events) return null;
 
   const unordered = events.list();
-  const roster = [
+  const ordered = [
     ...ORDER.map((id) => unordered.find((e) => e.id === id)).filter(Boolean),
     ...unordered.filter((e) => !ORDER.includes(e.id)),
   ];
+  /* Round 80: through time -- past, now (grouped by chip, in the journey's
+   * order), future, then size and scale (see YEAR). */
+  const sectionRank = (e) => {
+    const i = SECTIONS.findIndex((sec) => sec.key === e.section);
+    return i < 0 ? SECTIONS.length : i;
+  };
+  const era = (e) => {
+    if (e.section === "scale") return 3;
+    const year = YEAR[e.id];
+    if (year === undefined) return 1;
+    return year < PRESENT ? 0 : 2;
+  };
+  const roster = ordered
+    .map((e, i) => ({ e, i }))
+    .sort((a, b) => era(a.e) - era(b.e)
+      || (YEAR[a.e.id] ?? 0) - (YEAR[b.e.id] ?? 0)
+      || sectionRank(a.e) - sectionRank(b.e)
+      || a.i - b.i)
+    .map(({ e }) => e);
   const reduced = typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
   const colourOf = (event) => FAMILY_COLOURS[event.family] ?? "#ffc482";
 
@@ -242,7 +341,7 @@ export function createSpaceEventsDashboard({ events, trigger = null, onView = nu
     <article class="sec">
       <header class="sec__head">
         <div class="sec__heading">
-          <span class="sec__eyebrow">${roster.length} real things that happen · from the beginning, outwards</span>
+          <span class="sec__eyebrow">${roster.length} real things that happen · from the beginning to the far future</span>
           <h2 id="events-dashboard-title">Space events</h2>
         </div>
         <div class="sec__search">
@@ -252,6 +351,13 @@ export function createSpaceEventsDashboard({ events, trigger = null, onView = nu
         </div>
         <button class="sec__close" type="button" aria-label="Close space events">×</button>
       </header>
+      <div class="sec__chips" role="group" aria-label="Show events about">
+        <button class="sec__chip is-on" type="button" data-section="" aria-pressed="true">Everything <span>${roster.length}</span></button>
+        ${SECTIONS.map((sec) => {
+          const n = roster.filter((e) => e.section === sec.key).length;
+          return n ? `<button class="sec__chip" type="button" data-section="${sec.key}" aria-pressed="false">${sec.label} <span>${n}</span></button>` : "";
+        }).join("")}
+      </div>
 
       <div class="sec__hero">
         <div class="sec__stage"><canvas class="sec__preview" aria-hidden="true"></canvas></div>
@@ -374,13 +480,13 @@ export function createSpaceEventsDashboard({ events, trigger = null, onView = nu
         <h3 class="sec__title">${event.title}</h3>
         <div class="sec__tags">
           <span class="sec__tag" style="--c:${colourOf(event)}">${event.familyLabel}</span>
-          <span class="sec__tag sec__tag--quiet" title="${event.kindBlurb ?? ""}">${event.kindLabel} · ${OFTEN[event.id] ?? event.kindShort}</span>
+          <span class="sec__tag sec__tag--quiet" title="${event.kindBlurb ?? ""}">${event.kindLabel} · ${OFTEN[event.id] ?? event.often ?? event.kindShort}</span>
           <span class="sec__seen" data-tone="${seen.tone}">${seen.text}</span>
         </div>
         <p class="sec__detail">${event.detail}.</p>
-        ${TIMELINE[event.id] ? `<dl class="sec__timeline">
-          <div><dt>Last happened</dt><dd>${TIMELINE[event.id].last}</dd></div>
-          <div><dt>Next</dt><dd>${TIMELINE[event.id].next}</dd></div>
+        ${(TIMELINE[event.id] ?? event.timeline) ? `<dl class="sec__timeline">
+          ${(TIMELINE[event.id] ?? event.timeline).last ? `<div><dt>Last happened</dt><dd>${(TIMELINE[event.id] ?? event.timeline).last}</dd></div>` : ""}
+          ${(TIMELINE[event.id] ?? event.timeline).next ? `<div><dt>Next</dt><dd>${(TIMELINE[event.id] ?? event.timeline).next}</dd></div>` : ""}
         </dl>` : event.when ? `<p class="sec__when"><span>When</span>${event.when}</p>` : ""}
         <details class="sec__more">
           <summary>Why it happens · how often</summary>
@@ -426,17 +532,20 @@ export function createSpaceEventsDashboard({ events, trigger = null, onView = nu
 
   /* Everything a card shows (renderText), as one string to search. */
   function searchText(e) {
-    const timeline = TIMELINE[e.id];
+    const timeline = TIMELINE[e.id] ?? e.timeline;
     return [e.place, e.body, e.title, e.familyLabel, e.kindLabel, e.kindShort, e.kindBlurb,
-      OFTEN[e.id], e.detail, timeline?.last, timeline?.next, e.when, e.cause, e.frequency,
+      OFTEN[e.id], e.often, e.detail, timeline?.last, timeline?.next, e.when, e.cause, e.frequency,
       e.accuracy, e.note].filter(Boolean).join(" ");
   }
   let searchFrom = null;
+  let chosenSection = "";
 
   function applyFilter() {
     // Round 76: every word typed, anywhere, any case (ui/searchMatch.js).
     const terms = searchTerms(filterInput.value);
     const current = shown[index]?.id;
+    /* Round 79: the chosen chip narrows first, then the search. */
+    const pool = chosenSection ? roster.filter((e) => e.section === chosenSection) : roster;
     /*
      * Round 78 (the owner: "the events search still does not bring it up --
      * is it because of the tile I am on?"). Two things were wrong:
@@ -451,13 +560,13 @@ export function createSpaceEventsDashboard({ events, trigger = null, onView = nu
      *   the search returns to the tile you were on.
      */
     if (terms.length) {
-      const hits = roster.filter((e) => matches(searchText(e), terms));
+      const hits = pool.filter((e) => matches(searchText(e), terms));
       const inName = hits.filter((e) => matches(`${e.title} ${e.place} ${e.body}`, terms));
       shown = [...inName, ...hits.filter((e) => !inName.includes(e))];
       if (!searchFrom) searchFrom = current;
       index = 0;
     } else {
-      shown = roster.slice();
+      shown = pool.slice();
       const back = shown.findIndex((e) => e.id === (searchFrom ?? current));
       index = back >= 0 ? back : 0;
       searchFrom = null;
@@ -562,6 +671,23 @@ export function createSpaceEventsDashboard({ events, trigger = null, onView = nu
   });
 
   filterInput.addEventListener("input", () => { stopAuto(); applyFilter(); });
+  panel.querySelector(".sec__chips")?.addEventListener("click", (e) => {
+    const chip = e.target.closest("[data-section]");
+    if (!chip) return;
+    stopAuto();
+    chosenSection = chip.dataset.section;
+    panel.querySelectorAll(".sec__chip").forEach((c) => {
+      const on = c === chip;
+      c.classList.toggle("is-on", on);
+      c.setAttribute("aria-pressed", String(on));
+    });
+    // A new group opens on its first event.
+    searchFrom = null;
+    const first = (chosenSection ? roster.filter((ev) => ev.section === chosenSection) : roster)[0];
+    index = 0;
+    applyFilter();
+    if (first && !searchTerms(filterInput.value).length) turnTo(0, { instant: true });
+  });
 
   function play(id) {
     if (!events.isAvailable?.(id)) {

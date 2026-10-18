@@ -1,0 +1,77 @@
+SHARP-SPIKE.TXT
+===============
+
+What this file is
+-----------------
+- It lists every narration clip that has a sharp audio spike, so the next recording can be made without one.
+- It also holds new or longer speech that some events now need.
+- Each entry gives the event's id (as in src/js/scene/events/catalogue/stories.js) and the exact text to record.
+- Once the new audio is in place, tell me. I'll then switch the site's text (stories.js) and the narration timing over to it. Until then, the old text and clip stay, so the words and the voice keep matching.
+
+Started: October 17, 2026 (round 83).
+
+
+PART A - clips with a sharp spike (re-record the same event)
+------------------------------------------------------------
+
+1. leonid-storm-1833 - The Leonid meteor storm
+
+   The current clip has a sharp spike. Its current text is:
+
+   "On the night of the twelfth of November eighteen thirty-three, the sky over North America filled with shooting stars, tens of thousands an hour, falling like snow. Earth had ploughed through a dense trail of dust left by Comet Tempel–Tuttle. The study of meteors as a science began that night."
+
+   Please don't record that text again. Use the new text in Part B, item 1 instead: the animation now shows the comet, its dust trail and Earth crossing it, and the new words explain that link.
+
+
+2. supermoon - Supermoon
+
+   The current clip has a sharp spike. Its current text is:
+
+   "The Moon's distance from us changes over every orbit. A full Moon near its closest point is called a supermoon. It looks about fourteen percent bigger and thirty percent brighter than a full Moon at its farthest. Side by side, the difference is clear, even though by eye it is hard to tell."
+
+   Record this text instead. It follows the new animation: the real Moon going round its oval orbit, the view from Earth at apogee and at perigee, then the two Moons side by side.
+
+   "The Moon's orbit is not a perfect circle but an oval, so its distance from us changes every month. At its farthest point, called apogee, it looks a little smaller. At its closest, called perigee, it looks a little bigger. A full Moon near perigee is called a supermoon. It is about fourteen percent wider and thirty percent brighter than a full Moon at apogee. Side by side the difference is clear, even though by eye it is hard to tell."
+
+
+PART B - new or longer speech
+-----------------------------
+
+1. leonid-storm-1833 - The Leonid meteor storm (replaces the text in Part A, item 1)
+
+   This explains what Comet Tempel–Tuttle has to do with the meteors, in the same order as the animation: comet, then dust trail, then Earth crossing it, then the shooting stars, then the sky over North America.
+
+   "Every thirty-three years, Comet Tempel–Tuttle swings past the Sun, and the Sun's heat drives dust off it. That dust spreads out along the comet's path, like a river of tiny grains. Earth's orbit crosses that river, and every November we pass through it. The comet travels the opposite way round the Sun to us, so the grains hit our air head-on, at seventy-one kilometres a second, and burn up as shooting stars. On the night of the twelfth of November eighteen thirty-three, Earth hit a dense, young stretch of the trail. Over North America, tens of thousands of shooting stars an hour fell like snow, all streaming from one point in the constellation Leo. The study of meteors as a science began that night."
+
+
+2. precession - Earth's wobble: precession
+
+   The current text assumes people know what Polaris and a pole star are. This version explains them first, in the order of the new animation: the axis pointing at Polaris, the night sky turning round it, then the slow wobble from Thuban to Vega.
+
+   Current text, for reference:
+
+   "Earth's axis wobbles, like a spinning top that is slowing down, tracing a slow circle in the sky once every twenty-six thousand years. Today our axis points at Polaris, the North Star. In about twelve thousand years, it will point near Vega, and Vega will be our pole star."
+
+   New text:
+
+   "Earth spins around an axis, an imaginary line through the North and South Poles. Today the north end of that line points almost exactly at one star: Polaris, the North Star. So as Earth turns, the whole night sky seems to wheel around Polaris, while Polaris alone stays still. That is why travellers have used it for centuries to find north. But the axis itself slowly wobbles, like a spinning top, tracing a circle once every twenty-six thousand years. When the first pyramids were built, it pointed near a faint star called Thuban. In about twelve thousand years it will point near Vega, one of the brightest stars in the sky, and Vega will be our pole star."
+
+
+3. zodiacal-light - Zodiacal light
+
+   This adds where to look, when to look, and what kind of light it is.
+
+   Current text, for reference:
+
+   "On dark, clear nights, just after sunset or before dawn, a faint cone of light rises from the horizon along the path of the planets. It is zodiacal light: sunlight, scattered by countless grains of dust drifting between the planets, much of it shed by comets and asteroids."
+
+   New text:
+
+   "On a dark, moonless spring evening, once twilight has ended, look west, where the Sun went down. A faint cone of white light rises from the horizon, leaning along the path that the Sun, the Moon and the planets follow across the sky. This is zodiacal light. It does not glow by itself. It is sunlight, scattered by countless grains of dust drifting between the planets, much of it shed by comets. It is widest and brightest near the horizon, where the dust is closest to the Sun. In autumn, look east before dawn instead. There it was once called the false dawn."
+
+
+Recording notes
+---------------
+- Same voice and pace as the other catalogue clips. Each clip is about 20 to 35 seconds.
+- Read the numbers as written ("seventy-one kilometres a second").
+- After recording, please listen for clipping on hard consonants: "k" in "kilometres" and "t" in "Tempel–Tuttle".

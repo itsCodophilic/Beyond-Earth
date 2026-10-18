@@ -1611,6 +1611,13 @@ import { POINTER_PROXY_LAYER } from "./scene/pointerProxies.js";
 
   function setSolarEventStagingUI(active) {
     document.body.classList.toggle("is-space-event", active);
+    /* Round 79: a catalogue event is a diorama in front of the lens (no
+     * body); the distance readout below it says nothing about it, so it
+     * steps aside while one plays (cinematic-ui.css). */
+    const staged = active && solarEventCurrentId
+      ? solarSystemEvents.list().find((event) => event.id === solarEventCurrentId)
+      : null;
+    document.body.classList.toggle("is-diorama-event", Boolean(staged?.section && staged?.art));
     EVENT_LOCK.active = active;
     if (active) { clearCelestialHover(); clearPlanetOrbitHover(); }
     document.querySelectorAll(EVENT_LOCKED_CONTROLS).forEach((control) => {
@@ -1827,7 +1834,9 @@ import { POINTER_PROXY_LAYER } from "./scene/pointerProxies.js";
      */
 composeSolarEventShot(
       definition.facesSun || definition.shotSwing ? target : null,
-      definition.shotZoom ?? 1,
+      definition.shotDistance && target
+        ? definition.shotDistance / Math.max(0.001, getFocusedBaseDistance(target))
+        : definition.shotZoom ?? 1,
       definition.shotPitch ?? null,
       definition.shotSwing ?? 0,
     );
@@ -1841,7 +1850,21 @@ composeSolarEventShot(
     narrator.say(`event:${id}`);
     solarEventReplay?.setLine(`event:${id}`);
 
-    let remaining = EVENT_ARRIVAL_DELAY_SECONDS;
+    /*
+     * Round 79 (Prompts.md: "the event starts after 3 seconds -- remove
+     * that"). A catalogue diorama has nowhere to fly to, so it starts at
+     * once; one staged on a real body (Mars, Venus, Earth) waits two seconds
+     * for the flight. The first 24 keep their five.
+     */
+    const isCatalogue = Boolean(definition.section && definition.art);
+    /* Round 81 (Prompts.md, Olympus Mons: "we see Mars for a split second,
+     * then Everest -- show Everest first"): an event that opens on black
+     * starts at once and goes black now, so the flight to its body happens
+     * unseen behind it. */
+    const arrivalDelay = !isCatalogue ? EVENT_ARRIVAL_DELAY_SECONDS
+      : definition.isSky || definition.startsDark ? 0 : 2;
+    if (definition.startsDark) setEventVeil({ blackout: true, keep: [skyEventAnchor] });
+    let remaining = arrivalDelay;
     const tick = () => {
       solarEventEyebrow.textContent = remaining > 0
         ? `${definition.place ?? definition.body} · beginning in ${remaining}s`
@@ -1862,11 +1885,11 @@ composeSolarEventShot(
      * 1.2 s after she does: her line, less the countdown, plus that breath.
      */
     const storySeconds = narrator.canSpeak() ? narrator.lengthOf(`event:${id}`) : 0;
-    const fitTo = storySeconds > 0 ? storySeconds - EVENT_ARRIVAL_DELAY_SECONDS + 1.2 : null;
+    const fitTo = storySeconds > 0 ? storySeconds - arrivalDelay + 1.2 : null;
     solarEventStartTimer = setTimeout(() => {
       solarEventStartTimer = null;
       solarSystemEvents.play(id, { fitTo });
-    }, EVENT_ARRIVAL_DELAY_SECONDS * 1000);
+    }, arrivalDelay * 1000 + 30);
     return true;
   }
 
@@ -2532,7 +2555,9 @@ composeSolarEventShot(
      * MAX_CINEMATIC_CAMERA_DISTANCE (11,500), still applies after this. */
     /* Round 43: up to 60 -- the formation and the solar wind frame the
      * whole system out to the drawn heliosphere (~2,300-3,400 units). */
-    focusZoomTarget = THREE.MathUtils.clamp(Number(shotZoom) || 1, 0.5, 60);
+    /* Round 80: up to 400 -- "A day on Venus" opens with Venus and its
+     * whole orbit in frame (~290 x Venus's framing distance). */
+    focusZoomTarget = THREE.MathUtils.clamp(Number(shotZoom) || 1, 0.5, Math.min(400, getFocusedMaximumZoom(focusedBody)));
   }
   // Null in ordinary inspection; set to the parent of the complete catalogue
   // atlas while its alternate system-wide shot is active.
@@ -2587,6 +2612,9 @@ composeSolarEventShot(
   const satelliteHighlightColour = new THREE.Color(0x64ffd0);
   let celestialHoverTimer = null;
   let celestialHoverFramePending = false;
+  /* Round 84: whether the pointer was last over the interface (main
+   * pointermove handler, INTERFACE_SELECTOR). */
+  let pointerOverInterface = false;
   let focusSelectionPulseStartedAt = -Infinity;
   const celestialHoverAnchor = new THREE.Vector2(-9999, -9999);
   let lastPointerType = "mouse";
@@ -3328,6 +3356,41 @@ composeSolarEventShot(
           matched = candidate;
         }
       });
+      if (matched) return matched;
+      /*
+       * Round 84 (Prompts.md: "Rheasilvia ... using real celestial bodies",
+       * Bennu, Ceres, Phaethon, Titan, Hyperion, Iapetus ...): the same
+       * search the board's "travel there" makes. The small bodies and the
+       * belt's big five are groups, not meshes, so the walk above never
+       * finds them; and a Saturn or Jupiter moon may not be built yet --
+       * moons hydrate one at a time in idle slots -- so a queued one is
+       * moved to the front and built now.
+       */
+      const same = (candidate) => (candidate?.userData?.name ?? candidate?.name) === name;
+      /* (`smallBodies` and `asteroidBelt` are declared further down this
+       * file; this only ever runs once the page is built, but a call before
+       * then must not throw.) */
+      try {
+        matched = (smallBodies?.allTargets ?? []).find(same) ?? null;
+      } catch {
+        return null;
+      }
+      if (!matched && asteroidBelt?.system) {
+        asteroidBelt.system.traverse((object) => {
+          if (!matched && object.userData?.isAsteroid && same(object)) matched = object;
+        });
+      }
+      if (!matched) {
+        for (const system of majorSatelliteSystems) {
+          const pending = system.pendingDirectSatellites ?? [];
+          const index = pending.findIndex(({ profile }) => profile?.name === name);
+          if (index >= 0) {
+            pending.unshift(...pending.splice(index, 1));
+            matched = hydrateNextMajorSatellite(system)?.satellite?.moon ?? null;
+            if (matched) break;
+          }
+        }
+      }
       return matched;
   }
 
@@ -3380,7 +3443,73 @@ composeSolarEventShot(
      * it like any other zoom. */
     setZoom: (zoom) => {
       if (zoom == null || !focusedBody || !isSolarEventStaging()) return;
-      focusZoomTarget = THREE.MathUtils.clamp(zoom, 0.5, Math.min(60, getFocusedMaximumZoom(focusedBody)));
+      /* Round 80: a catalogue event on a real planet pulls right back to
+       * find it in the Solar System (Venus: ~1,300 units out), so the cap is
+       * the camera's own limit, not 60. */
+      focusZoomTarget = THREE.MathUtils.clamp(zoom, 0.5, getFocusedMaximumZoom(focusedBody));
+    },
+    setZoomDistance: (distance) => {
+      if (distance == null || !focusedBody || !isSolarEventStaging()) return;
+      const base = Math.max(0.001, getFocusedBaseDistance(focusedBody));
+      focusZoomTarget = THREE.MathUtils.clamp(distance / base, 0.5, getFocusedMaximumZoom(focusedBody));
+    },
+    /*
+     * Round 82 (Prompts.md: "use our real bodies -- the Sun storming out and
+     * reaching our real Earth"): an event can move the camera on to a second
+     * body part-way through -- the same travel and shot composition as
+     * presentSolarEvent, the camera flying there itself. Events cut to black
+     * across the flight.
+     */
+    /*
+     * Round 82: the real Sun's look for an event -- { scale, tint } -- for
+     * "the Sun becomes a red giant" on the site's own Sun. null puts it back.
+     */
+    setSunLook: (look) => setEventSunLook(look),
+    /*
+     * Round 83 (Prompts.md: the annular eclipse "with the camera at Earth's
+     * position ... the Moon covers the Sun but we see the ring"): turns the
+     * camera round the focused body to an absolute azimuth (and elevation),
+     * eased like any other camera move -- for a shot that sweeps the line of
+     * sight past a body slowly, the way the Moon drifts across the Sun.
+     */
+    /*
+     * Round 87 (Prompts.md: the comet events "using real space bodies"):
+     * an event can put one of the site's real comets at a distance from the
+     * Sun on its own orbit (inbound or outbound), its coma and tails
+     * following, and put it back to today afterwards -- the glow view's own
+     * placeCometAt / restoreCometToToday, without the chip.
+     */
+    placeComet: (name, au, outbound = false) => (Number.isFinite(au) ? placeCometAt(smallBodies, name, au, { outbound }) : null),
+    restoreComet: (name) => restoreCometToToday(smallBodies, name),
+    aim: (yawValue, pitchValue = null) => {
+      if (!isSolarEventStaging() || !focusedBody) return;
+      if (Number.isFinite(yawValue)) {
+        const turn = Math.PI * 2;
+        targetYaw = yawValue + Math.round((yaw - yawValue) / turn) * turn;
+      }
+      if (Number.isFinite(pitchValue)) targetPitch = THREE.MathUtils.clamp(pitchValue, -1.1, 1.1);
+    },
+    refocus: (name, shot = {}) => {
+      if (!isSolarEventStaging()) return false;
+      const target = solarSystemEventBodies(name);
+      if (!target) return false;
+      if (focusedBody !== target) focusBody(target);
+      /* An absolute azimuth for the camera (radians, world: its offset from
+       * the body is (sin yaw, cos yaw)), for a shot worked out from where
+       * the bodies are -- side-on to the Sun-Earth line, say. */
+      if (Number.isFinite(shot.shotYaw)) {
+        composeSolarEventShot(null, shot.shotDistance ? shot.shotDistance / Math.max(0.001, getFocusedBaseDistance(target)) : shot.shotZoom ?? 1, shot.shotPitch ?? null, 0);
+        const turn = Math.PI * 2;
+        targetYaw = shot.shotYaw + Math.round((yaw - shot.shotYaw) / turn) * turn;
+        return true;
+      }
+      composeSolarEventShot(
+        shot.facesSun || shot.shotSwing ? target : null,
+        shot.shotDistance ? shot.shotDistance / Math.max(0.001, getFocusedBaseDistance(target)) : shot.shotZoom ?? 1,
+        shot.shotPitch ?? null,
+        shot.shotSwing ?? 0,
+      );
+      return true;
     },
   });
 
@@ -3392,12 +3521,65 @@ composeSolarEventShot(
    * objects (the Moon, inside the true-scale magnetosphere). Each object's
    * own visibility is put back exactly as it was when the veil lifts.
    */
+  let eventSunLook = null;
+  const sunLookSaved = new Map();
+  function setEventSunLook(look) {
+    eventSunLook = look ?? null;
+    const layers = [sun.surface, sun.chromosphere, sun.innerCorona, sun.outerCorona].filter(Boolean);
+    const tint = look?.tint ? new THREE.Color(look.tint) : null;
+    layers.forEach((layer) => {
+      const u = layer.material?.uniforms;
+      const slot = u?.uTint ?? u?.uColor;
+      if (!slot?.value?.isColor) return;
+      if (!sunLookSaved.has(slot)) sunLookSaved.set(slot, slot.value.clone());
+      slot.value.copy(sunLookSaved.get(slot));
+      if (tint) slot.value.multiply(tint);
+    });
+    const glowMaterial = sun.glow?.material;
+    if (glowMaterial?.color) {
+      if (!sunLookSaved.has(glowMaterial)) sunLookSaved.set(glowMaterial, glowMaterial.color.clone());
+      glowMaterial.color.copy(sunLookSaved.get(glowMaterial));
+      if (tint) glowMaterial.color.multiply(tint);
+    }
+  }
+
   function setEventVeil(what) {
     eventVeil.saved.forEach((visible, object) => { object.visible = visible; });
     eventVeil.saved.clear();
+    if (eventVeil.savedBackground !== undefined) {
+      scene.background = eventVeil.savedBackground;
+      eventVeil.savedBackground = undefined;
+    }
     eventVeil.objects = [];
     setGuideSuppression("event-veil", false);
     if (!what) return;
+    /*
+     * Round 79 (Prompts.md: "the space background should be hidden and a black
+     * background visible"). "blackout", or { blackout: true, keep: [objects] }:
+     * everything in the scene is hidden but the given objects (the deep-sky
+     * anchor a catalogue diorama hangs from, by default) and the path down to
+     * them, and the background is plain black. The lights stay. Put back
+     * exactly as it was when the veil lifts.
+     */
+    if (what === "blackout" || what?.blackout) {
+      const keep = (what?.keep ?? [skyEventAnchor]).filter(Boolean);
+      const onPath = new Set();
+      keep.forEach((object) => { for (let o = object; o; o = o.parent) onPath.add(o); });
+      const hideAround = (node) => {
+        node.children.forEach((child) => {
+          if (keep.includes(child) || child.isLight || child.isCamera) return;
+          if (onPath.has(child)) { hideAround(child); return; }
+          eventVeil.objects.push(child);
+        });
+      };
+      hideAround(scene);
+      eventVeil.objects.forEach((object) => eventVeil.saved.set(object, object.visible));
+      eventVeil.savedBackground = scene.background;
+      scene.background = new THREE.Color(0x000000);
+      setGuideSuppression("event-veil", true);
+      applyEventVeil();
+      return;
+    }
     if (what === "system") {
       world.children.forEach((child) => {
         if (child === skyEventAnchor) return;
@@ -3441,9 +3623,10 @@ composeSolarEventShot(
     if (solarEventPhase !== "running") return;
     if (!solarEventCurrentId || !solarEventNotice.classList.contains("is-visible")) return;
     solarEventPhase = "done";
-    solarEventEyebrow.textContent = `${
-      solarSystemEvents.list().find((event) => event.id === solarEventCurrentId)?.body ?? ""
-    } · that was it`;
+    /* Round 79: the place, as the countdown said it ("The Sun and Earth"),
+     * not the body -- which is "Deep space" for every catalogue diorama. */
+    const finished = solarSystemEvents.list().find((event) => event.id === solarEventCurrentId);
+    solarEventEyebrow.textContent = `${finished?.place ?? finished?.body ?? ""} · that was it`;
     // The planet is the viewer's again the instant the event stops, rather
     // than when they get round to dismissing the caption.
     setSolarEventStagingUI(false);
@@ -4138,6 +4321,7 @@ composeSolarEventShot(
      * block runs before this object exists and `const` is not hoisted.
      */
     window.__events = solarSystemEvents;
+    window.__eventBody = solarSystemEventBodies;
     window.__galacto = galactocentric;
     /*
      * The staged route, as distinct from `__events.trigger`.
@@ -5032,6 +5216,8 @@ composeSolarEventShot(
     let targetScale = isActiveSunInspection
       ? THREE.MathUtils.lerp(1, 0.18, sunFocusPullbackBlend)
       : 1;
+    /* Round 82: a space event sizing the real Sun (a red giant). */
+    const eventSunScale = eventSunLook && Number.isFinite(eventSunLook.scale) ? eventSunLook.scale : null;
     if (!isActiveSunInspection && Number.isFinite(observerAU) && observerAU > 0) {
       const realDistanceKm = observerAU * ASTRONOMICAL_UNIT_KM;
       const angularRadius = Math.atan(SUN_RADIUS_KM / realDistanceKm);
@@ -5065,6 +5251,7 @@ composeSolarEventShot(
       );
     }
 
+    if (eventSunScale !== null) targetScale = eventSunScale;
     const currentScale = sun.system.scale.x;
     const scaleEase = isActiveSunInspection ? 0.22 : focusExitTransition ? 0.16 : 0.085;
     const nextScale = snapSunApparentScaleOnNextFrame
@@ -5192,9 +5379,11 @@ composeSolarEventShot(
     const sunFocusSparkleVisibility = isActiveSunInspection
       ? THREE.MathUtils.smoothstep(sunFocusPullbackBlend, 0.10, 0.68)
       : 0;
-    const sparkleVisibility = isActiveSunInspection
-      ? sunFocusSparkleVisibility
-      : resolvedSparkleVisibility;
+    const sparkleVisibility = eventSunLook && Number.isFinite(eventSunLook.scale)
+      ? 0 /* Round 82: the event shows the Sun itself (a red giant) */
+      : isActiveSunInspection
+        ? sunFocusSparkleVisibility
+        : resolvedSparkleVisibility;
 
     if (sun.distantStar) {
       const primaryTwinkle = Math.sin(elapsedTime * 3.35) * 0.095
@@ -6385,7 +6574,7 @@ composeSolarEventShot(
     const pulse = 1 + Math.sin(elapsedTime * 3.4) * 0.020;
 
     majorSatelliteSystems.forEach((system) => {
-      const target = selectedName === system.parentName ? 1 : 0;
+      const target = selectedName === system.parentName && !isSolarEventStaging() ? 1 : 0;
       const atlasActive = satelliteOverviewParentName === system.parentName;
       const focusedSatellite = focusedBody?.userData?.parentPlanet === system.parentName
         ? focusedBody
@@ -6438,7 +6627,10 @@ composeSolarEventShot(
       });
     });
 
-    const earthIntensityTarget = selectedName === "Earth" ? 1 : 0;
+    /* Round 84: no green selection rim on the Moon while a space event plays
+     * (the Earth and Moon events stage the real Moon, and the rim read as a
+     * ring drawn round it). */
+    const earthIntensityTarget = selectedName === "Earth" && !isSolarEventStaging() ? 1 : 0;
     moon.userData.earthSystemHighlightIntensity = THREE.MathUtils.lerp(
       Number(moon.userData.earthSystemHighlightIntensity ?? 0),
       earthIntensityTarget,
@@ -7250,6 +7442,12 @@ composeSolarEventShot(
      */
     if (isDragging
       || !reachedSolarSystem // round 74: no hover behind the beginning screen
+      /* Round 84 (Prompts.md: "we are on the sub-dashboard and still the
+       * stuff beneath starts its voice"): nothing in the scene is hovered
+       * while the pointer is over the interface, or while the board or one
+       * of its pages is open on top of the scene. */
+      || pointerOverInterface
+      || celestialBoard?.isOpen?.()
       || lastPointerType === "touch"
       || isArrivalCaptionPlaying
       || tourSuppressesHover
@@ -9406,6 +9604,7 @@ composeSolarEventShot(
     if (event.touches.length < 2) focusPinchDistance = null;
   }, { passive: true });
 
+  const INTERFACE_SELECTOR = ".about-experience, .events-dashboard, .planet-details, .celestial-selection-card, .satellite-system-overview, .satellite-atlas-directory, .satellite-name-label, .hud, .body-card, .body-card-restore, .progress, .distance-cinematic-layer, .system-return-button, .comet-placement, .cboard, .cmoons, .neotab";
   addEventListener("pointermove", (event) => {
     updatePointerFromEvent(event);
     lastPointerType = event.pointerType || "mouse";
@@ -9415,7 +9614,13 @@ composeSolarEventShot(
     if (hoveredPlanetOrbit && !isPointerStillOnHoveredPlanetOrbit()) {
       clearPlanetOrbitHover();
     }
-    if (event.target.closest?.(".about-experience, .events-dashboard, .planet-details, .celestial-selection-card, .satellite-system-overview, .satellite-atlas-directory, .satellite-name-label, .hud, .body-card, .body-card-restore, .progress, .distance-cinematic-layer, .system-return-button, .comet-placement")) {
+    /* Round 84: the board and every page it opens (its own panels, the
+     * explanations, the near-Earth table) count as interface too -- they
+     * were missing here, so the scene under them went on taking hover and
+     * starting its narration. Anything that is not the scene's own canvas
+     * and sits in one of these is interface. */
+    pointerOverInterface = Boolean(event.target.closest?.(INTERFACE_SELECTOR));
+    if (pointerOverInterface) {
       clearCelestialHover();
       clearPlanetOrbitHover();
       lastPointer = { x: event.clientX, y: event.clientY };
@@ -9472,7 +9677,8 @@ composeSolarEventShot(
      * no clicks.
      */
     if (!reachedSolarSystem) return;
-    if (event.target.closest?.(".about-experience, .events-dashboard, .planet-details, .celestial-selection-card, .satellite-system-overview, .satellite-atlas-directory, .satellite-name-label, .body-card-restore, .progress, .distance-cinematic-layer, .system-return-button")) return;
+    if (event.target.closest?.(".about-experience, .events-dashboard, .planet-details, .celestial-selection-card, .satellite-system-overview, .satellite-atlas-directory, .satellite-name-label, .body-card-restore, .progress, .distance-cinematic-layer, .system-return-button, .cboard, .cmoons, .neotab")) return;
+    if (celestialBoard?.isOpen?.()) return;
     updatePointerFromEvent(event);
     const pressedOrbitCandidate = hoveredPlanetOrbit && isPointerStillOnHoveredPlanetOrbit()
       ? hoveredPlanetOrbit

@@ -199,9 +199,19 @@ function createAuroraMaterial() {
   return new THREE.ShaderMaterial({
     uniforms: {
       uTime: { value: 0 },
+      /* Round 82: a space event can drive a geomagnetic storm on the real
+       * Earth -- the oval's centre (|sin latitude|, 0.922 = ~67 degrees),
+       * its width (x the quiet width), its brightness, and how much of the
+       * high-altitude red shows. The defaults are the quiet aurora. */
+      uBandCentre: { value: 0.922 },
+      uBandWidth: { value: 1 },
+      uGain: { value: 1 },
+      uRed: { value: 0 },
     },
     vertexShader: `
       uniform float uTime;
+      uniform float uBandCentre;
+      uniform float uBandWidth;
       varying vec3 vWorldNormal;
       varying vec3 vWorldPosition;
       varying vec3 vLocalPosition;
@@ -215,8 +225,8 @@ function createAuroraMaterial() {
 
         // A narrow auroral oval near the polar regions, with local vertical
         // protrusions so the sheet does not feel completely flat.
-        float coreBand = exp(-pow((absY - 0.922) / 0.028, 2.0));
-        float outerBand = exp(-pow((absY - 0.902) / 0.048, 2.0)) * 0.40;
+        float coreBand = exp(-pow((absY - uBandCentre) / (0.028 * uBandWidth), 2.0));
+        float outerBand = exp(-pow((absY - (uBandCentre - 0.02 * uBandWidth)) / (0.048 * uBandWidth), 2.0)) * 0.40;
         float auroraBand = clamp(coreBand + outerBand, 0.0, 1.0);
 
         float broadArc = sin(longitude * 3.4 + uTime * 0.18 + sin(longitude * 6.2) * 0.35) * 0.5 + 0.5;
@@ -241,6 +251,8 @@ function createAuroraMaterial() {
     `,
     fragmentShader: `
       uniform float uTime;
+      uniform float uGain;
+      uniform float uRed;
       varying vec3 vWorldNormal;
       varying vec3 vWorldPosition;
       varying vec3 vLocalPosition;
@@ -320,7 +332,8 @@ function createAuroraMaterial() {
           * darknessVisibility
           * viewingVisibility
           * breathing
-          * 1.06;
+          * 1.06
+          * uGain;
 
         vec3 green = vec3(0.12, 1.0, 0.42);
         vec3 cyan = vec3(0.16, 0.92, 1.0);
@@ -329,6 +342,7 @@ function createAuroraMaterial() {
 
         float redFringe = smoothstep(0.91, 0.985, absY) * smoothstep(0.18, 0.82, spikeColumns);
         color = mix(color, red, redFringe * 0.30);
+        color = mix(color, red, uRed * (0.35 + 0.65 * (1.0 - spikeColumns)));
 
         // Strong base visibility stays, but the brighter columns and arcs now
         // shape the aurora into recognisable ribbons and spiky curtains.

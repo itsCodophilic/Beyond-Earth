@@ -222,6 +222,12 @@ export function makeSunSurfaceMaterial(texture) {
       uSpotSizes: {
         value: spotSizes,
       },
+
+      /* Round 82: a space event can recolour the real Sun (a red giant,
+       * a white dwarf). White = as drawn. */
+      uTint: {
+        value: new THREE.Color(1, 1, 1),
+      },
     },
 
     vertexShader: `
@@ -398,6 +404,7 @@ export function makeSunSurfaceMaterial(texture) {
       uniform float uGlow;
       uniform vec3 uSpotDirections[SPOT_COUNT];
       uniform float uSpotSizes[SPOT_COUNT];
+      uniform vec3 uTint;
 
       varying vec3 vNormalView;
       varying vec3 vViewPosition;
@@ -948,7 +955,7 @@ export function makeSunSurfaceMaterial(texture) {
             max(
               finalSurface,
               vec3(0.0)
-            ),
+            ) * uTint,
             1.0
           );
       }

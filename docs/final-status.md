@@ -1755,3 +1755,317 @@ Prompts.md items, in order:
   | storm | 6 | A magnetic shield in a storm |
   | comet | 7 | Sungrazing comet |
   | eclipse | 1 | Solar eclipse |
+
+## Part 58 — Round 79: 110 more space events, with her voice
+- **Ask:** users wanted more events. The owner asked for "all of them", with speech "more explainable", in 4–5 recordings.
+- **The events:** 110 new ones, 134 in total, listed in `docs/new-space-events-list.md`. All are natural; nothing human-made is the subject.
+
+| Section | Events |
+|---|---|
+| Size and scale | 12 |
+| The Sun | 10 |
+| Earth and Moon | 22 |
+| Mercury, Venus, Mars | 12 |
+| Asteroids | 6 |
+| Jupiter | 7 |
+| Saturn | 8 |
+| Ice giants and beyond | 10 |
+| Comets | 8 |
+| Alignments | 3 |
+| Deep sky | 12 |
+
+- **How they are built:** `src/js/scene/events/catalogue/`.
+  - `kit.js` is a toolkit. Each event is a diorama held in front of the lens (`body: null`), turning with the camera, in the clear area left of the event card.
+  - The kit supplies lit spheres with the real planet maps, a star shader, rocks, rings, lines, orbits, particle clouds, labels, captions and fades.
+  - Each section module (`scale.js`, `sun.js`, `earth-sky.js`, `earth-impacts.js`, `inner.js`, `asteroids.js`, `jupiter.js`, `saturn.js`, `outer.js`, `comets.js`, `alignments.js`, `deep.js`) holds its events. Each event has its full card text (detail, how often, cause, note, accuracy, dates) and a scene told in 3–4 captioned stages.
+  - Numbers carry their sources in comments.
+- **Two stage fixes found in the real site:**
+  - The site moves its camera's near plane (3.1 in the journey view), which clipped a diorama set 3 units out. Now it stands at least four near-planes out, scaled to match.
+  - Labels then grew with the distance, so their size is now divided back by it. The label declutter measures their true on-screen size.
+- **Her voice:**
+  - The text is `catalogue/stories.js`, one source for the events, the paste files and `narrationScript.js` (rec 3L). The recordings are `Part 3L-1.mp3` to `Part 3L-5.mp3`, 22 lines each.
+  - The cuts come from the same sentence-level alignment as before. Every line's length is within 15% of what its text predicts (64 ms a character in all five files).
+  - Each event stretches to its line (`fitTo`). Eight with short lines (under 16.1 s) had their design length cut to 16 s, so none outruns her: every event ends 1.2 s after she does.
+- **Spikes (Prompts.md):** "after … called a supermoon" and "after … falling like snow" were loud word onsets and hissing "s" sounds, not clicks.
+  - Every voice line now goes through `deEss` and `evenVoice` (soundscape.js) before the spike softener and limiter.
+    - `deEss`: the band above 5 kHz turned down 3:1 above a level of 0.045.
+    - `evenVoice`: 3:1 above a 10 ms level of 0.13, with no make-up gain.
+  - Measured on those two spots and the CME line, the loudest windows drop 1.5–2 dB and the median is unchanged.
+- **Space events panel:**
+  - Chips by section: Everything 134, Size & scale 12, The Sun 13, Earth & Moon 27, Mercury · Venus · Mars 14, Asteroids 6, Jupiter & Saturn 21, Ice giants & beyond 12, Comets & visitors 12, Alignments 3, Deep sky 14.
+  - The ring is grouped in that order.
+  - Each card shows the event's own "how often", last/next dates and a sketched picture drawn from its `art` descriptor (eventVignettes.js, drawArt).
+  - Search covers the new fields.
+- **During a diorama event:** the distance readout and progress bar step aside (`body.is-diorama-event`). The finished card now names the event's place, not "Deep space".
+- **Checked:**
+  - A bench page in the container (not in the project) builds, steps from p = 0 to 1 and disposes of all 110 events with no errors. Screenshots were reviewed at p = 0.5 for all 110.
+  - In the real site: the panel shows 134 events with working chips and search. `presentSolarEvent` stages catalogue events, and screenshots mid-event are correct after the near-plane and label fixes. No page errors.
+- **Known:**
+  - Two recorded lines are a little loose against their cards:
+    - The lunar occultation says a planet "vanishes … in a second or two". That is true of a star; Saturn takes about 30 s, and the card gives the real timing.
+    - Uranus's impactor is "several times the size of Earth" in the line; the models use 1–3 Earth masses, and the card says about twice Earth's mass.
+  - With the wide journey-view lens (about 70°), round bodies far left of centre look slightly oval.
+
+## Part 59 — Round 80: black stages in the middle, real worlds, and a ring that runs through time
+
+From the owner's notes in Prompts.md after testing round 79.
+
+- **Every diorama:**
+  - Plays on plain black. The solar system, the sky and the background are hidden while it runs and put back afterwards (`setEventVeil("blackout")`, main.js).
+  - Sits in the middle of the screen, not on the left.
+  - Starts at once. The three-second wait is gone for dioramas. An event on a real body waits two seconds for the camera.
+  - Labels redraw only when their words change. The "Light time" timer no longer flickers, and is anchored at its left edge so the words never move.
+- **Size & scale, reworked (scale.js, 10 events):**
+  - *All the planets fit between Earth and the Moon:* Earth and the Moon to true scale across the middle. The seven planets are in a row above them, so none hides another or the Moon. The small planets' names are on leaders to the left. Dashed guides carry the row's ends down to the gap, green when it fits and red when it does not. The Moon swings to apogee, then perigee.
+  - *Thirty Earths to the Moon:* thirty Earth-wide slots above the Earth–Moon line. The Earths are drawn a little smaller than their slots so there is space between them, with a count every five.
+  - *1.3 million Earths inside the Sun:* a white Sun. Earth is a lit planet, at true size, with a ×20 magnifier. Also 109 dots across the Sun, then the volume fill. No wait.
+  - *A storm wider than Earth:* Jupiter turned to the Great Red Spot, which is ringed. The spot is lifted out using its own picture cut from the same Cassini map. Three round Earths fit in its 1880s width (40,000 km). It shrinks to 2017 (16,350 km) and the outer two fall outside it.
+  - *A day on Venus is longer than its year:* on the site's own Sun. A Venus ×13 goes round on the real Venus's orbit radius, with the real Venus hidden. A red mark shows its backwards turn, and day and orbit counters run.
+  - *Olympus Mons and Everest:* the site's own Mars, turned so Olympus Mons faces the Sun, with a glowing ring and its name. Then black, and the two mountains in profile, heights to scale:
+    - Olympus Mons has its basal cliff and caldera.
+    - Everest is shown alongside.
+    - An airliner's cruising height is marked for reference.
+  - *Grand Canyon of the Solar System* (renamed): the site's own Mars, turned so Valles Marineris faces the Sun, traced with a glowing band along its real course. Then black:
+    - length bars: 4,000 km, against New York to Los Angeles (3,940 km) and the Grand Canyon (446 km);
+    - depth cross-sections: 7 km against 1.8 km.
+  - *The Moon is leaving us:* the site's own Earth and Moon. The real Moon is moved outward on its orbit at today's rate (38,000 km per billion years), with today's orbit dashed. It is put back afterwards.
+  - *Sunlight is 8 minutes old:* a white Sun. The line is raised clear of the card, and the timer is steady.
+  - *Sunlight's long way out:* a flat white-to-warm cut-away showing three random-walk photons with trails, turning convection cells, and rays converging on Earth with an 8-minute counter.
+  - Removed: *Saturn would float* and *Jupiter outweighs every other planet*. Their recorded lines stay in the audio, unused.
+- **New in the kit:**
+  - `ctx.hudLayer()`: a hud stage for a body event.
+  - `ctx.onHost`, `ctx.surfacePoint(lat, lon)` and `ctx.turnHostToward(lat, lon, dir)`: these use the maps' simple-cylindrical longitude (checked on the Mars and Jupiter maps).
+  - `mapUrl(name)`.
+  - Blackouts that keep only the hud layer.
+- **The user's two comparison images** (Images/…) are not used directly. Both carry other publishers' watermarks and artwork. The comparisons are drawn by the site from the published heights and lengths instead.
+- **Space events panel:** the ring now runs through time:
+  - It starts with *How the Solar System formed*, then every dated event in order (Arrokoth, Theia, Vesta … 3I/ATLAS).
+  - Then what is happening now, by chip.
+  - Then the future (T CrB, the 2027 eclipse, Apophis, Halley … Milky Way meets Andromeda).
+  - Then size & scale last.
+  - Total 132.
+- **Checked:**
+  - Bench: 108 catalogue events build, step and dispose with no errors.
+  - Real site: screenshots of every reworked event at several points, plus the panel order.
+
+## Part 60 — Round 81: the Red Spot, Venus and Olympus on the real worlds
+
+From Prompts.md after testing round 80.
+
+- **A storm wider than Earth:** now on the site's own Jupiter.
+  - It turns so the Great Red Spot faces the Sun. Where the spot is on the globe is worked out every frame, because the Jupiter shader slides its map by 0.0015 × time.
+  - The spot is ringed and named.
+  - The background then goes black, and the spot lifts out from where it is on screen to the middle of the screen. It uses its own picture from the Cassini map.
+  - Three round Earths sit below it, with dashed lines carrying the spot's edges down to them. In the 1880s, at 40,000 km, all three fit. By 2017, at 16,350 km, the outer two fall outside and dim: "Now only 1.3 Earths".
+- **A day on Venus:** now on the site's own Venus.
+  - It opens far out (`shotDistance: 900`), with Venus ringed and named, its own orbit highlighted in gold, and the Sun named.
+  - Then it closes in (`setZoomDistance`). The real Venus turns backwards at its true rate against a sped-up clock. A red mark is fixed on its surface, with arrows for "it turns this way" and "it goes round the Sun this way". Counters show the year (224.7 days) and the day (243 days), then sunrise to sunrise (116.75 days, in the west).
+  - The spin's direction is read from the geometry, because the site tilts Venus over 3.1 rad.
+  - Venus is not moved along its orbit. Moving it fast enough to show a year made the camera lose it, so its place in the year is shown by the counters.
+- **Olympus Mons and Everest:** the visuals now follow her recorded line, which mentions Everest first.
+  - Everest rises first, on black.
+  - Then the site's own Mars, with Olympus Mons ringed ("And this is Olympus Mons, on Mars").
+  - Then black again, with Olympus Mons rising beside Everest.
+  - Both are now lit 3D landforms rather than flat drawings. Their colours come from the site's Earth and Mars maps at those places. Everest has snow above 5.5 km. Olympus Mons has its basal cliff and caldera. The ground is Mars-coloured, under a dusty horizon.
+  - Heights are to scale; widths are squeezed.
+- **The owner's image** (`Images/Olympus moons vs everest.jpeg`) is a branded social-media graphic: a LifeScience logo and headline, 400 × 500 px. It is not used. Publishing it would copy someone else's artwork, and it is too small to enlarge well.
+- **Kit:**
+  - `turnHostToward` now allows for the site's tilt (rotation.z on the planet mesh).
+  - New: `ctx.reframe()`.
+  - New: `ctx.setZoomDistance(d)`.
+  - New: the `shotDistance` definition field.
+  - Event zoom is no longer capped at 60 (main.js).
+- **Removed** (already in round 80): Saturn would float, and Jupiter outweighs every other planet. Rebuild to see them gone.
+
+## Part 61 — Round 82: Venus round the real Sun, Everest first, and the status list
+
+- **A day on Venus:** redesigned again (Prompts.md: "the camera shows Venus directly and not its rotation around the Sun").
+  - The event is staged on the site's own Sun again, looking down on Venus's whole orbit.
+  - The **real Venus** is moved round its real orbit (its `meanAnomaly`) and turned on its axis, both at true rates against a sped-up clock. The covered part of the orbit is drawn in gold, and a ring and its name follow it.
+  - Venus is about a pixel across at that distance, so a circle on the left shows it **magnified**. The close-up is turned exactly as the real one is and lit from where the Sun really is, so its terminator is the real one. A red mark sits on its ground, with a dashed line to the real Venus.
+  - Sunrises at the mark are detected from the real geometry. They come about 117 days apart (days 149 and 266 in the test), shown as "in the west".
+  - Venus is left where the event ends; the camera is on the Sun, so nothing has to follow it.
+- **Olympus Mons and Everest:** opens on Everest at once.
+  - New definition field `startsDark`. `presentSolarEvent` veils the scene in black immediately and starts with no countdown, so the flight to Mars happens unseen behind Everest.
+- **`docs/space-events-status.md`:** every event, sorted into four groups:
+  - looks good (32);
+  - reworked, to check (2);
+  - not yet reviewed (98);
+  - removed (2).
+
+## Part 62 — Round 83: the Sun's events on the real Sun and Earth
+
+Prompts.md: "use our real bodies for all the not-yet-reviewed events".
+
+- **New tools for staging on real bodies:**
+  - `catalogue/real.js`: surface points, latitude and longitude on any body, turning a body, camera azimuths, the real Sun's own sunspot directions, a day-side glow shell, and `flyTo`.
+  - `earthAurora()`: drives the real Earth's aurora as a storm.
+  - Kit:
+    - `ctx.refocus(name, shot)`: moves the camera on to a second body mid-event. It is in main.js, with an absolute `shotYaw`.
+    - `ctx.holdWhile()`: holds the event's clock while the camera flies, at most 6 s.
+    - `ctx.attach(body, obj)`: hangs an object on any body.
+    - `ctx.setSunLook({ scale, tint })`: sizes and colours the real Sun. This is in main.js and graphics/materials.js (new `uTint` on the photosphere).
+  - `earthVisuals.js`: the aurora shader has new uniforms `uBandCentre`, `uBandWidth`, `uGain` and `uRed`. Their defaults are the quiet aurora.
+- **Rebuilt on the real bodies:**
+  - **Solar flare (X-class):** at the real Sun's own biggest sunspot group, turned to its edge, with loops that twist and snap. Then the real Earth: its day side flashes and the radio-blackout layer glows. The X-ray graph is drawn in bright lines over the sky, with no backing.
+  - **The Carrington Event:**
+    - On the real Sun, white-light beads at one of its sunspot groups. The ejection leaves toward Earth, seen side-on.
+    - Then a cut ("17.6 hours later") to the real Earth. Its own aurora spreads toward ~27° latitude and turns redder. Cuba and Boston are marked, with telegraph sparks.
+  - **The May 2024 superstorm:**
+    - Five ejections from a southern sunspot group standing in for AR 3664.
+    - Then the real Earth's aurora swells. Earth turns to Ladakh, then the Canary Islands, then Mexico. UT and G-level clock.
+  - **Prominence eruption:** on the real Sun's upper-left edge, ~80,000 km tall, with an Earth to scale beside it.
+  - **Coronal hole:**
+    - Painted on the real Sun as ultraviolet shows it (the card explains it is not a sunspot), with open field lines and the fast wind.
+    - Then "two days later" on the real Earth: the stream sweeps past and a mild aurora (G1) follows.
+  - **Neutrinos passing through you:** neutrinos from the real Sun's core stream out through it, then through the real Earth, with Japan turned to us and Super-Kamiokande flashing.
+  - **The Sun becomes a red giant:** the real Sun, from above, swells and reddens against the planets' own orbits.
+    - Mercury and Venus are hidden as they are swallowed.
+    - Earth's and Mars's orbits widen as the Sun loses mass.
+    - It throws off a nebula and shrinks to an Earth-sized bluish-white dwarf.
+    - Everything is put back afterwards.
+- **Colour only:** the 11-year cycle (white Sun and white curve), differential rotation (white Sun) and granulation (white cells).
+- **Checked:**
+  - Bench: all 10 Sun events, no errors.
+  - Real site:
+    - The Carrington Earth phase (aurora spreading, Cuba and Boston) and the camera's flight to Earth under the hold.
+    - Sun-phase frames of the flare, prominence, coronal hole and neutrinos.
+    - The red giant from start to white dwarf.
+  - The test machine renders a few frames a second, so cross-body flights could not be watched in real time.
+
+## Part 63 — The Earth and Moon events on the real Earth, Moon and Sun
+
+Prompts.md (the 22-item Earth & Moon list): "do it with the real bodies".
+
+- **New tools** (`catalogue/earthMoon.js`):
+  - `earthLayers()`: fades or hides the real Earth's clouds, city lights, air and aurora for an event, and puts them back.
+  - `earthSkin()`: a second surface laid just over the real Earth and cross-faded in. It has two looks:
+    - the molten proto-Earth, drawn with noise (the owner's reference picture was used only as a guide to the look);
+    - Earth 66 million years ago, from a new map.
+    - It also carries an impact's fireball glow, spreading fires and a dust veil.
+  - `moonRig()`: puts the real Moon anywhere an event needs it, near side (longitude 0) toward Earth, and puts it back afterwards.
+  - `moonShadow()`: Earth's umbra and penumbra on the real Moon, with the umbra lit copper from the Moon's own map.
+  - `spinner()`: spins the real Earth about its own tilted axis. The site's Euler-XYZ spin would make the poles circle at rewind speeds.
+  - `limbRing()`, `moltenBall()`.
+- **The 66 Ma map** (`public/textures/earth-66ma-2k.jpg`, built by `tools/paleo-earth/make-earth-66ma.py`):
+  - Made from NASA's Blue Marble with the plates turned back to roughly where published reconstructions put them: a narrower Atlantic, India an island, Australia against Antarctica, the Red Sea closed.
+  - Shallow seas are painted over low ground and the ice caps replaced with forest.
+  - It is approximate, and says so. The owner's internet picture is a screenshot of someone else's site, so it is not used.
+- **Kit and main.js:**
+  - `ctx.aim(yaw, pitch)`: turns the camera round the focused body mid-event, eased. It is in main.js and solarSystemEvents.js.
+  - A body event's hud layer now stands 0.3 units in front of the lens instead of 3, so a nearby real body (the Moon from 1.5 units) cannot hide its lines.
+- `real.js` gains `WHITE_SUN`, `cutter`, `yawWithRight`, `cameraAxes` and `earthPlace`.
+- **Rebuilt on the real bodies:** Theia, Chicxulub, Tunguska (then a daylight forest view), Chelyabinsk (then a city view), the mini-moon, the lunar eclipse (three camera positions), the annular eclipse (from Earth's surface; the Sun enlarged to keep the true 0.952 ratio), the supermoon, the tides, tidal locking, libration, earthshine, precession, zodiacal light and Apophis (like 3I/ATLAS). The Leonids start from the real Sun, with the comet's real orbit and its dust trail.
+- **Changed but still dioramas:**
+  - The magnetic reversal: compass needles and N/S marks that flip, stronger colours, and the 780,000-year label moved clear of the card.
+  - White sunlight in the Moon phases, and a white Sun in the 2027 eclipse.
+- **`sharp-spike.txt`** (project root): the narration clips with a sharp audio spike (Leonids, supermoon), plus new speech for the Leonids, precession and zodiacal light. `stories.js` keeps the old text until the new recordings exist, so voice and words still match.
+- **Found, not changed:** the site's own Moon shows its far side to Earth. moon.js leaves longitude 180 facing the pivot. The events turn it the right way while they run.
+- **Checked:**
+  - Bench: all 22 Earth events, no errors.
+  - Real site: every rebuilt event, at two to four moments each, and again after reframing.
+  - Many first views were too close, or had the key thing under the event card. They were reframed so the action sits left of the card.
+
+## Part 64 — Round 84: dashboard fixes, the supermoon again, and Mercury, Venus and Mars on the real bodies
+
+Prompts.md: "earth moons events look really great", three issues, then "Next part: inner planets".
+
+- **Dashboard:**
+  - "Why one face of the Moon" is gone from the dashboard (`celestialBoardData.js`, `mechanisms.js`); the space event covers it. The explainer is archived in `docs/archive/space-events-coming-soon/explainer-tidal-locking.js` with restore notes.
+  - Hovering on the scene under a dashboard or sub-dashboard (Kirkwood gaps over Saturn's ring, say) no longer starts hover speech. `main.js` now knows when the pointer is over interface (`INTERFACE_SELECTOR`, `pointerOverInterface`) and skips scene hover and clicks while it is, or while the board is open.
+- **Supermoon:**
+  - The Moon no longer drifts into Earth: Earth creeps along its own orbit while focused, and the Moon was placed round where Earth had been when the event began. It is now placed round where Earth is, every frame (the annular eclipse and earthshine likewise keep the Moon's offset from Earth).
+  - It ends with her line (duration 24, fitted to the narration).
+  - The real Moon now moves only along the drawn oval.
+  - From Earth at perigee, the camera uses a 64° lens (as the annular eclipse does), so the whole Moon and the dashed apogee ring fit left of the card. The ring is measured from where the camera really is.
+- **New tools in `inner.js`:**
+  - `putAtLongitude` / `putAtMean`: move a real planet to a heliocentric longitude or mean anomaly on its own orbit. The scene's x and z are the ecliptic's x and y, and `setOrbitPosition` puts true anomaly ν at ν + orbitRotation.
+  - `orbitRibbon`: a highlighted copy of a planet's own orbit guide, made with the same `createOrbitLine`.
+  - `transitStage`: the camera beyond the planet on the Sun–planet line, lifted so the path crosses at the real distance from the centre. The real Sun is resized so the true size ratio holds, and the clock is read off the planet's real place on the disc.
+  - `earthMarsStage`, `marsPlace` (turns a Mars region toward the Sun, rings it and points the camera at it), `placeRing`, `hudKit` (plays a round-79 diorama on a body event's hud layer), `holdForShot` (holds the clock until the camera really arrives) and `pitchFor` / `offsetLength` (main.js's 0.64 camera formula, run backwards; event pitch is capped at 1.1).
+- **Rebuilt on the real bodies:**
+  - **Transit of Venus:** to scale, on 2012's path. Then a side-on picture on black of why far-north and far-south observers see different paths. Then the transit again with both paths and their dots, and the pairs timeline along the bottom.
+  - **Transit of Mercury:** Mercury drawn ×4, on 2019's path. Then the view from above on black.
+  - **Mercury's double sunrise:** side by side on one clock (owner's idea) — the real Mercury round the real Sun with two-day dots on the right, the sky from its equator on the same day on the left, the graph along the bottom. The clock is quick far from perihelion and slow through days −10 to +11.
+  - **Venus is still volcanic:** the real Venus in its clouds, then the radar map, Maat Mons ringed and the vent marked. Then two radar frames on black, each 6 km wide with a 1 km scale bar and its vent's area under it (2.2 km², about 1.7 km across; about 4 km², about 2.3 km across). Also February's outline over October's, and two squares to scale.
+  - **Mars at opposition** and **Mars's backwards loop:** the real Earth and Mars at their real longitudes for each date, both orbits highlighted. The loop adds the line of sight out to the stars and the sky strip along the top.
+  - **Dust devils, spring geysers and avalanches:** the real Mars first, turned to the region (Amazonis Planitia and Gusev; Inca City at 81° S; the 84° N scarp of the 2008 avalanches) with the pole tipped toward the Sun. Then the diagrams on black, moved left of the card.
+  - **Phobos's slow fall:** the real Phobos and Deimos put on their real orbits (2.77 and 6.92 Mars radii), lapping Mars at the true 3.2 : 1. Also the synchronous orbit, the lagging bulge, the spiral and the breakup ring.
+- **Unchanged (owner: looks good):** Venus's super-rotation and the blue sunset.
+- **In step with the speech:** every rebuilt event has duration 24, so the runner fits it to her line (it fits between 0.6 and 2.6 times the duration) and it ends when she does. A first pass held them to at least about 30 s and they ran on after the speech.
+- **Camera:** each event re-asserts its shot every frame (`ctx.aim`, `setZoom`/`setZoomDistance`), because a composition main.js applies once the arrival settles otherwise took the camera elsewhere (Mars off to the side under the card).
+- The round-79 dioramas are kept in `docs/archive/inner-dioramas-round79/inner.js`.
+
+## Part 65 — Round 85: the asteroid, Jupiter and Saturn events on the real bodies
+
+Prompts.md: sharp-spike.txt as plain speech, then the asteroid, Jupiter and Saturn lists "on real bodies", the Io:Europa item off the dashboard, and the shrinking Red Spot as a duplicate.
+
+- **sharp-spike.txt** now holds only the words to be spoken, in four paragraphs like the Part-*.txt files (supermoon, Leonids 1833, precession, zodiacal light). Which paragraph belongs to which event is in `docs/sharp-spike-map.md`.
+- **Removed:**
+  - "The Great Red Spot is shrinking" — the same story as "A storm wider than Earth". Its narration lines stay in the stories file, unused.
+  - The Io : Europa (Laplace resonance) card on the dashboard (`celestialBoardData.js`, `mechanisms.js`). The space event covers it. The explainer is archived in `docs/archive/space-events-coming-soon/explainer-laplace.js` with restore notes.
+- **New shared tools** (`catalogue/bodyKit.js`): `holdShot` (refocus, hold the clock until the camera arrives, and re-assert the shot every frame), `distanceFor` (how far away for a body to fill a share of the screen), `diorama` (plays a round-79 picture on the hud beside or after the real body), `ringOn` (a ring on any body round a direction in its own frame), `dirAt`, `turnToward` (spins a body so a place on it faces the camera), `toHud`, `pin`.
+- **Asteroids, on the real bodies:**
+  - **Rheasilvia:** the real Vesta, the basin found from the mesh itself, an impactor, flash, ejecta and the rim ringed. Then a panel: the central peak beside Everest, and HED meteorites falling to Earth.
+  - **Colliding asteroids:** the real Sun with P/2010 A2's real orbit (a 2.291 AU, e 0.1245, i 5.256°) and the hit marked, then the collision picture on black.
+  - **Ceres:** the real Ceres with Occator ringed and its bright spot glowing, and the salt animation beside it.
+  - **Phaethon:** its real orbit from the site's own guide, timed by equal areas, its dust trail, and Earth moved to the crossing that makes the Geminids. The camera turns toward the crossing.
+  - **Bennu:** the real Bennu throwing pebbles that escape, orbit or fall back.
+- **Jupiter, on the real planet:**
+  - **A belt vanishes:** the South Equatorial Belt (19.5° S to 7° S) fades on the real Jupiter and comes back with a plume. It is drawn on its own shell above Jupiter's haze, so it shows.
+  - **Io's electric current:** Io at its real distance (5.9 Jupiter radii), the flux tube along the field lines, and the auroral footprints at the latitude those lines reach.
+  - **The 1 : 2 : 4 dance:** the site's own orbits of Io, Europa and Ganymede highlighted, the moons at their real periods, conjunction lines and a lap counter.
+  - **Lightning and sprites:** flashes on Jupiter's night side, mostly in the north, at 35–80°; red sprites later.
+- **Saturn, on the real planet and rings:**
+  - **Hexagon:** traced on the real north pole, with Earth beside it to scale.
+  - **Ring-plane crossing:** from Earth's direction, the rings' tilt computed for each date (26.9° × sin, crossing 2025.2, period 29.46 years).
+  - **Ring rain:** grains flowing down the field lines to bands at ±40°.
+  - **Propellers:** from above the real rings, the Encke gap and Pan placed in it (133,584 km), a propeller in the outer A ring drawn ×30, then the close-up.
+  - **Shepherd moons:** the F ring at 140,180 km, Prometheus and Pandora moved to their real orbits each side, then the streamers picture.
+  - **Titan:** the real Titan looking down on its northern seas (Kraken and Ligeia Mare ringed), rain over the pole, haze thinned, and the landscape beside it. The landscape's shapes each have their own layer, which ends the flicker.
+  - **Hyperion:** the real Hyperion turned by the classic chaotic-tumble model (Wisdom, Peale and Mignard 1984), with Titan's tug, then the twins.
+  - **Iapetus:** the real Iapetus turned dark face, bright face and back, dust swept onto the leading side, ice moving to the bright side, the ridge drawn. It follows where the dark region is on the site's own map (centred at u = 0.52), not the IAU 90° W number, since the map's longitudes start elsewhere.
+- **Found and fixed in the site (`saturnRings.js`):** the ring grains were stored ring by ring and the level of detail thins them by drawing only the first N. At a middle distance that drew only the D, C and B rings — the A ring (with the Encke and Keeler gaps) and the F ring simply vanished. The grains are now stored in a spread order (each to slot i × 7919 mod count), so thinning takes some of every ring. No random numbers are spent, so every grain and chunk keeps its place.
+- **In step with the speech:** every rebuilt event has duration 24, so it ends with her line.
+- **Unchanged (owner: looks good):** spun apart by sunlight, moon shadows on Jupiter, Europa's hidden ocean.
+- The round-79 dioramas are kept in `docs/archive/giants-dioramas-round79/`.
+
+## Part 66 — Round 86: Uranus, Neptune and beyond on the real bodies, and four fixes
+
+Prompts.md: eight events "using the real space bodies", five marked "looks good", and four issues.
+
+- **Fixes:**
+  - **Ceres's bright spots:** the names no longer follow points in the scene, so they cannot slide over each other. "Ceres" stands above it; "Occator crater" stands below it, with a thin line up to the crater.
+  - **Saturn's hexagon:** the traced line now sits on the hexagon painted on Saturn. `saturn.js` (the planet) draws it in the mesh's own frame with its corners at 30° + k·60° and a corner radius of 0.2425 of the sphere. The event's line was 30° off.
+  - **Ring-plane crossing:** the rings now really vanish edge-on. The site's ring grains are sprites with a minimum size, so edge-on they stayed a bright line. `saturnRings.js` gains an event fade (`uEventFade` on the grains, and the opaque chunks hidden once the grains are faint), driven by sin B over the last 1.2°. The clock holds on March 23, 2025 for a moment.
+  - **Titan:** Kraken Mare's and Ligeia Mare's names sit on opposite sides, each away from the other along the line between the seas. They are eased into place and drawn in a fixed order, so they no longer overlap or flicker.
+- **On the real bodies** (`catalogue/outerScenes.js`; `outer.js` keeps the words and points each event at its scene; the old dioramas are in `docs/archive/outer-dioramas-round79/outer.js`):
+  - **Uranus knocked on its side:** the real Uranus side on, with its axis, the upright and the 97.8° between them. Then it is rewound to upright with no rings, struck by a world about twice Earth's mass and tipped over, and a debris disc settles into its rings. The tilt is taken from the site's own axis, so nothing jumps.
+  - **42 years of daylight:** one 84-year orbit, as a camera travelling with Uranus would see it. Uranus stays put and its axis turns relative to the Sun, exactly as going round the orbit does. The camera is side on, so the day and night halves show. An inset shows the true orbit with the axis fixed. A first try moved the real Uranus along its orbit, but main.js aims the camera before events run, and one long frame lost Uranus from view.
+  - **Neptune's Great Dark Spot:** drawn on the real Neptune at its measured size and latitude (13,000 × 6,600 km at 22° S), on a shell over the clouds (`spotShell`), with its white companion clouds and Earth beside it to scale. It is gone in 1994, and a northern spot appears.
+  - **The fastest winds:** the real Neptune held still, with cloud streaks following Voyager 2's wind profile and the bars beside it.
+  - **Triton's doomed orbit:** the real Triton moved out to its real distance (14.4 Neptune radii), on an orbit tilted 23° and going backwards. Then its capture, the spiral to the Roche limit (2.26 radii) and the ring.
+  - **Charon's red cap:** the real Charon with the real Pluto beyond. Gas leaks from Pluto and freezes on Charon's pole as frost, which reddens into the real Mordor Macula on Charon's map.
+  - **Arrokoth's gentle merger:** the real Arrokoth's spin is run back fast, and it comes apart into its two lobes. They are cut from the site's own model at its neck (`splitLobes`; the other lobe's half is pressed into a dome), so they have the same colour, texture and size. The lobes circle each other, draw together and touch, becoming Arrokoth again.
+  - **A star brushes the Oort Cloud:** the real Sun, the planets' orbits and the site's Oort Cloud, seen with a 70° lens from 10,500 units. Gliese 710 crosses the cloud 10,000 AU out, on the site's own distance scale, and comets near its path fall inward.
+- **Picture moved left of the card:** `bodyKit.leanLeft` shifts the lens's view (a view offset), so the real body sits left of the event card instead of half under it. The hud layer moves back by the same amount, so screen positions still line up. It is used by the eight new events.
+- **Unchanged (owner: looks good):** Diamond rain; Pluto and Charon's double dance; the Great Conjunction; the planet parade; the Moon hides a planet.
+- Every rebuilt event has duration 24, so it ends with her line.
+
+## Part 67 — Round 87: the comets on the real bodies
+
+Prompts.md: "all the space events which we redesign are good", then the comets.
+
+- **All 36 events rebuilt on the real bodies in rounds 84–86 are approved** and listed under "Looks good".
+- **New plumbing:** `placeComet(name, au, outbound)` and `restoreComet(name)` go from main.js, through solarSystemEvents.js, into the kit's `ctx`. They are the glow view's own `placeCometAt` and `restoreCometToToday`, without the chip. An event can now carry one of the site's real comets along its own orbit, and the coma and tails follow.
+- **On the real bodies** (`catalogue/cometScenes.js`; `comets.js` keeps the words; the old dioramas are in `docs/archive/comet-dioramas-round79/comets.js`):
+  - **Halley's return:** the site's Halley from its 1986 perihelion out past Neptune (December 2023) and back to July 28, 2061. Its path is read off the site's own drawn conic, and its record of returns runs along the bottom. Then a close-up at perihelion.
+  - **Hale–Bopp:** the site's comet falls in from 7.2 AU (July 1995) to April 1, 1997, followed by a close-up. Then the 1997 sky as before, the comet now moving across the sky over the months (the owner asked whether it moves).
+  - **NEOWISE:** June 10 to July 23, 2020, with the real Earth on each date. Then a close-up. Then far out, round its ~720 AU orbit over 6,800 years.
+  - **Tsuchinshan–ATLAS:** drawn on its real orbit (JPL elements, parabolic, Barker's equation) with the real Earth on each date, and its dust sheet trailing along the orbit. Then a view from just behind Earth: the sheet edge-on is the anti-tail.
+  - **17P/Holmes:** drawn on its real orbit beyond Mars, with the real Earth and Mars in October 2007. The outburst follows, with the dust sphere drawn ×40, then the cloud beside the Sun to one scale.
+  - **73P:** drawn on its real orbit. It flares and splits at its 1995 return. By May 2006 there are dozens of fragments, each with a tail, strung along the orbit past the real Earth.
+  - **Encke:** the site's Encke placed where it was on April 20, 2007, with a CME sweeping out of the real Sun. The event draws the ion tail itself so it can break, while the site's own ion tail is hidden.
+  - **Why a comet has two tails:** the Sun is now white.
+- Camera moves between bodies happen behind a short cut to black, because the flight takes a few seconds.
+- Every rebuilt event has duration 24, so it ends with her line.

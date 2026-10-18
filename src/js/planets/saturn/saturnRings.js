@@ -266,6 +266,10 @@ function createGrainMaterial(pixelRatio) {
       uPixelRatio: { value: pixelRatio },
       uHoveredRegion: { value: -10 },
       uHoverStrength: { value: 0 },
+      // Round 86: a space event's fade (1 = normal). The ring-plane-crossing
+      // event lowers it as the line of sight reaches the ring plane, since a
+      // sheet ~10 m thick seen edge-on all but disappears.
+      uEventFade: { value: 1 },
     },
     vertexShader: `
       attribute float aRadius;
@@ -323,6 +327,7 @@ function createGrainMaterial(pixelRatio) {
       varying float vHighlight;
       varying float vHoverStrength;
       varying float vHighlightBoost;
+      uniform float uEventFade;
 
       void main() {
         vec2 centred = gl_PointCoord - vec2(0.5);
@@ -337,7 +342,7 @@ function createGrainMaterial(pixelRatio) {
         vec3 colour = mix(vColour, highlightColour, selected * min(0.68, 0.38 + (vHighlightBoost - 1.0) * 0.10));
         colour *= (0.92 + icyCore * 0.18) * otherDim * (1.0 + selected * (0.34 + (vHighlightBoost - 1.0) * 0.40));
         float alpha = softEdge * vAlpha * otherDim * (1.0 + selected * (0.22 + (vHighlightBoost - 1.0) * 0.92));
-        gl_FragColor = vec4(colour, alpha);
+        gl_FragColor = vec4(colour, alpha * uEventFade);
       }
     `,
     transparent: true,
@@ -345,6 +350,26 @@ function createGrainMaterial(pixelRatio) {
     depthWrite: false,
     blending: THREE.NormalBlending,
     toneMapped: true,
+  });
+}
+
+/*
+ * Reorders per-grain arrays in place so grain i moves to slot (i * stride)
+ * mod count, with stride coprime to count (a bijection). Consecutive slots
+ * then hold grains from all over the original ring-by-ring order, so the
+ * first N slots are an even sample of every ring. No randomness is used, so
+ * the placement random sequence (and the chunk field after it) is unchanged.
+ */
+function interleaveForThinning(count, arrays) {
+  const gcd = (a, b) => (b ? gcd(b, a % b) : a);
+  let stride = 7919; // a prime well away from the ring counts
+  while (gcd(stride, count) !== 1) stride += 2;
+  arrays.forEach(([array, size]) => {
+    const copy = array.slice();
+    for (let i = 0; i < count; i += 1) {
+      const slot = (i * stride) % count;
+      for (let k = 0; k < size; k += 1) array[slot * size + k] = copy[i * size + k];
+    }
   });
 }
 
@@ -397,6 +422,16 @@ function createGrainField(radius, count, random, pixelRatio) {
       index += 1;
     }
   });
+
+  // Round 85: the grains were filled ring by ring (D, C, B, A, F, G, E), and
+  // the level of detail below thins them with a draw range -- the first N
+  // grains. At a mid-distance view that drew only the inner rings and left
+  // the A ring (and the Encke and Keeler gaps in it) out entirely. Spreading
+  // the order makes any first N a uniform thinning of every ring instead.
+  interleaveForThinning(count, [
+    [positions, 3], [radii, 1], [angles, 1], [heights, 1], [angularSpeeds, 1],
+    [sizes, 1], [alphas, 1], [regionIndices, 1], [colours, 3],
+  ]);
 
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
@@ -749,6 +784,14 @@ export function createSaturnRingSystem({
   const hoverOverlays = createRingHoverOverlays({ group, radius });
 
   group.userData.animatedMaterials = [grains.material, chunks.material];
+  /* Round 86: lets a space event fade the rings (ring-plane crossing). The
+   * chunks are opaque, so they are simply hidden once the grains are faint. */
+  group.userData.setEventFade = (fade) => {
+    const f = THREE.MathUtils.clamp(Number(fade), 0, 1);
+    grains.material.uniforms.uEventFade.value = f;
+    grains.visible = f > 0.001;
+    chunks.visible = f > 0.4;
+  };
   group.userData.hoverOverlays = hoverOverlays;
   group.userData.hoveredRegionIndex = -1;
   group.userData.targetHoveredRegionIndex = -1;

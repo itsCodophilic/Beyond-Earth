@@ -21,7 +21,162 @@ export const FAMILY_COLOURS = Object.freeze({
   origins: "#d6b8ff",
   fields: "#5fe0e8",
   orbit: "#7fb2ff",
+  /* Round 79: the catalogue's families. */
+  scale: "#8fe3c8",
+  stellar: "#ffd27f",
+  galactic: "#c9a6ff",
+  geology: "#e0a070",
 });
+
+/*
+ * Round 79: the catalogue's 110 events are drawn from a small descriptor
+ * on each event (`art: { main, second, fx }`, catalogue/kit.js) rather than
+ * one hand-written sketch each: a main body, an optional second one, and an
+ * effect, all looping on `t`.
+ */
+const ART_BODIES = {
+  sun: ["#fff1c4", "#ff8a1f"], earth: ["#7fb4ff", "#0c2a5c"], moon: ["#e6e6e6", "#4c4c4c"],
+  mercury: ["#c7c0b8", "#4a4540"], venus: ["#f6e2b4", "#8a6a35"], mars: ["#ffa070", "#6a2412"],
+  jupiter: ["#f3d9b4", "#7a5232"], saturn: ["#f6e6b8", "#8a7040"], uranus: ["#c8f4f6", "#3d8c95"],
+  neptune: ["#8fb2ff", "#1b2f8a"], pluto: ["#f0dcc4", "#7a5a40"], charon: ["#cfcfcf", "#555555"],
+  io: ["#fbe98a", "#8a6a20"], europa: ["#f4ecdc", "#7a6a58"], titan: ["#f6c070", "#7a4a10"],
+  rock: ["#b0a89c", "#3e3a34"], comet: ["#e8f4ff", "#5a6a80"], star: ["#ffffff", "#ffd27f"],
+  redgiant: ["#ffb07a", "#8a1a0a"], whitedwarf: ["#ffffff", "#9fc4ff"], neutronstar: ["#ffffff", "#9fd8ff"],
+  galaxy: ["#fff3d6", "#5a4a8a"], blackhole: ["#000000", "#000000"], nebula: ["#ff9fd8", "#3a1a5a"],
+};
+function artBody(ctx, kind, x, y, r, t, seed = 1) {
+  const [inner, outer] = ART_BODIES[kind] ?? ART_BODIES.rock;
+  if (kind === "sun" || kind === "star" || kind === "redgiant" || kind === "whitedwarf" || kind === "neutronstar") {
+    glow(ctx, x, y, r * (kind === "neutronstar" ? 5 : 2.2), kind === "redgiant" ? "rgba(255,110,60,.45)" : kind === "whitedwarf" || kind === "neutronstar" ? "rgba(160,200,255,.55)" : "rgba(255,180,80,.5)");
+    disc(ctx, x, y, r, inner, outer);
+    return;
+  }
+  if (kind === "galaxy") {
+    for (let i = 0; i < 420; i += 1) {
+      const arm = i % 2; const k = rand(i + seed) ; const ang = arm * Math.PI + k * 5.5 + t * 0.15;
+      const d = k * r * 1.6; const sx = x + Math.cos(ang) * d + (rand(i * 3.1) - 0.5) * r * 0.25;
+      const sy = y + Math.sin(ang) * d * 0.45 + (rand(i * 5.7) - 0.5) * r * 0.12;
+      ctx.fillStyle = `rgba(${200 + 55 * (1 - k)},${210 + 30 * (1 - k)},255,${0.75 - k * 0.5})`;
+      ctx.fillRect(sx, sy, 1.4, 1.4);
+    }
+    glow(ctx, x, y, r * 0.7, "rgba(255,236,200,.8)");
+    return;
+  }
+  if (kind === "nebula") {
+    glow(ctx, x - r * 0.3, y, r * 1.4, "rgba(255,120,200,.45)");
+    glow(ctx, x + r * 0.4, y - r * 0.2, r * 1.2, "rgba(120,170,255,.4)");
+    glow(ctx, x, y, r * 0.25, "rgba(255,255,255,.9)");
+    return;
+  }
+  if (kind === "blackhole") {
+    ctx.strokeStyle = "rgba(255,170,80,.85)"; ctx.lineWidth = r * 0.28;
+    ctx.beginPath(); ctx.ellipse(x, y, r * 1.9, r * 0.55, -0.2, 0, Math.PI * 2); ctx.stroke();
+    glow(ctx, x, y, r * 2.4, "rgba(255,140,60,.35)");
+    ctx.fillStyle = "#000"; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = "rgba(255,210,150,.9)"; ctx.lineWidth = 1.4; ctx.beginPath(); ctx.arc(x, y, r * 1.08, 0, Math.PI * 2); ctx.stroke();
+    return;
+  }
+  if (kind === "comet") {
+    for (let i = 0; i < 90; i += 1) {
+      const k = rand(i + seed); const sx = x + k * r * 7; const sy = y - k * r * 2.2 + (rand(i * 7) - 0.5) * r * k * 2;
+      ctx.fillStyle = `rgba(200,225,255,${0.7 * (1 - k)})`; ctx.fillRect(sx, sy, 1.5, 1.5);
+    }
+    glow(ctx, x, y, r * 2.4, "rgba(190,230,255,.7)");
+    disc(ctx, x, y, r * 0.5, inner, outer);
+    return;
+  }
+  if (kind === "rock") {
+    ctx.fillStyle = outer; ctx.beginPath();
+    for (let k = 0; k <= 24; k += 1) {
+      const a = (k / 24) * Math.PI * 2; const rr = r * (0.78 + 0.28 * rand(k + seed * 13));
+      const px = x + Math.cos(a) * rr * 1.2; const py = y + Math.sin(a) * rr * 0.85;
+      if (k === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    }
+    ctx.fill();
+    disc(ctx, x - r * 0.15, y - r * 0.12, r * 0.55, "rgba(220,212,200,.55)", "rgba(0,0,0,0)");
+    return;
+  }
+  disc(ctx, x, y, r, inner, outer);
+  if (kind === "jupiter" || kind === "saturn") {
+    ctx.save(); ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.clip();
+    for (let b = -4; b <= 4; b += 1) {
+      ctx.fillStyle = b % 2 ? "rgba(120,80,50,.28)" : "rgba(255,240,220,.12)";
+      ctx.fillRect(x - r, y + b * r * 0.2 - r * 0.07, r * 2, r * 0.14);
+    }
+    if (kind === "jupiter") { ctx.fillStyle = "rgba(200,90,60,.8)"; ctx.beginPath(); ctx.ellipse(x + r * 0.3, y + r * 0.35, r * 0.22, r * 0.12, 0, 0, Math.PI * 2); ctx.fill(); }
+    ctx.restore();
+  }
+  if (kind === "saturn") {
+    ctx.strokeStyle = "rgba(240,225,180,.75)"; ctx.lineWidth = r * 0.16;
+    ctx.beginPath(); ctx.ellipse(x, y, r * 2.1, r * 0.55, -0.25, Math.PI * 0.05, Math.PI * 0.95, true); ctx.stroke();
+  }
+  // Terminator: the night side away from the upper left.
+  const g = ctx.createLinearGradient(x - r, y - r, x + r, y + r);
+  g.addColorStop(0.45, "rgba(0,0,0,0)"); g.addColorStop(1, "rgba(0,0,0,.6)");
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+}
+function drawArt(ctx, w, h, t, art, colour, seed) {
+  const m = Math.min(w, h);
+  const fx = art.fx ?? "glow";
+  const small = ["comet", "rock", "whitedwarf", "neutronstar", "blackhole"].includes(art.main);
+  const mx = w * 0.42; const my = h * 0.54; const R = m * (small ? 0.14 : art.main === "galaxy" ? 0.26 : 0.27);
+  const sx = w * 0.82; const sy = h * 0.28; const r2 = m * 0.08;
+  const loop = (speed, offset = 0) => ((t * speed + offset) % 1 + 1) % 1;
+  // Effects drawn behind the bodies.
+  if (fx === "orbit" || fx === "dance" || fx === "wobble") {
+    ctx.strokeStyle = "rgba(207,224,255,.3)"; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.ellipse(mx, my, R * 1.9, R * 0.75, 0, 0, Math.PI * 2); ctx.stroke();
+  }
+  if (fx === "lineup" || fx === "pulse") {
+    ctx.strokeStyle = "rgba(255,220,150,.25)"; ctx.beginPath(); ctx.moveTo(w * 0.05, my); ctx.lineTo(w * 0.95, my); ctx.stroke();
+  }
+  if (fx === "aurora") {
+    for (let i = 0; i < 6; i += 1) glow(ctx, mx + (i - 2.5) * R * 0.35, my - R * 0.95, R * 0.35, `rgba(109,255,156,${0.35 + 0.3 * Math.sin(t * 2 + i)})`);
+  }
+  if (fx === "spiral" || fx === "stream") {
+    ctx.strokeStyle = colour; ctx.globalAlpha = 0.6; ctx.lineWidth = 1.6; ctx.beginPath();
+    for (let k = 0; k < 80; k += 1) { const a = k * 0.18 + t; const rr = R * 0.4 + k * R * 0.025; const px = mx + Math.cos(a) * rr * 1.6; const py = my + Math.sin(a) * rr * 0.6; if (k) ctx.lineTo(px, py); else ctx.moveTo(px, py); }
+    ctx.stroke(); ctx.globalAlpha = 1;
+  }
+  artBody(ctx, art.main ?? "rock", mx, my, R, t, seed);
+  if (art.second) {
+    let x = sx; let y = sy;
+    if (fx === "orbit" || fx === "dance") { const a = t * 0.6; x = mx + Math.cos(a) * R * 1.9; y = my + Math.sin(a) * R * 0.75; }
+    if (fx === "transit" || fx === "eclipse" || fx === "shadow") { const u = loop(0.12); x = mx - R * 1.3 + u * R * 2.6; y = my - R * 0.1; }
+    if (fx === "impact") { const u = loop(0.25); x = mx + R * 2.4 * (1 - u); y = my - R * 1.6 * (1 - u); }
+    const rr = fx === "transit" || fx === "eclipse" ? R * 0.22 : r2;
+    if (fx === "transit" || fx === "eclipse") { ctx.fillStyle = "#000"; ctx.beginPath(); ctx.arc(x, y, fx === "eclipse" ? R * 0.96 : rr, 0, Math.PI * 2); ctx.fill(); }
+    else artBody(ctx, art.second, x, y, rr, t, seed + 7);
+    if (fx === "impact" && loop(0.25) > 0.92) glow(ctx, mx + R * 0.2, my - R * 0.2, R * 1.4, "rgba(255,230,180,.95)");
+  }
+  // Effects drawn over.
+  const c = colour;
+  if (fx === "flare" || fx === "flash") { const u = loop(0.3); glow(ctx, mx + R * 0.6, my - R * 0.5, R * (0.3 + 1.2 * u), `rgba(255,255,255,${0.9 * (1 - u)})`); }
+  if (fx === "burst" || fx === "ripple" || fx === "wave") {
+    for (let k = 0; k < 3; k += 1) { const u = loop(0.25, k / 3); ctx.strokeStyle = c; ctx.globalAlpha = 0.8 * (1 - u); ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(mx, my, R * (1 + u * 1.8), 0, Math.PI * 2); ctx.stroke(); }
+    ctx.globalAlpha = 1;
+  }
+  if (fx === "loop") { ctx.strokeStyle = "rgba(255,170,90,.9)"; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(mx + R * 0.7, my - R * 0.75, R * (0.35 + 0.05 * Math.sin(t * 2)), Math.PI, 0); ctx.stroke(); }
+  if (fx === "jets" || fx === "beam") {
+    for (let i = 0; i < 70; i += 1) { const u = loop(0.5, rand(i)); const a = -Math.PI / 2 + (rand(i * 3) - 0.5) * (fx === "beam" ? 0.15 : 0.6); ctx.fillStyle = `rgba(230,240,255,${0.8 * (1 - u)})`; ctx.fillRect(mx + Math.cos(a) * R * (1 + u * 1.4), my + Math.sin(a) * R * (1 + u * 1.4), 1.6, 1.6); if (fx === "beam") ctx.fillRect(mx - Math.cos(a) * R * (1 + u * 1.4), my - Math.sin(a) * R * (1 + u * 1.4), 1.6, 1.6); }
+  }
+  if (fx === "dust" || fx === "rain" || fx === "split") {
+    for (let i = 0; i < 80; i += 1) { const u = loop(fx === "rain" ? 0.6 : 0.2, rand(i)); const px = mx + (rand(i * 7) - 0.5) * R * 2.6; const py = fx === "rain" ? my - R * 1.2 + u * R * 2.4 : my + (rand(i * 11) - 0.5) * R * 2; ctx.fillStyle = fx === "rain" ? `rgba(160,200,255,${0.7 * (1 - u)})` : `rgba(230,200,160,${0.6 * (1 - u)})`; ctx.fillRect(px + (fx === "split" ? u * R * (rand(i) - 0.5) * 3 : 0), py, 1.6, fx === "rain" ? 4 : 1.6); }
+  }
+  if (fx === "spot" || fx === "storm") { ctx.fillStyle = fx === "spot" ? "rgba(205,90,60,.85)" : "rgba(255,255,255,.75)"; ctx.beginPath(); ctx.ellipse(mx + R * 0.25, my + R * 0.2, R * (0.3 + 0.03 * Math.sin(t)), R * 0.18, 0, 0, Math.PI * 2); ctx.fill(); }
+  if (fx === "hexagon") { ctx.strokeStyle = "rgba(255,230,180,.85)"; ctx.lineWidth = 1.6; ctx.beginPath(); for (let k = 0; k <= 6; k += 1) { const a = k * Math.PI / 3 + t * 0.1; const px = mx + Math.cos(a) * R * 0.45; const py = my - R * 0.55 + Math.sin(a) * R * 0.2; if (k) ctx.lineTo(px, py); else ctx.moveTo(px, py); } ctx.stroke(); }
+  if (fx === "tail" || fx === "twotails") {
+    for (let i = 0; i < 120; i += 1) { const k = rand(i); ctx.fillStyle = `rgba(235,235,255,${0.6 * (1 - k)})`; ctx.fillRect(mx + R * 0.6 + k * w * 0.45, my - k * h * 0.12 + Math.sin(k * 3 + t) * 2, 1.5, 1.5); if (fx === "twotails") { ctx.fillStyle = `rgba(120,170,255,${0.7 * (1 - k)})`; ctx.fillRect(mx + R * 0.6 + k * w * 0.48, my - R * 0.3 - k * h * 0.02, 1.5, 1.5); } }
+  }
+  if (fx === "phases") { const u = loop(0.08); ctx.fillStyle = "rgba(0,0,0,.75)"; ctx.beginPath(); ctx.ellipse(mx + Math.cos(u * Math.PI * 2) * R, my, R, R, 0, 0, Math.PI * 2); ctx.fill(); }
+  if (fx === "tides") { ctx.strokeStyle = "rgba(120,190,255,.7)"; ctx.lineWidth = 2; ctx.beginPath(); ctx.ellipse(mx, my, R * (1.25 + 0.05 * Math.sin(t)), R * 1.05, 0, 0, Math.PI * 2); ctx.stroke(); }
+  if (fx === "edgeon") { ctx.strokeStyle = "rgba(240,225,180,.8)"; ctx.lineWidth = 1.4; ctx.beginPath(); ctx.ellipse(mx, my, R * 2.2, R * 0.05 + R * 0.4 * Math.abs(Math.sin(t * 0.3)), 0, 0, Math.PI * 2); ctx.stroke(); }
+  if (fx === "ring") { ctx.strokeStyle = c; ctx.lineWidth = 2; ctx.beginPath(); ctx.ellipse(mx, my, R * 1.9, R * 0.5, -0.2, 0, Math.PI * 2); ctx.stroke(); }
+  if (fx === "cells") { for (let i = 0; i < 40; i += 1) { const a = rand(i) * Math.PI * 2; const d = Math.sqrt(rand(i * 3)) * R * 0.9; glow(ctx, mx + Math.cos(a) * d, my + Math.sin(a) * d, R * 0.12, `rgba(255,240,190,${0.35 + 0.3 * Math.sin(t * 2 + i)})`); } }
+  if (fx === "glow" || fx === "pulse") glow(ctx, mx, my, R * (1.4 + 0.2 * Math.sin(t * 2)), c, 0.35);
+  if (fx === "pulse") { const u = loop(0.25); glow(ctx, w * 0.05 + u * w * 0.9, my, m * 0.05, "rgba(255,250,220,.95)"); }
+  if (fx === "lineup") { ["#c7c0b8", "#f6e2b4", "#ffa070", "#f3d9b4", "#f6e6b8", "#c8f4f6", "#8fb2ff"].forEach((col, i) => disc(ctx, w * 0.55 + i * w * 0.055, my, m * (i === 3 || i === 4 ? 0.05 : 0.025), col, "#222")); }
+}
 
 const rand = (s) => { const x = Math.sin(s * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
 
@@ -288,6 +443,8 @@ export function drawEventVignette(ctx, w, h, t, ev) {
     ctx.fillStyle = "rgba(255,240,200,.55)"; ctx.beginPath(); ctx.arc(x, y, g, toSun - Math.PI / 2, toSun + Math.PI / 2); ctx.fill();
     ctx.strokeStyle = "#ffffff"; ctx.lineWidth = 1.4; ctx.beginPath();
     ctx.moveTo(x - Math.sin(tilt) * g * 1.7, y + Math.cos(tilt) * g * 1.7); ctx.lineTo(x + Math.sin(tilt) * g * 1.9, y - Math.cos(tilt) * g * 1.9); ctx.stroke();
+  } else if (ev.art) {
+    drawArt(ctx, w, h, t, ev.art, FAMILY_COLOURS[ev.family] ?? "#ffffff", ev.id.length);
   } else {
     const c = FAMILY_COLOURS[ev.family] ?? "#ffffff";
     glow(ctx, w * 0.5, h * 0.5, m * 0.3, c);

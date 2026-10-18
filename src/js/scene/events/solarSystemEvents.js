@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { INTERSTELLAR_EVENTS } from "./interstellarPassages.js";
 import { PROCESS_EVENTS } from "./systemProcesses.js";
+import { CATALOGUE_EVENTS } from "./catalogue/index.js";
 
 /**
  * Things that actually happen out there, staged on a timer.
@@ -8059,7 +8060,26 @@ const EVENT_FAMILIES = Object.freeze({
   origins: "Formation of the Solar System",
   fields: "Magnetic fields and plasma",
   orbit: "Orbit and spin",
+  /* Round 79: the catalogue (catalogue/). */
+  scale: "Size and scale",
+  stellar: "Stars and their deaths",
+  galactic: "Galaxies and black holes",
+  geology: "Geology and deep time",
 });
+
+/*
+ * Round 79: which chip of the Space events panel each of the first 24 sits
+ * under (the catalogue's events carry their own `section`).
+ */
+const SECTION_OF = {
+  "solar-system-formation": "sun", "solar-wind": "sun", "solar-cme": "sun", sungrazer: "comets",
+  "mercury-sodium-tail": "inner", "meteor-shower": "earth", "solar-eclipse": "earth", seasons: "earth",
+  "earth-magnetosphere": "earth", "lunar-impact-flash": "earth", "mars-dust-storm": "inner",
+  "jupiter-impact": "giants", "io-eruption": "giants", "saturn-impact": "giants", "saturn-white-spot": "giants",
+  "ring-spokes": "giants", "enceladus-plumes": "giants", "uranus-storms": "outer", "triton-geysers": "outer",
+  "oumuamua-passage": "comets", "borisov-passage": "comets", "atlas-3i-passage": "comets",
+  supernova: "deep", kilonova: "deep",
+};
 
 const EVENTS = [
   {
@@ -8457,6 +8477,8 @@ const EVENTS = [
   ...INTERSTELLAR_EVENTS,
   // Round 43: formation, the solar wind, a magnetosphere, the seasons.
   ...PROCESS_EVENTS,
+  // Round 79: the catalogue -- 110 more (catalogue/index.js).
+  ...CATALOGUE_EVENTS,
 ];
 
 /**
@@ -8510,6 +8532,16 @@ export function createSolarSystemEvents({
   setVeil = null,
   /* Round 44: an event that moves the camera in or out (the solar wind). */
   setZoom = null,
+  /* Round 80: the same, by camera distance in scene units. */
+  setZoomDistance = null,
+  /* Round 82: move the camera on to another body mid-event. */
+  refocus = null,
+  setSunLook = null,
+  /* Round 83: turn the camera round the focused body mid-event. */
+  aim = null,
+  /* Round 87: place one of the site's real comets on its own orbit. */
+  placeComet = null,
+  restoreComet = null,
 } = {}) {
   let active = null;
   let paused = false;
@@ -8521,6 +8553,12 @@ export function createSolarSystemEvents({
     setStage: (stage) => setStage?.(stage),
     setVeil: (what) => setVeil?.(what),
     setZoom: (zoom) => setZoom?.(zoom),
+    setZoomDistance: (distance) => setZoomDistance?.(distance),
+    refocus: (name, shot) => refocus?.(name, shot) ?? false,
+    setSunLook: (look) => setSunLook?.(look),
+    aim: (yawValue, pitchValue) => aim?.(yawValue, pitchValue),
+    placeComet: (name, au, outbound) => placeComet?.(name, au, outbound) ?? null,
+    restoreComet: (name) => restoreComet?.(name) ?? false,
   };
 
   function isOnScreen(body) {
@@ -8571,6 +8609,7 @@ export function createSolarSystemEvents({
     setSkyHighlight?.(0);
     setStage?.(null);
     setVeil?.(null);
+    setSunLook?.(null);
     active = null;
     emit();
   }
@@ -8580,8 +8619,12 @@ export function createSolarSystemEvents({
 
     update(deltaSeconds) {
       if (paused || !active) return;
-      active.elapsed += deltaSeconds;
+      /* Round 82: an event can hold its clock while the camera flies to a
+       * second body (kit.js, ctx.holdWhile), so its picture is not half over
+       * before the camera gets there. */
+      if (!active.holding?.()) active.elapsed += deltaSeconds;
       const progress = active.elapsed / active.duration;
+      if (typeof window !== "undefined") window.__dbgE = [active.elapsed, active.duration, deltaSeconds];
       if (progress >= 1) stop();
       else { active.update(progress, skyApi); emit(); }
     },
@@ -8600,7 +8643,8 @@ export function createSolarSystemEvents({
       const instance = definition.build(
         definition.body === null ? host : host,
         camera,
-        { skyRadius: getSkyRadius(), skyClutter: getSkyClutter() },
+        /* Round 79: findBody, so a catalogue event can borrow a body. */
+        { skyRadius: getSkyRadius(), skyClutter: getSkyClutter(), findBody, skyAnchor },
         skyApi,
       );
       host.add(instance.group);
@@ -8726,11 +8770,21 @@ export function createSolarSystemEvents({
        */
       facesTerminator: event.facesTerminator === true,
       shotZoom: Number(event.shotZoom) || 1,
+      /* Round 80: or the camera distance itself (scene units), for a shot
+       * that has to frame something of a known size -- Venus's orbit. */
+      shotDistance: Number(event.shotDistance) || null,
+      /* Round 81: opens on black (main.js veils before the flight). */
+      startsDark: event.startsDark === true,
       /**
        * The camera elevation this event wants, in radians, or null for the
        * composed default. Read by the staging in main.js alongside facesSun.
        */
       shotPitch: Number.isFinite(event.shotPitch) ? event.shotPitch : null,
+      /* Round 79: the catalogue's own fields (catalogue/kit.js, event()). */
+      section: event.section ?? SECTION_OF[event.id] ?? null,
+      often: event.often ?? null,
+      timeline: event.timeline ?? null,
+      art: event.art ?? null,
     })),
 
     getState: snapshot,

@@ -236,17 +236,11 @@ export const BOARD_STRUCTURES = Object.freeze([
    * formation, solar wind, magnetospheres and seasons moved to the planned
    * space events.
    */
-  {
-    key: "tidal-locking",
-    /* Round 38: "How it works" filter removed; listed with the moons. */
-    filters: ["moons"],
-    name: "Why one face of the Moon",
-    region: "inner",
-    meta: "Tidal locking, shown moving",
-    kind: "A mechanism, shown moving",
-    art: "tidallock",
-    words: "tidal locking locked synchronous rotation far side moon how it works mechanism",
-  },
+  /* Round 84 (Prompts.md: "why one face of the Moon ... is covered in the
+   * space event, so we can remove it from the dashboard"): the tidal
+   * locking card is gone; the space event "Why we see one face" tells it
+   * on the real Moon. Its explainer is archived in
+   * docs/archive/space-events-coming-soon/explainer-tidal-locking.js. */
   {
     key: "centaurs",
     filters: ["icy"],
@@ -257,16 +251,10 @@ export const BOARD_STRUCTURES = Object.freeze([
     art: "centaur",
     words: "centaur centaurs population swarm chiron chariklo pholus echeclus nessus asbolus hylonome bienor",
   },
-  {
-    key: "laplace",
-    filters: ["moons"],
-    name: "Io, Europa, Ganymede · 1 : 2 : 4",
-    region: "giants",
-    meta: "The Laplace resonance, shown moving",
-    kind: "A mechanism, shown moving",
-    art: "resonance",
-    words: "laplace resonance io europa ganymede 1:2:4 galilean orbit how it works mechanism",
-  },
+  /* Round 84 (Prompts.md): the Io, Europa, Ganymede 1:2:4 card is gone;
+   * the space event "The 1:2:4 dance" shows it on the real moons. Its
+   * explainer is archived in
+   * docs/archive/space-events-coming-soon/explainer-laplace.js. */
   /* Round 39: Neptune's own card ("Neptune's Trojans") is replaced by
    * the Trojans of Uranus and Neptune -- the same 42, one card, in the
    * column they belong to (the owner: "both are same right?"). */

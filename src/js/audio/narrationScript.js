@@ -17,6 +17,8 @@
  * Facts are the site's own (its dossiers and captions) or standard values;
  * where something is a nickname or debated, the line says so.
  */
+import { CATALOGUE_STORIES } from "../scene/events/catalogue/stories.js";
+
 export const NARRATION = [
   // ===== 3A · Arrival, the Sun and the planets ==============================
   { rec: "3A", id: "arrival-1", text: "One star, eight planets — and at least five dwarf planets, with more found every few years." },
@@ -459,6 +461,10 @@ export const NARRATION = [
   { rec: "3K", id: "Teharonhiawako", text: "This is Teharonhiawako and its partner Sawiskera — twin brothers in Mohawk legend, and a pair of worlds circling each other in the cold, quiet Kuiper Belt." },
   { rec: "3K", id: "Altjira", text: "This is Altjira, a world beyond Neptune that is probably not one but three." },
   { rec: "3K", id: "Chiminigagua", text: "This is Chiminigagua, a dwarf planet candidate out in the scattered disc, named after the creator of light in the legends of the Muisca people." },
+  // ===== 3L · The space events catalogue (round 79) =========================
+  // 110 lines, kept in catalogue/stories.js (one source for the events, the
+  // paste files and this script); 22 to a recording, Part 3L-1 to 3L-5.
+  ...CATALOGUE_STORIES.map(([id, text]) => ({ rec: "3L", id: `event:${id}`, text })),
 ];
 
 /** The line for a body, by its exact name, or null. */
