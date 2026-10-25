@@ -2,6 +2,8 @@ import * as THREE from "three";
 import { INTERSTELLAR_EVENTS } from "./interstellarPassages.js";
 import { PROCESS_EVENTS } from "./systemProcesses.js";
 import { CATALOGUE_EVENTS } from "./catalogue/index.js";
+import { stage } from "./catalogue/kit.js";
+import { CORE_COLLAPSE_SCENE, KILONOVA_SCENE } from "./catalogue/novae.js";
 
 /**
  * Things that actually happen out there, staged on a timer.
@@ -8037,6 +8039,13 @@ const EVENT_KINDS = Object.freeze({
     label: "Recorded event",
     blurb: "It happened once, on a date we know. What you watch is a replay of what was measured.",
   },
+  /* Round 88: the wormhole and the white hole -- allowed by the equations,
+   * never found. */
+  theory: {
+    short: "an idea",
+    label: "An idea, never seen",
+    blurb: "The laws of physics allow it, but no one has ever found one. What you watch is the idea, drawn.",
+  },
 });
 
 /**
@@ -8360,27 +8369,38 @@ const EVENTS = [
   },
   {
     id: "supernova",
-    body: null,
-    title: "Supernova",
+    /* Round 88 (Prompts.md: each kind of nova its own voyage): the Type II-P
+     * diorama (createSupernova, kept below) is redesigned as a voyage to
+     * Cassiopeia A, on the real Earth (catalogue/novae.js). */
+    body: "Earth",
+    section: "deep",
+    art: { main: "redgiant", fx: "burst" },
+    title: "A core-collapse supernova: Cassiopeia A",
     kind: "transient",
     family: "deepSky",
-    detail: "A massive star collapses and detonates, lighting up the dust around it for months",
-    frequency: "About two per century in the Milky Way. The last one seen from Earth with the naked eye was probably in 1680",
-    cause: "A star above about eight solar masses runs out of fuel, its iron core collapses to a neutron star in under a second, and the infalling envelope rebounds off it.",
-    note: "The light does not flash and vanish. This is a Type II-P: a ten-day rise, a hundred-day plateau while hydrogen recombines through the expanding envelope, then a cobalt-56 tail that takes over a year to fade.",
-    build: createSupernova,
+    detail: "A star of about 15–20 Suns ran out of fuel; its core collapsed into a neutron star in under a second and the rest of the star exploded",
+    frequency: "About two per century in the Milky Way, most hidden by dust. Cassiopeia A's light reached Earth around 1670 and was barely noticed",
+    cause: "A star above about eight solar masses burns its core all the way to iron, which cannot release energy. The iron core collapses to a neutron star (or a black hole) in under a second; the star's outer layers fall in, rebound and are blasted out.",
+    note: "Cassiopeia A, 11,000 light-years away, is the youngest known supernova remnant in our galaxy: a shell 10 light-years across, still expanding at about 5,000 km/s. Its light echo showed it was a Type IIb. Chandra found the neutron star at its centre in 1999.",
+    accuracy: "Its place in the sky and the galaxy are real. The star, the neutron star and the shell are drawn, not to scale with each other.",
+    build: stage(CORE_COLLAPSE_SCENE, { mode: "body" }),
   },
   {
     id: "kilonova",
-    body: null,
-    title: "Kilonova",
+    /* Round 88: the diorama (createKilonova, kept below) redesigned as a
+     * voyage to GW170817 (catalogue/novae.js). */
+    body: "Earth",
+    section: "deep",
+    art: { main: "neutronstar", second: "neutronstar", fx: "burst" },
+    title: "A kilonova: GW170817",
     kind: "transient",
     family: "deepSky",
-    detail: "Two neutron stars merge and throw off debris that builds gold and platinum in seconds",
-    frequency: "Rare enough that one has been caught once — GW170817, on 17 August 2017, in a galaxy 130 million light-years away",
+    detail: "Two neutron stars merged 130 million light-years away; LIGO and Virgo felt it, and seventy telescopes watched the debris make gold",
+    frequency: "Caught once so far with light and gravitational waves together — GW170817, on 17 August 2017",
     cause: "Two neutron stars spiral together and merge, flinging out a few per cent of a solar mass of neutron-rich debris that runs rapid neutron capture and builds elements past iron.",
-    note: "This is where the heavy elements come from. GW170817 is estimated to have made several Earth-masses of gold and platinum — most of the gold on Earth was made this way.",
-    build: createKilonova,
+    note: "This is where much of the heavy elements come from. GW170817 is estimated to have made several Earth-masses of gold and platinum. A short gamma-ray burst arrived 1.7 seconds after the gravitational waves ended.",
+    accuracy: "Its direction is real and its distance (about 40 megaparsecs) is from the gravitational waves. The neutron stars, the jet and the debris are drawn, not to scale.",
+    build: stage(KILONOVA_SCENE, { mode: "body" }),
   },
   {
     id: "mercury-sodium-tail",

@@ -68,7 +68,22 @@ const YEAR = {
   "vesta-rheasilvia": -1e9,
   chicxulub: -6.6e7,
   "magnetic-reversal": -7.8e5,
+  /* Round 92: "What is a nova?" first among the novae and supernovae: the
+   * first "guest star" on record, SN 185 (Book of the Later Han). */
+  "what-is-a-nova": 185,
   "crab-supernova": 1054.5,
+  /* Round 88: the nova family and the new deep-sky voyages (dates on
+   * their cards, catalogue/novae.js and deepNew.js). */
+  "type-ia-supernova": 1572.86,
+  supernova: 1670, /* Cassiopeia A's light, about 1670 */
+  "eta-carinae": 1843.2,
+  "symbiotic-nova": 1944.9,
+  "classical-nova": 1975.66,
+  "hypernova": 1998.31,
+  "luminous-red-nova": 2002.1,
+  "j1407b-rings": 2007.4,
+  "recurrent-nova": 2021.6,
+  "micronova": 2022.3,
   "leonid-storm-1833": 1833.87,
   "sun-carrington": 1859.67,
   tunguska: 1908.5,
@@ -258,7 +273,7 @@ const TIMELINE = {
     next: "Never — it passes Neptune's distance in March 2028 on its way out",
   },
   supernova: {
-    last: "In our galaxy, seen by eye: 1604 (Kepler's star). Nearest since: SN 1987A, 23 February 1987, in the Large Magellanic Cloud",
+    last: "Cassiopeia A's light, about 1670, barely noticed. Seen by eye in our galaxy: 1604 (Kepler's star). Nearest since: SN 1987A, 23 February 1987",
     next: "Unpredictable — about two a century in the Milky Way, most hidden behind dust",
   },
   kilonova: {

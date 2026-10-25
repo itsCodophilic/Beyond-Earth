@@ -221,8 +221,6 @@ export const NARRATION_CUTS = Object.freeze({
   "event:oumuamua-passage": ["Part 3F-3", 274.92, 308.37],
   "event:borisov-passage": ["Part 3F-3", 308.71, 335.64],
   "event:atlas-3i-passage": ["Part 3F-3", 336.27, 368.94],
-  "event:supernova": ["Part 3F-3", 369.70, 409.97],
-  "event:kilonova": ["Part 3F-3", 410.46, 448.95],
   "Juno": ["Part 3G-1", 0.03, 7.91],
   "52 Europa": ["Part 3G-1", 8.37, 17.68],
   "Davida": ["Part 3G-1", 18.07, 26.03],
@@ -468,7 +466,6 @@ export const NARRATION_CUTS = Object.freeze({
   "event:lunar-eclipse": ["Part 3L-2", 0.04, 18.88],
   "event:annular-eclipse": ["Part 3L-2", 19.34, 37.06],
   "event:eclipse-2027": ["Part 3L-2", 37.50, 57.69],
-  "event:supermoon": ["Part 3L-2", 58.17, 76.19],
   "event:moon-phases": ["Part 3L-2", 76.67, 93.99],
   "event:tides": ["Part 3L-2", 94.51, 115.90],
   "event:tidal-locking": ["Part 3L-2", 116.32, 137.27],
@@ -482,11 +479,8 @@ export const NARRATION_CUTS = Object.freeze({
   "event:daylight-fireball-1972": ["Part 3L-2", 273.23, 292.61],
   "event:apophis-2029": ["Part 3L-2", 293.45, 311.83],
   "event:mini-moon-2024": ["Part 3L-2", 312.55, 330.80],
-  "event:leonid-storm-1833": ["Part 3L-2", 331.22, 350.55],
-  "event:precession": ["Part 3L-2", 351.02, 369.91],
   "event:magnetic-reversal": ["Part 3L-2", 370.35, 389.95],
   "event:steve": ["Part 3L-2", 390.38, 409.15],
-  "event:zodiacal-light": ["Part 3L-2", 409.55, 428.26],
   "event:transit-mercury": ["Part 3L-3", 0.02, 19.68],
   "event:transit-venus": ["Part 3L-3", 20.11, 42.29],
   "event:mercury-double-sunrise": ["Part 3L-3", 42.75, 60.71],
@@ -541,16 +535,61 @@ export const NARRATION_CUTS = Object.freeze({
   "event:great-conjunction": ["Part 3L-5", 120.29, 136.91],
   "event:planet-parade": ["Part 3L-5", 137.52, 153.96],
   "event:lunar-occultation": ["Part 3L-5", 154.43, 170.53],
-  "event:betelgeuse-dimming": ["Part 3L-5", 170.94, 189.91],
-  "event:t-crb-nova": ["Part 3L-5", 190.40, 212.22],
-  "event:grb-boat": ["Part 3L-5", 212.75, 235.57],
-  "event:sn-1987a": ["Part 3L-5", 236.06, 257.66],
-  "event:crab-supernova": ["Part 3L-5", 258.11, 277.88],
-  "event:gw150914": ["Part 3L-5", 278.27, 299.56],
-  "event:magnetar-flare": ["Part 3L-5", 299.93, 320.73],
-  "event:tidal-disruption": ["Part 3L-5", 321.10, 339.49],
-  "event:sgr-a-flares": ["Part 3L-5", 340.03, 355.88],
-  "event:fast-radio-bursts": ["Part 3L-5", 356.38, 374.26],
-  "event:proxima-superflare": ["Part 3L-5", 374.70, 393.69],
-  "event:milky-way-andromeda": ["Part 3L-5", 394.12, 415.33],
+  /*
+   * Round 89: the deep-sky voyages (speech-forDeep-sky-1 to -4: the nova
+   * family, the twelve redesigned events, the new ones) and the re-recorded
+   * spike clips (spike: supermoon, the Leonids, precession, zodiacal
+   * light). Cut by paragraph from a sentence-level alignment, as above (10
+   * ms RMS at -45 dBFS, syllable-timed sentences, long pauses inside a
+   * sentence penalised): median sentence residual 6-8%. Every boundary but
+   * one came out the same under six settings of the model; that one (the
+   * pulsar into Kepler-186f) was settled by the sentence timings on either
+   * side of it. The classical nova's cut takes in
+   * the four opening paragraphs (what a nova, a supernova and a kilonova
+   * are). These replace the old event:supernova and event:kilonova (Part
+   * 3F-3), the deep-sky lines of Part 3L-5 and the four spike lines of
+   * Part 3L-2.
+   */
+  /* Round 91: her opening four paragraphs are their own event now. */
+  "event:what-is-a-nova": ["speech-forDeep-sky-1", 0.01, 111.95],
+  "event:classical-nova": ["speech-forDeep-sky-1", 112.5, 172.05],
+  "event:recurrent-nova": ["speech-forDeep-sky-1", 172.44, 231.40],
+  "event:micronova": ["speech-forDeep-sky-1", 231.81, 277.62],
+  "event:symbiotic-nova": ["speech-forDeep-sky-1", 278.10, 330.06],
+  "event:type-ia-supernova": ["speech-forDeep-sky-1", 330.10, 396.00],
+  "event:supernova": ["speech-forDeep-sky-1", 396.40, 458.78],
+  "event:kilonova": ["speech-forDeep-sky-1", 459.33, 514.23],
+  "event:hypernova": ["speech-forDeep-sky-1", 514.62, 569.46],
+  "event:luminous-red-nova": ["speech-forDeep-sky-1", 569.81, 628.16],
+  "event:crab-supernova": ["speech-forDeep-sky-2", 0.04, 53.58],
+  "event:sn-1987a": ["speech-forDeep-sky-2", 54.00, 113.56],
+  "event:magnetar-flare": ["speech-forDeep-sky-2", 113.95, 166.38],
+  "event:gw150914": ["speech-forDeep-sky-2", 166.78, 221.33],
+  "event:proxima-superflare": ["speech-forDeep-sky-2", 221.64, 274.87],
+  "event:betelgeuse-dimming": ["speech-forDeep-sky-2", 275.17, 330.77],
+  "event:t-crb-nova": ["speech-forDeep-sky-2", 331.30, 380.35],
+  "event:grb-boat": ["speech-forDeep-sky-2", 381.01, 426.74],
+  "event:tidal-disruption": ["speech-forDeep-sky-2", 427.41, 474.27],
+  "event:sgr-a-flares": ["speech-forDeep-sky-2", 474.91, 536.57],
+  "event:fast-radio-bursts": ["speech-forDeep-sky-2", 536.97, 588.59],
+  "event:milky-way-andromeda": ["speech-forDeep-sky-2", 588.98, 639.39],
+  "event:wormhole": ["speech-forDeep-sky-3", 0.03, 49.13],
+  "event:biggest-black-hole": ["speech-forDeep-sky-3", 49.97, 95.77],
+  "event:white-hole": ["speech-forDeep-sky-3", 96.28, 144.12],
+  "event:biggest-star": ["speech-forDeep-sky-3", 145.00, 192.13],
+  "event:dyson-sphere": ["speech-forDeep-sky-3", 192.51, 245.90],
+  "event:bootes-void": ["speech-forDeep-sky-3", 246.35, 281.88],
+  "event:pulsar": ["speech-forDeep-sky-3", 282.27, 335.14],
+  "event:kepler-186f": ["speech-forDeep-sky-3", 335.58, 385.79],
+  "event:heart-nebula": ["speech-forDeep-sky-4", 0.03, 35.02],
+  "event:galaxy-types": ["speech-forDeep-sky-4", 35.62, 81.07],
+  "event:j1407b-rings": ["speech-forDeep-sky-4", 81.72, 124.88],
+  "event:horsehead-nebula": ["speech-forDeep-sky-4", 125.51, 169.09],
+  "event:rogue-planet": ["speech-forDeep-sky-4", 169.25, 215.43],
+  "event:eta-carinae": ["speech-forDeep-sky-4", 216.24, 260.01],
+  "event:pillars-of-creation": ["speech-forDeep-sky-4", 260.95, 296.86],
+  "event:supermoon": ["spike", 0.03, 28.62],
+  "event:leonid-storm-1833": ["spike", 29.33, 74.47],
+  "event:precession": ["spike", 75.18, 118.20],
+  "event:zodiacal-light": ["spike", 118.92, 155.11],
 });

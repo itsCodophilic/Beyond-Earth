@@ -2069,3 +2069,218 @@ Prompts.md: "all the space events which we redesign are good", then the comets.
   - **Why a comet has two tails:** the Sun is now white.
 - Camera moves between bodies happen behind a short cut to black, because the flight takes a few seconds.
 - Every rebuilt event has duration 24, so it ends with her line.
+
+## Part 68 — Round 88: deep sky, made real
+
+Prompts.md: "all events look good". The comets are approved; the deep-sky events are redesigned, the novae become a family, and there are new events.
+
+- **The voyage** (`catalogue/deepVoyage.js`), shared by every deep-sky event:
+  1. **Home.** The real Earth, with the camera behind it looking toward the object. The object is ringed and named at its real place in the site's sky (RA/Dec through `celestialToVector`). The camera cannot look more than about 52° up or down, so a far-southern object is put below Earth instead.
+  2. **Out.** The site goes black and stars stream past: blue ahead, red behind, faint at speed. The title says faster-than-light travel only happens in a picture.
+  3. **The map.** A Milky Way of 16,000 points (four arms, bar, Sun 26,700 ly out). It closes in from the whole galaxy to a few times the object's distance, and its galactic l/b/d comes from the J2000 position. For another galaxy, the view pulls away from ours instead.
+  4. **The object.** It is drawn in 3D in a "universe" hung in front of the lens, seen through a virtual camera, with charts on the hud.
+  5. **Back.** The stars stream past the other way.
+  6. **Home again.** The object as seen from Earth: a new star brightening at its real place, or a glow round the real Earth for gamma rays striking the upper atmosphere.
+- **The objects** (`deepObjects.js`):
+  - stars and white dwarfs
+  - accretion discs and gas streams
+  - debris and blast waves
+  - neutron stars with dipole fields and beams
+  - **ray-traced black holes:** one or two holes bending a shared procedural sky (`lensSky`), so the lensing meets the sky without a seam, with a Doppler-beamed disc
+  - nebulae and supernova remnants
+  - the five Hubble galaxy types
+  - ring systems, planets, a Dyson swarm, the cosmic web
+  - a wormhole mouth and Flamm's funnel
+  - photographs placed square to the camera
+- **Shared scenes** (`deepScenes.js`):
+  - supernova (core-collapse, Ia, hyper; neutrinos first; SN 1987A's rings; ending on a photograph)
+  - nova (stream or wind, magnetic poles for a micronova, slow symbiotic, recurrent counter)
+  - merger (neutron stars, black holes, stars with a light echo)
+- **Custom scenes** (`deepCustom.js`): magnetar and FRB, Proxima and its planet with the Sun to scale, Betelgeuse's dust and the Solar System to scale, the tidal disruption, Sgr A* (S-stars, then the shadow), and the Andromeda merger (test stars, computed once into 160 snapshots).
+- **Events:**
+  - `novae.js`: the nine kinds of nova. The core-collapse and kilonova voyages are built from the round-1 `supernova` and `kilonova` entries in `solarSystemEvents.js`; those entries now use `body: "Earth"` and section `deep`, and the old dioramas stay in the file, unused.
+  - `deepRedesign.js`: the twelve redesigned events.
+  - `deepNew.js`: fifteen new events — thirteen asked for, plus Eta Carinae and the Pillars of Creation.
+  - `deep.js` now only gathers them. The round-79 file is in `docs/archive/deep-dioramas-round79/deep.js`.
+- **Photographs:** the owner's Crab Nebula, SN 1987A and Horsehead images are copied to `public/assets/deep-sky/`. The magnetar, Betelgeuse and black-hole pictures were used as references for the 3D drawing, not shown.
+- **Corrections, said on the cards:**
+  - PSO J318.5−22, not J218.5; it was not ejected from our Solar System.
+  - Stephenson 2-18 reaches past Saturn, not round the whole Solar System; its size is uncertain.
+  - A hypernova is about energy; "superluminous" is about brightness.
+- **Speech:** `speech-forDeep-sky.txt` holds 40 paragraphs, about 5,100 words: four on what a nova, supernova and kilonova are, then one per event. `docs/speech-forDeep-sky-map.md` maps them to events. The new events' words are in `stories.js`, unrecorded, so they are silent and run 60 s. The redesigned events keep their recorded round-79 lines, so they run 36 s.
+- **New kind:** `theory` ("An idea, never seen"), for the wormhole and the white hole.
+- **Dashboard years** have been added for the new dated events.
+
+## Part 69 — Round 89: her voice for deep sky, and the spike clips
+
+The owner recorded `speech-forDeep-sky-1` to `-4` (split from round 88's single file, under ElevenLabs' 10,000-character limit) and `spike` (the four lines of `sharp-spike.txt`), all in `public/audio`.
+
+- **The cuts** (`src/js/audio/narrationCuts.js`, a block at the end) come from round 70's method:
+  - 10 ms RMS envelope at −45 dBFS, pauses of 0.12 s or more;
+  - sentences timed by syllables and aligned by dynamic programming, with long pauses inside a sentence penalised;
+  - cut by paragraph, with 60 ms lead-in and 150 ms tail.
+- **How good the cuts are:**
+  - The median sentence residual is 6–8%, and every line comes out at 0.33–0.40 s a word.
+  - Every boundary but one came out the same under six settings of the model. The odd one, the pulsar into Kepler-186f, was settled by the sentence timings on either side (the last pulsar sentence fits 6.35 s against 6.3 s predicted).
+- **Where each cut goes:**
+  - 40 lines in all: the nine novae, the twelve redesigned events, the fifteen new ones, and supermoon, the Leonids, precession and zodiacal light.
+  - The classical nova's line takes in the four opening paragraphs on what a nova, a supernova and a kilonova are (172 s). That event's design length is now 70 s, so the 2.6× limit (182 s) covers it.
+  - The old `event:supernova` and `event:kilonova` (Part 3F-3), the deep-sky lines of Part 3L-5 and the four spike lines of Part 3L-2 are no longer used.
+- **The words:**
+  - `stories.js` now holds the recorded words for the redesigned deep-sky events and the four spike events.
+  - `narrationScript.js` holds the new supernova and kilonova lines (rec "3M").
+  - The paste files are in `docs/voice3-text/` as `speech-forDeep-sky-1.txt` to `-4.txt` and `spike.txt`.
+- **The MP3s:** `speech-forDeep-sky-2.mp3` is 256 kbit/s; the others are 128. Both are constant bit rate, which the narrator's byte-range reader handles (it reads the bit rate from the first frame).
+
+## Part 70 — Round 90: relativity on the way, real stars, and photographs rebuilt in 3D
+
+These changes are from the eight items in `Prompts.md`.
+
+- **Black-hole colour.**
+  - The colours the public knows are not true colour:
+    - The Event Horizon Telescope pictures are radio data, painted in an orange colour map.
+    - Gas that hot would really look white to blue-white.
+    - *Interstellar* and NASA's 2019 visualisation show it orange, gold and white.
+  - As asked, the ray-traced disc now uses that look. The palette has four stops: deep orange at the cool rim, then orange, then gold, then warm white only where the gas is hottest and beamed at us. Bright parts are scaled by their largest channel, so they keep their colour instead of burning to white. TON 618 is a little more golden.
+- **The trip** (`nearLightSky` in `deepVoyage.js`, replacing the streaks):
+  - **Speed:** β rises to 0.995 (γ = 10) and falls again on arrival.
+  - **Each star:** placed by aberration, cos θ′ = (cos θ + β)/(1 + β cos θ). Its colour temperature is multiplied by D = γ(1 + β cos θ), using Tanner Helland's blackbody fit.
+  - **Brightness:** about D³ in reality; drawn as D^1.6, capped, so the crowd ahead is a bright circle rather than a white-out.
+  - **Colours:** blue, then violet ahead; red at the rim, where D falls below 1; dark behind.
+  - **Fading:** light shifted into the infrared fades. Ahead it does not, because what was infrared shifts into view.
+  - **The glow ahead** stands for the blueshifted microwave background. The comment says that at γ = 10 it would really still be invisible (about 54 K).
+  - **Readout:** "99.5% of the speed of light" and the trip's time on Earth and on board (time on board = time on Earth ÷ γ).
+  - **Wording:** the "faster than light" and "Back home" titles are gone, and the card's last step is "Looking back".
+  - **Terrell rotation** is not shown, because the trips pass close to nothing.
+- **Starting view:** there is no title at home or on the way. The object's name sits beside its ring, to the right, or to the left near the right edge. The "From Earth" end titles are gone.
+- **Charts** move every frame to sit just above `.solar-event-notice`, as wide as the card, with labels scaled to match. Long titles are set smaller to fit. Where there is no room above, the chart sits beside the card and steps aside during a supernova's close-up of the neutron star. Between card steps it stays where it was.
+- **Supernova stars** (`realStar`, `STAR_KINDS` in `deepObjects.js`):
+  - **Surface:** a 3D Worley-noise surface (convection cells), limb darkening and spots.
+  - **Kinds:** red supergiant (few huge cells, dust clumps round it), yellow and blue supergiants, Wolf-Rayet (stripped, in its own wind), red dwarf, Sun-like.
+  - **Which star where:** the Crab, a red supergiant; SN 1987A, a blue supergiant (Sanduleak −69° 202); Cas A, a yellow supergiant; the hypernova and the BOAT, Wolf-Rayet stars.
+  - **Flicker:** each star flickers in its last years (pre-supernova outbursts).
+- **The onion** is drawn as the two flat faces the cut leaves, coloured by depth: hydrogen, helium, carbon, neon/oxygen, silicon and iron, from red to blue-white. The boundaries churn (silicon and neon breaking into each other, Chandra on Cas A) and the iron core falls in. The camera turns so both faces are seen. Stripped stars have helium outside.
+- **The blast** lights the whole screen (`screenFlash`): blue-white, then warm white, then orange-red.
+- **Novae:**
+  - **Shell:** the gas thrown off is a bipolar, olive or peanut shell with about 30 knots. It cools from blue-white to hydrogen red, with green knots late on, and soft glowing gas under the knots.
+  - **Glowing bubble:** shaped to match the shell.
+  - **Donor star:** a real surface.
+  - **Slow nova:** the long glow of RR Tel is gentler.
+- **The neutron star close up** (`pulsarWind`):
+  - **What is shown:** a tiny white-hot ball flickering as its beams sweep us (slowed), an inner ring of knots, a torus of soft gas with wisps forming and drifting out as it spins, and a jet of puffs. The jet is brighter on our side, and its axis is leaned on screen as in the Chandra pictures.
+  - **Camera:** goes in until the torus is about a third of the view.
+  - **Cas A:** its star is "quiet": a faint haze and no jets.
+- **Photographs rebuilt in 3D** (`imageNebula`): each pixel becomes a point, placed in depth by what it is.
+  - **The Crab:** shell mode. Filaments lie on a shell, front or back. The blue synchrotron glow fills the inside, drawn fainter. The photo's background level (0.09) is subtracted so space stays black.
+  - **SN 1987A:** plane mode, on the ring's 43° tilt.
+  - **The Horsehead:** layer mode. The blue-violet sky is at the back. The dust is in front, darkest nearest. Behind every dust pixel is a point of IC 434's glow, so nothing opens up when the camera swings.
+  - **Camera:** swings either side of the face-on view, so the depth shows.
+  - **The photographs themselves** are no longer shown.
+- **Fixes along the way:**
+  - The galaxy's glow sprite washed the view brown as the map closed on the Sun, so it is hidden in the default map's close half.
+  - Captions stayed lit on the way home when the event left between two frames. A last call now fades them.
+
+Tested at 1280×760:
+
+- Crab, 1987A, Cas A;
+- classical, recurrent and symbiotic novae;
+- Type Ia, hypernova, kilonova, BOAT;
+- Horsehead, TON 618, GW150914.
+
+## Part 71 — Round 91: colourful streaks, more pictures rebuilt in 3D, and "What is a nova?"
+
+From the round-91 list in `Prompts.md`, with the owner's new pictures in `images/`.
+
+- **The trip.** The streaks are back, at the owner's request, replacing round 90's relativistic sky. They come in colour, with faint gas drifting past between them (`lightStreaks` in `deepVoyage.js`):
+  - **Stars:** 1,800 in a tube round the line of travel, each coloured like a real star, from blue-white (O/B) to orange-red (M), with a few tinted by gas.
+  - **Gas:** 110 soft clouds in the colours nebulae glow in: hydrogen pink, oxygen teal, blue, violet and dusty orange. They drift past at half the stars' speed and fade before they would fill the view.
+  - **Speed:** the streaks lengthen as the speed rises.
+  - **Wording:** the speed readout stays. "Faster than light" and "Back home" stay gone.
+- **No "rebuilt in 3D from the photograph" line anywhere.** The captions are gone, SN 1987A's title now reads "the ring of hot spots", and the Horsehead's card no longer mentions the photograph.
+- **Tycho's supernova** ends on the remnant rebuilt in 3D from the owner's Chandra picture (`imageNebula` mode `ball`): the knots fill the sphere and the rim stays thin. The camera faces it and swings.
+- **Eta Carinae** (`deepNew.js`):
+  - **Stars:** two hot blue stars with real surfaces.
+  - **The Homunculus:** two mottled lobes, white with lilac and blue, joined at the star, with a ragged orange skirt. Their axis runs lower-left to upper-right, tilted toward us, as in the picture.
+  - **Then the whole picture:** the purple X-ray shell and older ejecta, rebuilt in 3D round the lobes. The middle of the picture is left out, so the lobes are not drawn twice.
+  - **Label fix:** the Homunculus label now sits beside the upper lobe instead of over the title, which is where it had overlapped and flickered.
+- **RR Telescopii:** the year counter has moved to the bottom left for all novae, and the red giant's label no longer repeats "a Mira star".
+- **What is a nova? (new event)** — the owner asked for this because the classical nova was slow with four paragraphs of introduction.
+  - **Audio:** her four opening paragraphs (`speech-forDeep-sky-1`, 0.01–111.95 s) are now this event.
+  - **Home:** a "new star" flares and fades in the real sky (the voyage's new `home(q)`).
+  - **Three acts:** a nova, a supernova and a kilonova, each drawn by its own event's scene and timed to her paragraphs (`acts()` in `novae.js`).
+  - **Nova Cygni 1975** now runs only her lines on V1500 Cygni (112.50–172.05 s). Its 70 s design length is gone.
+- **The hypernova:**
+  - The jets are now flowing gas (`particleJet`): narrow, knotted, and fading as they spread.
+  - Once the debris has spread, the camera closes on the black hole to just outside its ray-traced sphere.
+  - The jets are real: a collapsar's spinning hole and disc shoot gas out along the axis at nearly the speed of light. That gas is what shines in gamma rays.
+- **V838 Monocerotis:**
+  - The merged star is a real red-supergiant surface.
+  - The dust round it is the owner's Hubble picture rebuilt in 3D. The flash reveals it as it reaches each part (`reveal(R, w)`), and the merged star's label gives way to the echo's.
+- **The magnetar:**
+  - It has a blue-white grained surface, like the owner's picture.
+  - At the starquake the crust's seams glow (`uCrack`), replacing the drawn crack lines, and the flare bursts from one bright spot.
+  - "To Earth" now points left, where its label is clear of the card.
+- **J1407b** (from the owner's two pictures):
+  - **The planet:** pale cream with faint bands.
+  - **The rings:** 37 sharp-edged rings of grey-beige, each with its own width, density and fine striation, with the gap at 60–66% of the way out.
+  - **The camera:** opens close on the planet and its inner rings, pulls out to the whole system, closes in a little for Saturn's rings, then the eclipse.
+  - **The light** on the planet is now worked out in its own tilted frame.
+- **Two black holes merge:** no wave rings are drawn after the merger.
+- **The kilonova** (from the owner's GW170817 picture):
+  - **The neutron stars:** realStar kind `ns`, cracked blue crust with white-hot seams. Each is stretched toward the other in the last moments.
+  - **After the merger:** a hot, swollen merged star for a moment, then a torus of debris.
+  - **The jet** is particles (gas), not a cone.
+- **Betelgeuse** (the owner's picture, ESO's view of its extended atmosphere):
+  - **The star:** a real red-supergiant surface with very large cells.
+  - **Round it:** a huge glowing red-orange envelope and a curling plume. They give way for the to-scale view.
+  - **Label fix:** its label moved to the side, off the title.
+- **RS Ophiuchi:** the chart labels 1898, 1933, 1967 and 2006; the last three eruptions sat too close to read.
+- **TV Columbae:** the gas now runs from the end of the stream, on the side facing the red dwarf, along the field lines to the poles. The field lines and the donor also fade with the scene.
+- **New image assets** in `public/assets/deep-sky/`:
+  - `tycho-sn1572.jpg`: from the owner's webp.
+  - `eta-carinae.jpg`: centred on the star and padded.
+  - `v838-monocerotis.jpg`: centred on the star.
+  - The kilonova, magnetar, Betelgeuse and J1407b pictures are artists' impressions. They were used as references for the 3D drawing, not shown.
+
+## Part 72 — Round 92: "What is a nova?" first, and Cassiopeia A in 3D
+
+- **Order:** "What is a nova?" now comes before every nova and supernova in the events list, which sorts dated events by year. It is dated 185 AD (`YEAR` in `spaceEventsDashboard.js`): SN 185, the first "guest star" on record (Book of the Later Han). That puts it ahead of the Crab (1054), Tycho (1572), Cassiopeia A (about 1670) and the rest. In the event list itself it was already first among the novae (`NOVA_EVENTS`).
+- **Cassiopeia A** (the core-collapse supernova) now ends on the owner's Webb picture (2023), rebuilt in 3D as `public/assets/deep-sky/cassiopeia-a.jpg`, cropped square on the remnant. The shell mode puts the orange-pink filaments and the grey smoke on the shell and leaves the middle dark, where the quiet neutron star sits. Settings: threshold 0.1, floor 0.08, keep 0.9.
+  - The close-up of the neutron star now ends at 0.76 and the picture comes in at 0.8. It arrives with her last lines and the title "Cassiopeia A today".
+
+## Part 73 — Round 93: simple trip words, a real wormhole, debris that obeys gravity, gas nebulae
+
+- **The trip:**
+  - **Words:** the only words are "Travelling from the Sun / to …" going out and "Travelling back to Earth" coming home. The speed readout is gone.
+  - **Coming home:** the same colourful streaks, run backwards (`lightStreaks.drive(b, a, dir)`, with tails trailing the motion).
+- **A star torn apart by a black hole** (`tdeScene` in `deepCustom.js`, rewritten):
+  - **Approach:** the star comes in on a parabola, stretched more and more toward the hole.
+  - **Disruption:** at pericentre its 3,000 pieces take the star's speed with energies spread by the tidal spread, half bound and half not. From then on they move under the hole's gravity (G M = 1, pericentre 8.1).
+  - **Unbound half:** flies off along hyperbolas.
+  - **Bound half:** goes out on ellipses and falls back, the most bound first. There its radial motion is damped (shocks) and it circularises into a ring and a hot disc, which flares.
+  - **Look:** a soft gas copy of every third piece makes it read as gas.
+  - **Why the star used to vanish:** it passed inside the ray-traced sphere. That sphere is now kept inside the pericentre (bound 7 rs).
+- **The wormhole:**
+  - **No trip** (`noTrip`): it is a theory, so there is no leaving or coming home.
+  - **The mouth** (`wormholeMouth`) as rendered for Interstellar (James et al. 2015): a crystal ball showing the far end's black sky, with its stars and a spiral galaxy, bent more toward the rim. Round the rim, a ring of our own sky bent round the throat. It is not blue, and not black like a black hole either: it has no horizon.
+  - **The crossing** (`wormholeTunnel`): a few seconds inside the throat, with the stars and the far galaxy wound into turning arcs round the way ahead. The far end's sky then opens ahead and takes over (`farSkySphere`).
+  - **The far side:** looking back, the mouth shows our sky. The event is timed to her line.
+- **Stephenson 2-18:** smaller planet names, each at its own angle round its orbit. The four inner orbits share one label, "Mercury to Mars", and the star's label sits to its left.
+- **PSO J318.5−22:** the planet's label moved left of the planet, on three lines.
+- **Tabby's star** (`dysonRings`, after the owner's picture): nine bands of curved collector panels on orbits at many tilts, each band filling round its orbit as it is built. The panels are solid, lit orange-gold, and leave gaps where the star shows through. A lattice of tiny lights surrounds them.
+- **The pulsar:** the cones are gone. Glowing plasma streams out of each magnetic pole in a widening beam that sweeps round with the star (`particleJet` on the magnetic axis). The star is now a real neutron-star surface.
+- **The Horsehead and the Pillars** (`imageNebula`): a new `gas` option makes softer, fainter, larger points, with a coarse haze of very large faint ones over them, so they read as gas. In layer mode the picture's edges fade out. The Pillars are rebuilt from the owner's Webb picture (`pillars-of-creation.jpg`): the blue nebula behind, the orange-brown pillars in front, and the red glow of newborn stars at two tips. The camera rises up the pillars and swings a little.
+
+## Part 74 — Round 94: the trip through the wormhole
+
+The owner sent the Interstellar clip of the Endurance going through the wormhole. I used it only as a reference for the look; nothing of it was copied. `wormholeTunnel` in `deepObjects.js` is rewritten. Inside the throat, the view is a tunnel whose walls are the sky itself, lensed into long sheets:
+- very dark teal-grey, mottled;
+- glassy arcs where the sheets fold;
+- star-points smeared along the way, with a few blue glints;
+- thin, broken gold-white seams where a galaxy's light is drawn into arcs;
+- dark smoke sliding past close by;
+- far ahead, the exit: a small crystal ball holding the far end's sky, which grows until it fills the view.
+
+The tunnel rolls slowly and the view shakes a little. Each direction is mapped to its angle round the way ahead and the depth at which it meets a tube of radius 1, and the pattern scrolls toward us and twists with depth. The tunnel is now drawn opaque over everything.
+
+The crossing is longer: 58–80% of the visit, about 10 seconds of her 49-second line (it was 62–74%, about 6 seconds). The mouth approach is 44–58% and the far end 80–100%, with the titles and the card step moved to match.

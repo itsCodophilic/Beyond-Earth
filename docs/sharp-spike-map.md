@@ -12,3 +12,5 @@
 Recording notes: same voice and pace as the other catalogue clips; numbers read as written; listen for clipping on hard consonants ("k" in "kilometres", "t" in "Tempel–Tuttle").
 
 Until the new clips exist, `stories.js` keeps the old text so the words on screen and the voice still match.
+
+**Recorded and wired (round 89).** `public/audio/spike.mp3` is cut by paragraph in `narrationCuts.js`: supermoon 0.03–28.62 s, the Leonids 29.33–74.47 s, precession 75.18–118.20 s, zodiacal light 118.92–155.11 s. `stories.js` now holds these words, and the old clips in Part 3L-2 are no longer used.
